@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Procedures collection: Read and write permissions for clinic catalog management
+    match /procedures/{procedureId} {
+      allow read, write: if true;
+    }
+    
+    // Clinic settings document: Clinic identity, tagline, professionals, contact info
+    match /clinic_settings/{docId} {
+      allow read, write: if true;
+    }
+
+    // Default fallback
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "La Vie Clinique - Indaiatuba",
+  "description": "Catálogo editorial e gerenciador de procedimentos estéticos da La Vie Clinique em Indaiatuba com suporte a múltiplas médicas responsáveis e exportação.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
