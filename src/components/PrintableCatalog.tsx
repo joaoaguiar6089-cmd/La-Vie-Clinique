@@ -322,6 +322,83 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
                   </p>
                 </div>
 
+                {/* CLINICAL TEAM - horizontal cards in the same format as procedure cards (photo + name/subtitle) */}
+                {clinicDoctors.length > 0 && (
+                  <div className="mb-7 pb-6 border-b border-[#E8E6DE]">
+                    <div className="flex items-center gap-2.5 mb-3.5">
+                      <span className="w-3 h-3 rounded-full bg-[#B88358] shadow-xs" />
+                      <h2
+                        className="font-serif-luxury text-lg font-bold text-[#1A1A1C] tracking-tight"
+                        style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}
+                      >
+                        {clinicDoctors.length > 1 ? 'Corpo Clínico Responsável' : 'Responsável Técnica'}
+                      </h2>
+                    </div>
+
+                    <div className={clinicDoctors.length > 1 ? 'grid grid-cols-2 gap-4' : 'flex justify-center'}>
+                      {clinicDoctors.map((doc, idx) => {
+                        const isPhotoLeft = idx % 2 === 0;
+                        const initials = doc.name.replace(/[^A-Za-zÀ-ÿ]/g, '').slice(0, 2).toUpperCase() || 'DR';
+
+                        const photoBlock = (
+                          <div className="relative w-[92px] h-[104px] bg-[#F0EFEA] overflow-hidden shrink-0">
+                            {doc.photoUrl ? (
+                              <img
+                                src={doc.photoUrl}
+                                alt={doc.name}
+                                className="w-full h-full object-cover block"
+                                referrerPolicy="no-referrer"
+                                crossOrigin="anonymous"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[#D8A47F] font-serif-luxury text-xl font-bold bg-[#1A1A1C]">
+                                {initials}
+                              </div>
+                            )}
+                          </div>
+                        );
+
+                        const textBlock = (
+                          <div className="flex-1 h-[104px] px-4 flex flex-col justify-center min-w-0 bg-white">
+                            <p
+                              className="font-serif-luxury text-[15px] font-bold text-[#1A1A1C] leading-snug truncate"
+                              style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}
+                            >
+                              {doc.name}
+                            </p>
+                            {doc.specialty && (
+                              <p className="text-[11px] text-[#8A8985] italic leading-snug line-clamp-2 mt-0.5">
+                                {doc.specialty}
+                              </p>
+                            )}
+                          </div>
+                        );
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex flex-row items-stretch h-[104px] bg-white rounded-lg border border-[#E8E6DE] shadow-xs overflow-hidden ${
+                              clinicDoctors.length === 1 ? 'w-[360px]' : ''
+                            }`}
+                          >
+                            {isPhotoLeft ? (
+                              <>
+                                {photoBlock}
+                                {textBlock}
+                              </>
+                            ) : (
+                              <>
+                                {textBlock}
+                                {photoBlock}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* INTERACTIVE TABLE OF CONTENTS / SUMÁRIO */}
                 <div>
                   <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-[#E8E6DE]">

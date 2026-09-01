@@ -3,6 +3,7 @@ import { Procedure, ClinicProfile, Professional } from '../types';
 export interface DoctorDisplayInfo {
   name: string;
   specialty?: string;
+  photoUrl?: string;
 }
 
 /**
@@ -102,6 +103,7 @@ export function getClinicDoctors(clinic: ClinicProfile): DoctorDisplayInfo[] {
     return clinic.professionals.map((p) => ({
       name: cleanDoctorNameOnly(p.name),
       specialty: p.title || p.specialty || clinic.professionalTitle || undefined,
+      photoUrl: p.photoUrl || undefined,
     }));
   }
 

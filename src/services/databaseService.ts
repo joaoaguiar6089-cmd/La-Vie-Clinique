@@ -26,7 +26,13 @@ function cleanForFirestore<T extends Record<string, any>>(obj: T): T {
   const cleaned: any = {};
   for (const [key, value] of Object.entries(obj)) {
     if (value !== undefined) {
-      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      if (Array.isArray(value)) {
+        cleaned[key] = value.map((item) =>
+          item !== null && typeof item === 'object' && !(item instanceof Date)
+            ? cleanForFirestore(item)
+            : item
+        );
+      } else if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
         cleaned[key] = cleanForFirestore(value);
       } else {
         cleaned[key] = value;

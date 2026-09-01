@@ -37,6 +37,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [images, setImages] = useState<string[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [benefits, setBenefits] = useState<string[]>([]);
+  const [newBenefitInput, setNewBenefitInput] = useState('');
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
 
   const allCategories = Array.from(

@@ -6,6 +6,7 @@ export interface Professional {
   specialty?: string;
   phone?: string;
   instagram?: string;
+  photoUrl?: string;
 }
 
 export interface Procedure {

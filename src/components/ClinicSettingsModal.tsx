@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope } from 'lucide-react';
+import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera } from 'lucide-react';
 import { ClinicProfile, Professional } from '../types';
 
 interface ClinicSettingsModalProps {
@@ -60,7 +60,42 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   const [docRegistry, setDocRegistry] = useState('');
   const [docTitle, setDocTitle] = useState('');
   const [docSpecialty, setDocSpecialty] = useState('');
+  const [docPhotoUrl, setDocPhotoUrl] = useState('');
   const [showDoctorForm, setShowDoctorForm] = useState(false);
+
+  const handleDoctorPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (loadEvt) => {
+      const rawBase64 = loadEvt.target?.result as string;
+      if (!rawBase64) return;
+
+      // Downscale & re-encode as JPEG so the photo stays well under Firestore's
+      // 1 MiB document limit (raw phone photos can be several MB as base64).
+      const img = new Image();
+      img.onload = () => {
+        const MAX_DIMENSION = 480;
+        const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
+        const targetW = Math.round(img.width * scale);
+        const targetH = Math.round(img.height * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          setDocPhotoUrl(rawBase64);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        setDocPhotoUrl(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = () => setDocPhotoUrl(rawBase64);
+      img.src = rawBase64;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleChange = (field: keyof ClinicProfile, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -72,6 +107,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setDocRegistry('');
     setDocTitle('');
     setDocSpecialty('');
+    setDocPhotoUrl('');
     setShowDoctorForm(true);
   };
 
@@ -81,6 +117,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setDocRegistry(doc.registryNumber || '');
     setDocTitle(doc.title || doc.specialty || '');
     setDocSpecialty(doc.specialty || doc.title || '');
+    setDocPhotoUrl(doc.photoUrl || '');
     setShowDoctorForm(true);
   };
 
@@ -94,7 +131,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         ...prev,
         professionals: prev.professionals.map((d) =>
           d.id === editingDocId
-            ? { ...d, name: docName.trim(), registryNumber: docRegistry.trim(), title: docTitle.trim(), specialty: docTitle.trim() }
+            ? { ...d, name: docName.trim(), registryNumber: docRegistry.trim(), title: docTitle.trim(), specialty: docTitle.trim(), photoUrl: docPhotoUrl.trim() || undefined }
             : d
         ),
       }));
@@ -106,6 +143,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         registryNumber: docRegistry.trim(),
         title: docTitle.trim(),
         specialty: docTitle.trim(),
+        photoUrl: docPhotoUrl.trim() || undefined,
       };
       setFormData((prev) => ({
         ...prev,
@@ -119,6 +157,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setDocRegistry('');
     setDocTitle('');
     setDocSpecialty('');
+    setDocPhotoUrl('');
     setShowDoctorForm(false);
   };
 
@@ -248,6 +287,36 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   </button>
                 </div>
 
+                <div className="flex items-center gap-3">
+                  <div className="w-16 h-16 rounded-full bg-white border border-gray-200 overflow-hidden shrink-0 flex items-center justify-center">
+                    {docPhotoUrl ? (
+                      <img src={docPhotoUrl} alt="Prévia da foto" className="w-full h-full object-cover" />
+                    ) : (
+                      <Camera className="w-5 h-5 text-gray-300" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                      Foto da Médica (usada na capa do catálogo em PDF)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] cursor-pointer transition-colors">
+                        Escolher Arquivo
+                        <input type="file" accept="image/*" onChange={handleDoctorPhotoUpload} className="hidden" />
+                      </label>
+                      {docPhotoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setDocPhotoUrl('')}
+                          className="text-[11px] text-red-500 hover:text-red-700 font-medium"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-medium text-gray-700 mb-1">
@@ -330,8 +399,12 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   className="flex items-center justify-between p-3 rounded-xs bg-white/60 backdrop-blur-xs border border-white/80 hover:border-[#A67C52]/30 transition-all"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#1A1A1A] text-[#C49B74] flex items-center justify-center text-xs font-bold font-serif-luxury shadow-xs">
-                      {doc.name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'DR'}
+                    <div className="w-8 h-8 rounded-full bg-[#1A1A1A] text-[#C49B74] flex items-center justify-center text-xs font-bold font-serif-luxury shadow-xs overflow-hidden shrink-0">
+                      {doc.photoUrl ? (
+                        <img src={doc.photoUrl} alt={doc.name} className="w-full h-full object-cover" />
+                      ) : (
+                        doc.name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'DR'
+                      )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
