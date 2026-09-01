@@ -331,7 +331,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 <span>Pré-visualização do Documento:</span>
                 <span>Formato: A4 / 2x Retina</span>
               </div>
-              <div className="border border-white/60 rounded-sm overflow-hidden shadow-inner bg-white/30 backdrop-blur-xs p-2 sm:p-4 max-h-[500px] overflow-y-auto">
+              <div className="border border-white/60 rounded-sm shadow-inner bg-white/30 backdrop-blur-xs p-2 sm:p-4 max-h-[500px] overflow-auto">
                 <PrintableCatalog
                   procedures={procedures}
                   clinic={clinic}
@@ -344,11 +344,13 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
           {/* PREVIEW CONTAINER FOR SINGLE CARD */}
           {activeTab === 'single-card' && activeSingleProcedure && (
-            <div className="flex flex-col items-center justify-center p-4 bg-white/30 backdrop-blur-xs rounded-sm border border-white/60">
-              <p className="text-xs text-gray-400 mb-4">
+            <div className="flex flex-col items-center p-4 bg-white/30 backdrop-blur-xs rounded-sm border border-white/60">
+              <p className="text-xs text-gray-400 mb-4 text-center">
                 Card promocional formatado para envio direto ao cliente no WhatsApp ou postagem:
               </p>
-              <PrintableCard procedure={activeSingleProcedure} clinic={clinic} />
+              <div className="w-full flex justify-start sm:justify-center overflow-x-auto">
+                <PrintableCard procedure={activeSingleProcedure} clinic={clinic} />
+              </div>
             </div>
           )}
 

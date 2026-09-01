@@ -53,8 +53,6 @@ export interface ClinicProfile {
   consultationNote?: string;
 }
 
-export type CatalogViewMode = 'editorial-grid' | 'lookbook-cards' | 'magazine-spread' | 'minimal-table';
-
 export interface FilterState {
   search: string;
   category: string;

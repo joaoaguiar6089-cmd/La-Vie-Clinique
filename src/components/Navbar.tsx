@@ -1,10 +1,10 @@
 import React from 'react';
-import { Sparkles, Plus, Share2, Settings, BookOpen, ListOrdered, CloudCheck, Cloud, Loader2 } from 'lucide-react';
+import { Plus, Share2, Settings, ListOrdered, Loader2 } from 'lucide-react';
 import { ClinicProfile } from '../types';
 
 interface NavbarProps {
-  activeTab: 'catalog' | 'manager' | 'export' | 'settings';
-  setActiveTab: (tab: 'catalog' | 'manager' | 'export' | 'settings') => void;
+  onOpenExport: () => void;
+  onOpenSettings: () => void;
   onOpenNewProcedure: () => void;
   clinic: ClinicProfile;
   proceduresCount: number;
@@ -12,20 +12,22 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  activeTab,
-  setActiveTab,
+  onOpenExport,
+  onOpenSettings,
   onOpenNewProcedure,
   clinic,
   proceduresCount,
   syncStatus = 'synced',
 }) => {
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
   return (
     <header className="sticky top-0 z-40 glass-nav transition-all duration-300 border-b border-white/60 shadow-xs">
       {/* Main Header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
         {/* Brand & Monogram */}
-        <div 
-          onClick={() => setActiveTab('catalog')}
+        <div
+          onClick={scrollToTop}
           className="flex items-center gap-3 cursor-pointer group"
           id="brand-header-link"
         >
@@ -45,42 +47,21 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Navigation Tabs */}
         <nav className="hidden md:flex items-center gap-1 bg-white/40 backdrop-blur-md p-1 rounded-sm border border-white/60 shadow-xs">
           <button
-            id="tab-catalog-btn"
-            onClick={() => setActiveTab('catalog')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium transition-all ${
-              activeTab === 'catalog'
-                ? 'bg-[#1A1A1A] text-white shadow-xs'
-                : 'text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60'
-            }`}
+            id="tab-manager-btn"
+            onClick={scrollToTop}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium transition-all bg-[#1A1A1A] text-white shadow-xs"
           >
-            <BookOpen className="w-3.5 h-3.5" />
-            Catálogo
-            <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-[#A67C52]/20 text-[#A67C52] font-bold">
+            <ListOrdered className="w-3.5 h-3.5" />
+            Itens
+            <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-[#A67C52]/20 text-[#C49B74] font-bold">
               {proceduresCount}
             </span>
           </button>
 
           <button
-            id="tab-manager-btn"
-            onClick={() => setActiveTab('manager')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium transition-all ${
-              activeTab === 'manager'
-                ? 'bg-[#1A1A1A] text-white shadow-xs'
-                : 'text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60'
-            }`}
-          >
-            <ListOrdered className="w-3.5 h-3.5" />
-            Procedimentos
-          </button>
-
-          <button
             id="tab-export-btn"
-            onClick={() => setActiveTab('export')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium transition-all ${
-              activeTab === 'export'
-                ? 'bg-[#1A1A1A] text-white shadow-xs'
-                : 'text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60'
-            }`}
+            onClick={onOpenExport}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60 transition-all"
           >
             <Share2 className="w-3.5 h-3.5 text-[#A67C52]" />
             Exportar PDF
@@ -88,12 +69,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             id="tab-settings-btn"
-            onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium transition-all ${
-              activeTab === 'settings'
-                ? 'bg-[#1A1A1A] text-white shadow-xs'
-                : 'text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60'
-            }`}
+            onClick={onOpenSettings}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60 transition-all"
           >
             <Settings className="w-3.5 h-3.5" />
             Configurações
@@ -103,7 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Primary Action Button */}
         <div className="flex items-center gap-2">
           {/* Cloud Sync Status Indicator */}
-          <div 
+          <div
             className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/60 backdrop-blur-xs border border-white/80 text-[10px] font-medium text-gray-600 shadow-2xs"
             title={syncStatus === 'syncing' ? 'Sincronizando com o Firebase...' : 'Conectado ao Firebase Cloud'}
           >
@@ -127,7 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             id="btn-export-quick"
-            onClick={() => setActiveTab('export')}
+            onClick={onOpenExport}
             className="md:hidden p-2 rounded-sm text-[#1A1A1A] bg-white/50 backdrop-blur-md border border-white/60 hover:bg-white/80"
             title="Exportar Catálogo"
           >
@@ -147,39 +124,24 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Mobile navigation tab bar */}
-      <div className="md:hidden flex border-t border-white/60 bg-white/60 backdrop-blur-md px-2 py-1 overflow-x-auto justify-around">
+      <div className="md:hidden flex border-t border-white/60 bg-white/60 backdrop-blur-md px-2 py-1 justify-around">
         <button
-          onClick={() => setActiveTab('catalog')}
-          className={`flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider ${
-            activeTab === 'catalog' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600'
-          }`}
-        >
-          <BookOpen className="w-3.5 h-3.5" />
-          Catálogo ({proceduresCount})
-        </button>
-        <button
-          onClick={() => setActiveTab('manager')}
-          className={`flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider ${
-            activeTab === 'manager' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600'
-          }`}
+          onClick={scrollToTop}
+          className="flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider bg-[#1A1A1A] text-white"
         >
           <ListOrdered className="w-3.5 h-3.5" />
-          Itens
+          Itens ({proceduresCount})
         </button>
         <button
-          onClick={() => setActiveTab('export')}
-          className={`flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider ${
-            activeTab === 'export' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600'
-          }`}
+          onClick={onOpenExport}
+          className="flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider text-gray-600"
         >
           <Share2 className="w-3.5 h-3.5 text-[#A67C52]" />
           PDF
         </button>
         <button
-          onClick={() => setActiveTab('settings')}
-          className={`flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider ${
-            activeTab === 'settings' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600'
-          }`}
+          onClick={onOpenSettings}
+          className="flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider text-gray-600"
         >
           <Settings className="w-3.5 h-3.5" />
           Clínica

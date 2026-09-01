@@ -157,8 +157,126 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
         </div>
       </div>
 
-      {/* Procedures Table (Frosted Glass) */}
-      <div className="bg-white/50 backdrop-blur-md rounded-sm border border-white/60 shadow-xs overflow-hidden">
+      {/* Procedures List — Mobile Cards (below sm breakpoint) */}
+      <div className="sm:hidden space-y-3">
+        {filteredProcedures.length === 0 ? (
+          <div className="text-center py-12 text-gray-400 text-xs bg-white/50 backdrop-blur-md rounded-sm border border-white/60">
+            Nenhum procedimento encontrado com os filtros selecionados.
+          </div>
+        ) : (
+          filteredProcedures.map((proc) => {
+            const hasDiscount = proc.promotionalPrice && proc.promotionalPrice < proc.price;
+            const img = proc.images && proc.images.length > 0 ? proc.images[0] : '';
+
+            return (
+              <div
+                key={proc.id}
+                className="bg-white/60 backdrop-blur-md rounded-sm border border-white/70 shadow-xs p-3"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-14 h-14 rounded-xs overflow-hidden bg-gray-200 shrink-0 border border-white/60">
+                    {img ? (
+                      <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <ImageIcon className="w-4 h-4" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <h4
+                        onClick={() => onViewDetails(proc)}
+                        className="font-medium text-sm text-[#1A1A1A] uppercase tracking-tight cursor-pointer line-clamp-2"
+                      >
+                        {proc.title}
+                      </h4>
+                      <button
+                        onClick={() => onToggleFeatured(proc.id)}
+                        className={`shrink-0 p-1 rounded-xs transition-colors ${
+                          proc.isFeatured ? 'text-[#C49B74] bg-[#1A1A1A]' : 'text-gray-300'
+                        }`}
+                        title="Alternar Destaque VIP"
+                      >
+                        <Star className={`w-3.5 h-3.5 ${proc.isFeatured ? 'fill-[#C49B74]' : ''}`} />
+                      </button>
+                    </div>
+
+                    {proc.subtitle && (
+                      <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">{proc.subtitle}</p>
+                    )}
+
+                    <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
+                      <span className="inline-block px-2 py-0.5 rounded-xs bg-white/70 border border-white/80 text-[#A67C52] font-semibold text-[10px] tracking-widest uppercase">
+                        {proc.category}
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        {proc.duration || '—'} · {proc.sessionsRecommended || '1 sessão'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline gap-1.5 font-mono mt-1.5">
+                      {hasDiscount && (
+                        <span className="text-[10px] text-gray-400 line-through">
+                          {formatBRL(proc.price)}
+                        </span>
+                      )}
+                      <span className="font-semibold text-[#A67C52] text-sm">
+                        {formatBRL(hasDiscount ? proc.promotionalPrice : proc.price)}
+                      </span>
+                      {proc.priceNote && (
+                        <span className="text-[10px] text-gray-400 font-sans">{proc.priceNote}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-1 mt-2.5 pt-2.5 border-t border-white/60">
+                  <button
+                    onClick={() => onViewDetails(proc)}
+                    className="p-2 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-white/80 transition-colors"
+                    title="Ver Detalhes"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => onShareSingle(proc)}
+                    className="p-2 rounded-xs text-gray-400 hover:text-[#A67C52] hover:bg-white/80 transition-colors"
+                    title="Exportar Card"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => onDuplicateProcedure(proc)}
+                    className="p-2 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-white/80 transition-colors"
+                    title="Duplicar"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => onEditProcedure(proc)}
+                    className="p-2 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-white/80 transition-colors"
+                    title="Editar"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => onDeleteProcedure(proc.id)}
+                    className="p-2 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50/50 transition-colors"
+                    title="Excluir"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Procedures Table (Frosted Glass) — sm and up */}
+      <div className="hidden sm:block bg-white/50 backdrop-blur-md rounded-sm border border-white/60 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-gray-600">
             <thead className="bg-white/60 text-[#1A1A1A] uppercase text-[10px] font-semibold tracking-widest border-b border-white/80">

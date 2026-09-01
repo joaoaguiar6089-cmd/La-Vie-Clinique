@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
-import { CatalogView } from './components/CatalogView';
 import { ProcedureManager } from './components/ProcedureManager';
 import { ProcedureDetailModal } from './components/ProcedureDetailModal';
 import { ProcedureFormModal } from './components/ProcedureFormModal';
@@ -8,7 +7,7 @@ import { ShareExportModal } from './components/ShareExportModal';
 import { ClinicSettingsModal } from './components/ClinicSettingsModal';
 import { Procedure, ClinicProfile } from './types';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
-import { Sparkles, Heart, Shield, RefreshCw, Plus, Check } from 'lucide-react';
+import { RefreshCw, Check } from 'lucide-react';
 import {
   seedInitialDataIfEmpty,
   subscribeToProcedures,
@@ -54,7 +53,6 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced');
 
   // Navigation and Modals State
-  const [activeTab, setActiveTab] = useState<'catalog' | 'manager' | 'export' | 'settings'>('catalog');
   const [selectedProcedureForDetails, setSelectedProcedureForDetails] = useState<Procedure | null>(null);
   const [selectedProcedureForEdit, setSelectedProcedureForEdit] = useState<Procedure | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -289,17 +287,11 @@ export default function App() {
 
       {/* Main Top Header */}
       <Navbar
-        activeTab={activeTab}
-        setActiveTab={(tab) => {
-          if (tab === 'export') {
-            setSingleProcedureToExport(null);
-            setIsExportModalOpen(true);
-          } else if (tab === 'settings') {
-            setIsSettingsModalOpen(true);
-          } else {
-            setActiveTab(tab);
-          }
+        onOpenExport={() => {
+          setSingleProcedureToExport(null);
+          setIsExportModalOpen(true);
         }}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenNewProcedure={() => {
           setSelectedProcedureForEdit(null);
           setIsFormModalOpen(true);
@@ -311,49 +303,24 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
-        {activeTab === 'catalog' && (
-          <CatalogView
-            procedures={procedures}
-            clinic={clinic}
-            categories={categories}
-            onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
-            onEdit={(proc) => {
-              setSelectedProcedureForEdit(proc);
-              setIsFormModalOpen(true);
-            }}
-            onDelete={handleDeleteProcedure}
-            onShareSingle={handleShareSingle}
-            onOpenNewProcedure={() => {
-              setSelectedProcedureForEdit(null);
-              setIsFormModalOpen(true);
-            }}
-            onOpenExport={() => {
-              setSingleProcedureToExport(null);
-              setIsExportModalOpen(true);
-            }}
-          />
-        )}
-
-        {activeTab === 'manager' && (
-          <ProcedureManager
-            procedures={procedures}
-            clinic={clinic}
-            categories={categories}
-            onOpenNewProcedure={() => {
-              setSelectedProcedureForEdit(null);
-              setIsFormModalOpen(true);
-            }}
-            onEditProcedure={(proc) => {
-              setSelectedProcedureForEdit(proc);
-              setIsFormModalOpen(true);
-            }}
-            onDeleteProcedure={handleDeleteProcedure}
-            onDuplicateProcedure={handleDuplicateProcedure}
-            onToggleFeatured={handleToggleFeatured}
-            onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
-            onShareSingle={handleShareSingle}
-          />
-        )}
+        <ProcedureManager
+          procedures={procedures}
+          clinic={clinic}
+          categories={categories}
+          onOpenNewProcedure={() => {
+            setSelectedProcedureForEdit(null);
+            setIsFormModalOpen(true);
+          }}
+          onEditProcedure={(proc) => {
+            setSelectedProcedureForEdit(proc);
+            setIsFormModalOpen(true);
+          }}
+          onDeleteProcedure={handleDeleteProcedure}
+          onDuplicateProcedure={handleDuplicateProcedure}
+          onToggleFeatured={handleToggleFeatured}
+          onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
+          onShareSingle={handleShareSingle}
+        />
       </main>
 
       {/* Modals & Drawers */}
@@ -444,12 +411,10 @@ export default function App() {
               </h4>
               <ul className="space-y-2 text-xs text-gray-400">
                 <li>
-                  <button onClick={() => setActiveTab('catalog')} className="hover:text-white transition-colors">
-                    Catálogo Editorial
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => setActiveTab('manager')} className="hover:text-white transition-colors">
+                  <button
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                    className="hover:text-white transition-colors"
+                  >
                     Gerenciador de Procedimentos
                   </button>
                 </li>

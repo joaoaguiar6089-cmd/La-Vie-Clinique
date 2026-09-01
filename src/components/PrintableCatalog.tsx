@@ -237,7 +237,7 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
   const clinicDoctors = getClinicDoctors(clinic);
 
   return (
-    <div id="printable-catalog-root" className="w-full flex flex-col gap-10 items-center justify-center font-sans bg-[#E5E3DD] p-4 sm:p-8">
+    <div id="printable-catalog-root" className="w-full flex flex-col gap-10 items-start sm:items-center justify-center font-sans bg-[#E5E3DD] p-4 sm:p-8">
       {pages.map((page) => {
         if (page.isCover) {
           // ====================================================
