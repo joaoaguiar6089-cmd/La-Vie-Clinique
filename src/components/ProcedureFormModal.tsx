@@ -122,7 +122,11 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setCustomDoctorNames([]);
     }
     setErrors({});
-  }, [procedureToEdit, isOpen, availableDoctors]);
+    // availableDoctors is intentionally excluded: it's a new array reference on every
+    // clinic profile sync, and including it would reset all in-progress form edits
+    // (including image removals) whenever that background sync fires while editing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [procedureToEdit, isOpen]);
 
   const toggleDoctorSelection = (docId: string) => {
     setAssignedDoctorIds((prev) =>
@@ -803,9 +807,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRemoveImage(idx)}
-                      className="absolute top-1 right-1 p-1 bg-red-600/90 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-1 right-1 p-1.5 bg-red-600/90 hover:bg-red-600 active:bg-red-700 text-white rounded-full shadow-sm transition-colors"
+                      title="Remover imagem"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))}
