@@ -6,6 +6,7 @@ import { Procedure, ClinicProfile } from '../types';
 import { exportElementAsPDF, exportElementAsImage, buildWhatsAppCatalogShareUrl } from '../utils/exportHelpers';
 import { PrintableCatalog } from './PrintableCatalog';
 import { PrintableCard } from './PrintableCard';
+import { ProcedureMultiSelect } from './ProcedureMultiSelect';
 
 interface ShareExportModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     singleProcedureToExport ? 'single-card' : 'pdf'
   );
   const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [selectedProcedureIds, setSelectedProcedureIds] = useState<string[]>([]);
   const [showPrices, setShowPrices] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
@@ -41,6 +43,14 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   const singleCardPrintRef = useRef<HTMLDivElement>(null);
 
   const activeSingleProcedure = procedures.find(p => p.id === selectedSingleProcedureId) || procedures[0];
+
+  // Procedures actually included in the PDF/PNG catalog & WhatsApp text:
+  // an explicit procedure selection always wins over the category filter.
+  const exportProcedures = selectedProcedureIds.length > 0
+    ? procedures.filter((p) => selectedProcedureIds.includes(p.id))
+    : selectedCategory === 'Todos'
+    ? procedures
+    : procedures.filter((p) => p.category === selectedCategory);
 
   const triggerConfetti = () => {
     try {
@@ -107,10 +117,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
   const handleCopyWhatsAppText = () => {
     const text = decodeURIComponent(
-      buildWhatsAppCatalogShareUrl(
-        selectedCategory === 'Todos' ? procedures : procedures.filter(p => p.category === selectedCategory),
-        clinic
-      ).split('text=')[1] || ''
+      buildWhatsAppCatalogShareUrl(exportProcedures, clinic).split('text=')[1] || ''
     );
     navigator.clipboard.writeText(text);
     setCopiedText(true);
@@ -214,7 +221,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           {/* Controls Bar for PDF & Image */}
           {(activeTab === 'pdf' || activeTab === 'image') && (
             <div className="bg-white/50 backdrop-blur-md p-4 rounded-sm border border-white/60 mb-6 flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-wrap items-end gap-4">
                 <div>
                   <label className="block text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
                     Filtrar por Categoria
@@ -222,7 +229,9 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   <select
                     value={selectedCategory}
                     onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-[#1A1A1A]"
+                    disabled={selectedProcedureIds.length > 0}
+                    title={selectedProcedureIds.length > 0 ? 'Desative a seleção específica de procedimentos para usar o filtro por categoria' : undefined}
+                    className="px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-[#1A1A1A] disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {categories.map((cat, idx) => (
                       <option key={idx} value={cat}>{cat}</option>
@@ -230,7 +239,13 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   </select>
                 </div>
 
-                <div className="flex items-center pt-4">
+                <ProcedureMultiSelect
+                  procedures={procedures}
+                  selectedIds={selectedProcedureIds}
+                  onChange={setSelectedProcedureIds}
+                />
+
+                <div className="flex items-center pb-2">
                   <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-600">
                     <input
                       type="checkbox"
@@ -333,9 +348,9 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
               </div>
               <div className="border border-white/60 rounded-sm shadow-inner bg-white/30 backdrop-blur-xs p-2 sm:p-4 max-h-[500px] overflow-auto">
                 <PrintableCatalog
-                  procedures={procedures}
+                  procedures={exportProcedures}
                   clinic={clinic}
-                  selectedCategory={selectedCategory}
+                  selectedCategory="Todos"
                   showPrices={showPrices}
                 />
               </div>
@@ -372,12 +387,15 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   </div>
                 </div>
 
+                <p className="text-[11px] text-[#A67C52] font-medium">
+                  {exportProcedures.length} procedimento{exportProcedures.length !== 1 ? 's' : ''} será
+                  {exportProcedures.length !== 1 ? 'ão' : ''} incluído{exportProcedures.length !== 1 ? 's' : ''} na mensagem
+                  {selectedProcedureIds.length === 0 && selectedCategory !== 'Todos' ? ` (categoria "${selectedCategory}")` : ''}.
+                </p>
+
                 <div className="flex items-center gap-3">
                   <a
-                    href={buildWhatsAppCatalogShareUrl(
-                      selectedCategory === 'Todos' ? procedures : procedures.filter(p => p.category === selectedCategory),
-                      clinic
-                    )}
+                    href={buildWhatsAppCatalogShareUrl(exportProcedures, clinic)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 py-2.5 px-4 rounded-sm bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-semibold uppercase tracking-wider text-center shadow-xs transition-all flex items-center justify-center gap-2"

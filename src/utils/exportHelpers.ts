@@ -48,20 +48,40 @@ async function safeGetImageBase64(src: string): Promise<string | null> {
 }
 
 /**
+ * Renders a solid-color placeholder as a data URL, used when a source image
+ * can't be fetched/converted — keeps the element free of cross-origin <img>
+ * sources that would otherwise taint the export canvas.
+ */
+function createPlaceholderDataUrl(width: number, height: number, color = '#E8E6DE'): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width));
+  canvas.height = Math.max(1, Math.round(height));
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  return canvas.toDataURL('image/png');
+}
+
+/**
  * Pre-inlines all images inside an element to prevent tainted canvas issues.
+ * Any image that fails to load/convert (broken URL, CORS block, timeout) is
+ * swapped for a local placeholder — leaving the original cross-origin src in
+ * place is what taints the canvas and makes canvas.toDataURL() throw later.
  */
 async function prepareImagesForExport(element: HTMLElement): Promise<void> {
   const images = Array.from(element.querySelectorAll('img'));
   await Promise.all(
     images.map(async (img) => {
       if (!img.src || img.src.startsWith('data:')) return;
+      const fallbackWidth = img.naturalWidth || img.width || 300;
+      const fallbackHeight = img.naturalHeight || img.height || 300;
       try {
         const base64 = await safeGetImageBase64(img.src);
-        if (base64) {
-          img.src = base64;
-        }
+        img.src = base64 || createPlaceholderDataUrl(fallbackWidth, fallbackHeight);
       } catch {
-        // Proceed without breaking
+        img.src = createPlaceholderDataUrl(fallbackWidth, fallbackHeight);
       }
     })
   );
