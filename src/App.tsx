@@ -5,6 +5,7 @@ import { ProcedureDetailModal } from './components/ProcedureDetailModal';
 import { ProcedureFormModal } from './components/ProcedureFormModal';
 import { ShareExportModal } from './components/ShareExportModal';
 import { ClinicSettingsModal } from './components/ClinicSettingsModal';
+import { AnamnesisModule } from './components/anamnesis/AnamnesisModule';
 import { Procedure, ClinicProfile } from './types';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { RefreshCw, Check } from 'lucide-react';
@@ -53,6 +54,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced');
 
   // Navigation and Modals State
+  const [currentView, setCurrentView] = useState<'procedures' | 'anamnesis'>('procedures');
   const [selectedProcedureForDetails, setSelectedProcedureForDetails] = useState<Procedure | null>(null);
   const [selectedProcedureForEdit, setSelectedProcedureForEdit] = useState<Procedure | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -287,6 +289,8 @@ export default function App() {
 
       {/* Main Top Header */}
       <Navbar
+        currentView={currentView}
+        onSelectView={(view) => setCurrentView(view)}
         onOpenExport={() => {
           setSingleProcedureToExport(null);
           setIsExportModalOpen(true);
@@ -303,24 +307,31 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
-        <ProcedureManager
-          procedures={procedures}
-          clinic={clinic}
-          categories={categories}
-          onOpenNewProcedure={() => {
-            setSelectedProcedureForEdit(null);
-            setIsFormModalOpen(true);
-          }}
-          onEditProcedure={(proc) => {
-            setSelectedProcedureForEdit(proc);
-            setIsFormModalOpen(true);
-          }}
-          onDeleteProcedure={handleDeleteProcedure}
-          onDuplicateProcedure={handleDuplicateProcedure}
-          onToggleFeatured={handleToggleFeatured}
-          onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
-          onShareSingle={handleShareSingle}
-        />
+        {currentView === 'procedures' ? (
+          <ProcedureManager
+            procedures={procedures}
+            clinic={clinic}
+            categories={categories}
+            onOpenNewProcedure={() => {
+              setSelectedProcedureForEdit(null);
+              setIsFormModalOpen(true);
+            }}
+            onEditProcedure={(proc) => {
+              setSelectedProcedureForEdit(proc);
+              setIsFormModalOpen(true);
+            }}
+            onDeleteProcedure={handleDeleteProcedure}
+            onDuplicateProcedure={handleDuplicateProcedure}
+            onToggleFeatured={handleToggleFeatured}
+            onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
+            onShareSingle={handleShareSingle}
+          />
+        ) : (
+          <AnamnesisModule
+            clinicProfile={clinic}
+            catalogProcedures={procedures}
+          />
+        )}
       </main>
 
       {/* Modals & Drawers */}

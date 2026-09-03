@@ -61,3 +61,78 @@ export interface FilterState {
   minPrice?: number;
   maxPrice?: number;
 }
+
+// ==========================================
+// MÓDULO DE FICHAS DE ANAMNESE — TIPOS
+// ==========================================
+
+export type QuestionFieldType =
+  | 'texto_curto'
+  | 'texto_longo'
+  | 'numero'
+  | 'data'
+  | 'unica_escolha'
+  | 'multipla_escolha'
+  | 'escala'
+  | 'sim_nao';
+
+export interface AnamnesisQuestion {
+  id: string;
+  texto: string;
+  tipo_campo: QuestionFieldType;
+  opcoes?: string[]; // Opções para unica_escolha ou multipla_escolha
+  escalaMax?: number; // 5 ou 10 para escala
+  obrigatoria: boolean;
+  ordem: number;
+  ajuda?: string;
+}
+
+export interface AnamnesisTemplate {
+  id: string; // Ex: 'tpl-botox'
+  procedimentoId?: string; // ID do procedimento do catálogo (se vinculado)
+  procedimentoNome: string; // Ex: 'Botox', 'HIFU - Ultrassom Microfocado'
+  categoria?: string;
+  tem_foto: boolean; // Se true, exibe campo de upload de foto para posterior anotação manual
+  fotoModeloUrl?: string; // Foto de referência / foto do doutor / mapa anatômico carregado pelo profissional na edição da ficha
+  perguntasEspecificas: AnamnesisQuestion[];
+  descricao?: string;
+  updatedAt?: string;
+}
+
+export interface Patient {
+  id: string;
+  nome: string;
+  contato?: string; // Telefone / WhatsApp
+  dataNascimento?: string; // YYYY-MM-DD
+  cpf?: string;
+  email?: string;
+  observacoes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface AnamnesisRecord {
+  id: string;
+  pacienteId: string;
+  pacienteNome: string;
+  pacienteContato?: string;
+  pacienteDataNascimento?: string;
+  procedimentoId?: string;
+  procedimentoNome: string;
+  dataAtendimento: string; // YYYY-MM-DD ou ISO
+  profissionalNome?: string; // Esteticista ou médica responsável
+  respostasGerais: Record<string, any>; // questionId -> valor
+  respostasEspecificas: Record<string, any>; // questionId -> valor
+  fotoModeloUrl?: string; // Foto do doutor / mapa anatômico de referência herdado do modelo
+  fotoPacienteUrl?: string; // Foto real enviada pelo paciente online ou tirada na clínica
+  fotoUrl?: string; // Retrocompatibilidade (espelha fotoPacienteUrl)
+  perguntasSnapshot: {
+    gerais: AnamnesisQuestion[];
+    especificas: AnamnesisQuestion[];
+  };
+  observacoesFinais?: string;
+  origemPreenchimento?: 'online_paciente' | 'presencial_clinica';
+  createdAt: string;
+  updatedAt?: string;
+}
+

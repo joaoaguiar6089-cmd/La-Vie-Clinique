@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "Procedure": {
+      "title": "Procedure",
+      "description": "Clinic aesthetic procedure catalog item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID of the procedure" },
+        "title": { "type": "string", "description": "Title of the procedure" },
+        "category": { "type": "string", "description": "Category name" },
+        "price": { "type": "number", "description": "Base price" },
+        "order": { "type": "number", "description": "Display order" }
+      },
+      "required": ["id", "title", "category", "price"]
+    },
+    "ClinicProfile": {
+      "title": "ClinicProfile",
+      "description": "Clinic identity, professionals, contact info",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Clinic name" },
+        "tagline": { "type": "string", "description": "Slogan or description" },
+        "phone": { "type": "string", "description": "WhatsApp contact" },
+        "instagram": { "type": "string", "description": "Instagram handle" }
+      },
+      "required": ["name", "phone"]
+    },
+    "AnamnesisQuestion": {
+      "title": "AnamnesisQuestion",
+      "description": "An individual question in an anamnesis form",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique question identifier" },
+        "texto": { "type": "string", "description": "Question text" },
+        "tipo_campo": {
+          "type": "string",
+          "enum": ["texto_curto", "texto_longo", "numero", "data", "unica_escolha", "multipla_escolha", "escala", "sim_nao"],
+          "description": "Input field type"
+        },
+        "opcoes": { "type": "array", "description": "Selection options for choice types" },
+        "obrigatoria": { "type": "boolean", "description": "Whether the answer is required" },
+        "ordem": { "type": "number", "description": "Display sort order" }
+      },
+      "required": ["id", "texto", "tipo_campo", "obrigatoria", "ordem"]
+    },
+    "AnamnesisTemplate": {
+      "title": "AnamnesisTemplate",
+      "description": "Template specification for an aesthetic procedure anamnesis form",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Template identifier" },
+        "procedimentoNome": { "type": "string", "description": "Name of the procedure" },
+        "tem_foto": { "type": "boolean", "description": "Whether this form requires patient/clinical photo upload" },
+        "perguntasEspecificas": { "type": "array", "description": "Specific questions for this procedure" }
+      },
+      "required": ["id", "procedimentoNome", "tem_foto"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "Patient record for the clinic",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique patient ID" },
+        "nome": { "type": "string", "description": "Patient full name" },
+        "contato": { "type": "string", "description": "Phone / WhatsApp" },
+        "dataNascimento": { "type": "string", "description": "Birth date" },
+        "createdAt": { "type": "string", "description": "Registration date ISO" }
+      },
+      "required": ["id", "nome", "createdAt"]
+    },
+    "AnamnesisRecord": {
+      "title": "AnamnesisRecord",
+      "description": "Completed anamnesis consultation record linked to a patient and procedure",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique consultation record ID" },
+        "pacienteId": { "type": "string", "description": "Linked patient ID" },
+        "pacienteNome": { "type": "string", "description": "Patient name" },
+        "procedimentoNome": { "type": "string", "description": "Procedure name" },
+        "dataAtendimento": { "type": "string", "description": "Date of attendance" },
+        "respostasGerais": { "type": "object", "description": "Key-value map of general answers" },
+        "respostasEspecificas": { "type": "object", "description": "Key-value map of specific answers" },
+        "fotoUrl": { "type": "string", "description": "Optional clinical photo URL or base64" },
+        "createdAt": { "type": "string", "description": "Creation timestamp ISO" }
+      },
+      "required": ["id", "pacienteId", "pacienteNome", "procedimentoNome", "dataAtendimento", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/procedures/{procedureId}": {
+      "schema": { "$ref": "#/entities/Procedure" },
+      "description": "Procedures catalog collection"
+    },
+    "/clinic_settings/{docId}": {
+      "schema": { "$ref": "#/entities/ClinicProfile" },
+      "description": "Clinic profile and clinical team settings"
+    },
+    "/anamnesis_general_questions/{questionId}": {
+      "schema": { "$ref": "#/entities/AnamnesisQuestion" },
+      "description": "Global general questions included in every anamnesis form"
+    },
+    "/anamnesis_templates/{templateId}": {
+      "schema": { "$ref": "#/entities/AnamnesisTemplate" },
+      "description": "Procedure specific anamnesis templates and specific questions"
+    },
+    "/patients/{patientId}": {
+      "schema": { "$ref": "#/entities/Patient" },
+      "description": "Patient registry and demographics"
+    },
+    "/anamnesis_records/{recordId}": {
+      "schema": { "$ref": "#/entities/AnamnesisRecord" },
+      "description": "Filled anamnesis consultation history"
+    }
+  }
+}

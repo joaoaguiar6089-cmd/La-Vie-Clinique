@@ -1,8 +1,10 @@
 import React from 'react';
-import { Plus, Share2, Settings, ListOrdered, Loader2 } from 'lucide-react';
+import { Plus, Share2, Settings, ListOrdered, Loader2, ClipboardList } from 'lucide-react';
 import { ClinicProfile } from '../types';
 
 interface NavbarProps {
+  currentView: 'procedures' | 'anamnesis';
+  onSelectView: (view: 'procedures' | 'anamnesis') => void;
   onOpenExport: () => void;
   onOpenSettings: () => void;
   onOpenNewProcedure: () => void;
@@ -12,6 +14,8 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
+  currentView,
+  onSelectView,
   onOpenExport,
   onOpenSettings,
   onOpenNewProcedure,
@@ -27,7 +31,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
         {/* Brand & Monogram */}
         <div
-          onClick={scrollToTop}
+          onClick={() => {
+            onSelectView('procedures');
+            scrollToTop();
+          }}
           className="flex items-center gap-3 cursor-pointer group"
           id="brand-header-link"
         >
@@ -39,7 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {clinic.name}
             </h1>
             <p className="text-[10px] tracking-[0.2em] uppercase text-gray-500 mt-1 font-medium line-clamp-1">
-              Catálogo de Procedimentos
+              {currentView === 'anamnesis' ? 'Fichas de Anamnese' : 'Catálogo de Procedimentos'}
             </p>
           </div>
         </div>
@@ -48,14 +55,37 @@ export const Navbar: React.FC<NavbarProps> = ({
         <nav className="hidden md:flex items-center gap-1 bg-white/40 backdrop-blur-md p-1 rounded-sm border border-white/60 shadow-xs">
           <button
             id="tab-manager-btn"
-            onClick={scrollToTop}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium transition-all bg-[#1A1A1A] text-white shadow-xs"
+            onClick={() => onSelectView('procedures')}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium transition-all ${
+              currentView === 'procedures'
+                ? 'bg-[#1A1A1A] text-white shadow-xs'
+                : 'text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60'
+            }`}
           >
             <ListOrdered className="w-3.5 h-3.5" />
-            Itens
-            <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-[#A67C52]/20 text-[#C49B74] font-bold">
+            Procedimentos
+            <span
+              className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                currentView === 'procedures'
+                  ? 'bg-[#A67C52]/20 text-[#C49B74]'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
               {proceduresCount}
             </span>
+          </button>
+
+          <button
+            id="tab-anamnesis-btn"
+            onClick={() => onSelectView('anamnesis')}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium transition-all ${
+              currentView === 'anamnesis'
+                ? 'bg-[#1A1A1A] text-white shadow-xs'
+                : 'text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60'
+            }`}
+          >
+            <ClipboardList className={`w-3.5 h-3.5 ${currentView === 'anamnesis' ? 'text-[#C49B74]' : 'text-[#A67C52]'}`} />
+            Fichas de Anamnese
           </button>
 
           <button
@@ -111,27 +141,42 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Share2 className="w-4 h-4 text-[#A67C52]" />
           </button>
 
-          <button
-            id="btn-new-procedure-main"
-            onClick={onOpenNewProcedure}
-            className="flex items-center gap-2 px-5 py-2 rounded-sm bg-[#A67C52] text-white text-xs tracking-widest uppercase font-semibold hover:bg-[#8e6945] shadow-xs active:scale-95 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Novo Cadastro</span>
-            <span className="sm:hidden">Novo</span>
-          </button>
+          {currentView === 'procedures' ? (
+            <button
+              id="btn-new-procedure-main"
+              onClick={onOpenNewProcedure}
+              className="flex items-center gap-2 px-5 py-2 rounded-sm bg-[#A67C52] text-white text-xs tracking-widest uppercase font-semibold hover:bg-[#8e6945] shadow-xs active:scale-95 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Novo Procedimento</span>
+              <span className="sm:hidden">Novo</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
       {/* Mobile navigation tab bar */}
       <div className="md:hidden flex border-t border-white/60 bg-white/60 backdrop-blur-md px-2 py-1 justify-around">
         <button
-          onClick={scrollToTop}
-          className="flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider bg-[#1A1A1A] text-white"
+          onClick={() => onSelectView('procedures')}
+          className={`flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider ${
+            currentView === 'procedures' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600'
+          }`}
         >
           <ListOrdered className="w-3.5 h-3.5" />
           Itens ({proceduresCount})
         </button>
+
+        <button
+          onClick={() => onSelectView('anamnesis')}
+          className={`flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider ${
+            currentView === 'anamnesis' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600'
+          }`}
+        >
+          <ClipboardList className="w-3.5 h-3.5 text-[#A67C52]" />
+          Anamnese
+        </button>
+
         <button
           onClick={onOpenExport}
           className="flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider text-gray-600"
@@ -139,6 +184,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Share2 className="w-3.5 h-3.5 text-[#A67C52]" />
           PDF
         </button>
+
         <button
           onClick={onOpenSettings}
           className="flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider text-gray-600"
@@ -150,3 +196,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+

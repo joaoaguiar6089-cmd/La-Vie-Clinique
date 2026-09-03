@@ -12,12 +12,30 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Procedure, ClinicProfile } from '../types';
+import {
+  Procedure,
+  ClinicProfile,
+  AnamnesisQuestion,
+  AnamnesisTemplate,
+  Patient,
+  AnamnesisRecord,
+} from '../types';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
+import {
+  DEFAULT_GENERAL_QUESTIONS,
+  DEFAULT_PROCEDURE_TEMPLATES,
+  SAMPLE_PATIENTS,
+  SAMPLE_ANAMNESIS_RECORDS,
+} from '../data/anamnesisInitialData';
 
 const PROCEDURES_COLLECTION = 'procedures';
 const CLINIC_SETTINGS_COLLECTION = 'clinic_settings';
 const CLINIC_SETTINGS_DOC_ID = 'main_profile';
+
+const ANAMNESIS_GENERAL_QUESTIONS_COLLECTION = 'anamnesis_general_questions';
+const ANAMNESIS_TEMPLATES_COLLECTION = 'anamnesis_templates';
+const PATIENTS_COLLECTION = 'patients';
+const ANAMNESIS_RECORDS_COLLECTION = 'anamnesis_records';
 
 /**
  * Deeply removes undefined values so Firestore never throws 'Unsupported field value: undefined'
@@ -201,3 +219,257 @@ export async function reorderProceduresInDb(procedures: Procedure[]): Promise<vo
   });
   await batch.commit();
 }
+
+// ==========================================
+// MÓDULO DE FICHAS DE ANAMNESE — DATABASE OPERATIONS
+// ==========================================
+
+/**
+ * Seed initial anamnesis data (general questions, templates, sample patients and records) if empty.
+ */
+export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
+  try {
+    // 1. Seed General Questions if empty
+    const genQSnap = await getDocs(collection(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION));
+    if (genQSnap.empty) {
+      console.log('Seeding initial general questions for anamnesis...');
+      const batch = writeBatch(db);
+      DEFAULT_GENERAL_QUESTIONS.forEach((q) => {
+        const ref = doc(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, q.id);
+        batch.set(ref, cleanForFirestore(q));
+      });
+      await batch.commit();
+    }
+
+    // 2. Seed Procedure Templates if empty
+    const tplSnap = await getDocs(collection(db, ANAMNESIS_TEMPLATES_COLLECTION));
+    if (tplSnap.empty) {
+      console.log('Seeding initial procedure templates for anamnesis...');
+      const batch = writeBatch(db);
+      DEFAULT_PROCEDURE_TEMPLATES.forEach((tpl) => {
+        const ref = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, tpl.id);
+        batch.set(ref, cleanForFirestore({
+          ...tpl,
+          updatedAt: new Date().toISOString(),
+        }));
+      });
+      await batch.commit();
+    }
+
+    // 3. Seed Patients if empty
+    const patSnap = await getDocs(collection(db, PATIENTS_COLLECTION));
+    if (patSnap.empty) {
+      console.log('Seeding initial sample patients...');
+      const batch = writeBatch(db);
+      SAMPLE_PATIENTS.forEach((p) => {
+        const ref = doc(db, PATIENTS_COLLECTION, p.id);
+        batch.set(ref, cleanForFirestore(p));
+      });
+      await batch.commit();
+    }
+
+    // 4. Seed Anamnesis Records if empty
+    const recSnap = await getDocs(collection(db, ANAMNESIS_RECORDS_COLLECTION));
+    if (recSnap.empty) {
+      console.log('Seeding initial sample anamnesis records...');
+      const batch = writeBatch(db);
+      SAMPLE_ANAMNESIS_RECORDS.forEach((r) => {
+        const ref = doc(db, ANAMNESIS_RECORDS_COLLECTION, r.id);
+        batch.set(ref, cleanForFirestore(r));
+      });
+      await batch.commit();
+    }
+  } catch (err) {
+    console.error('Error seeding initial anamnesis data:', err);
+  }
+}
+
+/**
+ * Subscribe to General Questions
+ */
+export function subscribeToGeneralQuestions(
+  onUpdate: (questions: AnamnesisQuestion[]) => void,
+  onError?: (err: Error) => void
+) {
+  const q = query(collection(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION), orderBy('ordem', 'asc'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items: AnamnesisQuestion[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ ...(docSnap.data() as AnamnesisQuestion), id: docSnap.id });
+      });
+      onUpdate(items);
+    },
+    (error) => {
+      console.error('General questions subscription error:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Save a single General Question
+ */
+export async function saveGeneralQuestion(question: AnamnesisQuestion): Promise<void> {
+  const docRef = doc(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, question.id);
+  await setDoc(docRef, cleanForFirestore(question), { merge: true });
+}
+
+/**
+ * Save/reorder all General Questions in batch
+ */
+export async function saveAllGeneralQuestions(questions: AnamnesisQuestion[]): Promise<void> {
+  const batch = writeBatch(db);
+  questions.forEach((q, index) => {
+    const docRef = doc(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, q.id);
+    batch.set(docRef, cleanForFirestore({ ...q, ordem: index + 1 }), { merge: true });
+  });
+  await batch.commit();
+}
+
+/**
+ * Delete a General Question
+ */
+export async function deleteGeneralQuestion(questionId: string): Promise<void> {
+  const docRef = doc(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, questionId);
+  await deleteDoc(docRef);
+}
+
+/**
+ * Subscribe to Procedure Templates
+ */
+export function subscribeToAnamnesisTemplates(
+  onUpdate: (templates: AnamnesisTemplate[]) => void,
+  onError?: (err: Error) => void
+) {
+  const colRef = collection(db, ANAMNESIS_TEMPLATES_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const items: AnamnesisTemplate[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ ...(docSnap.data() as AnamnesisTemplate), id: docSnap.id });
+      });
+      // Sort alphabetically by procedure name
+      items.sort((a, b) => a.procedimentoNome.localeCompare(b.procedimentoNome));
+      onUpdate(items);
+    },
+    (error) => {
+      console.error('Anamnesis templates subscription error:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Save or update a Procedure Template
+ */
+export async function saveAnamnesisTemplate(template: AnamnesisTemplate): Promise<void> {
+  const docRef = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, template.id);
+  const dataToSave = cleanForFirestore({
+    ...template,
+    updatedAt: new Date().toISOString(),
+  });
+  await setDoc(docRef, dataToSave, { merge: true });
+}
+
+/**
+ * Delete a Procedure Template
+ */
+export async function deleteAnamnesisTemplate(templateId: string): Promise<void> {
+  const docRef = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, templateId);
+  await deleteDoc(docRef);
+}
+
+/**
+ * Subscribe to Patients collection
+ */
+export function subscribeToPatients(
+  onUpdate: (patients: Patient[]) => void,
+  onError?: (err: Error) => void
+) {
+  const colRef = collection(db, PATIENTS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const items: Patient[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ ...(docSnap.data() as Patient), id: docSnap.id });
+      });
+      items.sort((a, b) => a.nome.localeCompare(b.nome));
+      onUpdate(items);
+    },
+    (error) => {
+      console.error('Patients subscription error:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Save or update a Patient record
+ */
+export async function savePatient(patient: Patient): Promise<void> {
+  const docRef = doc(db, PATIENTS_COLLECTION, patient.id);
+  const dataToSave = cleanForFirestore({
+    ...patient,
+    updatedAt: new Date().toISOString(),
+  });
+  await setDoc(docRef, dataToSave, { merge: true });
+}
+
+/**
+ * Delete a Patient
+ */
+export async function deletePatient(patientId: string): Promise<void> {
+  const docRef = doc(db, PATIENTS_COLLECTION, patientId);
+  await deleteDoc(docRef);
+}
+
+/**
+ * Subscribe to Anamnesis Records (Consultations)
+ */
+export function subscribeToAnamnesisRecords(
+  onUpdate: (records: AnamnesisRecord[]) => void,
+  onError?: (err: Error) => void
+) {
+  const colRef = collection(db, ANAMNESIS_RECORDS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const items: AnamnesisRecord[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ ...(docSnap.data() as AnamnesisRecord), id: docSnap.id });
+      });
+      // Sort newest first by dataAtendimento or createdAt
+      items.sort((a, b) => new Date(b.dataAtendimento || b.createdAt).getTime() - new Date(a.dataAtendimento || a.createdAt).getTime());
+      onUpdate(items);
+    },
+    (error) => {
+      console.error('Anamnesis records subscription error:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Save or update an Anamnesis Record
+ */
+export async function saveAnamnesisRecord(record: AnamnesisRecord): Promise<void> {
+  const docRef = doc(db, ANAMNESIS_RECORDS_COLLECTION, record.id);
+  const dataToSave = cleanForFirestore({
+    ...record,
+    updatedAt: new Date().toISOString(),
+  });
+  await setDoc(docRef, dataToSave, { merge: true });
+}
+
+/**
+ * Delete an Anamnesis Record
+ */
+export async function deleteAnamnesisRecord(recordId: string): Promise<void> {
+  const docRef = doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId);
+  await deleteDoc(docRef);
+}
+

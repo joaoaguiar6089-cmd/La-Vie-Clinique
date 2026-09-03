@@ -11,9 +11,30 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Anamnesis Module: General questions inherited by all procedure forms
+    match /anamnesis_general_questions/{questionId} {
+      allow read, write: if true;
+    }
+
+    // Anamnesis Module: Procedure template configurations and specific questions
+    match /anamnesis_templates/{templateId} {
+      allow read, write: if true;
+    }
+
+    // Patients registry
+    match /patients/{patientId} {
+      allow read, write: if true;
+    }
+
+    // Filled anamnesis attendance records & history
+    match /anamnesis_records/{recordId} {
+      allow read, write: if true;
+    }
+
     // Default fallback
     match /{document=**} {
       allow read, write: if true;
     }
   }
 }
+
