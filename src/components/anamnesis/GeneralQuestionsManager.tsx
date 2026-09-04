@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AnamnesisQuestion, QuestionFieldType } from '../../types';
+import { AnamnesisQuestion, QuestionAudience, QuestionFieldType } from '../../types';
 import {
   Plus,
   Trash2,
@@ -39,6 +39,7 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
   const [ajuda, setAjuda] = useState('');
   const [opcoesInput, setOpcoesInput] = useState('');
   const [escalaMax, setEscalaMax] = useState<number>(10);
+  const [publicoAlvo, setPublicoAlvo] = useState<QuestionAudience>('paciente');
   const [formError, setFormError] = useState('');
 
   const openNewQuestionModal = () => {
@@ -49,6 +50,7 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
     setAjuda('');
     setOpcoesInput('');
     setEscalaMax(10);
+    setPublicoAlvo('paciente');
     setFormError('');
     setIsModalOpen(true);
   };
@@ -61,6 +63,7 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
     setAjuda(q.ajuda || '');
     setOpcoesInput(q.opcoes ? q.opcoes.join('\n') : '');
     setEscalaMax(q.escalaMax || 10);
+    setPublicoAlvo(q.publicoAlvo || 'paciente');
     setFormError('');
     setIsModalOpen(true);
   };
@@ -97,6 +100,7 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
         ajuda: ajuda.trim() || undefined,
         opcoes,
         escalaMax: tipoCampo === 'escala' ? escalaMax : undefined,
+        publicoAlvo,
       };
 
       await onSaveQuestion(questionToSave);
@@ -212,6 +216,15 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
                     <h4 className="font-semibold text-sm text-[#1A1A1A] leading-snug">
                       {q.texto}
                     </h4>
+                    {(q.publicoAlvo || 'paciente') === 'medico' ? (
+                      <span className="px-1.5 py-0.5 rounded-xs bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-semibold">
+                        Médico
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded-xs bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold">
+                        Paciente
+                      </span>
+                    )}
                     {q.obrigatoria ? (
                       <span className="px-1.5 py-0.5 rounded-xs bg-red-50 border border-red-200 text-red-600 text-[10px] font-semibold">
                         Obrigatória
@@ -429,6 +442,32 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
                   placeholder="Ex: Para ambientação agradável da sala de atendimento"
                   className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1">
+                  Quem Responde Esta Pergunta?
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPublicoAlvo('paciente')}
+                    className={`flex-1 px-4 py-2 rounded-sm text-xs font-semibold border transition-colors ${
+                      publicoAlvo === 'paciente' ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    Paciente (no link de preenchimento)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPublicoAlvo('medico')}
+                    className={`flex-1 px-4 py-2 rounded-sm text-xs font-semibold border transition-colors ${
+                      publicoAlvo === 'medico' ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    Médico (complemento na plataforma)
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200">

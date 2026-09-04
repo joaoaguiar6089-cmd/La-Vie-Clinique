@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   Patient,
+  PatientGender,
   AnamnesisTemplate,
   AnamnesisQuestion,
   AnamnesisRecord,
   ClinicProfile,
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
+import { resolveTemplatePhoto } from '../../utils/genderPhoto';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import {
   X,
@@ -24,6 +26,45 @@ import {
   ChevronDown,
   Music,
 } from 'lucide-react';
+
+interface GenderToggleProps {
+  value: PatientGender | '';
+  onChange: (value: PatientGender) => void;
+  error?: string;
+}
+
+const GenderToggle: React.FC<GenderToggleProps> = ({ value, onChange, error }) => (
+  <div>
+    <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+      Gênero <span className="text-gray-400 font-normal">(define a foto de referência)</span>
+    </label>
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => onChange('feminino')}
+        className={`flex-1 py-2 px-3 rounded-sm text-xs font-semibold uppercase tracking-wider transition-all border ${
+          value === 'feminino'
+            ? 'bg-[#1A1A1A] text-white border-[#1A1A1A] shadow-xs'
+            : `bg-white text-gray-700 hover:bg-gray-50 ${error ? 'border-red-400' : 'border-gray-200'}`
+        }`}
+      >
+        Feminino
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('masculino')}
+        className={`flex-1 py-2 px-3 rounded-sm text-xs font-semibold uppercase tracking-wider transition-all border ${
+          value === 'masculino'
+            ? 'bg-[#A67C52] text-white border-[#A67C52] shadow-xs'
+            : `bg-white text-gray-700 hover:bg-gray-50 ${error ? 'border-red-400' : 'border-gray-200'}`
+        }`}
+      >
+        Masculino
+      </button>
+    </div>
+    {error && <p className="text-[10px] text-red-500 mt-1">{error}</p>}
+  </div>
+);
 
 interface AnamnesisFormFillModalProps {
   isOpen: boolean;
@@ -58,8 +99,10 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   const [newPatientName, setNewPatientName] = useState('');
   const [newPatientPhone, setNewPatientPhone] = useState('');
   const [newPatientBirth, setNewPatientBirth] = useState('');
+  const [newPatientGender, setNewPatientGender] = useState<PatientGender | ''>('');
   const [newPatientEmail, setNewPatientEmail] = useState('');
   const [tipoMusica, setTipoMusica] = useState('');
+  const [selectedPatientGender, setSelectedPatientGender] = useState<PatientGender | ''>('');
 
   // Helper to identify questions that shouldn't be duplicated
   const isDuplicateIdentQuestion = (q: AnamnesisQuestion): boolean => {
@@ -113,11 +156,14 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
         if ((patient as any).tipoMusica) {
           setTipoMusica((patient as any).tipoMusica);
         }
+        setSelectedPatientGender(patient.genero || '');
       }
     }
   }, [selectedPatientId, patientMode, patients, generalQuestions]);
 
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
+  const currentGenero = patientMode === 'new' ? newPatientGender : selectedPatientGender;
+  const previewFotoModelo = currentTemplate ? resolveTemplatePhoto(currentTemplate, currentGenero || undefined) : undefined;
 
   if (!isOpen) return null;
 
@@ -163,8 +209,14 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
     if (patientMode === 'new' && !newPatientName.trim()) {
       newErrors['patient_name'] = 'Informe o nome completo do paciente.';
     }
+    if (patientMode === 'new' && !newPatientGender) {
+      newErrors['patient_gender'] = 'Selecione o gênero (define a foto de referência).';
+    }
     if (patientMode === 'select' && !selectedPatientId) {
       newErrors['patient_select'] = 'Selecione um paciente cadastrado ou crie um novo.';
+    }
+    if (patientMode === 'select' && selectedPatientId && !selectedPatientGender) {
+      newErrors['patient_gender'] = 'Selecione o gênero (define a foto de referência).';
     }
 
     // Procedure
@@ -188,6 +240,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
       let patientNameToUse = '';
       let patientPhoneToUse = '';
       let patientBirthToUse = '';
+      let patientGenderToUse: Patient['genero'];
 
       if (patientMode === 'new') {
         const newPat: Patient = {
@@ -195,6 +248,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           nome: newPatientName.trim(),
           contato: newPatientPhone.trim() || undefined,
           dataNascimento: newPatientBirth || undefined,
+          genero: newPatientGender || undefined,
           email: newPatientEmail.trim() || undefined,
           createdAt: new Date().toISOString(),
         };
@@ -203,11 +257,17 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
         patientNameToUse = newPat.nome;
         patientPhoneToUse = newPat.contato || '';
         patientBirthToUse = newPat.dataNascimento || '';
+        patientGenderToUse = newPat.genero;
       } else {
         const found = patients.find((p) => p.id === selectedPatientId);
         patientNameToUse = found?.nome || '';
         patientPhoneToUse = found?.contato || '';
         patientBirthToUse = found?.dataNascimento || '';
+        patientGenderToUse = selectedPatientGender || found?.genero;
+        // Persiste o gênero caso tenha sido corrigido/preenchido agora para um paciente já existente
+        if (found && selectedPatientGender && found.genero !== selectedPatientGender) {
+          await onSavePatient({ ...found, genero: selectedPatientGender });
+        }
       }
 
       // If user filled gen-nome in answers, prioritize it
@@ -223,19 +283,38 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
         'gen-musica': tipoMusica.trim(),
       };
 
+      // Perguntas exclusivas do profissional já são preenchidas de uma vez só no atendimento
+      // presencial — espelha essas respostas em respostasProfissional para manter a mesma
+      // fonte de verdade usada pela ficha online + complementação.
+      const respostasProfissional: Record<string, any> = {};
+      extraGeneralQuestions.forEach((q) => {
+        if ((q.publicoAlvo || 'paciente') === 'medico' && finalRespostasGerais[q.id] !== undefined) {
+          respostasProfissional[q.id] = finalRespostasGerais[q.id];
+        }
+      });
+      currentTemplate.perguntasEspecificas.forEach((q) => {
+        if ((q.publicoAlvo || 'paciente') === 'medico' && respostasEspecificas[q.id] !== undefined) {
+          respostasProfissional[q.id] = respostasEspecificas[q.id];
+        }
+      });
+
       const newRecord: AnamnesisRecord = {
         id: `rec-${Date.now()}`,
         pacienteId: patientIdToUse,
         pacienteNome: patientNameToUse,
         pacienteContato: patientPhoneToUse,
         pacienteDataNascimento: patientBirthToUse,
+        pacienteGenero: patientGenderToUse,
         procedimentoId: currentTemplate.id,
+        templateId: currentTemplate.id,
         procedimentoNome: currentTemplate.procedimentoNome,
         dataAtendimento,
         profissionalNome,
         respostasGerais: finalRespostasGerais,
         respostasEspecificas,
-        fotoModeloUrl: currentTemplate.fotoModeloUrl || undefined,
+        respostasProfissional,
+        profissionalPreenchidoEm: new Date().toISOString(),
+        fotoModeloUrl: resolveTemplatePhoto(currentTemplate, patientGenderToUse),
         fotoPacienteUrl: currentTemplate.tem_foto ? fotoUrl || undefined : undefined,
         fotoUrl: currentTemplate.tem_foto ? fotoUrl || undefined : undefined,
         perguntasSnapshot: {
@@ -372,6 +451,14 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                         className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                       />
                     </div>
+                    <GenderToggle
+                      value={selectedPatientGender}
+                      onChange={(v) => {
+                        setSelectedPatientGender(v);
+                        if (errors['patient_gender']) setErrors((prev) => ({ ...prev, patient_gender: '' }));
+                      }}
+                      error={errors['patient_gender']}
+                    />
                   </div>
                 )}
               </div>
@@ -447,6 +534,15 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                   />
                 </div>
+
+                <GenderToggle
+                  value={newPatientGender}
+                  onChange={(v) => {
+                    setNewPatientGender(v);
+                    if (errors['patient_gender']) setErrors((prev) => ({ ...prev, patient_gender: '' }));
+                  }}
+                  error={errors['patient_gender']}
+                />
               </div>
             )}
 
@@ -552,7 +648,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           )}
 
           {/* SECTION 4: FOTOS CLÍNICAS (Foto do Doutor e Foto do Paciente) */}
-          {(currentTemplate?.tem_foto || currentTemplate?.fotoModeloUrl) && (
+          {(currentTemplate?.tem_foto || previewFotoModelo) && (
             <div className="bg-white p-4 sm:p-5 rounded-sm border border-emerald-200/80 shadow-2xs space-y-4 bg-gradient-to-br from-white to-emerald-50/20">
               <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                 <div className="flex items-center gap-2">
@@ -571,8 +667,8 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* 1. Foto do Doutor / Mapa de Referência */}
-                {currentTemplate?.fotoModeloUrl && (
+                {/* 1. Foto do Doutor / Mapa de Referência (escolhida pelo gênero do paciente) */}
+                {previewFotoModelo ? (
                   <div className="p-3 bg-white rounded-sm border border-gray-200 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-[#1A1A1A]">
@@ -584,7 +680,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     </div>
                     <div className="w-full h-44 rounded-xs overflow-hidden border border-gray-200 bg-[#FAF9F6] flex items-center justify-center">
                       <img
-                        src={currentTemplate.fotoModeloUrl}
+                        src={previewFotoModelo}
                         alt="Foto de referência do doutor"
                         className="w-full h-full object-contain"
                       />
@@ -593,11 +689,17 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                       Guia anatômico configurado para {currentTemplate.procedimentoNome}
                     </p>
                   </div>
+                ) : (
+                  !currentGenero && (currentTemplate?.fotoModeloFemininoUrl || currentTemplate?.fotoModeloMasculinoUrl) && (
+                    <div className="p-3 bg-amber-50 rounded-sm border border-amber-200 text-[11px] text-amber-800 flex items-center justify-center text-center">
+                      Selecione o gênero do paciente acima para ver a foto de referência.
+                    </div>
+                  )
                 )}
 
                 {/* 2. Foto do Paciente */}
                 {currentTemplate?.tem_foto && (
-                  <div className={`p-3 bg-white rounded-sm border border-emerald-200 space-y-2 ${!currentTemplate?.fotoModeloUrl ? 'sm:col-span-2' : ''}`}>
+                  <div className={`p-3 bg-white rounded-sm border border-emerald-200 space-y-2 ${!previewFotoModelo ? 'sm:col-span-2' : ''}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-emerald-900">
                         Foto Real do Paciente (Opcional)

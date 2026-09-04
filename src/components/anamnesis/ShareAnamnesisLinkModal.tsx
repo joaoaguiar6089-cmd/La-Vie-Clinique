@@ -23,7 +23,6 @@ interface ShareAnamnesisLinkModalProps {
   clinicProfile: ClinicProfile;
   initialTemplateId?: string;
   initialPatientId?: string;
-  onOpenPatientView?: (templateId: string, patientId?: string) => void;
 }
 
 export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = ({
@@ -34,7 +33,6 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
   clinicProfile,
   initialTemplateId,
   initialPatientId,
-  onOpenPatientView,
 }) => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     initialTemplateId || (templates[0]?.id || '')
@@ -81,11 +79,7 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
   };
 
   const handlePreviewAsPatient = () => {
-    if (onOpenPatientView && selectedTemplate) {
-      onOpenPatientView(selectedTemplate.id, selectedPatientId || undefined);
-    } else {
-      window.open(shareableUrl, '_blank');
-    }
+    window.open(shareableUrl, '_blank');
   };
 
   return (

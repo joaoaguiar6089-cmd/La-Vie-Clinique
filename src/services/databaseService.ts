@@ -9,6 +9,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  where,
   writeBatch
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -471,5 +472,79 @@ export async function saveAnamnesisRecord(record: AnamnesisRecord): Promise<void
 export async function deleteAnamnesisRecord(recordId: string): Promise<void> {
   const docRef = doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId);
   await deleteDoc(docRef);
+}
+
+// ==========================================
+// ONE-TIME FETCHES — usados pela página pública de preenchimento (sem login),
+// que não deve assinar coleções inteiras em tempo real.
+// ==========================================
+
+/**
+ * Fetch a single Anamnesis Template by ID (one-time).
+ */
+export async function getAnamnesisTemplateById(templateId: string): Promise<AnamnesisTemplate | null> {
+  const docRef = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, templateId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return null;
+  return { ...(snap.data() as AnamnesisTemplate), id: snap.id };
+}
+
+/**
+ * Fetch a single Patient by ID (one-time).
+ */
+export async function getPatientById(patientId: string): Promise<Patient | null> {
+  const docRef = doc(db, PATIENTS_COLLECTION, patientId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return null;
+  return { ...(snap.data() as Patient), id: snap.id };
+}
+
+/**
+ * Fetch a single Anamnesis Record by ID (one-time).
+ */
+export async function getAnamnesisRecordById(recordId: string): Promise<AnamnesisRecord | null> {
+  const docRef = doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return null;
+  return { ...(snap.data() as AnamnesisRecord), id: snap.id };
+}
+
+/**
+ * Fetch all Anamnesis Records for a given patient (one-time, unordered — sort client-side).
+ * Used to find/prefill a patient's most recent record and to detect an existing record
+ * for a given template so the same public link can be reopened to keep editing.
+ */
+export async function getRecordsForPatient(patientId: string): Promise<AnamnesisRecord[]> {
+  const q = query(collection(db, ANAMNESIS_RECORDS_COLLECTION), where('pacienteId', '==', patientId));
+  const snap = await getDocs(q);
+  const items: AnamnesisRecord[] = [];
+  snap.forEach((docSnap) => {
+    items.push({ ...(docSnap.data() as AnamnesisRecord), id: docSnap.id });
+  });
+  items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return items;
+}
+
+/**
+ * Fetch General Questions once (no live subscription) — used by the public form page.
+ */
+export async function getGeneralQuestionsOnce(): Promise<AnamnesisQuestion[]> {
+  const q = query(collection(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION), orderBy('ordem', 'asc'));
+  const snap = await getDocs(q);
+  const items: AnamnesisQuestion[] = [];
+  snap.forEach((docSnap) => {
+    items.push({ ...(docSnap.data() as AnamnesisQuestion), id: docSnap.id });
+  });
+  return items;
+}
+
+/**
+ * Fetch the Clinic Profile once (no live subscription) — used by the public form page.
+ */
+export async function getClinicProfileOnce(): Promise<ClinicProfile | null> {
+  const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
+  const snap = await getDoc(clinicRef);
+  if (!snap.exists()) return null;
+  return snap.data() as ClinicProfile;
 }
 

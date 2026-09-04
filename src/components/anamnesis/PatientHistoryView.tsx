@@ -195,6 +195,11 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                         Online Paciente
                       </span>
                     )}
+                    {rec.origemPreenchimento === 'online_paciente' && !rec.profissionalPreenchidoEm && (
+                      <span className="px-1.5 py-0.5 rounded-xs bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold uppercase tracking-wider">
+                        Aguardando Médico
+                      </span>
+                    )}
                     {rec.fotoModeloUrl && (rec.fotoPacienteUrl || rec.fotoUrl) ? (
                       <span className="px-1.5 py-0.5 rounded-xs bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-semibold">
                         Foto Doutor + Paciente

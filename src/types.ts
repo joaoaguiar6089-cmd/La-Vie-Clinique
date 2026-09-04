@@ -76,6 +76,8 @@ export type QuestionFieldType =
   | 'escala'
   | 'sim_nao';
 
+export type QuestionAudience = 'paciente' | 'medico';
+
 export interface AnamnesisQuestion {
   id: string;
   texto: string;
@@ -85,7 +87,10 @@ export interface AnamnesisQuestion {
   obrigatoria: boolean;
   ordem: number;
   ajuda?: string;
+  publicoAlvo?: QuestionAudience; // Quem responde esta pergunta. Ausente = 'paciente' (padrão retrocompatível)
 }
+
+export type PatientGender = 'feminino' | 'masculino';
 
 export interface AnamnesisTemplate {
   id: string; // Ex: 'tpl-botox'
@@ -93,7 +98,9 @@ export interface AnamnesisTemplate {
   procedimentoNome: string; // Ex: 'Botox', 'HIFU - Ultrassom Microfocado'
   categoria?: string;
   tem_foto: boolean; // Se true, exibe campo de upload de foto para posterior anotação manual
-  fotoModeloUrl?: string; // Foto de referência / foto do doutor / mapa anatômico carregado pelo profissional na edição da ficha
+  fotoModeloUrl?: string; // Legado/fallback — usado quando não há foto específica por gênero
+  fotoModeloFemininoUrl?: string; // Foto/mapa anatômico de referência — versão feminina
+  fotoModeloMasculinoUrl?: string; // Foto/mapa anatômico de referência — versão masculina
   perguntasEspecificas: AnamnesisQuestion[];
   descricao?: string;
   updatedAt?: string;
@@ -104,6 +111,7 @@ export interface Patient {
   nome: string;
   contato?: string; // Telefone / WhatsApp
   dataNascimento?: string; // YYYY-MM-DD
+  genero?: PatientGender;
   cpf?: string;
   email?: string;
   observacoes?: string;
@@ -117,13 +125,19 @@ export interface AnamnesisRecord {
   pacienteNome: string;
   pacienteContato?: string;
   pacienteDataNascimento?: string;
+  pacienteGenero?: PatientGender;
   procedimentoId?: string;
+  templateId?: string; // ID da ficha-modelo (AnamnesisTemplate.id) usada para gerar este registro
   procedimentoNome: string;
   dataAtendimento: string; // YYYY-MM-DD ou ISO
   profissionalNome?: string; // Esteticista ou médica responsável
-  respostasGerais: Record<string, any>; // questionId -> valor
-  respostasEspecificas: Record<string, any>; // questionId -> valor
-  fotoModeloUrl?: string; // Foto do doutor / mapa anatômico de referência herdado do modelo
+  respostasGerais: Record<string, any>; // questionId -> valor (perguntas gerais, ambos os públicos)
+  respostasEspecificas: Record<string, any>; // questionId -> valor (perguntas específicas, ambos os públicos)
+  respostasProfissional?: Record<string, any>; // questionId -> valor, respostas exclusivas do profissional (publicoAlvo='medico')
+  profissionalPreenchidoEm?: string; // ISO timestamp da 1ª vez que o profissional salvou sua parte — presença trava a edição do paciente
+  fotoModeloUrl?: string; // Foto do doutor / mapa anatômico de referência, já resolvida pelo gênero do paciente no momento da criação
+  fotoModeloAnotadaUrl?: string; // Versão da foto de referência com anotações do profissional (imagem "achatada", usada no PDF)
+  fotoModeloAnotacoesJson?: string; // Estado do canvas de anotação (JSON do Fabric.js) para permitir reabrir e continuar editando
   fotoPacienteUrl?: string; // Foto real enviada pelo paciente online ou tirada na clínica
   fotoUrl?: string; // Retrocompatibilidade (espelha fotoPacienteUrl)
   perguntasSnapshot: {

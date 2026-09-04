@@ -6,6 +6,7 @@ import { ProcedureFormModal } from './components/ProcedureFormModal';
 import { ShareExportModal } from './components/ShareExportModal';
 import { ClinicSettingsModal } from './components/ClinicSettingsModal';
 import { AnamnesisModule } from './components/anamnesis/AnamnesisModule';
+import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
 import { Procedure, ClinicProfile } from './types';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { RefreshCw, Check } from 'lucide-react';
@@ -22,7 +23,17 @@ import {
 const STORAGE_KEY_PROCEDURES = 'aura_bronze_procedures_v1';
 const STORAGE_KEY_CLINIC = 'aura_bronze_clinic_v1';
 
+// A ficha de anamnese pública (link enviado ao cliente) é servida por um shell totalmente
+// separado do painel administrativo — sem login, sem catálogo. Esta checagem depende só da
+// URL de carregamento da página, então é estável durante toda a vida desta instância do App.
+const publicSearchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+const isPublicAnamnesisRoute = !!(publicSearchParams?.get('anamnese') || publicSearchParams?.get('ficha'));
+
 export default function App() {
+  if (isPublicAnamnesisRoute) {
+    return <PublicAnamnesisEntry />;
+  }
+
   // Load procedures from localStorage or default samples initial fallback
   const [procedures, setProcedures] = useState<Procedure[]>(() => {
     try {

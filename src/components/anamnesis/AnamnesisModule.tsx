@@ -220,6 +220,8 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
           templates={templates}
           catalogProcedures={catalogProcedures}
           generalQuestions={generalQuestions}
+          clinicProfile={clinicProfile}
+          patients={patients}
           onSaveTemplate={saveAnamnesisTemplate}
           onDeleteTemplate={deleteAnamnesisTemplate}
         />
@@ -252,9 +254,11 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
       {/* PRINTABLE / DETAIL MODAL */}
       {detailRecord && (
         <PrintableAnamnesisSheet
-          record={detailRecord}
+          record={records.find((r) => r.id === detailRecord.id) || detailRecord}
           clinicProfile={clinicProfile}
           onClose={() => setDetailRecord(null)}
+          viewerRole="staff"
+          onSaveRecord={saveAnamnesisRecord}
         />
       )}
     </div>

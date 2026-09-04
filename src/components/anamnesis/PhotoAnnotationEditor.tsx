@@ -1,0 +1,721 @@
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Canvas, IText, Line, PencilBrush, FabricImage, FabricObject, Point } from 'fabric';
+import {
+  X,
+  MousePointer2,
+  Type,
+  Pencil,
+  Minus,
+  Trash2,
+  Undo2,
+  Redo2,
+  Save,
+  Loader2,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
+
+interface PhotoAnnotationEditorProps {
+  imageUrl: string;
+  initialAnnotationsJson?: string;
+  title?: string;
+  onSave: (flattenedDataUrl: string, annotationsJson: string) => Promise<void> | void;
+  onClose: () => void;
+}
+
+type Tool = 'select' | 'text' | 'draw' | 'line';
+
+const COLORS = ['#E11D48', '#1A1A1A', '#2563EB', '#16A34A', '#F59E0B', '#FFFFFF'];
+const MIN_ZOOM = 0.15;
+const MAX_ZOOM = 6;
+const ZOOM_STEP = 1.25;
+
+const isTextObject = (obj: FabricObject | undefined | null) =>
+  !!obj && (obj.type === 'i-text' || obj.type === 'itext' || obj.type === 'textbox');
+
+const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+
+/** Canvas display size that comfortably fits the current viewport (desktop or mobile). */
+function computeDisplaySize() {
+  if (typeof window === 'undefined') return { width: 600, height: 400 };
+  const width = Math.max(280, Math.min(window.innerWidth - 32, 1000));
+  const height = Math.max(280, Math.min(window.innerHeight - 230, 900));
+  return { width, height };
+}
+
+export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
+  imageUrl,
+  initialAnnotationsJson,
+  title,
+  onSave,
+  onClose,
+}) => {
+  // Plain host div that React renders and owns; the actual <canvas> elements are created and
+  // destroyed imperatively inside it (see bootstrap effect below). Fabric.js rewrites the DOM
+  // around whatever canvas element it's given (wraps it, adds a sibling "upper canvas" for
+  // interaction, and unwraps it again on dispose) — if React directly owned that <canvas> as a
+  // JSX child, React's own unmount would try to remove a node Fabric has since relocated,
+  // throwing "Failed to execute 'removeChild' ... not a child of this node". Keeping the node
+  // React tracks (this div) untouched by Fabric side-steps that entirely.
+  const canvasHostRef = useRef<HTMLDivElement>(null);
+  const fabricCanvasRef = useRef<Canvas | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // The photo's own natural pixel size — annotation objects live in this coordinate space
+  // regardless of the current on-screen zoom, so exports are always full resolution.
+  const imageDimsRef = useRef({ width: 0, height: 0 });
+  const pinchRef = useRef<{ startDistance: number; startZoom: number } | null>(null);
+
+  const [tool, setTool] = useState<Tool>('select');
+  const [color, setColor] = useState('#E11D48');
+  const [strokeWidth, setStrokeWidth] = useState(8);
+  const [fontSize, setFontSize] = useState(60);
+  const [zoomPercent, setZoomPercent] = useState(100);
+  const [isReady, setIsReady] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasSelection, setHasSelection] = useState(false);
+  const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
+
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef(-1);
+  const suppressHistoryRef = useRef(false);
+  // Fabric's Canvas#dispose() is async. React 19 StrictMode mounts effects twice in dev
+  // (mount → cleanup → mount), and creating a new Canvas on the same <canvas> element before
+  // the previous instance finished disposing corrupts Fabric's internal DOM wrapper. Gating the
+  // next setup on the prior disposal promise avoids that race.
+  const pendingDisposalRef = useRef<Promise<unknown>>(Promise.resolve());
+
+  const refreshHistoryButtons = useCallback(() => {
+    setHistoryState({
+      canUndo: historyIndexRef.current > 0,
+      canRedo: historyIndexRef.current < historyRef.current.length - 1,
+    });
+  }, []);
+
+  const pushHistory = useCallback(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || suppressHistoryRef.current) return;
+    const json = JSON.stringify(canvas.toJSON());
+    historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
+    historyRef.current.push(json);
+    historyIndexRef.current = historyRef.current.length - 1;
+    refreshHistoryButtons();
+  }, [refreshHistoryButtons]);
+
+  /** Scales + centers the image so it's fully visible in the current canvas viewport. */
+  const fitToScreen = useCallback((canvas: Canvas, imgW: number, imgH: number) => {
+    if (!imgW || !imgH) return;
+    const cw = canvas.width || 1;
+    const ch = canvas.height || 1;
+    const fitZoom = clampZoom(Math.min(cw / imgW, ch / imgH) || 1);
+    canvas.setZoom(fitZoom);
+    const vpt = canvas.viewportTransform;
+    if (vpt) {
+      vpt[4] = (cw - imgW * fitZoom) / 2;
+      vpt[5] = (ch - imgH * fitZoom) / 2;
+      canvas.setViewportTransform(vpt);
+    }
+    canvas.requestRenderAll();
+    setZoomPercent(Math.round(fitZoom * 100));
+  }, []);
+
+  const applyZoom = useCallback((canvas: Canvas, newZoom: number, center?: Point) => {
+    const clamped = clampZoom(newZoom);
+    const point = center || new Point((canvas.width || 0) / 2, (canvas.height || 0) / 2);
+    canvas.zoomToPoint(point, clamped);
+    canvas.requestRenderAll();
+    setZoomPercent(Math.round(clamped * 100));
+  }, []);
+
+  // ============ Canvas bootstrap (once) ============
+  useEffect(() => {
+    if (!canvasHostRef.current) return;
+    const hostEl = canvasHostRef.current;
+    let cancelled = false;
+
+    async function setup() {
+      // Wait out any still-in-flight disposal from a prior StrictMode mount before creating a
+      // new canvas in this host.
+      await pendingDisposalRef.current;
+      if (cancelled) return;
+
+      const canvasEl = document.createElement('canvas');
+      hostEl.appendChild(canvasEl);
+
+      const canvas = new Canvas(canvasEl, {
+        selection: false,
+        preserveObjectStacking: true,
+      });
+      fabricCanvasRef.current = canvas;
+
+      const displaySize = computeDisplaySize();
+      canvas.setDimensions(displaySize);
+
+      suppressHistoryRef.current = true;
+      try {
+        let imgW = 0;
+        let imgH = 0;
+        if (initialAnnotationsJson) {
+          await canvas.loadFromJSON(JSON.parse(initialAnnotationsJson));
+          if (cancelled) return;
+          const bg = canvas.backgroundImage as FabricImage | undefined;
+          imgW = (bg?.width || 0) * (bg?.scaleX || 1);
+          imgH = (bg?.height || 0) * (bg?.scaleY || 1);
+        } else {
+          const img = await FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' });
+          if (cancelled) return;
+          imgW = img.width || 1000;
+          imgH = img.height || 1000;
+          // Keep the image at its native pixel size in scene space — never shrink it to fit the
+          // display here. Fitting the *view* is handled separately below via zoom, so annotation
+          // coordinates and the final export always stay at full resolution.
+          img.set({ scaleX: 1, scaleY: 1, selectable: false, evented: false });
+          canvas.backgroundImage = img;
+        }
+        imageDimsRef.current = { width: imgW, height: imgH };
+        fitToScreen(canvas, imgW, imgH);
+        canvas.renderAll();
+      } finally {
+        suppressHistoryRef.current = false;
+        if (!cancelled) {
+          pushHistory();
+          setIsReady(true);
+        }
+      }
+
+      const onAdded = () => pushHistory();
+      const onModified = () => pushHistory();
+      const onRemoved = () => pushHistory();
+      const onPathCreated = () => pushHistory();
+      const onSelection = () => setHasSelection(!!canvas.getActiveObject());
+      const onSelectionCleared = () => setHasSelection(false);
+
+      canvas.on('object:added', onAdded);
+      canvas.on('object:modified', onModified);
+      canvas.on('object:removed', onRemoved);
+      canvas.on('path:created', onPathCreated);
+      canvas.on('selection:created', onSelection);
+      canvas.on('selection:updated', onSelection);
+      canvas.on('selection:cleared', onSelectionCleared);
+    }
+
+    setup();
+
+    return () => {
+      cancelled = true;
+      const canvas = fabricCanvasRef.current;
+      fabricCanvasRef.current = null;
+      setIsReady(false);
+      if (canvas) {
+        // Fabric's dispose() restores/unwraps the DOM synchronously before it returns (the promise
+        // it returns is only for the async object-teardown that follows) — safe to empty the host
+        // right away so it's ready for a future setup(), without waiting on that promise.
+        pendingDisposalRef.current = canvas.dispose().catch(() => {});
+        hostEl.innerHTML = '';
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ============ Keep the canvas viewport sized to the screen (rotation, resize) ============
+  useEffect(() => {
+    if (!isReady) return;
+    const handleResize = () => {
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return;
+      canvas.setDimensions(computeDisplaySize());
+      fitToScreen(canvas, imageDimsRef.current.width, imageDimsRef.current.height);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isReady, fitToScreen]);
+
+  // ============ Mouse wheel zoom (desktop) ============
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !isReady) return;
+
+    const handleWheel = (opt: any) => {
+      const delta = opt.e.deltaY;
+      const zoom = clampZoom(canvas.getZoom() * 0.999 ** delta);
+      applyZoom(canvas, zoom, new Point(opt.e.offsetX, opt.e.offsetY));
+      opt.e.preventDefault();
+      opt.e.stopPropagation();
+    };
+
+    canvas.on('mouse:wheel', handleWheel);
+    return () => canvas.off('mouse:wheel', handleWheel);
+  }, [isReady, applyZoom]);
+
+  // ============ Pinch-to-zoom (touch) ============
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    const hostEl = canvasHostRef.current;
+    if (!canvas || !hostEl || !isReady) return;
+
+    const distance = (touches: TouchList) =>
+      Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
+    const midpoint = (touches: TouchList) => ({
+      clientX: (touches[0].clientX + touches[1].clientX) / 2,
+      clientY: (touches[0].clientY + touches[1].clientY) / 2,
+    });
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        pinchRef.current = { startDistance: distance(e.touches), startZoom: canvas.getZoom() };
+      }
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinchRef.current) {
+        e.preventDefault();
+        const scale = distance(e.touches) / pinchRef.current.startDistance;
+        const zoom = clampZoom(pinchRef.current.startZoom * scale);
+        const mid = midpoint(e.touches);
+        const rect = hostEl.getBoundingClientRect();
+        applyZoom(canvas, zoom, new Point(mid.clientX - rect.left, mid.clientY - rect.top));
+      }
+    };
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinchRef.current = null;
+    };
+
+    hostEl.addEventListener('touchstart', handleTouchStart, { passive: false });
+    hostEl.addEventListener('touchmove', handleTouchMove, { passive: false });
+    hostEl.addEventListener('touchend', handleTouchEnd);
+    hostEl.addEventListener('touchcancel', handleTouchEnd);
+
+    return () => {
+      hostEl.removeEventListener('touchstart', handleTouchStart);
+      hostEl.removeEventListener('touchmove', handleTouchMove);
+      hostEl.removeEventListener('touchend', handleTouchEnd);
+      hostEl.removeEventListener('touchcancel', handleTouchEnd);
+    };
+  }, [isReady, applyZoom]);
+
+  // ============ Tool behavior wiring ============
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !isReady) return;
+
+    canvas.isDrawingMode = tool === 'draw';
+    canvas.defaultCursor = tool === 'select' ? 'grab' : 'crosshair';
+    canvas.forEachObject((obj) => {
+      if (obj === canvas.backgroundImage) return;
+      obj.selectable = tool === 'select';
+      obj.evented = tool === 'select';
+    });
+
+    if (tool === 'draw') {
+      const brush = new PencilBrush(canvas);
+      brush.color = color;
+      brush.width = strokeWidth;
+      canvas.freeDrawingBrush = brush;
+    }
+
+    let draftLine: Line | null = null;
+    let isDraggingLine = false;
+    let isPanning = false;
+    let lastPanPoint: Point | null = null;
+
+    const handleMouseDown = (opt: any) => {
+      if (tool === 'select' && !opt.target) {
+        // Drag on empty canvas pans the view instead of Fabric's default rubber-band select —
+        // more useful here, and essential once the image no longer fits 1:1 on screen.
+        isPanning = true;
+        lastPanPoint = canvas.getViewportPoint(opt.e);
+        canvas.defaultCursor = 'grabbing';
+        return;
+      }
+      if (tool === 'text') {
+        if (opt.target) return;
+        const pointer = canvas.getScenePoint(opt.e);
+        const text = new IText('Digite aqui', {
+          left: pointer.x,
+          top: pointer.y,
+          fontSize,
+          fill: color,
+          fontFamily: 'Arial, sans-serif',
+        });
+        canvas.add(text);
+        canvas.setActiveObject(text);
+        text.enterEditing();
+        text.selectAll();
+        canvas.requestRenderAll();
+        setTool('select');
+      } else if (tool === 'line') {
+        const pointer = canvas.getScenePoint(opt.e);
+        draftLine = new Line([pointer.x, pointer.y, pointer.x, pointer.y], {
+          stroke: color,
+          strokeWidth,
+          selectable: false,
+          evented: false,
+          strokeLineCap: 'round',
+        });
+        suppressHistoryRef.current = true;
+        canvas.add(draftLine);
+        isDraggingLine = true;
+      }
+    };
+
+    const handleMouseMove = (opt: any) => {
+      if (isPanning && lastPanPoint) {
+        const p = canvas.getViewportPoint(opt.e);
+        canvas.relativePan(new Point(p.x - lastPanPoint.x, p.y - lastPanPoint.y));
+        lastPanPoint = p;
+        return;
+      }
+      if (!isDraggingLine || !draftLine) return;
+      const pointer = canvas.getScenePoint(opt.e);
+      draftLine.set({ x2: pointer.x, y2: pointer.y });
+      canvas.requestRenderAll();
+    };
+
+    const handleMouseUp = () => {
+      if (isPanning) {
+        isPanning = false;
+        lastPanPoint = null;
+        canvas.defaultCursor = 'grab';
+        return;
+      }
+      if (!isDraggingLine || !draftLine) return;
+      isDraggingLine = false;
+      suppressHistoryRef.current = false;
+      draftLine.set({ selectable: true, evented: true });
+      draftLine.setCoords();
+      canvas.setActiveObject(draftLine);
+      canvas.requestRenderAll();
+      draftLine = null;
+      pushHistory();
+      setTool('select');
+    };
+
+    canvas.on('mouse:down', handleMouseDown);
+    canvas.on('mouse:move', handleMouseMove);
+    canvas.on('mouse:up', handleMouseUp);
+
+    return () => {
+      canvas.off('mouse:down', handleMouseDown);
+      canvas.off('mouse:move', handleMouseMove);
+      canvas.off('mouse:up', handleMouseUp);
+    };
+  }, [tool, color, strokeWidth, fontSize, isReady, pushHistory]);
+
+  // ============ Keyboard delete ============
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return;
+      const active = canvas.getActiveObject() as any;
+      if (active?.isEditing) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (canvas.getActiveObjects().length === 0) return;
+        e.preventDefault();
+        deleteSelected();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const deleteSelected = () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    canvas.getActiveObjects().forEach((obj) => canvas.remove(obj));
+    canvas.discardActiveObject();
+    canvas.requestRenderAll();
+  };
+
+  const applyColor = (newColor: string) => {
+    setColor(newColor);
+    const canvas = fabricCanvasRef.current;
+    const active = canvas?.getActiveObject();
+    if (active) {
+      active.set(isTextObject(active) ? 'fill' : 'stroke', newColor);
+      canvas?.requestRenderAll();
+      pushHistory();
+    }
+  };
+
+  const applyStrokeWidth = (value: number) => {
+    setStrokeWidth(value);
+    const canvas = fabricCanvasRef.current;
+    const active = canvas?.getActiveObject();
+    if (active && !isTextObject(active)) {
+      active.set('strokeWidth', value);
+      canvas?.requestRenderAll();
+      pushHistory();
+    }
+  };
+
+  const applyFontSize = (value: number) => {
+    setFontSize(value);
+    const canvas = fabricCanvasRef.current;
+    const active = canvas?.getActiveObject();
+    if (active && isTextObject(active)) {
+      active.set('fontSize', value);
+      canvas?.requestRenderAll();
+      pushHistory();
+    }
+  };
+
+  const restoreFromHistory = async (idx: number) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    suppressHistoryRef.current = true;
+    await canvas.loadFromJSON(JSON.parse(historyRef.current[idx]));
+    canvas.renderAll();
+    suppressHistoryRef.current = false;
+    refreshHistoryButtons();
+  };
+
+  const handleUndo = () => {
+    if (historyIndexRef.current <= 0) return;
+    historyIndexRef.current -= 1;
+    restoreFromHistory(historyIndexRef.current);
+  };
+
+  const handleRedo = () => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    historyIndexRef.current += 1;
+    restoreFromHistory(historyIndexRef.current);
+  };
+
+  const handleZoomIn = () => {
+    const canvas = fabricCanvasRef.current;
+    if (canvas) applyZoom(canvas, canvas.getZoom() * ZOOM_STEP);
+  };
+
+  const handleZoomOut = () => {
+    const canvas = fabricCanvasRef.current;
+    if (canvas) applyZoom(canvas, canvas.getZoom() / ZOOM_STEP);
+  };
+
+  const handleZoomFit = () => {
+    const canvas = fabricCanvasRef.current;
+    if (canvas) fitToScreen(canvas, imageDimsRef.current.width, imageDimsRef.current.height);
+  };
+
+  const handleSave = async () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    canvas.discardActiveObject();
+
+    const { width: imgW, height: imgH } = imageDimsRef.current;
+    const prevVpt = canvas.viewportTransform ? ([...canvas.viewportTransform] as typeof canvas.viewportTransform) : undefined;
+    const prevDims = { width: canvas.width, height: canvas.height };
+
+    setIsSaving(true);
+    try {
+      // Render at the photo's full native resolution for export, regardless of the current
+      // on-screen zoom/pan — the exported image must always show the whole photo.
+      if (imgW && imgH) {
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        canvas.setDimensions({ width: imgW, height: imgH });
+        canvas.renderAll();
+      }
+      const dataUrl = canvas.toDataURL({ format: 'png', quality: 1 });
+      const json = JSON.stringify(canvas.toJSON());
+      await onSave(dataUrl, json);
+    } finally {
+      // Restore the editor's current view in case saving failed and editing continues.
+      canvas.setDimensions(prevDims as { width: number; height: number });
+      if (prevVpt) canvas.setViewportTransform(prevVpt);
+      canvas.renderAll();
+      setIsSaving(false);
+    }
+  };
+
+  const toolButtons: { id: Tool; label: string; icon: React.ReactNode }[] = [
+    { id: 'select', label: 'Selecionar / Mover', icon: <MousePointer2 className="w-4 h-4" /> },
+    { id: 'text', label: 'Texto', icon: <Type className="w-4 h-4" /> },
+    { id: 'draw', label: 'Desenho Livre', icon: <Pencil className="w-4 h-4" /> },
+    { id: 'line', label: 'Linha Reta', icon: <Minus className="w-4 h-4" /> },
+  ];
+
+  const placeholderSize = computeDisplaySize();
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-xs flex flex-col animate-fadeIn">
+      {/* Header */}
+      <div className="px-2.5 sm:px-6 py-2.5 sm:py-3 bg-[#1A1A1A] text-white flex items-center justify-between gap-2 shrink-0 shadow-lg">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74] shrink-0 hidden sm:inline-block" />
+          <span className="font-serif-luxury text-xs sm:text-base tracking-wide truncate">
+            {title || 'Anotar Foto de Referência'}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-2.5 sm:px-3 py-1.5 rounded-sm border border-white/20 text-white/80 hover:text-white hover:bg-white/10 text-xs font-semibold transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving || !isReady}
+            className="flex items-center gap-1.5 px-2.5 sm:px-4 py-1.5 rounded-sm bg-[#A67C52] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#8e6945] transition-all shadow-xs disabled:opacity-60 whitespace-nowrap"
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Save className="w-4 h-4 shrink-0" />}
+            <span className="hidden sm:inline">{isSaving ? 'Salvando...' : 'Salvar Anotações'}</span>
+            <span className="sm:hidden">{isSaving ? 'Salvando' : 'Salvar'}</span>
+          </button>
+          <button type="button" onClick={onClose} className="p-1 rounded-xs text-gray-400 hover:text-white transition-colors hidden sm:block">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="px-3 sm:px-6 py-2.5 bg-[#232323] border-b border-white/10 flex items-center gap-2 sm:gap-4 flex-wrap shrink-0">
+        {/* Tools */}
+        <div className="flex items-center gap-1 bg-black/30 p-1 rounded-sm">
+          {toolButtons.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              title={t.label}
+              onClick={() => setTool(t.id)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xs text-xs font-medium transition-all ${
+                tool === t.id ? 'bg-[#A67C52] text-white' : 'text-gray-300 hover:bg-white/10'
+              }`}
+            >
+              {t.icon}
+              <span className="hidden md:inline">{t.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Zoom */}
+        <div className="flex items-center gap-1 bg-black/30 p-1 rounded-sm">
+          <button
+            type="button"
+            title="Diminuir zoom"
+            onClick={handleZoomOut}
+            className="p-1.5 rounded-xs text-gray-300 hover:bg-white/10 transition-colors"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            title="Ajustar à tela"
+            onClick={handleZoomFit}
+            className="px-1.5 py-1 rounded-xs text-gray-300 hover:bg-white/10 text-[11px] font-mono font-semibold min-w-[3.25rem] text-center transition-colors"
+          >
+            {zoomPercent}%
+          </button>
+          <button
+            type="button"
+            title="Aumentar zoom"
+            onClick={handleZoomIn}
+            className="p-1.5 rounded-xs text-gray-300 hover:bg-white/10 transition-colors"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Colors */}
+        <div className="flex items-center gap-1.5">
+          {COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              title={c}
+              onClick={() => applyColor(c)}
+              className={`w-6 h-6 rounded-full border-2 transition-all ${
+                color === c ? 'border-[#C49B74] scale-110' : 'border-white/30'
+              }`}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => applyColor(e.target.value)}
+            title="Cor personalizada"
+            className="w-6 h-6 rounded-full border-2 border-white/30 bg-transparent cursor-pointer"
+          />
+        </div>
+
+        {/* Stroke width */}
+        <div className="flex items-center gap-1.5 text-gray-300 text-[11px]">
+          <span className="hidden sm:inline">Espessura</span>
+          <input
+            type="range"
+            min={2}
+            max={40}
+            value={strokeWidth}
+            onChange={(e) => applyStrokeWidth(Number(e.target.value))}
+            className="w-20 accent-[#A67C52]"
+          />
+          <span className="font-mono w-6">{strokeWidth}</span>
+        </div>
+
+        {/* Font size */}
+        <div className="flex items-center gap-1.5 text-gray-300 text-[11px]">
+          <span className="hidden sm:inline">Texto</span>
+          <input
+            type="range"
+            min={20}
+            max={200}
+            value={fontSize}
+            onChange={(e) => applyFontSize(Number(e.target.value))}
+            className="w-20 accent-[#A67C52]"
+          />
+          <span className="font-mono w-8">{fontSize}</span>
+        </div>
+
+        <div className="flex items-center gap-1 ml-auto">
+          <button
+            type="button"
+            title="Desfazer"
+            onClick={handleUndo}
+            disabled={!historyState.canUndo}
+            className="p-2 rounded-xs text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            title="Refazer"
+            onClick={handleRedo}
+            disabled={!historyState.canRedo}
+            className="p-2 rounded-xs text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            title="Excluir selecionado (ou tecla Delete)"
+            onClick={deleteSelected}
+            disabled={!hasSelection}
+            className="p-2 rounded-xs text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Canvas area — fixed, viewport-fitting size; zoom/pan navigate the photo within it */}
+      <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center p-4 sm:p-8 bg-[#111] touch-none">
+        <div className="relative bg-white rounded-sm shadow-2xl overflow-hidden">
+          {/* Fabric.js creates/owns its <canvas> element(s) inside this div directly via the DOM —
+              never render one here as JSX (see canvasHostRef above for why). */}
+          <div ref={canvasHostRef} />
+          {!isReady && (
+            <div
+              className="absolute inset-0 flex items-center justify-center bg-white"
+              style={{ width: placeholderSize.width, height: placeholderSize.height }}
+            >
+              <Loader2 className="w-8 h-8 text-[#A67C52] animate-spin" />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

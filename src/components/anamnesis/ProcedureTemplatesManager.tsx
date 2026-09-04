@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   AnamnesisTemplate,
   AnamnesisQuestion,
+  QuestionAudience,
   QuestionFieldType,
   Procedure,
   ClinicProfile,
@@ -31,6 +32,74 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 
+interface GenderPhotoSlotProps {
+  label: string;
+  url?: string;
+  isUploading: boolean;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onUrlChange: (url: string) => void;
+  onRemove: () => void;
+}
+
+const GenderPhotoSlot: React.FC<GenderPhotoSlotProps> = ({
+  label,
+  url,
+  isUploading,
+  onUpload,
+  onUrlChange,
+  onRemove,
+}) => (
+  <div className="p-3 bg-[#FAF9F6] rounded-sm border border-gray-200 space-y-2">
+    <div className="flex items-center justify-between">
+      <span className="text-[11px] font-bold text-[#1A1A1A] uppercase tracking-wider">{label}</span>
+      {url && (
+        <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-xs font-semibold border border-emerald-200">
+          Anexada
+        </span>
+      )}
+    </div>
+
+    {url ? (
+      <div className="space-y-2">
+        <div className="relative w-full h-40 rounded-sm overflow-hidden border border-gray-300 bg-white shadow-2xs">
+          <img src={url} alt={`Foto de referência — ${label}`} className="w-full h-full object-contain" />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="cursor-pointer flex-1 text-center px-2 py-1.5 rounded-xs bg-white border border-gray-200 hover:border-[#A67C52] text-gray-700 text-[11px] font-medium transition-colors shadow-2xs">
+            {isUploading ? 'Processando...' : 'Substituir'}
+            <input type="file" accept="image/*" onChange={onUpload} disabled={isUploading} className="hidden" />
+          </label>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="px-2 py-1.5 rounded-xs text-red-600 hover:bg-red-50 text-[11px] font-medium transition-colors"
+          >
+            Remover
+          </button>
+        </div>
+      </div>
+    ) : (
+      <div className="space-y-2">
+        <label className="cursor-pointer flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 hover:border-[#A67C52] rounded-sm bg-white hover:bg-white transition-all text-center group h-40">
+          <Upload className="w-5 h-5 text-[#A67C52] group-hover:scale-105 transition-transform mb-1.5" />
+          <span className="text-[11px] font-bold text-[#1A1A1A] group-hover:text-[#A67C52] transition-colors">
+            {isUploading ? 'Processando...' : `Upload foto ${label.toLowerCase()}`}
+          </span>
+          <span className="text-[10px] text-gray-400 mt-0.5">JPG, PNG ou WebP</span>
+          <input type="file" accept="image/*" onChange={onUpload} disabled={isUploading} className="hidden" />
+        </label>
+        <input
+          type="url"
+          placeholder="Ou cole o link direto de uma imagem..."
+          value={url || ''}
+          onChange={(e) => onUrlChange(e.target.value)}
+          className="w-full px-2.5 py-1.5 text-[11px] rounded-sm bg-white border border-gray-200 text-gray-700 focus:outline-hidden focus:border-[#A67C52]"
+        />
+      </div>
+    )}
+  </div>
+);
+
 interface ProcedureTemplatesManagerProps {
   templates: AnamnesisTemplate[];
   catalogProcedures: Procedure[];
@@ -39,7 +108,6 @@ interface ProcedureTemplatesManagerProps {
   patients?: Patient[];
   onSaveTemplate: (template: AnamnesisTemplate) => Promise<void>;
   onDeleteTemplate: (templateId: string) => Promise<void>;
-  onOpenPatientView?: (templateId: string, patientId?: string) => void;
 }
 
 export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps> = ({
@@ -50,7 +118,6 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
   patients = [],
   onSaveTemplate,
   onDeleteTemplate,
-  onOpenPatientView,
 }) => {
   const [selectedTemplate, setSelectedTemplate] = useState<AnamnesisTemplate | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -60,7 +127,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
   // Share link modal state
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareTemplateId, setShareTemplateId] = useState<string | undefined>(undefined);
-  const [isUploadingFotoModelo, setIsUploadingFotoModelo] = useState(false);
+  const [isUploadingFotoModelo, setIsUploadingFotoModelo] = useState<'feminino' | 'masculino' | null>(null);
 
   // Question editing sub-modal inside template editor
   const [questionModalOpen, setQuestionModalOpen] = useState(false);
@@ -71,6 +138,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
   const [qAjuda, setQAjuda] = useState('');
   const [qOpcoesInput, setQOpcoesInput] = useState('');
   const [qEscalaMax, setQEscalaMax] = useState<number>(10);
+  const [qPublicoAlvo, setQPublicoAlvo] = useState<QuestionAudience>('paciente');
   const [qError, setQError] = useState('');
 
   // Draft template in editor
@@ -114,6 +182,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
     setQAjuda('');
     setQOpcoesInput('');
     setQEscalaMax(10);
+    setQPublicoAlvo('paciente');
     setQError('');
     setQuestionModalOpen(true);
   };
@@ -128,6 +197,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
     setQAjuda(q.ajuda || '');
     setQOpcoesInput(q.opcoes ? q.opcoes.join('\n') : '');
     setQEscalaMax(q.escalaMax || 10);
+    setQPublicoAlvo(q.publicoAlvo || 'paciente');
     setQError('');
     setQuestionModalOpen(true);
   };
@@ -168,6 +238,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
       ajuda: qAjuda.trim() || undefined,
       opcoes: parsedOpcoes,
       escalaMax: qTipo === 'escala' ? qEscalaMax : undefined,
+      publicoAlvo: qPublicoAlvo,
     };
 
     const newQuestions = [...draftTemplate.perguntasEspecificas];
@@ -209,22 +280,27 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
     });
   };
 
-  const handleFotoModeloUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFotoModeloUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    genero: 'feminino' | 'masculino'
+  ) => {
     const file = e.target.files?.[0];
     if (!file || !draftTemplate) return;
-    setIsUploadingFotoModelo(true);
+    setIsUploadingFotoModelo(genero);
     try {
-      const compressed = await downscaleImage(file, 1200, 0.82);
+      // Resolução alta (2000px) — a imagem serve de tela para o profissional anotar depois e sai no PDF.
+      const compressed = await downscaleImage(file, 2000, 0.85);
+      const field = genero === 'feminino' ? 'fotoModeloFemininoUrl' : 'fotoModeloMasculinoUrl';
       setDraftTemplate({
         ...draftTemplate,
-        fotoModeloUrl: compressed,
+        [field]: compressed,
         tem_foto: true, // Also activates photo section so patient can also upload their photo
       });
     } catch (err) {
       console.error(err);
       alert('Erro ao carregar a imagem. Tente outro arquivo.');
     } finally {
-      setIsUploadingFotoModelo(false);
+      setIsUploadingFotoModelo(null);
       e.target.value = '';
     }
   };
@@ -335,10 +411,16 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   {tpl.categoria || 'Geral'}
                 </span>
                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                  {tpl.fotoModeloUrl ? (
+                  {(tpl.fotoModeloUrl || tpl.fotoModeloFemininoUrl || tpl.fotoModeloMasculinoUrl) ? (
                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-xs bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-semibold">
                       <Camera className="w-3 h-3" />
-                      Foto Doutor
+                      {tpl.fotoModeloFemininoUrl && tpl.fotoModeloMasculinoUrl
+                        ? 'Foto Fem. + Masc.'
+                        : tpl.fotoModeloFemininoUrl
+                        ? 'Foto Feminina'
+                        : tpl.fotoModeloMasculinoUrl
+                        ? 'Foto Masculina'
+                        : 'Foto Doutor'}
                     </span>
                   ) : null}
                   {tpl.tem_foto ? (
@@ -507,103 +589,49 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   />
                 </div>
 
-                {/* FOTO DO DOUTOR / MAPA ANATÔMICO DE REFERÊNCIA (Requested by user) */}
+                {/* FOTOS DE REFERÊNCIA / MAPA ANATÔMICO — UMA PARA CADA GÊNERO */}
                 <div className="pt-3 border-t border-gray-100 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
-                      <label className="text-xs font-bold text-[#1A1A1A]">
-                        Foto de Referência do Doutor / Mapa Anatômico
-                      </label>
-                    </div>
-                    {draftTemplate.fotoModeloUrl && (
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs font-semibold border border-emerald-200">
-                        Foto Anexada
-                      </span>
-                    )}
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
+                    <label className="text-xs font-bold text-[#1A1A1A]">
+                      Fotos de Referência / Mapa Anatômico (Feminino e Masculino)
+                    </label>
                   </div>
 
                   <p className="text-[11px] text-gray-500 leading-relaxed">
-                    Esta foto (ex: mapa de pontos de toxina botulínica, diagrama facial/corporal ou imagem do doutor)
-                    aparecerá no <strong>início do formulário online compartilhado com o paciente</strong>, e sairá
-                    no PDF / folha de impressão ou tablet para que você possa <strong>fazer anotações de doses, vetores e unidades</strong>.
+                    Ao gerar a ficha, o sistema escolhe automaticamente a foto de acordo com o gênero informado pelo
+                    paciente. Ela aparece no <strong>início do formulário online</strong> e é a tela usada pelo
+                    profissional para <strong>anotar doses, vetores e unidades</strong> depois. Envie em boa
+                    resolução — a imagem serve de tela de anotação e sai no PDF.
                   </p>
 
-                  {draftTemplate.fotoModeloUrl ? (
-                    <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-[#FAF9F6] rounded-sm border border-gray-200">
-                      <div className="relative w-32 h-32 rounded-sm overflow-hidden border border-gray-300 bg-white shrink-0 shadow-2xs">
-                        <img
-                          src={draftTemplate.fotoModeloUrl}
-                          alt="Foto de referência"
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
-                      <div className="flex-1 space-y-2 text-center sm:text-left">
-                        <span className="text-xs font-semibold text-[#1A1A1A] block">
-                          Imagem de referência carregada com sucesso
-                        </span>
-                        <p className="text-[11px] text-gray-500">
-                          A imagem será exibida no topo da ficha do paciente e no prontuário oficial.
-                        </p>
-                        <div className="flex items-center gap-2 pt-1 justify-center sm:justify-start">
-                          <label className="cursor-pointer px-3 py-1.5 rounded-xs bg-white border border-gray-200 hover:border-[#A67C52] text-gray-700 text-xs font-medium transition-colors shadow-2xs">
-                            {isUploadingFotoModelo ? 'Processando...' : 'Substituir Imagem'}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleFotoModeloUpload}
-                              disabled={isUploadingFotoModelo}
-                              className="hidden"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setDraftTemplate({ ...draftTemplate, fotoModeloUrl: undefined })
-                            }
-                            className="px-3 py-1.5 rounded-xs text-red-600 hover:bg-red-50 text-xs font-medium transition-colors"
-                          >
-                            Remover Imagem
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <label className="cursor-pointer flex flex-col items-center justify-center p-5 border-2 border-dashed border-gray-300 hover:border-[#A67C52] rounded-sm bg-[#FAF9F6] hover:bg-white transition-all text-center group">
-                        <div className="w-10 h-10 rounded-full bg-[#A67C52]/10 text-[#A67C52] flex items-center justify-center group-hover:scale-105 transition-transform mb-2">
-                          <Upload className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs font-bold text-[#1A1A1A] group-hover:text-[#A67C52] transition-colors">
-                          {isUploadingFotoModelo
-                            ? 'Processando imagem...'
-                            : 'Fazer upload da foto de referência / mapa de aplicação'}
-                        </span>
-                        <span className="text-[11px] text-gray-400 mt-0.5">
-                          Formatos JPG, PNG ou WebP. Redimensionamento e compressão automáticos.
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleFotoModeloUpload}
-                          disabled={isUploadingFotoModelo}
-                          className="hidden"
-                        />
-                      </label>
-
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="url"
-                          placeholder="Ou cole o link direto de uma imagem (URL)..."
-                          value={draftTemplate.fotoModeloUrl || ''}
-                          onChange={(e) =>
-                            setDraftTemplate({ ...draftTemplate, fotoModeloUrl: e.target.value })
-                          }
-                          className="w-full px-3 py-1.5 text-xs rounded-sm bg-white border border-gray-200 text-gray-700 focus:outline-hidden focus:border-[#A67C52]"
-                        />
-                      </div>
+                  {draftTemplate.fotoModeloUrl && !draftTemplate.fotoModeloFemininoUrl && !draftTemplate.fotoModeloMasculinoUrl && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-xs bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+                      <span>
+                        Este modelo ainda usa a foto única antiga (legado). Ela continua valendo como fallback até
+                        você enviar as versões feminina e masculina abaixo.
+                      </span>
                     </div>
                   )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <GenderPhotoSlot
+                      label="Feminino"
+                      url={draftTemplate.fotoModeloFemininoUrl}
+                      isUploading={isUploadingFotoModelo === 'feminino'}
+                      onUpload={(e) => handleFotoModeloUpload(e, 'feminino')}
+                      onUrlChange={(url) => setDraftTemplate({ ...draftTemplate, fotoModeloFemininoUrl: url })}
+                      onRemove={() => setDraftTemplate({ ...draftTemplate, fotoModeloFemininoUrl: undefined })}
+                    />
+                    <GenderPhotoSlot
+                      label="Masculino"
+                      url={draftTemplate.fotoModeloMasculinoUrl}
+                      isUploading={isUploadingFotoModelo === 'masculino'}
+                      onUpload={(e) => handleFotoModeloUpload(e, 'masculino')}
+                      onUrlChange={(url) => setDraftTemplate({ ...draftTemplate, fotoModeloMasculinoUrl: url })}
+                      onRemove={() => setDraftTemplate({ ...draftTemplate, fotoModeloMasculinoUrl: undefined })}
+                    />
+                  </div>
                 </div>
 
                 {/* TEM FOTO TOGGLE */}
@@ -652,8 +680,19 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                       <span className="text-gray-700 font-medium">
                         {gidx + 1}. {gq.texto}
                       </span>
-                      <span className="text-[10px] text-[#A67C52] font-mono">
-                        {fieldTypeLabels[gq.tipo_campo]} {gq.obrigatoria ? '(*)' : ''}
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className={`text-[9px] font-bold px-1 rounded-xs border ${
+                            (gq.publicoAlvo || 'paciente') === 'medico'
+                              ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                              : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                          }`}
+                        >
+                          {(gq.publicoAlvo || 'paciente') === 'medico' ? 'Médico' : 'Paciente'}
+                        </span>
+                        <span className="text-[10px] text-[#A67C52] font-mono">
+                          {fieldTypeLabels[gq.tipo_campo]} {gq.obrigatoria ? '(*)' : ''}
+                        </span>
                       </span>
                     </div>
                   ))}
@@ -711,6 +750,15 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                               <span className="text-xs font-semibold text-[#1A1A1A] leading-snug">
                                 {q.texto}
                               </span>
+                              {(q.publicoAlvo || 'paciente') === 'medico' ? (
+                                <span className="text-[9px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 rounded-xs font-bold">
+                                  Médico
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 rounded-xs font-bold">
+                                  Paciente
+                                </span>
+                              )}
                               {q.obrigatoria && (
                                 <span className="text-[9px] text-red-600 bg-red-50 border border-red-200 px-1 rounded-xs font-bold">
                                   Obrigatória
@@ -932,6 +980,32 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1">
+                  Quem Responde Esta Pergunta?
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setQPublicoAlvo('paciente')}
+                    className={`flex-1 px-4 py-2 rounded-sm text-xs font-semibold border transition-colors ${
+                      qPublicoAlvo === 'paciente' ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    Paciente (no link de preenchimento)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQPublicoAlvo('medico')}
+                    className={`flex-1 px-4 py-2 rounded-sm text-xs font-semibold border transition-colors ${
+                      qPublicoAlvo === 'medico' ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    Médico (complemento na plataforma)
+                  </button>
+                </div>
+              </div>
+
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200">
                 <button
                   type="button"
@@ -976,7 +1050,6 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
             }
           }
           initialTemplateId={shareTemplateId}
-          onOpenPatientView={onOpenPatientView}
         />
       )}
     </div>
