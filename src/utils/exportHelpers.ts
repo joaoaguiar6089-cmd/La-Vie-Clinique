@@ -87,6 +87,71 @@ async function prepareImagesForExport(element: HTMLElement): Promise<void> {
   );
 }
 
+const CAPTURE_SCALE = 2;
+
+interface FullHeightCapture {
+  canvas: HTMLCanvasElement;
+  /** Y-ranges, in captured-canvas pixels, that a page break must not fall inside. */
+  avoidBreakRanges: { top: number; bottom: number }[];
+}
+
+/**
+ * Renders a full, unclipped snapshot of `element` via html2canvas, along with the pixel ranges
+ * of any descendant marked `.page-break-inside-avoid` / `print:break-inside-avoid` (both classes
+ * already used throughout this app's printable sheets to keep a card or signature block from
+ * being split across a page in the browser's native print dialog).
+ *
+ * html2canvas paints an element as CSS would lay it out given its ancestors, so an element
+ * that's scrollable (`overflow-y-auto`) inside a viewport-height-capped, `position: fixed`
+ * modal — exactly how every printable sheet in this app is structured — gets rasterized only
+ * down to whatever fit in that clipped box, not its full scrollHeight. Cloning the element into
+ * an off-screen container with no scroll/height constraints sidesteps that entirely: the clone
+ * inherits the same global stylesheet (so Tailwind classes render identically) but has nothing
+ * left to clip it.
+ */
+async function captureElementFullHeight(element: HTMLElement): Promise<FullHeightCapture> {
+  const widthPx = element.clientWidth || 1200;
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone.style.overflow = 'visible';
+  clone.style.maxHeight = 'none';
+  clone.style.height = 'auto';
+  clone.style.width = `${widthPx}px`;
+
+  const wrapper = document.createElement('div');
+  wrapper.style.position = 'fixed';
+  wrapper.style.top = '0';
+  wrapper.style.left = '-99999px';
+  wrapper.style.width = `${widthPx}px`;
+  wrapper.style.zIndex = '-1';
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  try {
+    const cloneTop = clone.getBoundingClientRect().top;
+    const avoidBreakRanges = Array.from(clone.querySelectorAll<HTMLElement>('[class*="break-inside-avoid"]'))
+      .map((node) => {
+        const rect = node.getBoundingClientRect();
+        return {
+          top: (rect.top - cloneTop) * CAPTURE_SCALE,
+          bottom: (rect.bottom - cloneTop) * CAPTURE_SCALE,
+        };
+      })
+      .sort((a, b) => a.top - b.top);
+
+    const canvas = await html2canvas(clone, {
+      scale: CAPTURE_SCALE,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#F8F7F4',
+      logging: false,
+      windowWidth: widthPx,
+    });
+    return { canvas, avoidBreakRanges };
+  } finally {
+    document.body.removeChild(wrapper);
+  }
+}
+
 /**
  * Robust export to high-resolution PNG image (matches screen preview exactly).
  */
@@ -212,32 +277,46 @@ export async function exportElementAsPDF(
         });
       }
     } else {
-      // Fallback for single container elements without [data-pdf-page]
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#F8F7F4',
-        logging: false,
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      // Fallback for single container elements without [data-pdf-page] — these are typically
+      // scrollable content living inside a fixed-position modal, so capture via an off-screen
+      // clone rather than html2canvas(element) directly (see captureElementFullHeight).
+      const { canvas, avoidBreakRanges } = await captureElementFullHeight(element);
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
-      const ratio = imgWidth / imgHeight;
-      const renderedPdfHeight = pdfWidth / ratio;
+      // Canvas pixels per output mm — derived from width, since the whole image (and every page
+      // slice cut from it) is scaled to exactly pdfWidth wide, preserving aspect ratio.
+      const pxPerMm = imgWidth / pdfWidth;
+      const pageHeightPx = pdfHeight * pxPerMm;
 
-      let heightLeft = renderedPdfHeight;
-      let position = 0;
+      let sliceTop = 0;
+      let isFirstPage = true;
+      while (sliceTop < imgHeight) {
+        let sliceBottom = Math.min(imgHeight, sliceTop + pageHeightPx);
 
-      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, renderedPdfHeight, undefined, 'FAST');
-      heightLeft -= pdfHeight;
+        // If this natural page break would land inside a card/section marked to stay whole
+        // (page-break-inside-avoid / print:break-inside-avoid), end the page right before it
+        // instead — the element starts fresh on the next page rather than being split. Falls
+        // through to the natural cut if the element alone is taller than a full page.
+        const conflict = avoidBreakRanges.find(
+          (r) => r.top > sliceTop && r.top < sliceBottom && r.bottom > sliceBottom
+        );
+        if (conflict && conflict.top > sliceTop) {
+          sliceBottom = conflict.top;
+        }
 
-      while (heightLeft > 0) {
-        position = heightLeft - renderedPdfHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, renderedPdfHeight, undefined, 'FAST');
-        heightLeft -= pdfHeight;
+        const sliceHeightPx = sliceBottom - sliceTop;
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = imgWidth;
+        sliceCanvas.height = sliceHeightPx;
+        sliceCanvas
+          .getContext('2d')!
+          .drawImage(canvas, 0, sliceTop, imgWidth, sliceHeightPx, 0, 0, imgWidth, sliceHeightPx);
+
+        if (!isFirstPage) pdf.addPage();
+        pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, pdfWidth, sliceHeightPx / pxPerMm, undefined, 'FAST');
+
+        isFirstPage = false;
+        sliceTop = sliceBottom;
       }
     }
 

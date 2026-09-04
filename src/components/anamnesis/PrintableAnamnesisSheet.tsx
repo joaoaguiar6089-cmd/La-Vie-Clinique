@@ -47,31 +47,36 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isEditingProfissional, setIsEditingProfissional] = useState(false);
   const [isSavingProfissional, setIsSavingProfissional] = useState(false);
-  const [profissionalNomeDraft, setProfissionalNomeDraft] = useState(
-    record.profissionalNome || clinicProfile.professionals?.[0]?.name || clinicProfile.professionalName || ''
+  const [professionalIdDraft, setProfessionalIdDraft] = useState(
+    record.professionalId || clinicProfile.professionals?.find((p) => p.name === record.profissionalNome)?.id || ''
   );
   const [respostasProfissionalDraft, setRespostasProfissionalDraft] = useState<Record<string, any>>(
     { ...(record.respostasProfissional || {}) }
   );
-  const [isAnnotating, setIsAnnotating] = useState(false);
+  const [annotatingTarget, setAnnotatingTarget] = useState<'modelo' | 'paciente' | null>(null);
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleSaveAnnotation = async (dataUrl: string, annotationsJson: string) => {
-    if (!onSaveRecord) return;
+    if (!onSaveRecord || !annotatingTarget) return;
     try {
-      const updated: AnamnesisRecord = {
-        ...record,
-        fotoModeloAnotadaUrl: dataUrl,
-        fotoModeloAnotacoesJson: annotationsJson,
-      };
+      const updated: AnamnesisRecord =
+        annotatingTarget === 'modelo'
+          ? { ...record, fotoModeloAnotadaUrl: dataUrl, fotoModeloAnotacoesJson: annotationsJson }
+          : { ...record, fotoPacienteAnotadaUrl: dataUrl, fotoPacienteAnotacoesJson: annotationsJson };
       await onSaveRecord(updated);
-      setIsAnnotating(false);
+      setAnnotatingTarget(null);
     } catch (err) {
       console.error('Erro ao salvar anotações:', err);
-      alert('Não foi possível salvar as anotações agora. Tente novamente.');
+      const message = err instanceof Error ? err.message : String(err);
+      const isTooLarge = /longer than|exceeds|too large|maximum.*byte/i.test(message);
+      alert(
+        isTooLarge
+          ? 'Esta ficha ficou grande demais para salvar (limite de tamanho do banco de dados) — provavelmente por acumular várias fotos/anotações no mesmo registro. Tente remover alguma foto não essencial desta ficha antes de anotar, ou avise o suporte técnico.'
+          : 'Não foi possível salvar as anotações agora. Tente novamente.'
+      );
     }
   };
 
@@ -93,9 +98,11 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
     if (!onSaveRecord) return;
     setIsSavingProfissional(true);
     try {
+      const selectedProfessional = clinicProfile.professionals?.find((p) => p.id === professionalIdDraft);
       const updated: AnamnesisRecord = {
         ...record,
-        profissionalNome: profissionalNomeDraft.trim() || record.profissionalNome,
+        professionalId: professionalIdDraft || record.professionalId,
+        profissionalNome: selectedProfessional?.name || record.profissionalNome,
         respostasProfissional: respostasProfissionalDraft,
         profissionalPreenchidoEm: record.profissionalPreenchidoEm || new Date().toISOString(),
       };
@@ -152,6 +159,12 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   const isStaff = viewerRole === 'staff';
   const showMedicoSection = isStaff && medicoQuestions.length > 0;
   const referenceImageSrc = (isStaff && record.fotoModeloAnotadaUrl) || record.fotoModeloUrl;
+  const patientImageSrc =
+    (isStaff && record.fotoPacienteAnotadaUrl) || record.fotoPacienteUrl || record.fotoUrl;
+
+  const professionalName =
+    clinicProfile.professionals?.find((p) => p.id === record.professionalId)?.name || record.profissionalNome;
+  const hasProfessional = !!professionalName;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fadeIn">
@@ -286,7 +299,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                 Profissional Responsável
               </span>
               <span className="font-semibold text-gray-800 block mt-0.5">
-                {record.profissionalNome || clinicProfile.professionalName || 'Equipe La Vie'}
+                {professionalName || clinicProfile.professionalName || 'Equipe La Vie'}
               </span>
             </div>
           </div>
@@ -380,12 +393,18 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                     <label className="block text-xs font-semibold text-gray-800 mb-1">
                       Profissional Responsável
                     </label>
-                    <input
-                      type="text"
-                      value={profissionalNomeDraft}
-                      onChange={(e) => setProfissionalNomeDraft(e.target.value)}
+                    <select
+                      value={professionalIdDraft}
+                      onChange={(e) => setProfessionalIdDraft(e.target.value)}
                       className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-indigo-400"
-                    />
+                    >
+                      <option value="">-- Selecione o profissional --</option>
+                      {clinicProfile.professionals?.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="space-y-3 divide-y divide-indigo-100">
@@ -462,9 +481,9 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
               </div>
 
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col items-center gap-4">
                   {(record.fotoModeloUrl || record.fotoModeloAnotadaUrl) && (
-                    <div className="border border-gray-200 rounded-sm p-3.5 bg-[#FAF9F6] flex flex-col justify-between">
+                    <div className="w-full max-w-xl border border-gray-200 rounded-sm p-3.5 bg-[#FAF9F6] flex flex-col justify-between">
                       <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 mb-2">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-[#1A1A1A]">
                           Referência / Mapeamento
@@ -477,7 +496,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                         {isStaff && onSaveRecord && (
                           <button
                             type="button"
-                            onClick={() => setIsAnnotating(true)}
+                            onClick={() => setAnnotatingTarget('modelo')}
                             className="print:hidden flex items-center gap-1 px-2 py-1 rounded-xs bg-[#1A1A1A] text-[#C49B74] text-[10px] font-semibold uppercase tracking-wider hover:bg-black transition-colors"
                           >
                             <PenTool className="w-3 h-3" />
@@ -485,7 +504,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                           </button>
                         )}
                       </div>
-                      <div className="w-full h-64 sm:h-72 border border-gray-300 rounded-xs overflow-hidden bg-white flex items-center justify-center">
+                      <div className="w-full h-[308px] sm:h-[346px] border border-gray-300 rounded-xs overflow-hidden bg-white flex items-center justify-center">
                         <img
                           src={referenceImageSrc}
                           alt="Foto de referência, com anotações do profissional quando disponíveis"
@@ -496,32 +515,39 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                   )}
 
                   {(record.fotoPacienteUrl || record.fotoUrl) && (
-                    <div className="border border-gray-200 rounded-sm p-3.5 bg-[#FAF9F6] flex flex-col justify-between">
+                    <div className="w-full max-w-xl border border-gray-200 rounded-sm p-3.5 bg-[#FAF9F6] flex flex-col justify-between">
                       <div>
                         <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 mb-2">
                           <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-950">
                             Foto do(a) Paciente
+                            {isStaff && record.fotoPacienteAnotadaUrl && (
+                              <span className="ml-1.5 text-[9px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded-xs font-semibold border border-indigo-200 normal-case tracking-normal">
+                                Anotada
+                              </span>
+                            )}
                           </span>
+                          {isStaff && onSaveRecord && (
+                            <button
+                              type="button"
+                              onClick={() => setAnnotatingTarget('paciente')}
+                              className="print:hidden flex items-center gap-1 px-2 py-1 rounded-xs bg-[#1A1A1A] text-[#C49B74] text-[10px] font-semibold uppercase tracking-wider hover:bg-black transition-colors"
+                            >
+                              <PenTool className="w-3 h-3" />
+                              {record.fotoPacienteAnotadaUrl ? 'Editar' : 'Anotar'}
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div className="w-full h-64 sm:h-72 border border-emerald-300 rounded-xs overflow-hidden bg-white flex items-center justify-center">
+                      <div className="w-full h-[308px] sm:h-[346px] border border-emerald-300 rounded-xs overflow-hidden bg-white flex items-center justify-center">
                         <img
-                          src={record.fotoPacienteUrl || record.fotoUrl}
-                          alt="Foto da paciente"
+                          src={patientImageSrc}
+                          alt="Foto da paciente, com anotações do profissional quando disponíveis"
                           className="w-full h-full object-contain"
                         />
                       </div>
                     </div>
                   )}
                 </div>
-
-                {isStaff && (
-                  <div className="pt-1 text-[10px] text-gray-500 flex flex-wrap justify-between gap-2 border-t border-gray-100">
-                    <span>Lote do Produto: _____________________________</span>
-                    <span>Validade: _____/_____/_________</span>
-                    <span>Volume / Unidades Totais: ___________________</span>
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -538,7 +564,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
 
           {/* Consentimento */}
           <div className="mt-8 pt-4 border-t-2 border-gray-300 page-break-inside-avoid">
-            <p className="text-[10px] text-gray-500 leading-relaxed text-justify mb-4">
+            <p className="text-[10px] text-gray-500 leading-relaxed text-justify">
               Declaro que todas as informações prestadas nesta ficha de anamnese são verdadeiras, não tendo omitido
               qualquer fato relevante sobre meu estado de saúde, uso de medicações ou procedimentos prévios. Fui
               devidamente orientado(a) acerca dos cuidados pré e pós-procedimento e autorizo a realização do
@@ -546,43 +572,63 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
             </p>
 
             {isStaff ? (
-              <div className="grid grid-cols-2 gap-8 text-center pt-2">
-                <div>
-                  <div className="border-t border-[#1A1A1A] mx-auto w-48 mb-1.5" />
-                  <span className="text-xs font-bold text-[#1A1A1A] block">{record.pacienteNome}</span>
-                  <span className="text-[10px] text-gray-400 block">Assinatura do(a) Paciente</span>
-                </div>
-
-                <div>
-                  <div className="border-t border-[#1A1A1A] mx-auto w-48 mb-1.5" />
-                  <span className="text-xs font-bold text-[#1A1A1A] block">
-                    {record.profissionalNome || clinicProfile.professionalName || 'Profissional Responsável'}
-                  </span>
-                  <span className="text-[10px] text-gray-400 block">
+              hasProfessional ? (
+                <div className="mt-12 text-center">
+                  <div className="max-w-[220px] mx-auto">
+                    <div className="border-t border-[#1A1A1A] mb-1.5" />
+                    <span className="text-xs font-bold text-[#1A1A1A] block">{record.pacienteNome}</span>
+                    <span className="text-[10px] text-gray-400 block">Assinatura do(a) Paciente</span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-6">
+                    Profissional responsável: <span className="font-semibold text-[#1A1A1A]">{professionalName}</span>
+                    {' • '}
                     {clinicProfile.professionalTitle || 'Biomédica Esteta'} • {clinicProfile.name}
-                  </span>
+                  </p>
                 </div>
-              </div>
+              ) : (
+                <p className="mt-8 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xs px-3 py-2 text-center">
+                  Atribua um profissional responsável a esta ficha para habilitar a área de assinatura.
+                </p>
+              )
             ) : (
-              <div className="flex items-center gap-2 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xs px-3 py-2">
-                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                Termos aceitos digitalmente por {record.pacienteNome} em{' '}
-                {new Date(record.createdAt).toLocaleDateString('pt-BR')}.
+              <div className="mt-10 space-y-2.5">
+                {hasProfessional && (
+                  <p className="text-[11px] text-gray-500 text-center">
+                    Profissional responsável pelo seu atendimento:{' '}
+                    <span className="font-semibold text-[#1A1A1A]">{professionalName}</span>
+                  </p>
+                )}
+                <div className="flex items-center gap-2 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xs px-3 py-2">
+                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                  Termos aceitos digitalmente por {record.pacienteNome} em{' '}
+                  {new Date(record.createdAt).toLocaleDateString('pt-BR')}.
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {isAnnotating && (record.fotoModeloUrl || record.fotoModeloAnotacoesJson) && (
+      {annotatingTarget === 'modelo' && (record.fotoModeloUrl || record.fotoModeloAnotacoesJson) && (
         <PhotoAnnotationEditor
           imageUrl={record.fotoModeloUrl || ''}
           initialAnnotationsJson={record.fotoModeloAnotacoesJson}
-          title={`Anotar Foto — ${record.pacienteNome}`}
+          title={`Anotar Foto de Referência — ${record.pacienteNome}`}
           onSave={handleSaveAnnotation}
-          onClose={() => setIsAnnotating(false)}
+          onClose={() => setAnnotatingTarget(null)}
         />
       )}
+
+      {annotatingTarget === 'paciente' &&
+        (record.fotoPacienteUrl || record.fotoUrl || record.fotoPacienteAnotacoesJson) && (
+          <PhotoAnnotationEditor
+            imageUrl={record.fotoPacienteUrl || record.fotoUrl || ''}
+            initialAnnotationsJson={record.fotoPacienteAnotacoesJson}
+            title={`Anotar Foto do(a) Paciente — ${record.pacienteNome}`}
+            onSave={handleSaveAnnotation}
+            onClose={() => setAnnotatingTarget(null)}
+          />
+        )}
     </div>
   );
 };

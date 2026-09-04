@@ -10,21 +10,16 @@ import {
 import { downscaleImage } from '../../utils/imageCompressor';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
+import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
 import {
   X,
   Camera,
-  Upload,
   User,
-  Calendar,
-  Sparkles,
   FileText,
   CheckCircle2,
-  AlertCircle,
-  Plus,
-  Search,
   Printer,
-  ChevronDown,
   Music,
+  PenTool,
 } from 'lucide-react';
 
 interface GenderToggleProps {
@@ -35,17 +30,17 @@ interface GenderToggleProps {
 
 const GenderToggle: React.FC<GenderToggleProps> = ({ value, onChange, error }) => (
   <div>
-    <label className="block text-[11px] font-semibold text-gray-600 mb-1">
-      Gênero <span className="text-gray-400 font-normal">(define a foto de referência)</span>
+    <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+      Gênero <span className="text-[#8a8578] font-normal">(define a foto de referência)</span>
     </label>
     <div className="flex items-center gap-2">
       <button
         type="button"
         onClick={() => onChange('feminino')}
-        className={`flex-1 py-2 px-3 rounded-sm text-xs font-semibold uppercase tracking-wider transition-all border ${
+        className={`flex-1 h-11 rounded-xl text-[14px] font-semibold transition-colors border ${
           value === 'feminino'
-            ? 'bg-[#1A1A1A] text-white border-[#1A1A1A] shadow-xs'
-            : `bg-white text-gray-700 hover:bg-gray-50 ${error ? 'border-red-400' : 'border-gray-200'}`
+            ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+            : `bg-white text-[#4a4740] hover:border-[#A67C52]/40 ${error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)]'}`
         }`}
       >
         Feminino
@@ -53,18 +48,29 @@ const GenderToggle: React.FC<GenderToggleProps> = ({ value, onChange, error }) =
       <button
         type="button"
         onClick={() => onChange('masculino')}
-        className={`flex-1 py-2 px-3 rounded-sm text-xs font-semibold uppercase tracking-wider transition-all border ${
+        className={`flex-1 h-11 rounded-xl text-[14px] font-semibold transition-colors border ${
           value === 'masculino'
-            ? 'bg-[#A67C52] text-white border-[#A67C52] shadow-xs'
-            : `bg-white text-gray-700 hover:bg-gray-50 ${error ? 'border-red-400' : 'border-gray-200'}`
+            ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+            : `bg-white text-[#4a4740] hover:border-[#A67C52]/40 ${error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)]'}`
         }`}
       >
         Masculino
       </button>
     </div>
-    {error && <p className="text-[10px] text-red-500 mt-1">{error}</p>}
+    {error && <p className="text-[13px] text-[#E11D48] mt-1">{error}</p>}
   </div>
 );
+
+/** Pequena pílula indicando que a pergunta é de uso exclusivo da equipe clínica. */
+const StaffOnlyPill: React.FC = () => (
+  <span className="inline-block text-[11px] font-semibold text-[#4338CA] bg-[#EEF2FF] px-2 py-0.5 rounded-full border border-[#E0E7FF] ml-2 align-middle">
+    Não vai ao paciente
+  </span>
+);
+
+const isRiskAnswer = (q: AnamnesisQuestion, val: any): boolean =>
+  (q.tipo_campo === 'sim_nao' && (val === 'Sim' || val === true)) ||
+  (q.tipo_campo === 'escala' && Number(val) >= 7);
 
 interface AnamnesisFormFillModalProps {
   isOpen: boolean;
@@ -134,14 +140,15 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   const [dataAtendimento, setDataAtendimento] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
-  const [profissionalNome, setProfissionalNome] = useState<string>(
-    clinicProfile.professionals?.[0]?.name || clinicProfile.professionalName || 'Equipe La Vie'
-  );
+  const [professionalId, setProfessionalId] = useState<string>('');
 
   // Answers maps: questionId -> value
   const [respostasGerais, setRespostasGerais] = useState<Record<string, any>>({});
   const [respostasEspecificas, setRespostasEspecificas] = useState<Record<string, any>>({});
   const [fotoUrl, setFotoUrl] = useState<string>('');
+  const [fotoAnotadaUrl, setFotoAnotadaUrl] = useState<string>('');
+  const [fotoAnotacoesJson, setFotoAnotacoesJson] = useState<string | undefined>(undefined);
+  const [isAnnotatingPhoto, setIsAnnotatingPhoto] = useState(false);
   const [observacoesFinais, setObservacoesFinais] = useState<string>('');
 
   // Validation & status
@@ -174,10 +181,18 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
     try {
       const compressed = await downscaleImage(file);
       setFotoUrl(compressed);
+      setFotoAnotadaUrl('');
+      setFotoAnotacoesJson(undefined);
     } catch (err) {
       console.error(err);
       alert('Falha ao processar foto.');
     }
+  };
+
+  const handleSaveAnnotation = async (dataUrl: string, annotationsJson: string) => {
+    setFotoAnotadaUrl(dataUrl);
+    setFotoAnotacoesJson(annotationsJson);
+    setIsAnnotatingPhoto(false);
   };
 
   const handleGeneralAnswerChange = (questionId: string, val: any) => {
@@ -224,13 +239,18 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
       newErrors['template'] = 'Selecione um modelo de procedimento.';
     }
 
+    // Professional
+    if (!professionalId) {
+      newErrors['professional'] = 'Selecione o profissional responsável.';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSaveForm = async (openPrintAfter = false) => {
     if (!validateForm()) {
-      alert('Por favor, selecione ou informe o paciente.');
+      alert('Por favor, verifique os campos obrigatórios (paciente, procedimento e profissional responsável).');
       return;
     }
 
@@ -298,6 +318,8 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
         }
       });
 
+      const selectedProfessional = clinicProfile.professionals?.find((p) => p.id === professionalId);
+
       const newRecord: AnamnesisRecord = {
         id: `rec-${Date.now()}`,
         pacienteId: patientIdToUse,
@@ -309,14 +331,16 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
         templateId: currentTemplate.id,
         procedimentoNome: currentTemplate.procedimentoNome,
         dataAtendimento,
-        profissionalNome,
+        professionalId,
+        profissionalNome: selectedProfessional?.name,
         respostasGerais: finalRespostasGerais,
         respostasEspecificas,
         respostasProfissional,
         profissionalPreenchidoEm: new Date().toISOString(),
         fotoModeloUrl: resolveTemplatePhoto(currentTemplate, patientGenderToUse),
         fotoPacienteUrl: currentTemplate.tem_foto ? fotoUrl || undefined : undefined,
-        fotoUrl: currentTemplate.tem_foto ? fotoUrl || undefined : undefined,
+        fotoPacienteAnotadaUrl: currentTemplate.tem_foto ? fotoAnotadaUrl || undefined : undefined,
+        fotoPacienteAnotacoesJson: currentTemplate.tem_foto ? fotoAnotacoesJson : undefined,
         perguntasSnapshot: {
           gerais: [
             {
@@ -351,61 +375,61 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fadeIn">
-      <div className="relative w-full max-w-4xl bg-[#FAF9F6] rounded-sm border border-white/80 shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+      <div className="relative w-full max-w-4xl bg-[#F9F8F6] rounded-2xl border border-white/80 shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
         {/* Modal Top Header */}
         <div className="px-6 py-4 bg-[#1A1A1A] text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74]" />
             <div>
-              <h3 className="font-serif-luxury text-lg font-medium tracking-tight">
-                Nova Ficha de Anamnese — Atendimento Clínico
+              <h3 className="font-serif-luxury text-[21px] font-medium tracking-tight">
+                Nova Ficha de Anamnese
               </h3>
-              <p className="text-[11px] text-[#C49B74] font-medium">
-                La Vie Clinique • Registro Médico e Estético Integrado
+              <p className="text-[13px] text-[#C49B74] font-medium">
+                {clinicProfile.name || 'La Vie Clinique'} · Registro médico e estético integrado
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xs text-gray-400 hover:text-white transition-colors"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
           {/* SECTION 1: PACIENTE & ATENDIMENTO */}
-          <div className="bg-white p-4 sm:p-5 rounded-sm border border-gray-200/80 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-[#1A1A1A] flex items-center gap-1.5">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3 border-b border-[rgba(26,26,26,.07)] pb-3">
+              <h4 className="text-[15px] font-semibold text-[#1A1A1A] flex items-center gap-2">
                 <User className="w-4 h-4 text-[#A67C52]" />
-                1. Identificação do Paciente & Atendimento
+                1. Identificação do paciente & atendimento
               </h4>
 
-              <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-xs">
+              <div className="flex items-center gap-1 bg-[#F9F8F6] p-1 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setPatientMode('select')}
-                  className={`px-3 py-1 rounded-2xs text-xs font-medium transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
                     patientMode === 'select'
-                      ? 'bg-white text-[#1A1A1A] shadow-2xs font-semibold'
-                      : 'text-gray-500 hover:text-gray-900'
+                      ? 'bg-white text-[#1A1A1A] shadow-xs font-semibold'
+                      : 'text-[#8a8578] hover:text-[#1A1A1A]'
                   }`}
                 >
-                  Paciente Cadastrado
+                  Paciente cadastrado
                 </button>
                 <button
                   type="button"
                   onClick={() => setPatientMode('new')}
-                  className={`px-3 py-1 rounded-2xs text-xs font-medium transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
                     patientMode === 'new'
-                      ? 'bg-white text-[#1A1A1A] shadow-2xs font-semibold'
-                      : 'text-gray-500 hover:text-gray-900'
+                      ? 'bg-white text-[#1A1A1A] shadow-xs font-semibold'
+                      : 'text-[#8a8578] hover:text-[#1A1A1A]'
                   }`}
                 >
-                  + Novo Paciente
+                  + Novo paciente
                 </button>
               </div>
             </div>
@@ -414,14 +438,14 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
             {patientMode === 'select' && (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-800 mb-1">
-                    Selecione o Paciente
+                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                    Selecione o paciente
                   </label>
                   <select
                     value={selectedPatientId}
                     onChange={(e) => setSelectedPatientId(e.target.value)}
-                    className={`w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border ${
-                      errors['patient_select'] ? 'border-red-400' : 'border-gray-200'
+                    className={`w-full h-11 px-3 text-[14px] rounded-xl bg-[#F9F8F6] border ${
+                      errors['patient_select'] ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)]'
                     } text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] font-medium`}
                   >
                     <option value="">-- Escolha um paciente da clínica --</option>
@@ -432,23 +456,23 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     ))}
                   </select>
                   {errors['patient_select'] && (
-                    <p className="text-[10px] text-red-500 mt-1">{errors['patient_select']}</p>
+                    <p className="text-[13px] text-[#E11D48] mt-1">{errors['patient_select']}</p>
                   )}
                 </div>
 
                 {selectedPatientId && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-gray-50/70 border border-gray-200 rounded-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-[#F9F8F6] rounded-xl">
                     <div>
-                      <label className="block text-[11px] font-semibold text-gray-600 mb-1 flex items-center gap-1.5">
+                      <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5 flex items-center gap-1.5">
                         <Music className="w-3.5 h-3.5 text-[#A67C52]" />
-                        Tipo de Música
+                        Tipo de música
                       </label>
                       <input
                         type="text"
                         value={tipoMusica}
                         onChange={(e) => setTipoMusica(e.target.value)}
                         placeholder="Ex: MPB, Jazz, Pop, Lounge, Clássica..."
-                        className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                        className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                       />
                     </div>
                     <GenderToggle
@@ -466,64 +490,64 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
             {/* New Patient Inline Fields */}
             {patientMode === 'new' && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-gray-50/70 border border-gray-200 rounded-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-[#F9F8F6] rounded-xl">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-800 mb-1">
-                    Nome Completo
+                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                    Nome completo
                   </label>
                   <input
                     type="text"
                     value={newPatientName}
                     onChange={(e) => setNewPatientName(e.target.value)}
                     placeholder="Ex: Ana Clara Menezes"
-                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                   />
                   {errors['patient_name'] && (
-                    <p className="text-[10px] text-red-500 mt-1">{errors['patient_name']}</p>
+                    <p className="text-[13px] text-[#E11D48] mt-1">{errors['patient_name']}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-800 mb-1">
-                    WhatsApp / Telefone
+                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                    WhatsApp / telefone
                   </label>
                   <input
                     type="text"
                     value={newPatientPhone}
                     onChange={(e) => setNewPatientPhone(e.target.value)}
                     placeholder="(19) 99999-9999"
-                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-800 mb-1">
-                    Data de Nascimento
+                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                    Data de nascimento
                   </label>
                   <input
                     type="date"
                     value={newPatientBirth}
                     onChange={(e) => setNewPatientBirth(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5">
+                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5 flex items-center gap-1.5">
                     <Music className="w-3.5 h-3.5 text-[#A67C52]" />
-                    Tipo de Música
+                    Tipo de música
                   </label>
                   <input
                     type="text"
                     value={tipoMusica}
                     onChange={(e) => setTipoMusica(e.target.value)}
                     placeholder="Ex: MPB, Jazz, Pop, Lounge, Clássica..."
-                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-800 mb-1">
+                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
                     E-mail
                   </label>
                   <input
@@ -531,7 +555,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     value={newPatientEmail}
                     onChange={(e) => setNewPatientEmail(e.target.value)}
                     placeholder="paciente@exemplo.com"
-                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                   />
                 </div>
 
@@ -547,15 +571,15 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
             )}
 
             {/* Procedure Template, Date & Professional */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
               <div>
-                <label className="block text-xs font-semibold text-gray-800 mb-1">
-                  Procedimento / Ficha
+                <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                  Procedimento / ficha
                 </label>
                 <select
                   value={selectedTemplateId}
                   onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] font-semibold"
+                  className="w-full h-11 px-3 text-[14px] rounded-xl bg-[#F9F8F6] border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] font-semibold"
                 >
                   {templates.map((tpl) => (
                     <option key={tpl.id} value={tpl.id}>
@@ -566,36 +590,61 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-800 mb-1">
-                  Data do Atendimento
+                <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                  Data do atendimento
                 </label>
                 <input
                   type="date"
                   value={dataAtendimento}
                   onChange={(e) => setDataAtendimento(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full h-11 px-3 text-[14px] rounded-xl bg-[#F9F8F6] border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-800 mb-1">
-                  Profissional Responsável
+                <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                  Profissional responsável
                 </label>
-                <input
-                  type="text"
-                  value={profissionalNome}
-                  onChange={(e) => setProfissionalNome(e.target.value)}
-                  placeholder="Nome da biomédica/esteticista"
-                  className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
-                />
+                <select
+                  value={professionalId}
+                  onChange={(e) => {
+                    setProfessionalId(e.target.value);
+                    if (errors['professional']) {
+                      setErrors((prev) => {
+                        const next = { ...prev };
+                        delete next['professional'];
+                        return next;
+                      });
+                    }
+                  }}
+                  className={`w-full h-11 px-3 text-[14px] rounded-xl bg-[#F9F8F6] border ${
+                    errors['professional'] ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)]'
+                  } text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]`}
+                >
+                  <option value="">-- Selecione o profissional --</option>
+                  {clinicProfile.professionals?.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                {errors['professional'] && (
+                  <p className="text-[13px] text-[#E11D48] mt-1">{errors['professional']}</p>
+                )}
+                {(!clinicProfile.professionals || clinicProfile.professionals.length === 0) && (
+                  <p className="text-[13px] text-amber-600 mt-1">
+                    Nenhum profissional cadastrado. Cadastre em Configurações da Clínica.
+                  </p>
+                )}
               </div>
             </div>
 
             {/* Outras Perguntas Gerais (se houver, integradas sem título separado) */}
             {extraGeneralQuestions.length > 0 && (
-              <div className="pt-3 border-t border-gray-100 space-y-3 divide-y divide-gray-100/60">
+              <div className="pt-3 border-t border-[rgba(26,26,26,.07)] space-y-4 divide-y divide-[rgba(26,26,26,.07)]">
                 {extraGeneralQuestions.map((q) => (
-                  <div key={q.id} className="pt-3 first:pt-0">
+                  <div key={q.id} className="pt-4 first:pt-0">
+                    {(q.publicoAlvo || 'paciente') === 'medico' && <StaffOnlyPill />}
                     <QuestionFieldRenderer
                       question={q}
                       value={respostasGerais[q.id]}
@@ -610,38 +659,51 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
           {/* SECTION 2: PERGUNTAS ESPECÍFICAS DO PROCEDIMENTO */}
           {currentTemplate && (
-            <div className="bg-white p-4 sm:p-5 rounded-sm border border-gray-200/80 shadow-2xs space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-[rgba(26,26,26,.07)] pb-3">
                 <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-widest text-[#1A1A1A] flex items-center gap-1.5">
+                  <h4 className="text-[15px] font-semibold text-[#1A1A1A] flex items-center gap-2">
                     <FileText className="w-4 h-4 text-[#A67C52]" />
-                    Avaliação Específica — {currentTemplate.procedimentoNome}
+                    2. Avaliação específica — {currentTemplate.procedimentoNome}
                   </h4>
                   {currentTemplate.descricao && (
-                    <p className="text-[11px] text-gray-500 mt-0.5">{currentTemplate.descricao}</p>
+                    <p className="text-[13px] text-[#8a8578] mt-1">{currentTemplate.descricao}</p>
                   )}
                 </div>
-                <span className="text-[10px] text-[#1A1A1A] bg-gray-100 px-2 py-0.5 rounded-xs font-bold">
-                  {currentTemplate.perguntasEspecificas.length} Questões
+                <span className="text-[12px] text-[#1A1A1A] bg-[#F9F8F6] px-2.5 py-1 rounded-full font-semibold">
+                  {currentTemplate.perguntasEspecificas.length} questões
                 </span>
               </div>
 
               {currentTemplate.perguntasEspecificas.length === 0 ? (
-                <p className="text-xs text-gray-400 py-3 italic">
+                <p className="text-[14px] text-[#8a8578] py-3 italic">
                   Este procedimento não possui perguntas específicas cadastradas no modelo.
                 </p>
               ) : (
-                <div className="space-y-4 divide-y divide-gray-100/60">
-                  {currentTemplate.perguntasEspecificas.map((q) => (
-                    <div key={q.id} className="pt-3 first:pt-0">
-                      <QuestionFieldRenderer
-                        question={q}
-                        value={respostasEspecificas[q.id]}
-                        onChange={(val) => handleSpecificAnswerChange(q.id, val)}
-                        hideMandatoryAsterisk={true}
-                      />
-                    </div>
-                  ))}
+                <div className="space-y-4 divide-y divide-[rgba(26,26,26,.07)]">
+                  {currentTemplate.perguntasEspecificas.map((q) => {
+                    const val = respostasEspecificas[q.id];
+                    const warning = isRiskAnswer(q, val);
+                    return (
+                      <div
+                        key={q.id}
+                        className={`pt-4 first:pt-0 ${warning ? '-mx-3 px-3 rounded-xl bg-[#E11D48]/5' : ''}`}
+                      >
+                        {(q.publicoAlvo || 'paciente') === 'medico' && <StaffOnlyPill />}
+                        <QuestionFieldRenderer
+                          question={q}
+                          value={val}
+                          onChange={(val) => handleSpecificAnswerChange(q.id, val)}
+                          hideMandatoryAsterisk={true}
+                        />
+                        {warning && (
+                          <p className="text-[13px] text-[#9F1239] font-medium mt-1.5">
+                            Atenção na parametrização
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -649,49 +711,43 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
           {/* SECTION 4: FOTOS CLÍNICAS (Foto do Doutor e Foto do Paciente) */}
           {(currentTemplate?.tem_foto || previewFotoModelo) && (
-            <div className="bg-white p-4 sm:p-5 rounded-sm border border-emerald-200/80 shadow-2xs space-y-4 bg-gradient-to-br from-white to-emerald-50/20">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-xs bg-emerald-100 text-emerald-800 flex items-center justify-center">
-                    <Camera className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-semibold uppercase tracking-widest text-emerald-950">
-                      4. Fotos de Mapeamento & Registro Clínico
-                    </h4>
-                    <p className="text-[11px] text-gray-500">
-                      A foto de referência do doutor e a foto do paciente saem impressas ou no tablet para anotações manuais (unidades, doses, vetores).
-                    </p>
-                  </div>
-                </div>
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-4">
+              <div>
+                <h4 className="text-[15px] font-semibold text-[#1A1A1A] flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-[#A67C52]" />
+                  4. Fotos de mapeamento & registro clínico
+                </h4>
+                <p className="text-[13px] text-[#8a8578] mt-1">
+                  A foto de referência da clínica e a foto do paciente ficam disponíveis para anotações manuais (unidades, doses, vetores).
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* 1. Foto do Doutor / Mapa de Referência (escolhida pelo gênero do paciente) */}
+                {/* 1. Foto de Referência da Clínica (escolhida pelo gênero do paciente) */}
                 {previewFotoModelo ? (
-                  <div className="p-3 bg-white rounded-sm border border-gray-200 space-y-2">
+                  <div className="p-3.5 bg-[#F9F8F6] rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#1A1A1A]">
-                        Foto de Referência da Dra. / Clínica
+                      <span className="text-[14px] font-semibold text-[#1A1A1A]">
+                        Referência da clínica
                       </span>
-                      <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-xs font-semibold border border-purple-200">
+                      <span className="text-[11px] text-[#4a4740] bg-white px-2 py-0.5 rounded-full font-semibold border border-[rgba(26,26,26,.1)]">
                         Modelo
                       </span>
                     </div>
-                    <div className="w-full h-44 rounded-xs overflow-hidden border border-gray-200 bg-[#FAF9F6] flex items-center justify-center">
+                    <div className="w-full h-44 rounded-xl overflow-hidden border border-[rgba(26,26,26,.07)] bg-white flex items-center justify-center">
                       <img
                         src={previewFotoModelo}
-                        alt="Foto de referência do doutor"
+                        alt="Foto de referência da clínica"
                         className="w-full h-full object-contain"
                       />
                     </div>
-                    <p className="text-[10px] text-gray-400 text-center italic">
+                    <p className="text-[12px] text-[#8a8578] text-center italic">
                       Guia anatômico configurado para {currentTemplate.procedimentoNome}
                     </p>
                   </div>
                 ) : (
                   !currentGenero && (currentTemplate?.fotoModeloFemininoUrl || currentTemplate?.fotoModeloMasculinoUrl) && (
-                    <div className="p-3 bg-amber-50 rounded-sm border border-amber-200 text-[11px] text-amber-800 flex items-center justify-center text-center">
+                    <div className="p-3.5 bg-amber-50 rounded-xl text-[13px] text-amber-800 flex items-center justify-center text-center">
                       Selecione o gênero do paciente acima para ver a foto de referência.
                     </div>
                   )
@@ -699,32 +755,39 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
                 {/* 2. Foto do Paciente */}
                 {currentTemplate?.tem_foto && (
-                  <div className={`p-3 bg-white rounded-sm border border-emerald-200 space-y-2 ${!previewFotoModelo ? 'sm:col-span-2' : ''}`}>
+                  <div className={`p-3.5 bg-[#F9F8F6] rounded-xl space-y-2 ${!previewFotoModelo ? 'sm:col-span-2' : ''}`}>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-emerald-900">
-                        Foto Real do Paciente (Opcional)
+                      <span className="text-[14px] font-semibold text-[#1A1A1A]">
+                        Foto do paciente
                       </span>
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs font-semibold border border-emerald-200">
-                        Prontuário
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {fotoAnotadaUrl && (
+                          <span className="text-[11px] text-[#4338CA] bg-[#EEF2FF] px-2 py-0.5 rounded-full font-semibold border border-[#E0E7FF]">
+                            Anotada
+                          </span>
+                        )}
+                        <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                          Prontuário
+                        </span>
+                      </div>
                     </div>
 
                     {fotoUrl ? (
-                      <div className="space-y-2">
-                        <div className="relative w-full h-44 rounded-xs overflow-hidden border border-gray-200 bg-black/5 flex items-center justify-center">
+                      <div className="space-y-2.5">
+                        <div className="relative w-full h-[206px] rounded-xl overflow-hidden border border-[rgba(26,26,26,.07)] bg-black/5 flex items-center justify-center">
                           <img
-                            src={fotoUrl}
+                            src={fotoAnotadaUrl || fotoUrl}
                             alt="Foto do paciente"
                             className="w-full h-full object-contain"
                           />
                         </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Foto do paciente anexada
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Foto anexada
                           </span>
-                          <div className="flex items-center gap-2">
-                            <label className="cursor-pointer text-[11px] font-semibold text-[#A67C52] hover:underline">
+                          <div className="flex items-center gap-3">
+                            <label className="cursor-pointer text-[13px] font-semibold text-[#A67C52] hover:underline">
                               Trocar
                               <input
                                 type="file"
@@ -735,21 +798,33 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                             </label>
                             <button
                               type="button"
-                              onClick={() => setFotoUrl('')}
-                              className="text-[11px] text-red-600 hover:underline"
+                              onClick={() => {
+                                setFotoUrl('');
+                                setFotoAnotadaUrl('');
+                                setFotoAnotacoesJson(undefined);
+                              }}
+                              className="text-[13px] text-[#E11D48] hover:underline"
                             >
                               Remover
                             </button>
                           </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsAnnotatingPhoto(true)}
+                          className="w-full h-11 rounded-xl bg-[#A67C52] text-white text-[14px] font-semibold flex items-center justify-center gap-2 hover:bg-[#8E653D] active:scale-97 transition-all"
+                        >
+                          <PenTool className="w-4 h-4" />
+                          Anotar foto
+                        </button>
                       </div>
                     ) : (
-                      <label className="cursor-pointer flex flex-col items-center justify-center p-4 border-2 border-dashed border-emerald-300/80 hover:border-emerald-500 rounded-sm bg-emerald-50/20 hover:bg-emerald-50/40 transition-all text-center group h-44">
-                        <Camera className="w-6 h-6 text-emerald-600 group-hover:scale-105 transition-transform mb-1.5" />
-                        <span className="text-xs font-bold text-emerald-950 group-hover:text-emerald-700">
-                          Tirar ou Selecionar Foto do Paciente
+                      <label className="cursor-pointer flex flex-col items-center justify-center h-44 rounded-xl bg-white hover:bg-[#F9F8F6] transition-all text-center group" style={{ border: '1.5px dashed rgba(166,124,82,.5)' }}>
+                        <Camera className="w-6 h-6 text-[#A67C52] group-hover:scale-105 transition-transform mb-1.5" />
+                        <span className="text-[14px] font-semibold text-[#8E653D]">
+                          Tirar ou selecionar foto do paciente
                         </span>
-                        <span className="text-[10px] text-gray-500 mt-0.5">
+                        <span className="text-[12px] text-[#8a8578] mt-0.5">
                           Para registro clínico e marcações personalizadas
                         </span>
                         <input
@@ -767,52 +842,62 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           )}
 
           {/* SECTION 5: OBSERVAÇÕES FINAIS & CONDUTA */}
-          <div className="bg-white p-4 sm:p-5 rounded-sm border border-gray-200/80 shadow-2xs space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-widest text-[#1A1A1A]">
-              5. Observações Finais & Conduta do Atendimento
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-2">
+            <h4 className="text-[15px] font-semibold text-[#1A1A1A]">
+              5. Observações finais & conduta do atendimento
             </h4>
             <textarea
               rows={3}
               value={observacoesFinais}
               onChange={(e) => setObservacoesFinais(e.target.value)}
               placeholder="Ex: Paciente bem orientada quanto aos cuidados pós-procedimento. Retorno agendado em 15 dias para conferência de simetria..."
-              className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+              className="w-full min-h-[120px] px-3.5 py-3 text-[14px] rounded-xl bg-[#F9F8F6] border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] resize-y"
             />
           </div>
         </div>
 
         {/* Modal Bottom Actions */}
-        <div className="px-6 py-4 bg-white border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+        <div className="px-6 py-4 bg-white border-t border-[rgba(26,26,26,.07)] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2 rounded-sm border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+            className="w-full sm:w-auto h-[52px] px-5 rounded-2xl border border-[rgba(26,26,26,.12)] text-[15px] font-semibold text-[#4a4740] hover:bg-[#F9F8F6] transition-colors whitespace-nowrap"
           >
             Cancelar
           </button>
 
-          <div className="w-full sm:w-auto flex items-center gap-2">
+          <div className="w-full sm:w-auto flex items-center gap-2.5">
             <button
               type="button"
               disabled={isSaving}
               onClick={() => handleSaveForm(false)}
-              className="flex-1 sm:flex-initial px-5 py-2 rounded-sm bg-white border border-gray-300 text-xs font-semibold text-gray-800 hover:border-[#A67C52] hover:text-[#A67C52] uppercase tracking-wider transition-colors disabled:opacity-50"
+              className="flex-1 sm:flex-initial h-[52px] px-5 rounded-2xl bg-white border border-[rgba(26,26,26,.15)] text-[15px] font-semibold text-[#1A1A1A] hover:border-[#A67C52] hover:text-[#A67C52] transition-colors disabled:opacity-50 whitespace-nowrap"
             >
-              {isSaving ? 'Gravando...' : 'Salvar Ficha'}
+              {isSaving ? 'Gravando...' : 'Salvar ficha'}
             </button>
 
             <button
               type="button"
               disabled={isSaving}
               onClick={() => handleSaveForm(true)}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-6 py-2 rounded-sm bg-[#1A1A1A] text-[#C49B74] text-xs font-semibold uppercase tracking-wider hover:bg-black shadow-xs active:scale-95 transition-all disabled:opacity-50"
+              className="flex-1 sm:flex-initial h-[52px] px-6 rounded-2xl bg-[#1A1A1A] text-[#C49B74] text-[15px] font-semibold flex items-center justify-center gap-2 hover:bg-black shadow-xs active:scale-97 transition-all disabled:opacity-50 whitespace-nowrap"
             >
-              <Printer className="w-3.5 h-3.5" />
-              {isSaving ? 'Processando...' : 'Salvar & Gerar PDF'}
+              <Printer className="w-4 h-4" />
+              {isSaving ? 'Processando...' : 'Salvar e gerar PDF'}
             </button>
           </div>
         </div>
       </div>
+
+      {isAnnotatingPhoto && fotoUrl && (
+        <PhotoAnnotationEditor
+          imageUrl={fotoAnotadaUrl || fotoUrl}
+          initialAnnotationsJson={fotoAnotacoesJson}
+          title="Anotar foto do paciente"
+          onSave={handleSaveAnnotation}
+          onClose={() => setIsAnnotatingPhoto(false)}
+        />
+      )}
     </div>
   );
 };

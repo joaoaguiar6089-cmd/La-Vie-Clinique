@@ -1,13 +1,28 @@
 import React, { useState } from 'react';
-import { Search, Plus, Edit3, Trash2, Copy, Star, Eye, Image as ImageIcon, ArrowUpDown, Filter, Sparkles, Share2 } from 'lucide-react';
+import {
+  Search,
+  Plus,
+  Star,
+  Clock,
+  Repeat,
+  MoreHorizontal,
+  Eye,
+  Edit3,
+  Copy,
+  Share2,
+  Trash2,
+  FileDown,
+  Image as ImageIcon,
+} from 'lucide-react';
 import { Procedure, ClinicProfile } from '../types';
-import { formatBRL, formatDate } from '../utils/formatters';
+import { formatBRL } from '../utils/formatters';
 
 interface ProcedureManagerProps {
   procedures: Procedure[];
   clinic: ClinicProfile;
   categories: string[];
   onOpenNewProcedure: () => void;
+  onOpenExport: () => void;
   onEditProcedure: (procedure: Procedure) => void;
   onDeleteProcedure: (id: string) => void;
   onDuplicateProcedure: (procedure: Procedure) => void;
@@ -18,9 +33,9 @@ interface ProcedureManagerProps {
 
 export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
   procedures,
-  clinic,
   categories,
   onOpenNewProcedure,
+  onOpenExport,
   onEditProcedure,
   onDeleteProcedure,
   onDuplicateProcedure,
@@ -30,403 +45,308 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
-  const [sortBy, setSortBy] = useState<'title' | 'price' | 'date'>('date');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
 
-  const filteredProcedures = procedures
-    .filter((p) => {
-      const matchesSearch =
-        p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.subtitle && p.subtitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        p.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCat = selectedCategory === 'Todos' || p.category === selectedCategory;
-      return matchesSearch && matchesCat;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'title') {
-        return sortOrder === 'asc'
-          ? a.title.localeCompare(b.title)
-          : b.title.localeCompare(a.title);
-      }
-      if (sortBy === 'price') {
-        const pA = a.promotionalPrice || a.price;
-        const pB = b.promotionalPrice || b.price;
-        return sortOrder === 'asc' ? pA - pB : pB - pA;
-      }
-      // date
-      return sortOrder === 'asc'
-        ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+  const filteredProcedures = procedures.filter((p) => {
+    const matchesSearch =
+      p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.subtitle && p.subtitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      p.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCat = selectedCategory === 'Todos' || p.category === selectedCategory;
+    return matchesSearch && matchesCat;
+  });
 
-  const totalValue = procedures.reduce((acc, p) => acc + p.price, 0);
+  const featuredCount = procedures.filter((p) => p.isFeatured).length;
+  const categoriesCount = Array.from(new Set(procedures.map((p) => p.category))).length;
+
+  const openMenu = (procId: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 8, left: Math.max(12, rect.right - 256) });
+    setMenuFor(procId);
+  };
+
+  const closeMenu = () => {
+    setMenuFor(null);
+    setMenuPos(null);
+  };
+
+  const menuProcedure = procedures.find((p) => p.id === menuFor) || null;
+
+  const menuActions = menuProcedure
+    ? [
+        { label: 'Abrir detalhes', icon: Eye, onClick: () => onViewDetails(menuProcedure) },
+        { label: 'Editar procedimento', icon: Edit3, onClick: () => onEditProcedure(menuProcedure) },
+        { label: 'Enviar cartão em PDF', icon: Share2, onClick: () => onShareSingle(menuProcedure) },
+        {
+          label: menuProcedure.isFeatured ? 'Remover destaque' : 'Alternar destaque',
+          icon: Star,
+          onClick: () => onToggleFeatured(menuProcedure.id),
+        },
+        { label: 'Duplicar', icon: Copy, onClick: () => onDuplicateProcedure(menuProcedure) },
+        {
+          label: 'Excluir',
+          icon: Trash2,
+          onClick: () => onDeleteProcedure(menuProcedure.id),
+          danger: true,
+        },
+      ]
+    : [];
 
   return (
-    <div className="space-y-6">
-      {/* Overview Metric Bar (Frosted Glass) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white/40 backdrop-blur-md p-5 rounded-sm border border-white/60 shadow-xs">
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-            Total de Procedimentos
-          </span>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="font-serif-luxury text-3xl font-medium text-[#1A1A1A]">
-              {procedures.length}
+    <div className="px-5 sm:px-6 lg:px-8 py-5 sm:py-8 pb-28 sm:pb-8">
+      {/* Content header */}
+      <div className="mb-5 sm:mb-6">
+        <div className="sm:hidden flex items-baseline gap-2.5 flex-wrap">
+          <h2 className="font-serif-luxury text-[30px] font-medium text-[#1A1A1A] leading-tight">
+            {procedures.length} procedimentos
+          </h2>
+          {featuredCount > 0 && (
+            <span className="text-[13px] font-semibold text-[#A67C52]">
+              {featuredCount} em destaque
             </span>
-            <span className="text-xs text-[#A67C52] font-medium">cadastrados</span>
-          </div>
+          )}
         </div>
-
-        <div className="bg-white/40 backdrop-blur-md p-5 rounded-sm border border-white/60 shadow-xs">
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-            Procedimentos VIP
-          </span>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="font-serif-luxury text-3xl font-medium text-[#A67C52]">
-              {procedures.filter(p => p.isFeatured).length}
-            </span>
-            <span className="text-xs text-gray-500 font-medium">destaques</span>
-          </div>
-        </div>
-
-        <div className="bg-white/40 backdrop-blur-md p-5 rounded-sm border border-white/60 shadow-xs">
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-            Categorias Ativas
-          </span>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="font-serif-luxury text-3xl font-medium text-[#1A1A1A]">
-              {Array.from(new Set(procedures.map(p => p.category))).length}
-            </span>
-            <span className="text-xs text-gray-500 font-medium">especialidades</span>
-          </div>
+        <div className="hidden sm:block">
+          <h2 className="font-serif-luxury text-[34px] font-medium text-[#1A1A1A] leading-tight">
+            Procedimentos
+          </h2>
+          <p className="text-[16px] text-[#8a8578] mt-1">
+            {procedures.length} procedimentos · {categoriesCount} categorias
+            {featuredCount > 0 && <> · <span className="text-[#A67C52] font-medium">{featuredCount} em destaque</span></>}
+          </p>
         </div>
       </div>
 
-      {/* Action and Filter Controls (Frosted Glass) */}
-      <div className="bg-white/40 backdrop-blur-md p-4 sm:p-5 rounded-sm border border-white/60 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+      {/* Search + new-procedure bar */}
+      <div className="flex items-center gap-3 mb-4 sm:bg-white/50 sm:backdrop-blur-md sm:border sm:border-white/70 sm:rounded-2xl sm:px-4 sm:py-3">
+        <div className="relative flex-1 sm:flex-none sm:w-[340px]">
+          <Search className="w-[18px] h-[18px] text-[#a8a29a] absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por título, substância ou descrição..."
-            className="w-full pl-10 pr-4 py-2 rounded-sm bg-white/60 backdrop-blur-xs border border-white/70 text-xs font-medium text-[#1A1A1A] placeholder-gray-400 focus:outline-hidden focus:border-[#A67C52]"
+            placeholder="Buscar procedimento"
+            className="w-full h-12 sm:h-[46px] pl-11 pr-4 rounded-2xl sm:rounded-xl bg-white/60 backdrop-blur-xs border border-white/70 sm:border-[rgba(26,26,26,.1)] text-[15px] text-[#1A1A1A] placeholder-[#a8a29a] focus:outline-hidden focus:border-[#A67C52] transition-colors"
           />
         </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 rounded-sm bg-white/60 backdrop-blur-xs border border-white/70 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
-          >
-            {categories.map((c, idx) => (
-              <option key={idx} value={c}>{c}</option>
-            ))}
-          </select>
-
-          <button
-            onClick={() => {
-              if (sortBy === 'price') {
-                setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-              } else {
-                setSortBy('price');
-                setSortOrder('desc');
-              }
-            }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-sm text-xs font-semibold uppercase tracking-wider border transition-colors ${
-              sortBy === 'price'
-                ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                : 'bg-white/50 text-gray-600 border-white/70 hover:bg-white/80'
-            }`}
-          >
-            <ArrowUpDown className="w-3.5 h-3.5" />
-            Valor {sortBy === 'price' && (sortOrder === 'asc' ? '↑' : '↓')}
-          </button>
-
-          <button
-            onClick={onOpenNewProcedure}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Novo
-          </button>
-        </div>
+        <button
+          onClick={onOpenNewProcedure}
+          className="hidden sm:flex items-center gap-2 h-[46px] px-5 rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all shadow-xs shrink-0"
+        >
+          <Plus className="w-[18px] h-[18px]" />
+          Novo procedimento
+        </button>
       </div>
 
-      {/* Procedures List — Mobile Cards (below sm breakpoint) */}
-      <div className="sm:hidden space-y-3">
-        {filteredProcedures.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 text-xs bg-white/50 backdrop-blur-md rounded-sm border border-white/60">
-            Nenhum procedimento encontrado com os filtros selecionados.
-          </div>
-        ) : (
-          filteredProcedures.map((proc) => {
+      {/* Category chips */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-6 -mx-5 px-5 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            className={`shrink-0 h-9 sm:h-10 px-4 rounded-full text-[14px] font-medium border transition-colors whitespace-nowrap ${
+              selectedCategory === cat
+                ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+                : 'bg-white text-[#4a4740] border-[rgba(26,26,26,.1)] hover:border-[#A67C52]'
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* Cards grid */}
+      {filteredProcedures.length === 0 ? (
+        <div className="text-center py-16 text-[#8a8578] text-[15px] bg-white/50 rounded-2xl border border-white/70">
+          Nenhum procedimento encontrado com os filtros selecionados.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          {filteredProcedures.map((proc) => {
             const hasDiscount = proc.promotionalPrice && proc.promotionalPrice < proc.price;
             const img = proc.images && proc.images.length > 0 ? proc.images[0] : '';
 
             return (
-              <div
+              <article
                 key={proc.id}
-                className="bg-white/60 backdrop-blur-md rounded-sm border border-white/70 shadow-xs p-3"
+                className="bg-white rounded-[20px] shadow-[0_6px_22px_rgba(0,0,0,.06)] overflow-hidden flex flex-col"
               >
-                <div className="flex items-start gap-3">
-                  <div className="w-14 h-14 rounded-xs overflow-hidden bg-gray-200 shrink-0 border border-white/60">
-                    {img ? (
-                      <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        <ImageIcon className="w-4 h-4" />
-                      </div>
+                {/* Photo */}
+                <div className="relative h-[150px] bg-[#EFEDE7] shrink-0">
+                  {img ? (
+                    <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[#a8a29a]">
+                      <ImageIcon className="w-6 h-6" />
+                    </div>
+                  )}
+                  {proc.isFeatured && (
+                    <span className="absolute top-3 left-3 flex items-center gap-1 h-7 px-2.5 rounded-full bg-[rgba(26,26,26,.85)] text-[#E8CDAC] text-[12px] font-semibold">
+                      <Star className="w-3.5 h-3.5 fill-[#E8CDAC]" />
+                      Destaque
+                    </span>
+                  )}
+                  <span className="absolute top-3 right-3 h-7 px-2.5 rounded-full bg-white/95 text-[#4a4740] text-[11px] font-semibold flex items-center max-w-[70%] truncate">
+                    {proc.category}
+                  </span>
+                </div>
+
+                {/* Body */}
+                <div className="p-4 flex flex-col flex-1">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <h3
+                      onClick={() => onViewDetails(proc)}
+                      className="font-serif-luxury text-[24px] font-semibold text-[#1A1A1A] leading-tight cursor-pointer hover:text-[#A67C52] transition-colors"
+                    >
+                      {proc.title}
+                    </h3>
+                    <button
+                      onClick={(e) => openMenu(proc.id, e)}
+                      className="shrink-0 w-10 h-10 -mr-1.5 -mt-1 rounded-full flex items-center justify-center text-[#8a8578] hover:bg-[#F9F8F6] hover:text-[#1A1A1A] active:scale-95 transition-all"
+                      title="Mais ações"
+                    >
+                      <MoreHorizontal className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {proc.subtitle && (
+                    <p className="text-[14px] text-[#8a8578] leading-snug line-clamp-2 mb-2.5">
+                      {proc.subtitle}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-3 text-[13px] text-[#4a4740] mb-3">
+                    {proc.duration && (
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#A67C52]" />
+                        {proc.duration}
+                      </span>
+                    )}
+                    {proc.sessionsRecommended && (
+                      <span className="flex items-center gap-1.5">
+                        <Repeat className="w-3.5 h-3.5 text-[#A67C52]" />
+                        {proc.sessionsRecommended}
+                      </span>
                     )}
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h4
-                        onClick={() => onViewDetails(proc)}
-                        className="font-medium text-sm text-[#1A1A1A] uppercase tracking-tight cursor-pointer line-clamp-2"
-                      >
-                        {proc.title}
-                      </h4>
-                      <button
-                        onClick={() => onToggleFeatured(proc.id)}
-                        className={`shrink-0 p-1 rounded-xs transition-colors ${
-                          proc.isFeatured ? 'text-[#C49B74] bg-[#1A1A1A]' : 'text-gray-300'
-                        }`}
-                        title="Alternar Destaque VIP"
-                      >
-                        <Star className={`w-3.5 h-3.5 ${proc.isFeatured ? 'fill-[#C49B74]' : ''}`} />
-                      </button>
-                    </div>
-
-                    {proc.subtitle && (
-                      <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">{proc.subtitle}</p>
-                    )}
-
-                    <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
-                      <span className="inline-block px-2 py-0.5 rounded-xs bg-white/70 border border-white/80 text-[#A67C52] font-semibold text-[10px] tracking-widest uppercase">
-                        {proc.category}
-                      </span>
-                      <span className="text-[10px] text-gray-400">
-                        {proc.duration || '—'} · {proc.sessionsRecommended || '1 sessão'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-baseline gap-1.5 font-mono mt-1.5">
+                  <div className="border-t border-[rgba(26,26,26,.07)] pt-3 mb-3.5 mt-auto">
+                    <span className="block text-[12px] text-[#8a8578] mb-0.5">Investimento</span>
+                    <div className="flex items-baseline gap-2 flex-wrap">
                       {hasDiscount && (
-                        <span className="text-[10px] text-gray-400 line-through">
+                        <span className="text-[13px] text-[#a8a29a] line-through">
                           {formatBRL(proc.price)}
                         </span>
                       )}
-                      <span className="font-semibold text-[#A67C52] text-sm">
+                      <span className="text-[24px] font-bold text-[#8E653D]">
                         {formatBRL(hasDiscount ? proc.promotionalPrice : proc.price)}
                       </span>
                       {proc.priceNote && (
-                        <span className="text-[10px] text-gray-400 font-sans">{proc.priceNote}</span>
+                        <span className="text-[12px] text-[#8a8578]">{proc.priceNote}</span>
                       )}
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center justify-end gap-1 mt-2.5 pt-2.5 border-t border-white/60">
-                  <button
-                    onClick={() => onViewDetails(proc)}
-                    className="p-2 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-white/80 transition-colors"
-                    title="Ver Detalhes"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => onShareSingle(proc)}
-                    className="p-2 rounded-xs text-gray-400 hover:text-[#A67C52] hover:bg-white/80 transition-colors"
-                    title="Exportar Card"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => onDuplicateProcedure(proc)}
-                    className="p-2 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-white/80 transition-colors"
-                    title="Duplicar"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => onEditProcedure(proc)}
-                    className="p-2 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-white/80 transition-colors"
-                    title="Editar"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => onDeleteProcedure(proc.id)}
-                    className="p-2 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50/50 transition-colors"
-                    title="Excluir"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      onClick={() => onEditProcedure(proc)}
+                      className="flex-1 h-11 rounded-xl border border-[#A67C52] text-[#A67C52] text-[14px] font-semibold hover:bg-[#A67C52]/5 active:scale-97 transition-all"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => onViewDetails(proc)}
+                      className="flex-1 h-11 rounded-xl bg-[#A67C52] text-white text-[14px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all"
+                    >
+                      Ver ficha
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </article>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
-      {/* Procedures Table (Frosted Glass) — sm and up */}
-      <div className="hidden sm:block bg-white/50 backdrop-blur-md rounded-sm border border-white/60 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-gray-600">
-            <thead className="bg-white/60 text-[#1A1A1A] uppercase text-[10px] font-semibold tracking-widest border-b border-white/80">
-              <tr>
-                <th className="py-3 px-4">Procedimento</th>
-                <th className="py-3 px-4">Categoria</th>
-                <th className="py-3 px-4">Investimento</th>
-                <th className="py-3 px-4">Duração & Sessões</th>
-                <th className="py-3 px-4 text-center">Destaque</th>
-                <th className="py-3 px-4 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredProcedures.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-400">
-                    Nenhum procedimento encontrado com os filtros selecionados.
-                  </td>
-                </tr>
-              ) : (
-                filteredProcedures.map((proc) => {
-                  const hasDiscount = proc.promotionalPrice && proc.promotionalPrice < proc.price;
-                  const img = proc.images && proc.images.length > 0 ? proc.images[0] : '';
+      {/* "…" menu: backdrop + bottom sheet (mobile) / popover (sm+) */}
+      {menuProcedure && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/30 sm:bg-transparent" onClick={closeMenu} />
 
-                  return (
-                    <tr key={proc.id} className="hover:bg-white/80 transition-colors group">
-                      {/* Name & Photo */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-xs overflow-hidden bg-gray-200 shrink-0 border border-white/60">
-                            {img ? (
-                              <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                <ImageIcon className="w-4 h-4" />
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <h4
-                              onClick={() => onViewDetails(proc)}
-                              className="font-medium text-sm text-[#1A1A1A] uppercase tracking-tight hover:text-[#A67C52] cursor-pointer"
-                            >
-                              {proc.title}
-                            </h4>
-                            {proc.subtitle && (
-                              <p className="text-[11px] text-gray-400 line-clamp-1">
-                                {proc.subtitle}
-                              </p>
-                            )}
-                            {proc.assignedDoctorNames && proc.assignedDoctorNames.length > 0 && (
-                              <p className="text-[10px] text-[#A67C52] font-medium mt-0.5">
-                                ✦ {proc.assignedDoctorNames.join(' • ')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
+          {/* Mobile bottom sheet */}
+          <div className="sm:hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[22px] shadow-2xl pb-[max(16px,env(safe-area-inset-bottom))] animate-fadeIn">
+            <div className="w-11 h-1 bg-[rgba(26,26,26,.15)] rounded-full mx-auto mt-3 mb-1" />
+            <p className="px-5 pt-2 pb-1 text-[13px] text-[#8a8578] font-medium truncate">
+              {menuProcedure.title}
+            </p>
+            <div className="py-1">
+              {menuActions.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={action.label}
+                    onClick={() => {
+                      action.onClick();
+                      closeMenu();
+                    }}
+                    className={`w-full flex items-center gap-3 h-[52px] px-5 text-[15px] font-medium transition-colors ${
+                      action.danger ? 'text-[#E11D48] hover:bg-[#E11D48]/5' : 'text-[#1A1A1A] hover:bg-[#F9F8F6]'
+                    }`}
+                  >
+                    <Icon className="w-[18px] h-[18px]" />
+                    {action.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-                      {/* Category */}
-                      <td className="py-3 px-4">
-                        <span className="inline-block px-2.5 py-0.5 rounded-xs bg-white/70 border border-white/80 text-[#A67C52] font-semibold text-[10px] tracking-widest uppercase">
-                          {proc.category}
-                        </span>
-                      </td>
+          {/* Desktop/tablet popover */}
+          {menuPos && (
+            <div
+              className="hidden sm:block fixed z-50 w-64 bg-white rounded-2xl shadow-2xl border border-[rgba(26,26,26,.07)] py-1.5 overflow-hidden"
+              style={{ top: menuPos.top, left: menuPos.left }}
+            >
+              {menuActions.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={action.label}
+                    onClick={() => {
+                      action.onClick();
+                      closeMenu();
+                    }}
+                    className={`w-full flex items-center gap-3 h-[46px] px-4 text-[14px] font-medium transition-colors ${
+                      action.danger ? 'text-[#E11D48] hover:bg-[#E11D48]/5' : 'text-[#1A1A1A] hover:bg-[#F9F8F6]'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {action.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
 
-                      {/* Price */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-baseline gap-1.5 font-mono">
-                          {hasDiscount && (
-                            <span className="text-[11px] text-gray-400 line-through">
-                              {formatBRL(proc.price)}
-                            </span>
-                          )}
-                          <span className="font-semibold text-[#A67C52] text-sm">
-                            {formatBRL(hasDiscount ? proc.promotionalPrice : proc.price)}
-                          </span>
-                        </div>
-                        {proc.priceNote && (
-                          <span className="text-[10px] text-gray-400 block font-sans">{proc.priceNote}</span>
-                        )}
-                      </td>
-
-                      {/* Specs */}
-                      <td className="py-3 px-4 text-[11px]">
-                        <div className="font-mono">{proc.duration || '—'}</div>
-                        <div className="text-gray-400">{proc.sessionsRecommended || '1 sessão'}</div>
-                      </td>
-
-                      {/* Featured toggle */}
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => onToggleFeatured(proc.id)}
-                          className={`p-1.5 rounded-xs transition-colors ${
-                            proc.isFeatured
-                              ? 'text-[#C49B74] bg-[#1A1A1A]'
-                              : 'text-gray-300 hover:text-[#A67C52] hover:bg-white'
-                          }`}
-                          title="Alternar Destaque VIP"
-                        >
-                          <Star className={`w-4 h-4 ${proc.isFeatured ? 'fill-[#C49B74]' : ''}`} />
-                        </button>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => onViewDetails(proc)}
-                            className="p-1.5 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-white/80 transition-colors"
-                            title="Ver Detalhes"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => onShareSingle(proc)}
-                            className="p-1.5 rounded-xs text-gray-400 hover:text-[#A67C52] hover:bg-white/80 transition-colors"
-                            title="Exportar Card"
-                          >
-                            <Share2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => onDuplicateProcedure(proc)}
-                            className="p-1.5 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-white/80 transition-colors"
-                            title="Duplicar"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => onEditProcedure(proc)}
-                            className="p-1.5 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-white/80 transition-colors"
-                            title="Editar"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => onDeleteProcedure(proc.id)}
-                            className="p-1.5 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50/50 transition-colors"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+      {/* Mobile sticky footer */}
+      <div className="sm:hidden fixed left-0 right-0 bottom-0 z-30 pt-8 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pointer-events-none" style={{ background: 'linear-gradient(to top, #F9F8F6 55%, transparent)' }}>
+        <div className="flex items-center gap-2.5 pointer-events-auto">
+          <button
+            onClick={onOpenNewProcedure}
+            className="flex-1 h-[52px] rounded-2xl bg-[#A67C52] text-white text-[16px] font-semibold shadow-lg active:scale-97 transition-all"
+          >
+            Novo procedimento
+          </button>
+          <button
+            onClick={onOpenExport}
+            className="w-[52px] h-[52px] rounded-2xl bg-white border border-[rgba(26,26,26,.1)] text-[#1A1A1A] flex items-center justify-center shadow-lg active:scale-97 transition-all shrink-0"
+            title="Exportar catálogo"
+          >
+            <FileDown className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </div>

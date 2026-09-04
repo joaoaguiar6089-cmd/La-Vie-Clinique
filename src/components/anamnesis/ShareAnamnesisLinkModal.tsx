@@ -38,6 +38,7 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
     initialTemplateId || (templates[0]?.id || '')
   );
   const [selectedPatientId, setSelectedPatientId] = useState<string>(initialPatientId || '');
+  const [selectedProfessionalId, setSelectedProfessionalId] = useState<string>('');
   const [isCopied, setIsCopied] = useState(false);
   const [customPhone, setCustomPhone] = useState<string>('');
 
@@ -45,12 +46,18 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
   const selectedPatient = patients.find((p) => p.id === selectedPatientId);
+  const canShare = !!selectedProfessionalId;
 
   // Compute public link
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
   const patientParam = selectedPatientId ? `&paciente=${encodeURIComponent(selectedPatientId)}` : '';
-  const shareableUrl = `${origin}${pathname}?anamnese=${encodeURIComponent(selectedTemplate?.id || '')}${patientParam}`;
+  const professionalParam = selectedProfessionalId
+    ? `&profissional=${encodeURIComponent(selectedProfessionalId)}`
+    : '';
+  const shareableUrl = `${origin}${pathname}?anamnese=${encodeURIComponent(
+    selectedTemplate?.id || ''
+  )}${patientParam}${professionalParam}`;
 
   // WhatsApp formatted message
   const targetPhone = selectedPatient?.contato
@@ -197,6 +204,32 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
             </div>
           )}
 
+          {/* Responsible Professional Selector */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">
+              Profissional Responsável *
+            </label>
+            <select
+              value={selectedProfessionalId}
+              onChange={(e) => setSelectedProfessionalId(e.target.value)}
+              className={`w-full px-3 py-2 text-xs rounded-sm bg-gray-50 border ${
+                canShare ? 'border-gray-200' : 'border-amber-300'
+              } text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] font-medium`}
+            >
+              <option value="">-- Selecione o profissional --</option>
+              {clinicProfile.professionals?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            {!canShare && (
+              <p className="text-[10px] text-amber-600 mt-1">
+                Selecione o profissional responsável para gerar e enviar o link.
+              </p>
+            )}
+          </div>
+
           {/* Generated URL Box */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">
@@ -212,7 +245,8 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-sm bg-[#1A1A1A] text-[#C49B74] hover:bg-black text-xs font-semibold uppercase tracking-wider shrink-0 transition-all active:scale-95"
+                disabled={!canShare}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-sm bg-[#1A1A1A] text-[#C49B74] hover:bg-black text-xs font-semibold uppercase tracking-wider shrink-0 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#1A1A1A]"
               >
                 {isCopied ? (
                   <>
@@ -245,7 +279,8 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
             <button
               type="button"
               onClick={handlePreviewAsPatient}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm bg-white border border-gray-300 text-gray-800 hover:border-[#A67C52] text-xs font-semibold tracking-wide transition-all shadow-2xs"
+              disabled={!canShare}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm bg-white border border-gray-300 text-gray-800 hover:border-[#A67C52] text-xs font-semibold tracking-wide transition-all shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Eye className="w-4 h-4 text-[#A67C52]" />
               Visualizar como Paciente
@@ -254,7 +289,8 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
             <button
               type="button"
               onClick={handleOpenWhatsApp}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-[#25D366] text-white hover:bg-[#20ba59] text-xs font-bold uppercase tracking-wider shadow-xs transition-all active:scale-95"
+              disabled={!canShare}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-[#25D366] text-white hover:bg-[#20ba59] text-xs font-bold uppercase tracking-wider shadow-xs transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <MessageCircle className="w-4 h-4" />
               Enviar pelo WhatsApp

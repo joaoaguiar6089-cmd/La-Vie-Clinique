@@ -6,6 +6,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   onSnapshot,
   query,
   orderBy,
@@ -459,10 +460,19 @@ export function subscribeToAnamnesisRecords(
  */
 export async function saveAnamnesisRecord(record: AnamnesisRecord): Promise<void> {
   const docRef = doc(db, ANAMNESIS_RECORDS_COLLECTION, record.id);
-  const dataToSave = cleanForFirestore({
+  const dataToSave: Record<string, any> = cleanForFirestore({
     ...record,
     updatedAt: new Date().toISOString(),
   });
+  // `fotoUrl` is a legacy mirror of `fotoPacienteUrl` kept only for records saved before that field
+  // existed. Once `fotoPacienteUrl` is set we don't need a second copy of the same base64 photo —
+  // every read site already falls back to `fotoUrl` — and keeping both wastes precious room inside
+  // Firestore's 1MB per-document limit, which photos (and their annotated versions) can hit fast.
+  // `merge: true` only adds/overwrites keys present in the payload, so omitting the key would leave
+  // any previously-stored `fotoUrl` in place; `deleteField()` is required to actually reclaim it.
+  if (record.fotoPacienteUrl) {
+    dataToSave.fotoUrl = deleteField();
+  }
   await setDoc(docRef, dataToSave, { merge: true });
 }
 

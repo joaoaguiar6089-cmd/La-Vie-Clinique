@@ -41,6 +41,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
   const anamneseParam = params.get('anamnese') || '';
   const pacienteParam = params.get('paciente') || '';
   const fichaParam = params.get('ficha') || '';
+  const profissionalParam = params.get('profissional') || '';
 
   const [screen, setScreen] = useState<Screen>('loading');
   const [errorMsg, setErrorMsg] = useState('');
@@ -193,10 +194,10 @@ export const PublicAnamnesisEntry: React.FC = () => {
 
   if (screen === 'loading') {
     return (
-      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center px-4">
         <div className="text-center space-y-3">
           <Loader2 className="w-8 h-8 text-[#A67C52] animate-spin mx-auto" />
-          <p className="text-xs text-gray-500">Carregando sua ficha de anamnese...</p>
+          <p className="text-[14px] text-[#8a8578]">Carregando sua ficha de anamnese...</p>
         </div>
       </div>
     );
@@ -204,57 +205,58 @@ export const PublicAnamnesisEntry: React.FC = () => {
 
   if (screen === 'error') {
     return (
-      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white rounded-sm border border-gray-200/80 shadow-xl p-8 text-center space-y-3">
-          <div className="w-14 h-14 rounded-full bg-red-50 text-red-500 border border-red-200 mx-auto flex items-center justify-center">
+      <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-[0_6px_22px_rgba(0,0,0,.06)] p-8 text-center space-y-3">
+          <div className="w-14 h-14 rounded-full bg-red-50 text-[#E11D48] border border-red-200 mx-auto flex items-center justify-center">
             <AlertTriangle className="w-7 h-7" />
           </div>
-          <h2 className="font-serif-luxury text-lg font-bold text-[#1A1A1A]">Não foi possível abrir a ficha</h2>
-          <p className="text-xs text-gray-500 leading-relaxed">{errorMsg}</p>
+          <h2 className="font-serif-luxury text-[21px] font-semibold text-[#1A1A1A]">Não foi possível abrir a ficha</h2>
+          <p className="text-[14px] text-[#8a8578] leading-relaxed">{errorMsg}</p>
         </div>
       </div>
     );
   }
 
   if (screen === 'success' && savedRecord) {
+    const firstName = savedRecord.pacienteNome?.split(' ')[0] || '';
     return (
-      <div className="min-h-screen bg-[#FDFBF7] py-8 sm:py-16 px-4">
-        <div className="max-w-2xl mx-auto bg-white rounded-sm border border-gray-200/80 shadow-xl overflow-hidden animate-fadeIn">
-          <div className="bg-[#1A1A1A] p-8 text-center text-white relative">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400/40 mx-auto flex items-center justify-center mb-4 shadow-lg">
-              <CheckCircle2 className="w-9 h-9" />
-            </div>
-            <span className="text-[10px] font-mono tracking-widest uppercase text-[#C49B74] block font-bold mb-1">
-              {clinicProfile.name}
-            </span>
-            <h2 className="font-serif-luxury text-2xl sm:text-3xl font-bold tracking-tight">
-              Ficha de Anamnese Enviada!
-            </h2>
-            <p className="text-xs sm:text-sm text-gray-300 mt-2 max-w-md mx-auto leading-relaxed">
-              Obrigado, <strong className="text-white">{savedRecord.pacienteNome}</strong>. Suas informações foram
-              registradas com segurança no prontuário digital da clínica.
+      <div className="min-h-screen bg-[#F9F8F6] py-8 sm:py-16 px-4">
+        <div className="max-w-lg mx-auto text-center space-y-5 animate-fadeIn">
+          <div className="w-[76px] h-[76px] rounded-full bg-[#A67C52] text-white mx-auto flex items-center justify-center shadow-[0_6px_22px_rgba(166,124,82,.3)]">
+            <CheckCircle2 className="w-9 h-9" />
+          </div>
+          <div>
+            <h2 className="font-serif-luxury text-[32px] font-medium text-[#1A1A1A]">Ficha enviada</h2>
+            <p className="text-[15px] text-[#4a4740] mt-2 max-w-md mx-auto leading-relaxed">
+              Obrigado, <strong className="text-[#1A1A1A]">{firstName}</strong>. Suas informações foram registradas
+              com segurança no prontuário digital da clínica.
             </p>
           </div>
 
-          <div className="p-6 sm:p-8 space-y-6">
-            <div className="bg-[#FAF9F6] border border-gray-200 rounded-sm p-4 text-xs space-y-2">
-              <div className="flex justify-between border-b border-gray-200/60 pb-2">
-                <span className="text-gray-500">Procedimento:</span>
-                <span className="font-bold text-[#1A1A1A]">{savedRecord.procedimentoNome}</span>
-              </div>
-              <div className="flex justify-between pt-1">
-                <span className="text-gray-500">Protocolo Digital:</span>
-                <span className="font-mono text-gray-700 font-bold">#{savedRecord.id.slice(-8).toUpperCase()}</span>
+          <div className="bg-white rounded-3xl shadow-[0_6px_22px_rgba(0,0,0,.06)] p-6 text-left space-y-5">
+            <div>
+              <span className="text-[13px] font-semibold text-[#A67C52]">Seu atendimento</span>
+              <div className="mt-2 space-y-2">
+                <div className="flex justify-between text-[14px]">
+                  <span className="text-[#8a8578]">Procedimento</span>
+                  <span className="font-semibold text-[#1A1A1A]">{savedRecord.procedimentoNome}</span>
+                </div>
+                <div className="flex justify-between text-[14px]">
+                  <span className="text-[#8a8578]">Protocolo digital</span>
+                  <span className="font-semibold text-[#1A1A1A]" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
+                    #{savedRecord.id.slice(-8).toUpperCase()}
+                  </span>
+                </div>
               </div>
             </div>
 
             {wasGenericLink && (
-              <div className="bg-[#A67C52]/10 border border-[#A67C52]/30 rounded-sm p-4 space-y-2.5">
-                <div className="flex items-center gap-2 text-[#1A1A1A] font-bold text-xs">
+              <div className="bg-[#F9F8F6] rounded-2xl p-4 space-y-2.5">
+                <div className="flex items-center gap-2 text-[#1A1A1A] font-semibold text-[14px]">
                   <Sparkles className="w-4 h-4 text-[#A67C52]" />
                   Guarde este link — ele é só seu
                 </div>
-                <p className="text-[11px] text-gray-600 leading-relaxed">
+                <p className="text-[13px] text-[#8a8578] leading-relaxed">
                   Use este link pessoal para voltar, revisar ou corrigir suas respostas até a sua consulta.
                 </p>
                 <div className="flex items-center gap-2">
@@ -262,14 +264,15 @@ export const PublicAnamnesisEntry: React.FC = () => {
                     type="text"
                     readOnly
                     value={personalLink}
-                    className="w-full px-3 py-2 text-[11px] rounded-sm bg-white border border-gray-200 text-gray-700 font-mono select-all focus:outline-hidden"
+                    className="w-full h-11 px-3 text-[13px] rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-[#4a4740] select-all focus:outline-hidden"
+                    style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
                   />
                   <button
                     type="button"
                     onClick={handleCopyPersonalLink}
-                    className="flex items-center gap-1 px-3 py-2 rounded-sm bg-[#1A1A1A] text-white text-xs font-semibold shrink-0 hover:bg-black transition-all"
+                    className="w-11 h-11 rounded-xl bg-[#1A1A1A] text-white flex items-center justify-center shrink-0 hover:bg-black transition-all"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
                 {selfWaUrl && (
@@ -277,7 +280,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
                     href={selfWaUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 hover:underline"
+                    className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700 hover:underline"
                   >
                     <MessageCircle className="w-3.5 h-3.5" />
                     Enviar este link para o meu WhatsApp
@@ -286,39 +289,33 @@ export const PublicAnamnesisEntry: React.FC = () => {
               </div>
             )}
 
-            <div className="bg-[#E7F8ED] border border-emerald-300/80 rounded-sm p-5 text-center space-y-3">
-              <div className="flex items-center justify-center gap-2 text-emerald-950 font-bold text-sm">
-                <MessageCircle className="w-5 h-5 text-emerald-600" />
-                Avisar a Clínica pelo WhatsApp
-              </div>
-              <a
-                href={waConfirmUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-sm bg-[#25D366] text-white hover:bg-[#20ba59] font-bold text-xs uppercase tracking-wider shadow-md active:scale-95 transition-all"
-              >
-                <MessageCircle className="w-4 h-4" />
-                Enviar Confirmação pelo WhatsApp
-              </a>
-            </div>
+            <a
+              href={waConfirmUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full h-[52px] rounded-2xl bg-[#25D366] text-white hover:bg-[#20ba59] font-semibold text-[15px] shadow-xs active:scale-97 transition-all"
+            >
+              <MessageCircle className="w-[18px] h-[18px]" />
+              Falar com a clínica no WhatsApp
+            </a>
 
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 border-t border-gray-100">
+            <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-3 border-t border-[rgba(26,26,26,.07)] pt-4">
               <button
                 type="button"
                 onClick={() => setShowPdfModal(true)}
-                className="flex items-center gap-2 text-xs text-[#A67C52] hover:text-[#8e6945] font-semibold transition-colors"
+                className="flex items-center gap-2 text-[13px] text-[#A67C52] hover:text-[#8E653D] font-semibold transition-colors"
               >
                 <FileDown className="w-4 h-4" />
-                Ver / Baixar PDF da Ficha
+                Ver / baixar PDF da ficha
               </button>
-              <span className="hidden sm:inline text-gray-300">•</span>
+              <span className="hidden sm:inline text-[#a8a29a]">•</span>
               <button
                 type="button"
                 onClick={() => setScreen('form')}
-                className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-800 font-semibold transition-colors"
+                className="flex items-center gap-2 text-[13px] text-[#8a8578] hover:text-[#1A1A1A] font-semibold transition-colors"
               >
                 <Edit3 className="w-4 h-4" />
-                Continuar Editando Respostas
+                Continuar editando respostas
               </button>
             </div>
           </div>
@@ -343,9 +340,9 @@ export const PublicAnamnesisEntry: React.FC = () => {
 
   if (isLocked && existingRecord) {
     return (
-      <div className="min-h-screen bg-[#FAF9F6]">
+      <div className="min-h-screen bg-[#F9F8F6]">
         <div className="max-w-3xl mx-auto pt-6 sm:pt-12 px-3 sm:px-6 pb-3 text-center">
-          <p className="text-[11px] text-gray-500 bg-white inline-block px-3 py-1.5 rounded-sm border border-gray-200">
+          <p className="text-[13px] text-[#4a4740] bg-white inline-block px-4 py-2 rounded-full border border-[rgba(26,26,26,.1)]">
             Sua ficha já foi complementada pela equipe e não pode mais ser editada. Você ainda pode salvar o PDF
             com as suas respostas.
           </p>
@@ -361,7 +358,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] py-6 sm:py-12 px-3 sm:px-6">
+    <div className="min-h-screen bg-[#F9F8F6] py-6 sm:py-12 px-5 sm:px-6">
       <OnlinePatientAnamnesisForm
         template={template}
         generalQuestions={generalQuestions}
@@ -369,6 +366,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
         initialPatient={initialPatient}
         existingRecord={existingRecord}
         prefillRespostasGerais={prefillGerais}
+        professionalId={profissionalParam || undefined}
         onSavePatient={savePatient}
         onSaveRecord={saveAnamnesisRecord}
         onSaved={handleSaved}

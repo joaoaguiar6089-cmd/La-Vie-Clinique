@@ -130,7 +130,8 @@ export interface AnamnesisRecord {
   templateId?: string; // ID da ficha-modelo (AnamnesisTemplate.id) usada para gerar este registro
   procedimentoNome: string;
   dataAtendimento: string; // YYYY-MM-DD ou ISO
-  profissionalNome?: string; // Esteticista ou médica responsável
+  professionalId?: string; // ID em ClinicProfile.professionals — fonte de verdade do profissional responsável
+  profissionalNome?: string; // Nome do profissional no momento do registro (espelha professionalId; mantido para fichas antigas sem ID)
   respostasGerais: Record<string, any>; // questionId -> valor (perguntas gerais, ambos os públicos)
   respostasEspecificas: Record<string, any>; // questionId -> valor (perguntas específicas, ambos os públicos)
   respostasProfissional?: Record<string, any>; // questionId -> valor, respostas exclusivas do profissional (publicoAlvo='medico')
@@ -139,6 +140,8 @@ export interface AnamnesisRecord {
   fotoModeloAnotadaUrl?: string; // Versão da foto de referência com anotações do profissional (imagem "achatada", usada no PDF)
   fotoModeloAnotacoesJson?: string; // Estado do canvas de anotação (JSON do Fabric.js) para permitir reabrir e continuar editando
   fotoPacienteUrl?: string; // Foto real enviada pelo paciente online ou tirada na clínica
+  fotoPacienteAnotadaUrl?: string; // Versão da foto do paciente com anotações do profissional (imagem "achatada", usada no PDF)
+  fotoPacienteAnotacoesJson?: string; // Estado do canvas de anotação (JSON do Fabric.js) da foto do paciente, para permitir reabrir e continuar editando
   fotoUrl?: string; // Retrocompatibilidade (espelha fotoPacienteUrl)
   perguntasSnapshot: {
     gerais: AnamnesisQuestion[];

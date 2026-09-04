@@ -43,6 +43,29 @@ function computeDisplaySize() {
   return { width, height };
 }
 
+/**
+ * Older saved annotation JSON can carry a background image with Fabric's default
+ * `originX/originY: 'center'` (a version of this editor never pinned it to 'left'/'top' before
+ * saving), which straddles the image across scene coordinate (0,0) instead of starting there —
+ * the exact mismatch that made saved exports render as a small crop of the top-left quadrant.
+ * Re-anchors the background to top-left at (0,0) and carries every other object along by the same
+ * delta, so their positions relative to the photo don't shift.
+ */
+function normalizeBackgroundOrigin(canvas: Canvas, bg: FabricImage | undefined) {
+  if (!bg || (bg.originX === 'left' && bg.originY === 'top')) return;
+  const w = (bg.width || 0) * (bg.scaleX || 1);
+  const h = (bg.height || 0) * (bg.scaleY || 1);
+  const dx = bg.originX === 'center' ? w / 2 - (bg.left || 0) : -(bg.left || 0);
+  const dy = bg.originY === 'center' ? h / 2 - (bg.top || 0) : -(bg.top || 0);
+  if (dx || dy) {
+    canvas._objects.forEach((obj) => {
+      obj.set({ left: (obj.left || 0) + dx, top: (obj.top || 0) + dy });
+      obj.setCoords();
+    });
+  }
+  bg.set({ originX: 'left', originY: 'top', left: 0, top: 0 });
+}
+
 export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
   imageUrl,
   initialAnnotationsJson,
@@ -161,15 +184,19 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
           const bg = canvas.backgroundImage as FabricImage | undefined;
           imgW = (bg?.width || 0) * (bg?.scaleX || 1);
           imgH = (bg?.height || 0) * (bg?.scaleY || 1);
+          normalizeBackgroundOrigin(canvas, bg);
         } else {
           const img = await FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' });
           if (cancelled) return;
           imgW = img.width || 1000;
           imgH = img.height || 1000;
-          // Keep the image at its native pixel size in scene space — never shrink it to fit the
-          // display here. Fitting the *view* is handled separately below via zoom, so annotation
-          // coordinates and the final export always stay at full resolution.
-          img.set({ scaleX: 1, scaleY: 1, selectable: false, evented: false });
+          // Keep the image at its native pixel size in scene space, anchored top-left at the
+          // scene origin — never shrink it to fit the display here. Fitting the *view* is handled
+          // separately below via zoom, so annotation coordinates and the final export always stay
+          // at full resolution. originX/Y must be pinned explicitly: Fabric's own default origin
+          // is 'center', which would place the image straddling (0,0) instead of starting there,
+          // silently breaking the top-left-anchored math fitToScreen/handleSave rely on.
+          img.set({ scaleX: 1, scaleY: 1, left: 0, top: 0, originX: 'left', originY: 'top', selectable: false, evented: false });
           canvas.backgroundImage = img;
         }
         imageDimsRef.current = { width: imgW, height: imgH };
@@ -505,23 +532,61 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
     const { width: imgW, height: imgH } = imageDimsRef.current;
     const prevVpt = canvas.viewportTransform ? ([...canvas.viewportTransform] as typeof canvas.viewportTransform) : undefined;
     const prevDims = { width: canvas.width, height: canvas.height };
+    const prevBackgroundColor = canvas.backgroundColor;
 
     setIsSaving(true);
     try {
-      // Render at the photo's full native resolution for export, regardless of the current
-      // on-screen zoom/pan — the exported image must always show the whole photo.
-      if (imgW && imgH) {
-        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-        canvas.setDimensions({ width: imgW, height: imgH });
+      // Nothing stops an annotation (a wide text box, a line dragged past the edge) from landing
+      // partly or fully outside the photo's own rectangle — exporting a fixed (0,0,imgW,imgH) region
+      // silently clipped whatever fell outside it. Union the photo's rect with every object's own
+      // bounding box (in absolute scene coordinates, ignoring the current pan/zoom) so the export
+      // always covers everything actually drawn, not just the original photo.
+      let minX = 0;
+      let minY = 0;
+      let maxX = imgW;
+      let maxY = imgH;
+      canvas.forEachObject((obj) => {
+        const r = obj.getBoundingRect(true, true);
+        minX = Math.min(minX, r.left);
+        minY = Math.min(minY, r.top);
+        maxX = Math.max(maxX, r.left + r.width);
+        maxY = Math.max(maxY, r.top + r.height);
+      });
+      const PAD = 4; // safety margin against stroke-width/anti-aliasing rounding at the edges
+      minX -= PAD;
+      minY -= PAD;
+      maxX += PAD;
+      maxY += PAD;
+      const exportW = maxX - minX;
+      const exportH = maxY - minY;
+
+      // Render the full union region for export, regardless of the current on-screen zoom/pan —
+      // shifting the viewport so (minX, minY) lands at the canvas origin.
+      if (exportW && exportH) {
+        canvas.setViewportTransform([1, 0, 0, 1, -minX, -minY]);
+        canvas.setDimensions({ width: exportW, height: exportH });
+        // JPEG has no transparency channel — an uncovered pixel would otherwise export black.
+        // The background photo covers most of the canvas already; this only matters for the thin
+        // padding strip (or any area annotations pushed the bounds into) beyond the photo's edge.
+        canvas.backgroundColor = '#FFFFFF';
         canvas.renderAll();
       }
-      const dataUrl = canvas.toDataURL({ format: 'png', quality: 1 });
+      // JPEG, not PNG: this data URL is stored inline in the Firestore record (see onSave), which
+      // rejects documents over 1MB. A single anamnesis record can carry up to two of these flattened
+      // exports (reference photo + patient's own photo) alongside their un-annotated originals, so
+      // each one needs to leave real headroom rather than using the whole 1MB budget on its own.
+      // Capping the longest side keeps a source photo of any resolution (up to ~2000px) well inside that shared budget.
+      const MAX_EXPORT_DIM = 1400;
+      const largestDim = Math.max(exportW || 0, exportH || 0);
+      const exportMultiplier = largestDim > MAX_EXPORT_DIM ? MAX_EXPORT_DIM / largestDim : 1;
+      const dataUrl = canvas.toDataURL({ format: 'jpeg', quality: 0.78, multiplier: exportMultiplier });
       const json = JSON.stringify(canvas.toJSON());
       await onSave(dataUrl, json);
     } finally {
       // Restore the editor's current view in case saving failed and editing continues.
       canvas.setDimensions(prevDims as { width: number; height: number });
       if (prevVpt) canvas.setViewportTransform(prevVpt);
+      canvas.backgroundColor = prevBackgroundColor;
       canvas.renderAll();
       setIsSaving(false);
     }

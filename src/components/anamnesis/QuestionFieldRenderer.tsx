@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnamnesisQuestion } from '../../types';
-import { Check, Calendar } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 interface QuestionFieldRendererProps {
   question: AnamnesisQuestion;
@@ -37,12 +37,12 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
     }
 
     return (
-      <div className="py-2 border-b border-gray-100 last:border-0">
+      <div className="py-2.5 border-b border-[rgba(26,26,26,.07)] last:border-0">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-xs font-medium text-gray-700">{texto}</span>
-          {!hideMandatoryAsterisk && obrigatoria && <span className="text-[10px] text-[#A67C52] font-semibold">*</span>}
+          <span className="text-[14px] font-medium text-[#4a4740]">{texto}</span>
+          {!hideMandatoryAsterisk && obrigatoria && <span className="text-[13px] text-[#A67C52] font-semibold">*</span>}
         </div>
-        <div className="mt-1 text-xs text-[#1A1A1A] font-semibold bg-gray-50/80 px-3 py-1.5 rounded-xs border border-gray-200/60">
+        <div className="mt-1.5 text-[14px] text-[#1A1A1A] font-semibold bg-[#F9F8F6] px-3.5 py-2 rounded-xl border border-[rgba(26,26,26,.07)]">
           {displayVal}
         </div>
       </div>
@@ -51,18 +51,20 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
 
   // INTERACTIVE INPUTS
   return (
-    <div className="space-y-1.5 py-1">
+    <div className="space-y-2 py-1">
       <div className="flex items-baseline justify-between gap-2">
-        <label htmlFor={`input-${id}`} className="block text-xs font-semibold text-gray-800">
+        <label htmlFor={`input-${id}`} className="block text-[15px] font-semibold text-[#1A1A1A]">
           {texto}
-          {!hideMandatoryAsterisk && obrigatoria && <span className="text-red-500 ml-1 font-bold">*</span>}
+          {!hideMandatoryAsterisk && obrigatoria && <span className="text-[#E11D48] ml-1 font-bold">*</span>}
         </label>
         {tipo_campo === 'escala' && (
-          <span className="text-[11px] text-gray-400 font-mono">1 a {escalaMax}</span>
+          <span className="text-[13px] text-[#8a8578]" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
+            1 a {escalaMax}
+          </span>
         )}
       </div>
 
-      {ajuda && <p className="text-[11px] text-gray-400 leading-snug">{ajuda}</p>}
+      {ajuda && <p className="text-[13px] text-[#8a8578] leading-snug">{ajuda}</p>}
 
       {/* 1. TEXTO CURTO */}
       {tipo_campo === 'texto_curto' && (
@@ -72,8 +74,8 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
           value={value || ''}
           onChange={(e) => onChange?.(e.target.value)}
           placeholder="Digite sua resposta..."
-          className={`w-full px-3 py-2 text-xs rounded-sm bg-white/90 border transition-all ${
-            error ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-200 focus:border-[#A67C52] focus:ring-1 focus:ring-[#A67C52]'
+          className={`w-full h-[52px] px-4 text-[15px] rounded-[13px] bg-white border transition-colors ${
+            error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
           } text-[#1A1A1A] focus:outline-hidden`}
         />
       )}
@@ -82,12 +84,12 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
       {tipo_campo === 'texto_longo' && (
         <textarea
           id={`input-${id}`}
-          rows={3}
+          rows={4}
           value={value || ''}
           onChange={(e) => onChange?.(e.target.value)}
           placeholder="Descreva detalhadamente..."
-          className={`w-full px-3 py-2 text-xs rounded-sm bg-white/90 border transition-all ${
-            error ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-200 focus:border-[#A67C52] focus:ring-1 focus:ring-[#A67C52]'
+          className={`w-full min-h-[120px] px-4 py-3 text-[15px] rounded-2xl bg-white border transition-colors ${
+            error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
           } text-[#1A1A1A] focus:outline-hidden resize-y`}
         />
       )}
@@ -100,30 +102,29 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
           value={value !== undefined ? value : ''}
           onChange={(e) => onChange?.(e.target.value === '' ? '' : Number(e.target.value))}
           placeholder="0"
-          className={`w-full max-w-xs px-3 py-2 text-xs rounded-sm bg-white/90 border font-mono transition-all ${
-            error ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-200 focus:border-[#A67C52] focus:ring-1 focus:ring-[#A67C52]'
+          className={`w-full max-w-[180px] h-[52px] px-4 text-[15px] rounded-[13px] bg-white border transition-colors ${
+            error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
           } text-[#1A1A1A] focus:outline-hidden`}
+          style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
         />
       )}
 
       {/* 4. DATA */}
       {tipo_campo === 'data' && (
-        <div className="relative max-w-xs">
-          <input
-            id={`input-${id}`}
-            type="date"
-            value={value || ''}
-            onChange={(e) => onChange?.(e.target.value)}
-            className={`w-full px-3 py-2 text-xs rounded-sm bg-white/90 border transition-all ${
-              error ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-200 focus:border-[#A67C52] focus:ring-1 focus:ring-[#A67C52]'
-            } text-[#1A1A1A] focus:outline-hidden`}
-          />
-        </div>
+        <input
+          id={`input-${id}`}
+          type="date"
+          value={value || ''}
+          onChange={(e) => onChange?.(e.target.value)}
+          className={`w-full max-w-[220px] h-[52px] px-4 text-[15px] rounded-[13px] bg-white border transition-colors ${
+            error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
+          } text-[#1A1A1A] focus:outline-hidden`}
+        />
       )}
 
-      {/* 5. ÚNICA ESCOLHA (RADIO / PILLS) */}
+      {/* 5. ÚNICA ESCOLHA (linhas com caixa circular) */}
       {tipo_campo === 'unica_escolha' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+        <div className="space-y-2 pt-0.5">
           {opcoes.map((opcao, idx) => {
             const isSelected = value === opcao;
             return (
@@ -131,29 +132,29 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
                 key={idx}
                 type="button"
                 onClick={() => onChange?.(opcao)}
-                className={`flex items-center gap-2.5 px-3 py-2 text-left rounded-sm text-xs transition-all border ${
-                  isSelected
-                    ? 'bg-[#1A1A1A] text-white border-[#1A1A1A] shadow-xs'
-                    : 'bg-white/80 text-gray-700 border-gray-200 hover:border-[#A67C52]/50 hover:bg-white'
+                className={`w-full flex items-center gap-3 h-[52px] px-4 text-left rounded-[13px] text-[15px] transition-colors border ${
+                  isSelected ? 'border-[#A67C52] border-[1.5px] bg-[#A67C52]/5' : 'border-[rgba(26,26,26,.12)] bg-white hover:border-[#A67C52]/40'
                 }`}
               >
-                <div
-                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                    isSelected ? 'border-[#C49B74] bg-[#C49B74]' : 'border-gray-300 bg-white'
+                <span
+                  className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 ${
+                    isSelected ? 'border-[#A67C52] bg-[#A67C52]' : 'border-[rgba(26,26,26,.2)] bg-white'
                   }`}
                 >
-                  {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#1A1A1A]" />}
-                </div>
-                <span className="font-medium text-[11px] leading-tight">{opcao}</span>
+                  {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
+                </span>
+                <span className={`leading-tight ${isSelected ? 'font-semibold text-[#1A1A1A]' : 'text-[#4a4740]'}`}>
+                  {opcao}
+                </span>
               </button>
             );
           })}
         </div>
       )}
 
-      {/* 6. MÚLTIPLA ESCOLHA (CHECKBOX) */}
+      {/* 6. MÚLTIPLA ESCOLHA (linhas com caixa quadrada) */}
       {tipo_campo === 'multipla_escolha' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+        <div className="space-y-2 pt-0.5">
           {opcoes.map((opcao, idx) => {
             const currentList: string[] = Array.isArray(value) ? value : [];
             const isChecked = currentList.includes(opcao);
@@ -171,30 +172,31 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
                 key={idx}
                 type="button"
                 onClick={handleToggle}
-                className={`flex items-center gap-2.5 px-3 py-2 text-left rounded-sm text-xs transition-all border ${
-                  isChecked
-                    ? 'bg-[#A67C52]/10 border-[#A67C52] text-[#1A1A1A] font-semibold'
-                    : 'bg-white/80 text-gray-700 border-gray-200 hover:border-[#A67C52]/40 hover:bg-white'
+                className={`w-full flex items-center gap-3 h-[52px] px-4 text-left rounded-[13px] text-[15px] transition-colors border ${
+                  isChecked ? 'border-[#A67C52] border-[1.5px] bg-[#A67C52]/5' : 'border-[rgba(26,26,26,.12)] bg-white hover:border-[#A67C52]/40'
                 }`}
               >
-                <div
-                  className={`w-4 h-4 rounded-xs border flex items-center justify-center shrink-0 ${
-                    isChecked ? 'bg-[#A67C52] border-[#A67C52] text-white' : 'border-gray-300 bg-white'
+                <span
+                  className={`w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 ${
+                    isChecked ? 'bg-[#A67C52] border-[#A67C52] text-white' : 'border-[rgba(26,26,26,.2)] bg-white'
                   }`}
                 >
-                  {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                </div>
-                <span className="text-[11px] leading-tight">{opcao}</span>
+                  {isChecked && <Check className="w-4 h-4 stroke-[3]" />}
+                </span>
+                <span className={`leading-tight ${isChecked ? 'font-semibold text-[#1A1A1A]' : 'text-[#4a4740]'}`}>
+                  {opcao}
+                </span>
               </button>
             );
           })}
+          <p className="text-[13px] text-[#8a8578] pt-0.5">Pode marcar mais de uma</p>
         </div>
       )}
 
       {/* 7. ESCALA (1-5 OU 1-10) */}
       {tipo_campo === 'escala' && (
-        <div className="pt-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="pt-0.5">
+          <div className="flex flex-wrap gap-2">
             {Array.from({ length: escalaMax || 10 }, (_, i) => i + 1).map((num) => {
               const isSelected = Number(value) === num;
               return (
@@ -202,11 +204,12 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
                   key={num}
                   type="button"
                   onClick={() => onChange?.(num)}
-                  className={`w-9 h-9 rounded-sm text-xs font-mono font-bold transition-all border ${
+                  className={`flex-1 min-w-[44px] h-12 rounded-xl transition-colors border ${
                     isSelected
-                      ? 'bg-[#1A1A1A] text-[#C49B74] border-[#1A1A1A] shadow-xs scale-105'
-                      : 'bg-white/90 text-gray-700 border-gray-200 hover:border-[#A67C52] hover:bg-[#A67C52]/5'
+                      ? 'border-[#A67C52] border-[1.5px] bg-[#A67C52]/5 text-[#A67C52] text-[17px] font-bold'
+                      : 'border-[rgba(26,26,26,.12)] bg-white text-[#4a4740] text-[15px] font-medium hover:border-[#A67C52]/40'
                   }`}
+                  style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
                 >
                   {num}
                 </button>
@@ -214,7 +217,7 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
             })}
           </div>
           {value !== undefined && value !== '' && (
-            <p className="text-[11px] text-gray-500 mt-1 font-mono">
+            <p className="text-[13px] text-[#8a8578] mt-2">
               Selecionado: <span className="font-bold text-[#A67C52]">{value}</span> de {escalaMax || 10}
             </p>
           )}
@@ -223,33 +226,29 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
 
       {/* 8. SIM / NÃO */}
       {tipo_campo === 'sim_nao' && (
-        <div className="flex items-center gap-3 pt-1">
-          <button
-            type="button"
-            onClick={() => onChange?.('Sim')}
-            className={`flex-1 sm:flex-initial sm:w-28 py-2 px-4 rounded-sm text-xs font-semibold uppercase tracking-wider transition-all border ${
-              value === 'Sim' || value === true
-                ? 'bg-[#1A1A1A] text-white border-[#1A1A1A] shadow-xs'
-                : 'bg-white/80 text-gray-700 border-gray-200 hover:bg-white hover:border-gray-300'
-            }`}
-          >
-            Sim
-          </button>
-          <button
-            type="button"
-            onClick={() => onChange?.('Não')}
-            className={`flex-1 sm:flex-initial sm:w-28 py-2 px-4 rounded-sm text-xs font-semibold uppercase tracking-wider transition-all border ${
-              value === 'Não' || value === false
-                ? 'bg-[#A67C52] text-white border-[#A67C52] shadow-xs'
-                : 'bg-white/80 text-gray-700 border-gray-200 hover:bg-white hover:border-gray-300'
-            }`}
-          >
-            Não
-          </button>
+        <div className="flex items-center gap-3 pt-0.5">
+          {(['Sim', 'Não'] as const).map((opt) => {
+            const isSelected = opt === 'Sim' ? value === 'Sim' || value === true : value === 'Não' || value === false;
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => onChange?.(opt)}
+                className={`flex-1 h-[52px] flex items-center justify-center gap-2 rounded-[13px] text-[15px] font-semibold transition-colors border ${
+                  isSelected
+                    ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+                    : 'bg-white text-[#4a4740] border-[rgba(26,26,26,.12)] hover:border-[#A67C52]/40'
+                }`}
+              >
+                {isSelected && <Check className="w-4 h-4" />}
+                {opt}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {error && <p className="text-[10px] text-red-500 font-medium">{error}</p>}
+      {error && <p className="text-[13px] text-[#E11D48] font-medium">{error}</p>}
     </div>
   );
 };

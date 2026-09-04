@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Share2, Settings, ListOrdered, Loader2, ClipboardList } from 'lucide-react';
+import { Settings, ListOrdered, ClipboardList, Share2 } from 'lucide-react';
 import { ClinicProfile } from '../types';
 
 interface NavbarProps {
@@ -7,10 +7,8 @@ interface NavbarProps {
   onSelectView: (view: 'procedures' | 'anamnesis') => void;
   onOpenExport: () => void;
   onOpenSettings: () => void;
-  onOpenNewProcedure: () => void;
   clinic: ClinicProfile;
   proceduresCount: number;
-  syncStatus?: 'syncing' | 'synced' | 'error';
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -18,182 +16,160 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectView,
   onOpenExport,
   onOpenSettings,
-  onOpenNewProcedure,
   clinic,
   proceduresCount,
-  syncStatus = 'synced',
 }) => {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  return (
-    <header className="sticky top-0 z-40 glass-nav transition-all duration-300 border-b border-white/60 shadow-xs">
-      {/* Main Header */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
-        {/* Brand & Monogram */}
-        <div
-          onClick={() => {
-            onSelectView('procedures');
-            scrollToTop();
-          }}
-          className="flex items-center gap-3 cursor-pointer group"
-          id="brand-header-link"
-        >
-          <div className="w-10 h-10 rounded-sm bg-[#1A1A1A] border border-[#A67C52]/40 flex items-center justify-center text-[#C49B74] font-serif-luxury text-lg font-bold shadow-sm group-hover:border-[#A67C52] transition-colors">
-            LV
-          </div>
-          <div>
-            <h1 className="font-serif-luxury text-xl sm:text-2xl font-medium tracking-tight text-[#1A1A1A] leading-none group-hover:text-[#A67C52] transition-colors">
-              {clinic.name}
-            </h1>
-            <p className="text-[10px] tracking-[0.2em] uppercase text-gray-500 mt-1 font-medium line-clamp-1">
-              {currentView === 'anamnesis' ? 'Fichas de Anamnese' : 'Catálogo de Procedimentos'}
-            </p>
-          </div>
-        </div>
+  const railItems = [
+    {
+      id: 'procedures' as const,
+      label: 'Procedimentos',
+      icon: ListOrdered,
+      active: currentView === 'procedures',
+      count: proceduresCount,
+      onClick: () => {
+        onSelectView('procedures');
+        scrollToTop();
+      },
+    },
+    {
+      id: 'anamnesis' as const,
+      label: 'Fichas dos pacientes',
+      icon: ClipboardList,
+      active: currentView === 'anamnesis',
+      count: undefined,
+      onClick: () => {
+        onSelectView('anamnesis');
+        scrollToTop();
+      },
+    },
+    {
+      id: 'export' as const,
+      label: 'Exportar catálogo',
+      icon: Share2,
+      active: false,
+      count: undefined,
+      onClick: onOpenExport,
+    },
+    {
+      id: 'settings' as const,
+      label: 'Configurações',
+      icon: Settings,
+      active: false,
+      count: undefined,
+      onClick: onOpenSettings,
+    },
+  ];
 
-        {/* Navigation Tabs */}
-        <nav className="hidden md:flex items-center gap-1 bg-white/40 backdrop-blur-md p-1 rounded-sm border border-white/60 shadow-xs">
+  return (
+    <>
+      {/* Mobile header + text nav (<640px) */}
+      <header className="sm:hidden sticky top-0 z-40 glass-nav">
+        <div className="px-5 py-3 flex items-center justify-between gap-3">
           <button
-            id="tab-manager-btn"
-            onClick={() => onSelectView('procedures')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium transition-all ${
-              currentView === 'procedures'
-                ? 'bg-[#1A1A1A] text-white shadow-xs'
-                : 'text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60'
-            }`}
+            onClick={() => {
+              onSelectView('procedures');
+              scrollToTop();
+            }}
+            className="flex items-center gap-3 min-w-0"
           >
-            <ListOrdered className="w-3.5 h-3.5" />
-            Procedimentos
-            <span
-              className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                currentView === 'procedures'
-                  ? 'bg-[#A67C52]/20 text-[#C49B74]'
-                  : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              {proceduresCount}
+            <span className="w-[38px] h-[38px] rounded-[10px] bg-[#1A1A1A] flex items-center justify-center text-[#C49B74] font-serif-luxury text-base font-semibold shrink-0">
+              LV
+            </span>
+            <span className="font-serif-luxury text-[22px] font-medium text-[#1A1A1A] leading-none truncate">
+              {clinic.name}
             </span>
           </button>
-
           <button
-            id="tab-anamnesis-btn"
-            onClick={() => onSelectView('anamnesis')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium transition-all ${
-              currentView === 'anamnesis'
-                ? 'bg-[#1A1A1A] text-white shadow-xs'
-                : 'text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60'
-            }`}
-          >
-            <ClipboardList className={`w-3.5 h-3.5 ${currentView === 'anamnesis' ? 'text-[#C49B74]' : 'text-[#A67C52]'}`} />
-            Fichas de Anamnese
-          </button>
-
-          <button
-            id="tab-export-btn"
-            onClick={onOpenExport}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60 transition-all"
-          >
-            <Share2 className="w-3.5 h-3.5 text-[#A67C52]" />
-            Exportar PDF
-          </button>
-
-          <button
-            id="tab-settings-btn"
             onClick={onOpenSettings}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-xs text-xs uppercase tracking-widest font-medium text-gray-600 hover:text-[#1A1A1A] hover:bg-white/60 transition-all"
+            className="w-11 h-11 rounded-xl flex items-center justify-center text-[#1A1A1A] hover:bg-white/60 active:scale-95 transition-all shrink-0"
+            title="Configurações"
           >
-            <Settings className="w-3.5 h-3.5" />
-            Configurações
+            <Settings className="w-5 h-5" />
+          </button>
+        </div>
+        <nav className="px-5 flex items-center gap-6 border-t border-[rgba(26,26,26,.07)]">
+          <button
+            onClick={() => onSelectView('procedures')}
+            className={`py-3 text-[16px] transition-colors ${
+              currentView === 'procedures'
+                ? 'font-semibold text-[#1A1A1A]'
+                : 'font-medium text-[#8a8578] hover:text-[#1A1A1A]'
+            }`}
+            style={
+              currentView === 'procedures'
+                ? { boxShadow: 'inset 0 -2px 0 #A67C52' }
+                : undefined
+            }
+          >
+            Procedimentos
+          </button>
+          <button
+            onClick={() => onSelectView('anamnesis')}
+            className={`py-3 text-[16px] transition-colors ${
+              currentView === 'anamnesis'
+                ? 'font-semibold text-[#1A1A1A]'
+                : 'font-medium text-[#8a8578] hover:text-[#1A1A1A]'
+            }`}
+            style={
+              currentView === 'anamnesis'
+                ? { boxShadow: 'inset 0 -2px 0 #A67C52' }
+                : undefined
+            }
+          >
+            Fichas dos pacientes
           </button>
         </nav>
+      </header>
 
-        {/* Primary Action Button */}
-        <div className="flex items-center gap-2">
-          {/* Cloud Sync Status Indicator */}
-          <div
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/60 backdrop-blur-xs border border-white/80 text-[10px] font-medium text-gray-600 shadow-2xs"
-            title={syncStatus === 'syncing' ? 'Sincronizando com o Firebase...' : 'Conectado ao Firebase Cloud'}
-          >
-            {syncStatus === 'syncing' ? (
-              <>
-                <Loader2 className="w-3 h-3 text-[#A67C52] animate-spin" />
-                <span className="text-[#A67C52]">Gravando...</span>
-              </>
-            ) : syncStatus === 'error' ? (
-              <>
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                <span>Modo Local</span>
-              </>
-            ) : (
-              <>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-gray-700">Firebase Conectado</span>
-              </>
-            )}
-          </div>
-
-          <button
-            id="btn-export-quick"
-            onClick={onOpenExport}
-            className="md:hidden p-2 rounded-sm text-[#1A1A1A] bg-white/50 backdrop-blur-md border border-white/60 hover:bg-white/80"
-            title="Exportar Catálogo"
-          >
-            <Share2 className="w-4 h-4 text-[#A67C52]" />
-          </button>
-
-          {currentView === 'procedures' ? (
-            <button
-              id="btn-new-procedure-main"
-              onClick={onOpenNewProcedure}
-              className="flex items-center gap-2 px-5 py-2 rounded-sm bg-[#A67C52] text-white text-xs tracking-widest uppercase font-semibold hover:bg-[#8e6945] shadow-xs active:scale-95 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Novo Procedimento</span>
-              <span className="sm:hidden">Novo</span>
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Mobile navigation tab bar */}
-      <div className="md:hidden flex border-t border-white/60 bg-white/60 backdrop-blur-md px-2 py-1 justify-around">
+      {/* Tablet icon rail (640–1023px) + Desktop sidebar (≥1024px) */}
+      <aside className="hidden sm:flex sm:flex-col sm:w-[68px] lg:w-[268px] sm:h-screen sm:sticky sm:top-0 sm:shrink-0 bg-[#1A1A1A] px-3 lg:px-[18px] py-[26px]">
         <button
           onClick={() => onSelectView('procedures')}
-          className={`flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider ${
-            currentView === 'procedures' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600'
-          }`}
+          className="flex items-center gap-3 mb-8 px-1"
         >
-          <ListOrdered className="w-3.5 h-3.5" />
-          Itens ({proceduresCount})
+          <span className="w-[42px] h-[42px] rounded-xl border border-[rgba(232,205,172,.35)] bg-black/20 flex items-center justify-center text-[#C49B74] font-serif-luxury text-lg font-semibold shrink-0">
+            LV
+          </span>
+          <span className="hidden lg:block font-serif-luxury text-[21px] font-medium text-[#F6EFE4] leading-tight text-left">
+            La Vie
+            <br />
+            Clinique
+          </span>
         </button>
 
-        <button
-          onClick={() => onSelectView('anamnesis')}
-          className={`flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider ${
-            currentView === 'anamnesis' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600'
-          }`}
-        >
-          <ClipboardList className="w-3.5 h-3.5 text-[#A67C52]" />
-          Anamnese
-        </button>
+        <nav className="flex-1 flex flex-col gap-1.5">
+          {railItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={item.onClick}
+                title={item.label}
+                className={`flex items-center gap-3 h-[50px] px-3 rounded-xl transition-colors ${
+                  item.active
+                    ? 'bg-[rgba(232,205,172,.14)] text-[#F6EFE4]'
+                    : 'text-[rgba(246,239,228,.7)] hover:bg-white/5 hover:text-[#F6EFE4]'
+                }`}
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                <span className="hidden lg:inline text-[16px] font-medium truncate">
+                  {item.label}
+                </span>
+                {item.count !== undefined && (
+                  <span className="hidden lg:inline ml-auto text-[13px] font-semibold text-[#C49B74]">
+                    {item.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
 
-        <button
-          onClick={onOpenExport}
-          className="flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider text-gray-600"
-        >
-          <Share2 className="w-3.5 h-3.5 text-[#A67C52]" />
-          PDF
-        </button>
-
-        <button
-          onClick={onOpenSettings}
-          className="flex items-center gap-1.5 py-1.5 px-3 rounded-xs text-xs font-medium uppercase tracking-wider text-gray-600"
-        >
-          <Settings className="w-3.5 h-3.5" />
-          Clínica
-        </button>
-      </div>
-    </header>
+        {/* Reservado para o perfil do profissional quando existir login */}
+        <div className="h-2" />
+      </aside>
+    </>
   );
 };
-

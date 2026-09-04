@@ -64,6 +64,13 @@ export default function App() {
   // Firebase Real-time Synchronization Status
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced');
 
+  useEffect(() => {
+    if (syncStatus === 'error') {
+      showToast('Modo local: suas alterações serão sincronizadas quando a conexão voltar.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncStatus]);
+
   // Navigation and Modals State
   const [currentView, setCurrentView] = useState<'procedures' | 'anamnesis'>('procedures');
   const [selectedProcedureForDetails, setSelectedProcedureForDetails] = useState<Procedure | null>(null);
@@ -289,7 +296,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] flex flex-col selection:bg-[#A67C52]/25 selection:text-[#1A1A1A]">
+    <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] sm:flex selection:bg-[#A67C52]/25 selection:text-[#1A1A1A]">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#1A1A1A]/90 backdrop-blur-xl text-white px-5 py-3 rounded-lg shadow-2xl border border-white/20 flex items-center gap-3 text-xs font-medium animate-bounce">
@@ -298,7 +305,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Top Header */}
+      {/* Navigation: mobile header+links, tablet icon rail, desktop sidebar */}
       <Navbar
         currentView={currentView}
         onSelectView={(view) => setCurrentView(view)}
@@ -307,43 +314,131 @@ export default function App() {
           setIsExportModalOpen(true);
         }}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
-        onOpenNewProcedure={() => {
-          setSelectedProcedureForEdit(null);
-          setIsFormModalOpen(true);
-        }}
         clinic={clinic}
         proceduresCount={procedures.length}
-        syncStatus={syncStatus}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
-        {currentView === 'procedures' ? (
-          <ProcedureManager
-            procedures={procedures}
-            clinic={clinic}
-            categories={categories}
-            onOpenNewProcedure={() => {
-              setSelectedProcedureForEdit(null);
-              setIsFormModalOpen(true);
-            }}
-            onEditProcedure={(proc) => {
-              setSelectedProcedureForEdit(proc);
-              setIsFormModalOpen(true);
-            }}
-            onDeleteProcedure={handleDeleteProcedure}
-            onDuplicateProcedure={handleDuplicateProcedure}
-            onToggleFeatured={handleToggleFeatured}
-            onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
-            onShareSingle={handleShareSingle}
-          />
-        ) : (
-          <AnamnesisModule
-            clinicProfile={clinic}
-            catalogProcedures={procedures}
-          />
-        )}
-      </main>
+      {/* Content Column */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <main className="flex-1 w-full">
+          {currentView === 'procedures' ? (
+            <ProcedureManager
+              procedures={procedures}
+              clinic={clinic}
+              categories={categories}
+              onOpenNewProcedure={() => {
+                setSelectedProcedureForEdit(null);
+                setIsFormModalOpen(true);
+              }}
+              onOpenExport={() => {
+                setSingleProcedureToExport(null);
+                setIsExportModalOpen(true);
+              }}
+              onEditProcedure={(proc) => {
+                setSelectedProcedureForEdit(proc);
+                setIsFormModalOpen(true);
+              }}
+              onDeleteProcedure={handleDeleteProcedure}
+              onDuplicateProcedure={handleDuplicateProcedure}
+              onToggleFeatured={handleToggleFeatured}
+              onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
+              onShareSingle={handleShareSingle}
+            />
+          ) : (
+            <AnamnesisModule
+              clinicProfile={clinic}
+              catalogProcedures={procedures}
+            />
+          )}
+        </main>
+
+        {/* Frosted Luxury Footer */}
+        <footer className="bg-[#1A1A1A] text-[#E5E4E0] border-t border-white/10 mt-16 transition-all">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 pb-8 border-b border-white/10">
+              {/* Col 1: Brand */}
+              <div className="md:col-span-2 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-sm bg-[#A67C52] text-white font-serif-luxury text-sm font-bold flex items-center justify-center shadow-sm">
+                    LV
+                  </div>
+                  <h3 className="font-serif-luxury text-xl font-medium tracking-tight text-white">
+                    {clinic.name}
+                  </h3>
+                </div>
+                <p className="text-xs text-gray-400 max-w-md leading-relaxed">
+                  {clinic.tagline}. Plataforma de catálogo editorial e compartilhamento inteligente de procedimentos em PDF e Imagem.
+                </p>
+                {clinic.professionals && clinic.professionals.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {clinic.professionals.map((doc, dIdx) => (
+                      <span key={dIdx} className="text-[11px] text-[#C49B74] tracking-wider uppercase font-medium bg-white/5 px-2.5 py-1 rounded-xs border border-white/10">
+                        {doc.name} {doc.specialty || doc.title ? `• ${doc.specialty || doc.title}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-[#A67C52] tracking-wider uppercase font-medium">
+                    {clinic.professionalName} {clinic.professionalTitle ? `• ${clinic.professionalTitle}` : ''}
+                  </p>
+                )}
+              </div>
+
+              {/* Col 2: Fast Navigation */}
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] mb-3">
+                  Navegação
+                </h4>
+                <ul className="space-y-2 text-xs text-gray-400">
+                  <li>
+                    <button
+                      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                      className="hover:text-white transition-colors"
+                    >
+                      Gerenciador de Procedimentos
+                    </button>
+                  </li>
+                  <li>
+                    <button onClick={() => setIsExportModalOpen(true)} className="hover:text-white transition-colors">
+                      Exportar Catálogo em PDF
+                    </button>
+                  </li>
+                  <li>
+                    <button onClick={() => setIsSettingsModalOpen(true)} className="hover:text-white transition-colors">
+                      Personalizar Dados da Clínica
+                    </button>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Col 3: Contact & Demo Actions */}
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] mb-3">
+                  Atendimento
+                </h4>
+                <p className="text-xs text-gray-400 mb-1">📱 {clinic.phone}</p>
+                <p className="text-xs text-gray-400 mb-1">📸 {clinic.instagram}</p>
+                <p className="text-xs text-gray-400 mb-3">{clinic.cityState}</p>
+                <button
+                  onClick={handleResetToDefaultSamples}
+                  className="text-[10px] text-gray-500 hover:text-[#A67C52] flex items-center gap-1 transition-colors uppercase tracking-wider"
+                  title="Restaurar dados de exemplo"
+                >
+                  <RefreshCw className="w-3 h-3" /> Restaurar demonstração
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
+              <p>© {new Date().getFullYear()} {clinic.name}. Todos os direitos reservados.</p>
+              <div className="flex items-center space-x-2 text-[#A67C52]">
+                <div className="w-8 h-[1px] bg-[#A67C52]/40"></div>
+                <span className="text-[10px] tracking-widest uppercase font-medium">Design Frosted Glass</span>
+              </div>
+            </div>
+          </div>
+        </footer>
+      </div>
 
       {/* Modals & Drawers */}
       {/* 1. Detail Modal */}
@@ -394,92 +489,6 @@ export default function App() {
         onSave={handleSaveClinic}
       />
 
-      {/* Frosted Luxury Footer */}
-      <footer className="bg-[#1A1A1A] text-[#E5E4E0] border-t border-white/10 mt-16 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 pb-8 border-b border-white/10">
-            {/* Col 1: Brand */}
-            <div className="md:col-span-2 space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-sm bg-[#A67C52] text-white font-serif-luxury text-sm font-bold flex items-center justify-center shadow-sm">
-                  LV
-                </div>
-                <h3 className="font-serif-luxury text-xl font-medium tracking-tight text-white">
-                  {clinic.name}
-                </h3>
-              </div>
-              <p className="text-xs text-gray-400 max-w-md leading-relaxed">
-                {clinic.tagline}. Plataforma de catálogo editorial e compartilhamento inteligente de procedimentos em PDF e Imagem.
-              </p>
-              {clinic.professionals && clinic.professionals.length > 0 ? (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {clinic.professionals.map((doc, dIdx) => (
-                    <span key={dIdx} className="text-[11px] text-[#C49B74] tracking-wider uppercase font-medium bg-white/5 px-2.5 py-1 rounded-xs border border-white/10">
-                      {doc.name} {doc.specialty || doc.title ? `• ${doc.specialty || doc.title}` : ''}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[11px] text-[#A67C52] tracking-wider uppercase font-medium">
-                  {clinic.professionalName} {clinic.professionalTitle ? `• ${clinic.professionalTitle}` : ''}
-                </p>
-              )}
-            </div>
-
-            {/* Col 2: Fast Navigation */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] mb-3">
-                Navegação
-              </h4>
-              <ul className="space-y-2 text-xs text-gray-400">
-                <li>
-                  <button
-                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                    className="hover:text-white transition-colors"
-                  >
-                    Gerenciador de Procedimentos
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => setIsExportModalOpen(true)} className="hover:text-white transition-colors">
-                    Exportar Catálogo em PDF
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => setIsSettingsModalOpen(true)} className="hover:text-white transition-colors">
-                    Personalizar Dados da Clínica
-                  </button>
-                </li>
-              </ul>
-            </div>
-
-            {/* Col 3: Contact & Demo Actions */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] mb-3">
-                Atendimento
-              </h4>
-              <p className="text-xs text-gray-400 mb-1">📱 {clinic.phone}</p>
-              <p className="text-xs text-gray-400 mb-1">📸 {clinic.instagram}</p>
-              <p className="text-xs text-gray-400 mb-3">{clinic.cityState}</p>
-              <button
-                onClick={handleResetToDefaultSamples}
-                className="text-[10px] text-gray-500 hover:text-[#A67C52] flex items-center gap-1 transition-colors uppercase tracking-wider"
-                title="Restaurar dados de exemplo"
-              >
-                <RefreshCw className="w-3 h-3" /> Restaurar demonstração
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
-            <p>© {new Date().getFullYear()} {clinic.name}. Todos os direitos reservados.</p>
-            <div className="flex items-center space-x-2 text-[#A67C52]">
-              <div className="w-8 h-[1px] bg-[#A67C52]/40"></div>
-              <span className="text-[10px] tracking-widest uppercase font-medium">Design Frosted Glass</span>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
