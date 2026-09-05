@@ -33,9 +33,14 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   });
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
 
-  // Sync formData when modal opens or clinic prop updates
+  // Sync formData only when the modal transitions from closed to open — NOT on every
+  // `clinic` prop change while it stays open. The clinic prop is a live Firestore
+  // subscription and can update mid-edit (e.g. another tab/device saving), which
+  // would otherwise silently wipe out professionals just added/edited in this modal
+  // before the user clicks "Salvar Informações".
+  const wasOpenRef = React.useRef(false);
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
       const initialProfessionals: Professional[] = clinic.professionals && clinic.professionals.length > 0
         ? clinic.professionals
         : [
@@ -52,6 +57,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
       setShowDoctorForm(false);
       setDeletingDocId(null);
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen, clinic]);
 
   // State for adding / editing a doctor
