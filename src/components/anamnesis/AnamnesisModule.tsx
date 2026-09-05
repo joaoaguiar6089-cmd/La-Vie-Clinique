@@ -134,70 +134,39 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
           </div>
         </div>
 
-        {/* The 3 Core Sub-Tabs requested by User */}
-        <div className="flex items-center gap-2 mt-6 border-b border-gray-200/80 overflow-x-auto pb-px">
-          {/* Tab 1 */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('records')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
-              activeTab === 'records'
-                ? 'border-[#A67C52] text-[#1A1A1A]'
-                : 'border-transparent text-gray-400 hover:text-gray-700'
-            }`}
-          >
-            <ClipboardList className="w-4 h-4" />
-            <span>(3) Atendimentos & Histórico por Paciente</span>
-            <span
-              className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                activeTab === 'records' ? 'bg-[#A67C52] text-white' : 'bg-gray-100 text-gray-500'
-              }`}
-            >
-              {records.length}
-            </span>
-          </button>
-
-          {/* Tab 2 */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('templates')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
-              activeTab === 'templates'
-                ? 'border-[#A67C52] text-[#1A1A1A]'
-                : 'border-transparent text-gray-400 hover:text-gray-700'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>(2) Fichas por Procedimento</span>
-            <span
-              className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                activeTab === 'templates' ? 'bg-[#A67C52] text-white' : 'bg-gray-100 text-gray-500'
-              }`}
-            >
-              {templates.length}
-            </span>
-          </button>
-
-          {/* Tab 3 */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('general')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
-              activeTab === 'general'
-                ? 'border-[#A67C52] text-[#1A1A1A]'
-                : 'border-transparent text-gray-400 hover:text-gray-700'
-            }`}
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>(1) Configuração das Perguntas Gerais</span>
-            <span
-              className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                activeTab === 'general' ? 'bg-[#A67C52] text-white' : 'bg-gray-100 text-gray-500'
-              }`}
-            >
-              {generalQuestions.length}
-            </span>
-          </button>
+        {/* The 3 Core Sub-Tabs requested by User — vertical stack on mobile/tablet, horizontal on desktop */}
+        <div className="flex flex-col gap-1.5 mt-6 lg:flex-row lg:items-center lg:gap-2 lg:border-b lg:border-[rgba(26,26,26,.07)] lg:pb-px">
+          {[
+            { id: 'records' as const, icon: ClipboardList, label: 'Atendimentos & histórico por paciente', count: records.length },
+            { id: 'templates' as const, icon: Layers, label: 'Fichas por procedimento', count: templates.length },
+            { id: 'general' as const, icon: Sparkles, label: 'Configuração das perguntas gerais', count: generalQuestions.length },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-3 w-full rounded-xl px-4 py-3.5 text-[15px] font-semibold transition-all lg:w-auto lg:gap-2 lg:rounded-none lg:px-4 lg:py-2.5 lg:text-[14px] lg:border-b-2 ${
+                  active
+                    ? 'bg-[#A67C52]/10 text-[#1A1A1A] lg:bg-transparent lg:border-[#A67C52]'
+                    : 'text-[#4a4740] hover:bg-[#F9F8F6] lg:text-[#8a8578] lg:border-transparent lg:hover:bg-transparent lg:hover:text-[#1A1A1A]'
+                }`}
+              >
+                <Icon className="w-[18px] h-[18px] lg:w-4 lg:h-4 shrink-0" />
+                <span className="flex-1 text-left lg:flex-initial whitespace-nowrap">{tab.label}</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[12px] font-semibold ${
+                    active ? 'bg-[#A67C52] text-white' : 'bg-[#F9F8F6] text-[#8a8578] lg:bg-gray-100'
+                  }`}
+                  style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
