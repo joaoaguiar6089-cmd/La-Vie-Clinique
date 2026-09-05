@@ -173,7 +173,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                 className="bg-white rounded-[20px] shadow-[0_6px_22px_rgba(0,0,0,.06)] overflow-hidden flex flex-col"
               >
                 {/* Photo */}
-                <div className="relative h-[150px] bg-[#EFEDE7] shrink-0">
+                <div className="relative aspect-[2/3] bg-[#EFEDE7] shrink-0">
                   {img ? (
                     <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
@@ -193,8 +193,8 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                 </div>
 
                 {/* Body */}
-                <div className="p-4 flex flex-col flex-1">
-                  <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="p-5 flex flex-col flex-1">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
                     <h3
                       onClick={() => onViewDetails(proc)}
                       className="font-serif-luxury text-[24px] font-semibold text-[#1A1A1A] leading-tight cursor-pointer hover:text-[#A67C52] transition-colors"
@@ -211,12 +211,12 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                   </div>
 
                   {proc.subtitle && (
-                    <p className="text-[14px] text-[#8a8578] leading-snug line-clamp-2 mb-2.5">
+                    <p className="text-[14px] text-[#8a8578] leading-snug line-clamp-2 mb-3">
                       {proc.subtitle}
                     </p>
                   )}
 
-                  <div className="flex items-center gap-3 text-[13px] text-[#4a4740] mb-3">
+                  <div className="flex items-center gap-3 text-[13px] text-[#4a4740] mb-3.5">
                     {proc.duration && (
                       <span className="flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-[#A67C52]" />
