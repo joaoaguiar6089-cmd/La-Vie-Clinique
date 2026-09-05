@@ -13,6 +13,7 @@ import {
   Loader2,
   ZoomIn,
   ZoomOut,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 interface PhotoAnnotationEditorProps {
@@ -38,8 +39,12 @@ const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 /** Canvas display size that comfortably fits the current viewport (desktop or mobile). */
 function computeDisplaySize() {
   if (typeof window === 'undefined') return { width: 600, height: 400 };
+  // Mobile stacks a two-row bottom toolbar (colors + tools) under the canvas instead of the
+  // single top toolbar row tablet/desktop use, so it needs a taller reserved chrome height.
+  const isMobile = window.innerWidth < 640;
+  const chrome = isMobile ? 260 : 230;
   const width = Math.max(280, Math.min(window.innerWidth - 32, 1000));
-  const height = Math.max(280, Math.min(window.innerHeight - 230, 900));
+  const height = Math.max(280, Math.min(window.innerHeight - chrome, 900));
   return { width, height };
 }
 
@@ -98,6 +103,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [hasSelection, setHasSelection] = useState(false);
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
+  const [isAdjustOpen, setIsAdjustOpen] = useState(false);
 
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef(-1);
@@ -592,30 +598,57 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
     }
   };
 
-  const toolButtons: { id: Tool; label: string; icon: React.ReactNode }[] = [
-    { id: 'select', label: 'Selecionar / Mover', icon: <MousePointer2 className="w-4 h-4" /> },
-    { id: 'text', label: 'Texto', icon: <Type className="w-4 h-4" /> },
-    { id: 'draw', label: 'Desenho Livre', icon: <Pencil className="w-4 h-4" /> },
-    { id: 'line', label: 'Linha Reta', icon: <Minus className="w-4 h-4" /> },
-  ];
+  const toolMeta: Record<Tool, { label: string; icon: React.ReactNode }> = {
+    select: { label: 'Mover', icon: <MousePointer2 className="w-[18px] h-[18px]" /> },
+    draw: { label: 'Desenho', icon: <Pencil className="w-[18px] h-[18px]" /> },
+    line: { label: 'Linha', icon: <Minus className="w-[18px] h-[18px]" /> },
+    text: { label: 'Texto', icon: <Type className="w-[18px] h-[18px]" /> },
+  };
+  const tabletToolOrder: Tool[] = ['select', 'draw', 'line', 'text'];
+  const mobileToolOrder: Tool[] = ['draw', 'line', 'text', 'select'];
 
   const placeholderSize = computeDisplaySize();
 
+  const sliderThumbClass =
+    '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#A67C52] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[#A67C52]';
+
   return (
     <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-xs flex flex-col animate-fadeIn">
-      {/* Header */}
-      <div className="px-2.5 sm:px-6 py-2.5 sm:py-3 bg-[#1A1A1A] text-white flex items-center justify-between gap-2 shrink-0 shadow-lg">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74] shrink-0 hidden sm:inline-block" />
-          <span className="font-serif-luxury text-xs sm:text-base tracking-wide truncate">
-            {title || 'Anotar Foto de Referência'}
+      {/* ============ Header ============ */}
+      <div className="relative px-4 sm:px-6 h-14 sm:h-auto sm:py-3.5 bg-[#1A1A1A] text-white flex items-center justify-between gap-3 shrink-0 shadow-lg">
+        {/* Mobile: close (44px) + centered title + Salvar */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="sm:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <span className="sm:hidden absolute left-1/2 -translate-x-1/2 font-serif-luxury text-[15px] truncate max-w-[55%]">
+          {title || 'Anotar foto'}
+        </span>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving || !isReady}
+          className="sm:hidden flex items-center gap-1.5 h-10 px-4 rounded-xl bg-[#A67C52] text-white text-[14px] font-semibold disabled:opacity-60"
+        >
+          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          {isSaving ? 'Salvando' : 'Salvar'}
+        </button>
+
+        {/* Tablet/desktop: bronze dot + title + patient name, Cancelar / Salvar anotações */}
+        <div className="hidden sm:flex items-center gap-2.5 min-w-0">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74] shrink-0" />
+          <span className="font-serif-luxury text-[21px] tracking-wide truncate">
+            {title || 'Anotar foto'}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="hidden sm:flex items-center gap-2.5 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-2.5 sm:px-3 py-1.5 rounded-sm border border-white/20 text-white/80 hover:text-white hover:bg-white/10 text-xs font-semibold transition-colors"
+            className="h-11 px-4 rounded-xl border border-white/20 text-white/80 hover:text-white hover:bg-white/10 text-[14px] font-semibold transition-colors whitespace-nowrap"
           >
             Cancelar
           </button>
@@ -623,75 +656,59 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
             type="button"
             onClick={handleSave}
             disabled={isSaving || !isReady}
-            className="flex items-center gap-1.5 px-2.5 sm:px-4 py-1.5 rounded-sm bg-[#A67C52] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#8e6945] transition-all shadow-xs disabled:opacity-60 whitespace-nowrap"
+            className="flex items-center gap-2 h-11 px-5 rounded-xl bg-[#A67C52] text-white text-[14px] font-semibold hover:bg-[#8E653D] transition-all disabled:opacity-60 whitespace-nowrap"
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Save className="w-4 h-4 shrink-0" />}
-            <span className="hidden sm:inline">{isSaving ? 'Salvando...' : 'Salvar Anotações'}</span>
-            <span className="sm:hidden">{isSaving ? 'Salvando' : 'Salvar'}</span>
-          </button>
-          <button type="button" onClick={onClose} className="p-1 rounded-xs text-gray-400 hover:text-white transition-colors hidden sm:block">
-            <X className="w-5 h-5" />
+            {isSaving ? 'Salvando...' : 'Salvar anotações'}
           </button>
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="px-3 sm:px-6 py-2.5 bg-[#232323] border-b border-white/10 flex items-center gap-2 sm:gap-4 flex-wrap shrink-0">
-        {/* Tools */}
-        <div className="flex items-center gap-1 bg-black/30 p-1 rounded-sm">
-          {toolButtons.map((t) => (
+      {/* ============ Toolbar — tablet/desktop (sm+) ============ */}
+      <div className="hidden sm:flex px-4 sm:px-6 py-2.5 bg-[#232323] border-b border-white/10 items-center gap-3 sm:gap-4 flex-wrap shrink-0">
+        <div className="flex items-center gap-1 bg-black/35 p-1 rounded-xl">
+          {tabletToolOrder.map((id) => (
             <button
-              key={t.id}
+              key={id}
               type="button"
-              title={t.label}
-              onClick={() => setTool(t.id)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xs text-xs font-medium transition-all ${
-                tool === t.id ? 'bg-[#A67C52] text-white' : 'text-gray-300 hover:bg-white/10'
+              title={toolMeta[id].label}
+              onClick={() => setTool(id)}
+              className={`flex items-center gap-1.5 h-11 px-3 rounded-lg text-[13px] font-medium transition-all ${
+                tool === id ? 'bg-[#A67C52] text-white' : 'text-gray-300 hover:bg-white/10'
               }`}
             >
-              {t.icon}
-              <span className="hidden md:inline">{t.label}</span>
+              {toolMeta[id].icon}
+              <span>{toolMeta[id].label}</span>
             </button>
           ))}
         </div>
 
-        {/* Zoom */}
-        <div className="flex items-center gap-1 bg-black/30 p-1 rounded-sm">
-          <button
-            type="button"
-            title="Diminuir zoom"
-            onClick={handleZoomOut}
-            className="p-1.5 rounded-xs text-gray-300 hover:bg-white/10 transition-colors"
-          >
+        <div className="flex items-center gap-1 bg-black/35 p-1 rounded-xl">
+          <button type="button" title="Diminuir zoom" onClick={handleZoomOut} className="p-2 rounded-lg text-gray-300 hover:bg-white/10 transition-colors">
             <ZoomOut className="w-4 h-4" />
           </button>
           <button
             type="button"
             title="Ajustar à tela"
             onClick={handleZoomFit}
-            className="px-1.5 py-1 rounded-xs text-gray-300 hover:bg-white/10 text-[11px] font-mono font-semibold min-w-[3.25rem] text-center transition-colors"
+            className="px-2 py-1 rounded-lg text-gray-300 hover:bg-white/10 text-[12px] font-semibold min-w-[3.25rem] text-center transition-colors"
+            style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
           >
             {zoomPercent}%
           </button>
-          <button
-            type="button"
-            title="Aumentar zoom"
-            onClick={handleZoomIn}
-            className="p-1.5 rounded-xs text-gray-300 hover:bg-white/10 transition-colors"
-          >
+          <button type="button" title="Aumentar zoom" onClick={handleZoomIn} className="p-2 rounded-lg text-gray-300 hover:bg-white/10 transition-colors">
             <ZoomIn className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Colors */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           {COLORS.map((c) => (
             <button
               key={c}
               type="button"
               title={c}
               onClick={() => applyColor(c)}
-              className={`w-6 h-6 rounded-full border-2 transition-all ${
+              className={`w-[30px] h-[30px] rounded-full border-2 transition-all ${
                 color === c ? 'border-[#C49B74] scale-110' : 'border-white/30'
               }`}
               style={{ backgroundColor: c }}
@@ -702,71 +719,51 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
             value={color}
             onChange={(e) => applyColor(e.target.value)}
             title="Cor personalizada"
-            className="w-6 h-6 rounded-full border-2 border-white/30 bg-transparent cursor-pointer"
+            className="w-[30px] h-[30px] rounded-full border-2 border-white/30 bg-transparent cursor-pointer"
           />
         </div>
 
-        {/* Stroke width */}
-        <div className="flex items-center gap-1.5 text-gray-300 text-[11px]">
-          <span className="hidden sm:inline">Espessura</span>
+        <div className="flex items-center gap-2 text-gray-300 text-[12px]">
+          <span>Espessura</span>
           <input
             type="range"
             min={2}
             max={40}
             value={strokeWidth}
             onChange={(e) => applyStrokeWidth(Number(e.target.value))}
-            className="w-20 accent-[#A67C52]"
+            className={`w-20 h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
           />
-          <span className="font-mono w-6">{strokeWidth}</span>
+          <span style={{ fontFamily: 'ui-monospace, Menlo, monospace' }} className="w-6">{strokeWidth}</span>
         </div>
 
-        {/* Font size */}
-        <div className="flex items-center gap-1.5 text-gray-300 text-[11px]">
-          <span className="hidden sm:inline">Texto</span>
+        <div className="flex items-center gap-2 text-gray-300 text-[12px]">
+          <span>Texto</span>
           <input
             type="range"
             min={20}
             max={200}
             value={fontSize}
             onChange={(e) => applyFontSize(Number(e.target.value))}
-            className="w-20 accent-[#A67C52]"
+            className={`w-20 h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
           />
-          <span className="font-mono w-8">{fontSize}</span>
+          <span style={{ fontFamily: 'ui-monospace, Menlo, monospace' }} className="w-8">{fontSize}</span>
         </div>
 
         <div className="flex items-center gap-1 ml-auto">
-          <button
-            type="button"
-            title="Desfazer"
-            onClick={handleUndo}
-            disabled={!historyState.canUndo}
-            className="p-2 rounded-xs text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-          >
+          <button type="button" title="Desfazer" onClick={handleUndo} disabled={!historyState.canUndo} className="p-2.5 rounded-lg text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
             <Undo2 className="w-4 h-4" />
           </button>
-          <button
-            type="button"
-            title="Refazer"
-            onClick={handleRedo}
-            disabled={!historyState.canRedo}
-            className="p-2 rounded-xs text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-          >
+          <button type="button" title="Refazer" onClick={handleRedo} disabled={!historyState.canRedo} className="p-2.5 rounded-lg text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
             <Redo2 className="w-4 h-4" />
           </button>
-          <button
-            type="button"
-            title="Excluir selecionado (ou tecla Delete)"
-            onClick={deleteSelected}
-            disabled={!hasSelection}
-            className="p-2 rounded-xs text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-          >
+          <button type="button" title="Excluir selecionado (ou tecla Delete)" onClick={deleteSelected} disabled={!hasSelection} className="p-2.5 rounded-lg text-[#E11D48] hover:bg-[#E11D48]/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Canvas area — fixed, viewport-fitting size; zoom/pan navigate the photo within it */}
-      <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center p-4 sm:p-8 bg-[#111] touch-none">
+      {/* ============ Canvas area ============ */}
+      <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center p-4 sm:p-8 bg-[#111] sm:bg-[#0f0f0f] touch-none relative">
         <div className="relative bg-white rounded-sm shadow-2xl overflow-hidden">
           {/* Fabric.js creates/owns its <canvas> element(s) inside this div directly via the DOM —
               never render one here as JSX (see canvasHostRef above for why). */}
@@ -780,7 +777,137 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
             </div>
           )}
         </div>
+
+        {/* Mobile floating controls */}
+        <div className="sm:hidden absolute top-3 right-3 flex items-center gap-1 bg-[rgba(0,0,0,.55)] backdrop-blur-md rounded-full px-1 py-1">
+          <button type="button" onClick={handleZoomOut} className="w-9 h-9 rounded-full flex items-center justify-center text-white/90">
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomFit}
+            className="px-1.5 text-[11px] text-white/90 font-semibold min-w-[2.75rem] text-center"
+            style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
+          >
+            {zoomPercent}%
+          </button>
+          <button type="button" onClick={handleZoomIn} className="w-9 h-9 rounded-full flex items-center justify-center text-white/90">
+            <ZoomIn className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="sm:hidden absolute top-3 left-3 flex items-center gap-1 bg-[rgba(0,0,0,.55)] backdrop-blur-md rounded-full px-1 py-1">
+          <button type="button" onClick={handleUndo} disabled={!historyState.canUndo} className="w-9 h-9 rounded-full flex items-center justify-center text-white/90 disabled:opacity-30">
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button type="button" onClick={handleRedo} disabled={!historyState.canRedo} className="w-9 h-9 rounded-full flex items-center justify-center text-white/90 disabled:opacity-30">
+            <Redo2 className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="sm:hidden absolute bottom-3 left-1/2 -translate-x-1/2 text-[12px] text-white/70 bg-[rgba(0,0,0,.55)] backdrop-blur-md px-3 py-1.5 rounded-full whitespace-nowrap">
+          Pinça para dar zoom · dois dedos para mover
+        </p>
       </div>
+
+      {/* ============ Toolbar — mobile (<640px) ============ */}
+      <div className="sm:hidden bg-[#1A1A1A] shrink-0">
+        <div className="flex items-center justify-center gap-2.5 py-2.5 border-b border-white/10">
+          {COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => applyColor(c)}
+              className={`w-9 h-9 rounded-full border-2 transition-all ${
+                color === c ? 'border-[#C49B74] scale-110' : 'border-white/25'
+              }`}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-5">
+          {mobileToolOrder.map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTool(id)}
+              className={`h-[60px] flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+                tool === id ? 'text-[#A67C52]' : 'text-gray-300'
+              }`}
+            >
+              {toolMeta[id].icon}
+              {toolMeta[id].label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setIsAdjustOpen(true)}
+            className="h-[60px] flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-gray-300"
+          >
+            <SlidersHorizontal className="w-[18px] h-[18px]" />
+            Ajustes
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile "Ajustes" bottom sheet */}
+      {isAdjustOpen && (
+        <>
+          <div className="sm:hidden fixed inset-0 z-10 bg-black/40" onClick={() => setIsAdjustOpen(false)} />
+          <div className="sm:hidden fixed left-0 right-0 bottom-0 z-20 bg-[#1A1A1A] rounded-t-[22px] pb-[max(20px,env(safe-area-inset-bottom))]">
+            <div className="w-11 h-1 bg-white/20 rounded-full mx-auto mt-3 mb-4" />
+            <div className="px-5 space-y-5">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[14px] font-semibold text-white">Espessura</span>
+                  <span className="text-[14px] text-[#C49B74]" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{strokeWidth}</span>
+                </div>
+                <input
+                  type="range"
+                  min={2}
+                  max={40}
+                  value={strokeWidth}
+                  onChange={(e) => applyStrokeWidth(Number(e.target.value))}
+                  className={`w-full h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-[34px] [&::-webkit-slider-thumb]:h-[34px] [&::-moz-range-thumb]:w-[34px] [&::-moz-range-thumb]:h-[34px]`}
+                  style={{ padding: '10px 0' }}
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[14px] font-semibold text-white">Tamanho do texto</span>
+                  <span className="text-[14px] text-[#C49B74]" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{fontSize}</span>
+                </div>
+                <input
+                  type="range"
+                  min={20}
+                  max={200}
+                  value={fontSize}
+                  onChange={(e) => applyFontSize(Number(e.target.value))}
+                  className={`w-full h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-[34px] [&::-webkit-slider-thumb]:h-[34px] [&::-moz-range-thumb]:w-[34px] [&::-moz-range-thumb]:h-[34px]`}
+                  style={{ padding: '10px 0' }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteSelected();
+                  setIsAdjustOpen(false);
+                }}
+                disabled={!hasSelection}
+                className="w-full h-12 rounded-xl bg-[#E11D48]/10 text-[#E11D48] text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-30"
+              >
+                <Trash2 className="w-4 h-4" />
+                Excluir seleção
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAdjustOpen(false)}
+                className="w-full h-[52px] rounded-2xl bg-[#A67C52] text-white text-[16px] font-semibold"
+              >
+                Pronto
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
