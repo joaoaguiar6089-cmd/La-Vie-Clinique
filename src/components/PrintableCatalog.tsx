@@ -140,7 +140,12 @@ const HorizontalProcedureCard: React.FC<ProcedureCardProps> = ({
         {/* Price Tag with Safe Margins */}
         {showPrices && (
           <div className="text-right shrink-0 pr-1">
-            <div className="flex items-baseline justify-end gap-1.5">
+            <div className="flex items-baseline justify-end gap-1.5 flex-wrap">
+              {proc.isStartingPrice && (
+                <span className="text-[10px] text-[#8A8985] font-medium uppercase tracking-wider">
+                  a partir de
+                </span>
+              )}
               {hasDiscount && (
                 <span className="text-xs text-[#A0A0A5] line-through">
                   {formatBRL(proc.price)}

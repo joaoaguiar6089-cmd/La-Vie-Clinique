@@ -18,6 +18,7 @@ export interface Procedure {
   price: number;
   promotionalPrice?: number;
   priceNote?: string; // e.g. "por sessão", "a partir de", "pacote 3 sessões", "área"
+  isStartingPrice?: boolean; // Quando true, exibe a opção "A partir de" antes do valor
   duration?: string; // e.g. "45 min", "1h 30min"
   sessionsRecommended?: string; // e.g. "1 a 3 sessões anuais", "4 a 6 sessões quinzenais"
   recoveryTime?: string; // e.g. "Sem downtime", "24 a 48h com leve vermelhidão"

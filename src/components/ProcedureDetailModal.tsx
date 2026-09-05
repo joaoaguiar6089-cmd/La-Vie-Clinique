@@ -206,11 +206,21 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
         <div className="sm:hidden absolute inset-x-0 bottom-0 bg-[rgba(249,248,246,.92)] backdrop-blur-xl border-t border-[rgba(26,26,26,.07)] px-5 py-4 flex items-center justify-between gap-4">
           <div>
             <span className="block text-[11px] text-[#8a8578]">Investimento</span>
-            <div className="flex items-baseline gap-1">
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              {procedure.isStartingPrice && (
+                <span className="text-[11px] text-[#8a8578] font-medium">a partir de</span>
+              )}
+              {hasDiscount && (
+                <span className="text-[11px] text-[#a8a29a] line-through">
+                  {formatBRL(procedure.price)}
+                </span>
+              )}
               <span className="text-[20px] font-bold text-[#8E653D]">
                 {formatBRL(hasDiscount ? procedure.promotionalPrice : procedure.price)}
               </span>
-              <span className="text-[12px] text-[#8a8578]">por sessão</span>
+              <span className="text-[12px] text-[#8a8578]">
+                {procedure.priceNote || 'por sessão'}
+              </span>
             </div>
           </div>
           <a
@@ -382,13 +392,23 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
                     <span className="text-[11px] font-semibold text-[#C49B74] block mb-1">
                       Investimento
                     </span>
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      {procedure.isStartingPrice && (
+                        <span className="text-[13px] font-medium text-gray-300">
+                          a partir de
+                        </span>
+                      )}
                       {hasDiscount && (
                         <span className="text-[13px] text-gray-400 line-through">{formatBRL(procedure.price)}</span>
                       )}
                       <span className="font-serif-luxury text-[38px] font-medium text-white">
                         {formatBRL(hasDiscount ? procedure.promotionalPrice : procedure.price)}
                       </span>
+                      {procedure.priceNote && (
+                        <span className="text-[13px] text-[#C49B74] font-medium ml-1">
+                          {procedure.priceNote}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="text-right text-[12px] text-gray-400">

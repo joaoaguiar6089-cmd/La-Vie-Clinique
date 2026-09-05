@@ -112,7 +112,10 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({ procedure, clinic 
           <span className="text-[9px] uppercase tracking-wider text-[#D8A47F] font-semibold block">
             Investimento
           </span>
-          <div className="flex items-baseline gap-1.5">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            {procedure.isStartingPrice && (
+              <span className="text-xs text-[#D8A47F] font-medium">a partir de</span>
+            )}
             {hasDiscount && (
               <span className="text-xs text-[#A0A0A5] line-through">
                 {formatBRL(procedure.price)}

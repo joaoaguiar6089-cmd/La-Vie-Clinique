@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope } from 'lucide-react';
 import { Procedure, Professional } from '../types';
 import { PRESET_IMAGE_LIBRARY, INITIAL_CATEGORIES } from '../data/initialData';
+import { formatBRL } from '../utils/formatters';
 
 interface ProcedureFormModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [price, setPrice] = useState<string>('');
   const [promotionalPrice, setPromotionalPrice] = useState<string>('');
   const [priceNote, setPriceNote] = useState('por sessão');
+  const [isStartingPrice, setIsStartingPrice] = useState<boolean>(false);
   const [duration, setDuration] = useState('45 a 60 min');
   const [sessionsRecommended, setSessionsRecommended] = useState('1 a 3 sessões');
   const [recoveryTime, setRecoveryTime] = useState('Sem downtime');
@@ -82,6 +84,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setPrice(procedureToEdit.price ? String(procedureToEdit.price) : '');
       setPromotionalPrice(procedureToEdit.promotionalPrice ? String(procedureToEdit.promotionalPrice) : '');
       setPriceNote(procedureToEdit.priceNote || 'por sessão');
+      setIsStartingPrice(Boolean(procedureToEdit.isStartingPrice));
       setDuration(procedureToEdit.duration || '');
       setSessionsRecommended(procedureToEdit.sessionsRecommended || '');
       setRecoveryTime(procedureToEdit.recoveryTime || '');
@@ -108,6 +111,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setPrice('');
       setPromotionalPrice('');
       setPriceNote('por sessão');
+      setIsStartingPrice(false);
       setDuration('45 min');
       setSessionsRecommended('1 a 3 sessões');
       setRecoveryTime('Sem downtime');
@@ -231,6 +235,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       price: Number(price),
       promotionalPrice: promotionalPrice ? Number(promotionalPrice) : undefined,
       priceNote: priceNote.trim() || 'por sessão',
+      isStartingPrice: isStartingPrice,
       duration: duration.trim() || undefined,
       sessionsRecommended: sessionsRecommended.trim() || undefined,
       recoveryTime: recoveryTime.trim() || undefined,
@@ -557,6 +562,41 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                 />
               </div>
+            </div>
+
+            {/* Checkbox "A partir de" */}
+            <div className="bg-white/60 backdrop-blur-xs border border-white/80 rounded-sm p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <label 
+                htmlFor="procedure-is-starting-price" 
+                className="flex items-start sm:items-center gap-3 cursor-pointer select-none group"
+              >
+                <input
+                  type="checkbox"
+                  id="procedure-is-starting-price"
+                  checked={isStartingPrice}
+                  onChange={(e) => setIsStartingPrice(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 sm:mt-0 rounded border-gray-300 text-[#A67C52] focus:ring-[#A67C52] accent-[#A67C52] cursor-pointer"
+                />
+                <div>
+                  <span className="text-xs font-semibold text-[#1A1A1A] group-hover:text-[#A67C52] transition-colors flex items-center gap-1.5">
+                    Habilitar "A partir de" no preço
+                  </span>
+                  <p className="text-[11px] text-[#737373] mt-0.5">
+                    Adiciona o prefixo "a partir de" antes do valor nos cards, no catálogo e nos orçamentos.
+                  </p>
+                </div>
+              </label>
+
+              {price && !isNaN(Number(price)) && Number(price) > 0 && (
+                <div className="text-left sm:text-right shrink-0 bg-[#F5F2ED] px-3 py-1.5 rounded border border-[#E5DFD7]">
+                  <span className="text-[10px] text-[#8a8578] uppercase tracking-wider block font-medium">Prévia no catálogo:</span>
+                  <span className="text-xs font-semibold text-[#8E653D]">
+                    {isStartingPrice ? 'a partir de ' : ''}
+                    {formatBRL(promotionalPrice && Number(promotionalPrice) > 0 ? Number(promotionalPrice) : Number(price))}
+                    {priceNote ? ` ${priceNote}` : ''}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

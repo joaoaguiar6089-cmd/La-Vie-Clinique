@@ -351,9 +351,10 @@ export function buildWhatsAppCatalogShareUrl(
   message += `📋 *CATÁLOGO DE PROCEDIMENTOS EXCLUSIVOS:*\n\n`;
 
   procedures.forEach((p, idx) => {
+    const prefix = p.isStartingPrice ? 'a partir de ' : '';
     const priceText = p.promotionalPrice 
-      ? `~${formatBRL(p.price)}~ por *${formatBRL(p.promotionalPrice)}*`
-      : `*${formatBRL(p.price)}*`;
+      ? `${prefix}~${formatBRL(p.price)}~ por *${formatBRL(p.promotionalPrice)}*`
+      : `${prefix}*${formatBRL(p.price)}*`;
     
     message += `${idx + 1}. *${p.title.toUpperCase()}*\n`;
     if (p.subtitle) message += `   _${p.subtitle}_\n`;
@@ -383,9 +384,10 @@ export function buildSingleProcedureWhatsAppUrl(
   procedure: Procedure,
   clinic: ClinicProfile
 ): string {
+  const prefix = procedure.isStartingPrice ? 'a partir de ' : '';
   const priceText = procedure.promotionalPrice 
-    ? `~${formatBRL(procedure.price)}~ por *${formatBRL(procedure.promotionalPrice)}*`
-    : `*${formatBRL(procedure.price)}*`;
+    ? `${prefix}~${formatBRL(procedure.price)}~ por *${formatBRL(procedure.promotionalPrice)}*`
+    : `${prefix}*${formatBRL(procedure.price)}*`;
 
   let message = `Olá! Gostaria de agendar ou tirar dúvidas sobre o procedimento:\n\n`;
   message += `✨ *${procedure.title.toUpperCase()}*\n`;

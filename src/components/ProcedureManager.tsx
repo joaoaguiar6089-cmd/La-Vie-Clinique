@@ -234,6 +234,11 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                   <div className="border-t border-[rgba(26,26,26,.07)] pt-3 mb-3.5 mt-auto">
                     <span className="block text-[12px] text-[#8a8578] mb-0.5">Investimento</span>
                     <div className="flex items-baseline gap-2 flex-wrap">
+                      {proc.isStartingPrice && (
+                        <span className="text-[12px] font-medium text-[#8a8578]">
+                          a partir de
+                        </span>
+                      )}
                       {hasDiscount && (
                         <span className="text-[13px] text-[#a8a29a] line-through">
                           {formatBRL(proc.price)}
