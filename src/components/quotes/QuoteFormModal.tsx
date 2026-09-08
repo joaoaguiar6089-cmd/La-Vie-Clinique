@@ -25,7 +25,11 @@ import {
   montarTextoApresentacao,
   sugerirDescontoCombinado,
 } from '../../utils/quoteCalc';
-import { montarItemAvulso, montarItemDoProcedimento } from '../../utils/quoteFactory';
+import {
+  montarItemAvulso,
+  montarItemDoProcedimento,
+  montarSnapshotClinica,
+} from '../../utils/quoteFactory';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { ProcedureSearchAdd } from './ProcedureSearchAdd';
 import { QuoteItemEditor } from './QuoteItemEditor';
@@ -190,7 +194,10 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   if (!isOpen) return null;
 
   const addProcedure = (procedure: Procedure) =>
-    setItens((prev) => [...prev, montarItemDoProcedimento(procedure)]);
+    setItens((prev) => [
+      ...prev,
+      montarItemDoProcedimento(procedure, professionals, professionalId),
+    ]);
 
   const updateItem = (item: QuoteItem) =>
     setItens((prev) => prev.map((i) => (i.id === item.id ? item : i)));
@@ -249,6 +256,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       descontoCombinadoPercentual: temDescontoCombinado ? descontoCombinadoPercentual : undefined,
       pagamento,
       observacoes: observacoes.trim() || undefined,
+      clinica: montarSnapshotClinica(clinic),
       total: totais.total,
     };
 
@@ -387,7 +395,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
 
               <div>
                 <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
-                  Profissional responsável *
+                  Responsável pelo orçamento *
                 </label>
                 <select
                   value={professionalId}
@@ -401,8 +409,12 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                     </option>
                   ))}
                 </select>
-                {errors.professional && (
+                {errors.professional ? (
                   <p className="mt-1 text-[11px] text-red-500">{errors.professional}</p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Padrão para os procedimentos novos — cada um pode ter outra profissional
+                  </p>
                 )}
               </div>
             </div>
@@ -435,8 +447,6 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
               Procedimentos ({itens.length})
             </SectionHeader>
 
-            <ProcedureSearchAdd procedures={procedures} onAdd={addProcedure} />
-
             {errors.itens && (
               <p className="text-[11px] text-red-500 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
@@ -451,6 +461,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   item={item}
                   index={index}
                   total={itens.length}
+                  professionals={professionals}
                   onChange={updateItem}
                   onRemove={() => removeItem(item.id)}
                   onMove={(direction) => moveItem(index, direction)}
@@ -458,14 +469,19 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setItens((prev) => [...prev, montarItemAvulso()])}
-              className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Procedimento fora do catálogo
-            </button>
+            <div className="flex flex-wrap items-start gap-2">
+              <ProcedureSearchAdd procedures={procedures} onAdd={addProcedure} />
+              <button
+                type="button"
+                onClick={() =>
+                  setItens((prev) => [...prev, montarItemAvulso(professionals, professionalId)])
+                }
+                className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Procedimento fora do catálogo
+              </button>
+            </div>
           </div>
 
           {/* Seção 4 — Totais */}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Trash2, Plus, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
-import { QuoteItem, QuoteItemDetail } from '../../types';
+import { Professional, QuoteItem, QuoteItemDetail } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { itemValorFinal, itemDescontoPercentual } from '../../utils/quoteCalc';
 
@@ -8,6 +8,7 @@ interface QuoteItemEditorProps {
   item: QuoteItem;
   index: number;
   total: number;
+  professionals: Professional[];
   onChange: (item: QuoteItem) => void;
   onRemove: () => void;
   onMove: (direction: -1 | 1) => void;
@@ -21,6 +22,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
   item,
   index,
   total,
+  professionals,
   onChange,
   onRemove,
   onMove,
@@ -100,8 +102,32 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
         </div>
       </div>
 
-      {/* Valores */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* Profissional e valor */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+            Profissional deste procedimento
+          </label>
+          <select
+            value={item.professionalId || ''}
+            onChange={(e) => {
+              const id = e.target.value || undefined;
+              patch({
+                professionalId: id,
+                profissionalNome: professionals.find((p) => p.id === id)?.name,
+              });
+            }}
+            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+          >
+            <option value="">Sem profissional definida</option>
+            {professionals.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">Valor de tabela</label>
           <input
@@ -114,19 +140,6 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
               patch({ valorTabela: e.target.value === '' ? 0 : Number(e.target.value) });
             }}
             className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
-          />
-        </div>
-
-        <div className="sm:col-span-2">
-          <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
-            Nota de preço (opcional)
-          </label>
-          <input
-            type="text"
-            value={item.notaPreco || ''}
-            onChange={(e) => patch({ notaPreco: e.target.value })}
-            placeholder="por aplicação · pacote fechado · por sessão"
-            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
           />
         </div>
       </div>

@@ -8,6 +8,7 @@ import { ClinicSettingsModal } from './components/ClinicSettingsModal';
 import { AnamnesisModule } from './components/anamnesis/AnamnesisModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
 import { QuotesPanel } from './components/quotes/QuotesPanel';
+import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { Procedure, ClinicProfile, AppView } from './types';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
@@ -31,10 +32,16 @@ const STORAGE_KEY_CLINIC = 'aura_bronze_clinic_v1';
 // URL de carregamento da página, então é estável durante toda a vida desta instância do App.
 const publicSearchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 const isPublicAnamnesisRoute = !!(publicSearchParams?.get('anamnese') || publicSearchParams?.get('ficha'));
+const isPublicQuoteRoute = !!publicSearchParams?.get('orcamento');
 
 export default function App() {
   if (isPublicAnamnesisRoute) {
     return <PublicAnamnesisEntry />;
+  }
+
+  // Mesmo padrão da anamnese: a paciente abre o orçamento pelo link, sem login
+  if (isPublicQuoteRoute) {
+    return <PublicQuoteEntry />;
   }
 
   // Load procedures from localStorage or default samples initial fallback

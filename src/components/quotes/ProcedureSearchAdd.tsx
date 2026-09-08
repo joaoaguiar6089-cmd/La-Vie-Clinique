@@ -9,7 +9,7 @@ interface ProcedureSearchAddProps {
 }
 
 /**
- * Busca no catálogo para acrescentar um procedimento ao orçamento. Diferente do
+ * Botão que abre a busca no catálogo para acrescentar um procedimento. Diferente do
  * ProcedureMultiSelect (que filtra), aqui cada clique adiciona um item novo — o
  * mesmo procedimento pode entrar duas vezes, por exemplo em regiões diferentes.
  */
@@ -17,9 +17,11 @@ export const ProcedureSearchAdd: React.FC<ProcedureSearchAddProps> = ({ procedur
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
+    inputRef.current?.focus();
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
@@ -48,23 +50,34 @@ export const ProcedureSearchAdd: React.FC<ProcedureSearchAddProps> = ({ procedur
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="relative">
-        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setIsOpen(true);
-          }}
-          onFocus={() => setIsOpen(true)}
-          placeholder="Buscar procedimento no catálogo para adicionar..."
-          className="w-full glass-input pl-8 pr-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
-        />
-      </div>
+      <button
+        type="button"
+        onClick={() => {
+          setSearchTerm('');
+          setIsOpen((v) => !v);
+        }}
+        className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+      >
+        <Plus className="w-3.5 h-3.5" />
+        Adicionar procedimento
+      </button>
 
       {isOpen && (
-        <div className="absolute z-30 mt-1 w-full bg-white rounded-sm border border-gray-200 shadow-xl overflow-hidden">
+        <div className="absolute z-30 mt-1 w-[min(380px,80vw)] bg-white rounded-sm border border-gray-200 shadow-xl overflow-hidden">
+          <div className="p-2.5 border-b border-gray-100">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar no catálogo..."
+                className="w-full pl-8 pr-3 py-1.5 rounded-xs bg-gray-50 border border-gray-200 text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+              />
+            </div>
+          </div>
+
           <div className="max-h-72 overflow-y-auto">
             {Object.keys(grouped).length === 0 ? (
               <p className="text-center text-xs text-gray-400 py-5">

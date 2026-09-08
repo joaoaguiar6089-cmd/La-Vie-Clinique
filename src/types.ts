@@ -183,12 +183,13 @@ export interface QuoteItem {
   procedureId?: string; // Origem no catálogo; ausente quando o item foi digitado à mão
   categoria: string;
   titulo: string;
+  professionalId?: string; // Quem realiza ESTE procedimento — cada item pode ter a sua
+  profissionalNome?: string; // Espelha o nome no momento da emissão, para o documento
   valorTabela: number; // Nasce de Procedure.promotionalPrice ?? price, editável
   temDesconto: boolean;
   valorComDesconto?: number; // Novo valor digitado; o percentual exibido é derivado, nunca digitado
   maisDeUmaSessao: boolean;
   sessoes: number; // 1 quando maisDeUmaSessao = false. Informativo: NÃO multiplica o valor
-  notaPreco?: string; // "por aplicação", "pacote fechado", "por sessão"
   detalhes: QuoteItemDetail[];
 }
 
@@ -202,11 +203,31 @@ export interface QuotePayment {
   negociacao?: string; // Texto livre — sai como nota abaixo das formas de pagamento
 }
 
-/** Status gravado no documento. `expirado` nunca é gravado: deriva da validade. */
-export type QuoteStoredStatus = 'rascunho' | 'enviado' | 'aceito';
+/**
+ * Status gravado no documento. `expirado` nunca é gravado: deriva da validade.
+ * `cancelado` é o "excluir" de um orçamento já enviado — o registro sobrevive para
+ * que o link que a paciente recebeu consiga avisar que ele não vale mais.
+ */
+export type QuoteStoredStatus = 'rascunho' | 'enviado' | 'aceito' | 'cancelado';
 
 /** Status exibido na interface, já considerando a data de validade. */
 export type QuoteStatus = QuoteStoredStatus | 'expirado';
+
+/**
+ * Retrato dos dados da clínica no momento da emissão. Existe por dois motivos:
+ * a página pública do link não tem login e as regras não deixam ela ler
+ * `clinic_settings` (que guarda e-mails e UIDs de acesso das profissionais); e um
+ * orçamento já enviado deve preservar o contato que a paciente recebeu.
+ */
+export interface QuoteClinicSnapshot {
+  name: string;
+  tagline?: string;
+  cityState?: string;
+  phone?: string;
+  email?: string;
+  instagram?: string;
+  legalNotice: string;
+}
 
 /** Referência a outro orçamento na cadeia de substituição. */
 export interface QuoteReference {
@@ -236,6 +257,7 @@ export interface Quote {
   descontoCombinadoPercentual?: number; // Digitado; sugestão = 2% × nº de itens, limitada ao teto
   pagamento: QuotePayment;
   observacoes?: string;
+  clinica?: QuoteClinicSnapshot; // Ausente só em orçamentos criados antes deste campo existir
   total: number; // Snapshot denormalizado apenas para a listagem — a verdade é calcularOrcamento()
   enviadoEm?: string; // ISO do 1º compartilhamento do link; presença trava a edição
   substituidoPor?: QuoteReference; // Preenchido no antigo quando um novo o substitui

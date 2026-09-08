@@ -155,7 +155,14 @@ export const resolveQuoteStatus = (
   quote: Pick<Quote, "status" | "dataValidade">,
   agora: Date = new Date()
 ): QuoteStatus => {
-  if (quote.status === "aceito" || quote.status === "rascunho") return quote.status;
+  // Cancelado e aceito são estados finais; rascunho nunca "vence" porque nem saiu daqui
+  if (
+    quote.status === "aceito" ||
+    quote.status === "rascunho" ||
+    quote.status === "cancelado"
+  ) {
+    return quote.status;
+  }
   const validade = new Date(quote.dataValidade);
   if (isNaN(validade.getTime())) return quote.status;
   return validade < agora ? "expirado" : quote.status;

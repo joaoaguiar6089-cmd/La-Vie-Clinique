@@ -27,19 +27,28 @@ Status: **aprovado, pronto para implementar** — 2026-09-08.
 - Numeração `AAAA-####` via `runTransaction` sobre `counters/quotes_<ano>`,
   reiniciando a cada ano. O número é **gerado no primeiro salvamento**, não ao abrir
   o formulário: abrir e desistir não queima número. É imutável depois de gerado.
-- Status: `rascunho` · `enviado` · `aceito` · `expirado`.
+- Status: `rascunho` · `enviado` · `aceito` · `expirado` · `cancelado`.
   - `expirado` é **calculado na hora** (comparando `dataValidade` com hoje), nunca
     gravado — sem job agendado.
   - `enviado` é marcado **automaticamente** no primeiro compartilhamento do link,
     e continua editável manualmente na listagem.
   - `aceito` é marcado à mão pela clínica.
+  - `cancelado` é o "excluir" de um orçamento já enviado.
 - **Depois de "enviado", o orçamento trava.** Qualquer ajuste vira uma
   **substituição**: cria um orçamento novo (cópia do antigo, número novo) e grava no
   antigo `substituidoPor` (id + número), exibido na listagem e na página online do
   link antigo, com link para o novo.
-- **Sem status "cancelado" e sem exclusão de orçamentos enviados.** Rascunho pode ser
-  excluído.
+- **Excluir depende de já ter saído da clínica**: rascunho é apagado de verdade
+  (nunca foi enviado a ninguém); um orçamento já enviado vira `cancelado`, porque o
+  link que a paciente tem no WhatsApp precisa continuar existindo para avisar que
+  aquele orçamento não vale mais. Cancelado perde as ações de substituir e aceitar,
+  e a página pública abre com uma tarja preta de cancelamento acima de tudo.
 - Valores em **reais** (`number`), consistente com `Procedure.price` e `formatBRL`.
+- O documento guarda um **retrato dos dados da clínica** (`Quote.clinica`) gravado na
+  emissão: nome, tagline, cidade, telefone, e-mail, Instagram e o aviso legal. Existe
+  por dois motivos — a página pública não tem login e as regras não deixam ela ler
+  `clinic_settings` (que contém e-mails e UIDs de acesso das profissionais); e um
+  orçamento já enviado deve preservar o contato que a paciente recebeu.
 
 ## 3. Cadastro do procedimento (`ProcedureFormModal`)
 
@@ -74,14 +83,24 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
   para alcançar sua melhor versão ✨"`), totalmente editável.
 
 **Procedimentos** (repetível, ordenável)
-- Seleção com busca no catálogo. O item nasce com categoria, título, valor
-  (`promotionalPrice` quando houver, senão `price`), nota de preço e os detalhes
-  pré-preenchidos — todos editáveis, cada detalhe removível, com "+ adicionar campo".
+- Dois botões lado a lado abaixo da lista: **"+ Adicionar procedimento"** (abre a
+  busca no catálogo) e **"+ Procedimento fora do catálogo"** (item em branco).
+- O item nasce com categoria, título, valor (`promotionalPrice` quando houver, senão
+  `price`) e os detalhes pré-preenchidos — todos editáveis, cada detalhe removível,
+  com "+ adicionar campo".
+- **Profissional por procedimento**: cada item tem a sua, porque nem sempre é a mesma
+  pessoa que realiza tudo. Vem da atribuição do próprio procedimento no catálogo
+  (`assignedDoctorIds`) e, na falta dela, da responsável escolhida no orçamento.
 - Valor: editável.
 - Checkbox **desconto** → digita-se o **novo valor**; o sistema calcula o percentual,
   que é o que aparece no PDF ("desconto de 11%").
 - Checkbox **mais de 1 sessão** → campo de quantidade.
-- Nota de preço curta: "por aplicação", "pacote fechado", "por sessão".
+- **Sem nota de preço.** A linha abaixo do valor mostra apenas o desconto e, quando
+  houver, a quantidade de sessões.
+
+O campo "responsável pelo orçamento" continua na identificação, mas agora serve só
+como padrão dos itens novos e como referência na listagem — quem aparece no documento
+é a profissional de cada procedimento.
 
 **Totais**
 - Subtotal = soma dos valores finais.
@@ -125,17 +144,16 @@ os destaques dos comentários.
 
 Estrutura: cabeçalho (quadrado "LV" + nome da clínica + tagline/cidade | nº do
 orçamento, emissão e validade) → hairline → "Preparado para" (nome, contato e, se
-houver, data da avaliação) | "Profissional responsável" em coluna separada →
-mensagem de abertura → lista de itens (categoria bronze em caixa alta, título em
-Cormorant, valor de tabela riscado quando há desconto, sub-linha com
-"desconto de X% · N sessões · nota de preço", grade de detalhes `auto-fit`
+houver, data da avaliação), em largura inteira → mensagem de abertura → lista de
+itens (categoria bronze em caixa alta, título em Cormorant, "com {profissional}" em
+9,5px logo abaixo, valor de tabela riscado quando há desconto, sub-linha com
+"desconto de X% · N sessões", grade de detalhes `auto-fit`
 `minmax(148px, 1fr)`) → rodapé de valores em duas colunas (pagamento à esquerda,
 bloco preto de subtotal/desconto combinado/total à direita) → aviso legal +
 contatos da clínica.
 
 **Multi-página:**
-- Página 1: cabeçalho completo → preparado para + profissional → mensagem → itens
-  que couberem.
+- Página 1: cabeçalho completo → preparado para → mensagem → itens que couberem.
 - Páginas seguintes: **cabeçalho reduzido** (nº do orçamento + nome da cliente) →
   itens restantes.
 - **Um item nunca é dividido** entre páginas: não coube inteiro, desce inteiro.
@@ -153,6 +171,12 @@ contatos da clínica.
 **Exportação:** caminho já existente — `exportElementAsPDF` de
 `src/utils/exportHelpers.ts`, branch de múltiplas páginas via divs `data-pdf-page`
 com largura fixa de 794px (A4 @ 96dpi), fundo `#F9F8F6`.
+
+O botão não baixa direto: abre uma **prévia** em tamanho real (`QuotePreviewModal`)
+com "Baixar PDF" dentro, para quem emite conferir antes de enviar. Na hora de
+exportar, a escala da prévia volta a 1 — html2canvas mede o elemento como ele está
+e capturaria distorcido um `transform: scale`. O arquivo sai como
+`Nome da cliente-2026-0148.pdf`.
 
 ## 7. Página online
 
@@ -178,14 +202,21 @@ Quatro parâmetros, com os valores do design como padrão:
 3. Texto do aviso legal do rodapé.
 4. Template da mensagem de abertura.
 
-## 9. Ordem de implementação
+## 9. Arquivos do módulo
 
-1. Tipos (`src/types.ts`) + `src/utils/quoteCalc.ts`
-2. Detalhes para orçamento no cadastro do procedimento
-3. Formulário gerador
-4. PDF e algoritmo de paginação
-5. Persistência (`quotes`, counters, regras) e listagem
-6. Página online
+| arquivo | papel |
+| --- | --- |
+| `src/utils/quoteCalc.ts` | regras de cálculo, status derivado, defaults |
+| `src/utils/quoteFactory.ts` | montagem de itens, detalhes e retrato da clínica |
+| `src/components/quotes/QuoteFormModal.tsx` | formulário gerador |
+| `src/components/quotes/QuoteItemEditor.tsx` | edição de um procedimento do orçamento |
+| `src/components/quotes/PatientSearchSelect.tsx` | busca de paciente |
+| `src/components/quotes/ProcedureSearchAdd.tsx` | busca no catálogo para adicionar |
+| `src/components/quotes/QuotePrintable.tsx` | páginas A4 + paginação medida |
+| `src/components/quotes/QuotePreviewModal.tsx` | prévia e download do PDF |
+| `src/components/quotes/QuoteShareModal.tsx` | link, WhatsApp e marcação de enviado |
+| `src/components/quotes/QuotesPanel.tsx` | listagem, filtros e ações |
+| `src/components/quotes/PublicQuoteEntry.tsx` | página da cliente (`?orcamento=`) |
 
 ## 10. Fora de escopo
 

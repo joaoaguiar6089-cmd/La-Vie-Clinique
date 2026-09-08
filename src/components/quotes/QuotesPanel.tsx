@@ -9,6 +9,9 @@ import {
   Check,
   FileText,
   AlertCircle,
+  Download,
+  Share2,
+  Ban,
 } from 'lucide-react';
 import {
   ClinicProfile,
@@ -29,8 +32,11 @@ import {
   replaceQuote,
   deleteQuote,
   setQuoteStatus,
+  markQuoteAsSent,
 } from '../../services/databaseService';
 import { QuoteFormModal } from './QuoteFormModal';
+import { QuotePreviewModal } from './QuotePreviewModal';
+import { QuoteShareModal } from './QuoteShareModal';
 
 interface QuotesPanelProps {
   clinic: ClinicProfile;
@@ -42,6 +48,7 @@ const STATUS_LABEL: Record<QuoteStatus, string> = {
   enviado: 'Enviado',
   aceito: 'Aceito',
   expirado: 'Expirado',
+  cancelado: 'Cancelado',
 };
 
 const STATUS_CLASS: Record<QuoteStatus, string> = {
@@ -49,6 +56,7 @@ const STATUS_CLASS: Record<QuoteStatus, string> = {
   enviado: 'bg-[#A67C52]/10 text-[#8E653D] border-[#A67C52]/25',
   aceito: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   expirado: 'bg-amber-50 text-amber-700 border-amber-200',
+  cancelado: 'bg-[#1A1A1A] text-[#C49B74] border-[#1A1A1A]',
 };
 
 export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedures }) => {
@@ -61,6 +69,17 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
   const [quoteToEdit, setQuoteToEdit] = useState<Quote | null>(null);
   const [seedFrom, setSeedFrom] = useState<Quote | null>(null);
   const [modoSubstituicao, setModoSubstituicao] = useState<Quote | null>(null);
+  const [quoteNaPrevia, setQuoteNaPrevia] = useState<Quote | null>(null);
+  const [quoteParaCompartilhar, setQuoteParaCompartilhar] = useState<Quote | null>(null);
+
+  const handleCompartilhado = async (quote: Quote) => {
+    if (quote.status !== 'rascunho') return;
+    try {
+      await markQuoteAsSent(quote.id);
+    } catch (e) {
+      setErro(`O link foi compartilhado, mas o status não mudou: ${(e as Error).message}`);
+    }
+  };
 
   useEffect(() => {
     const unsubQuotes = subscribeToQuotes(setQuotes, (e) =>
@@ -185,7 +204,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
         </div>
 
         <div className="flex items-center gap-1.5">
-          {(['todos', 'rascunho', 'enviado', 'aceito', 'expirado'] as const).map((s) => (
+          {(['todos', 'rascunho', 'enviado', 'aceito', 'expirado', 'cancelado'] as const).map((s) => (
             <button
               key={s}
               type="button"
@@ -262,6 +281,26 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                 </div>
 
                 <div className="flex items-center gap-0.5 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setQuoteParaCompartilhar(quote)}
+                    aria-label={`Compartilhar ${quote.numero}`}
+                    title="Compartilhar link com a cliente"
+                    className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setQuoteNaPrevia(quote)}
+                    aria-label={`Ver PDF do ${quote.numero}`}
+                    title="Ver e baixar PDF"
+                    className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+
                   {editavel && (
                     <button
                       type="button"
@@ -274,7 +313,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                     </button>
                   )}
 
-                  {!editavel && !substituido && (
+                  {!editavel && !substituido && status !== 'cancelado' && (
                     <button
                       type="button"
                       onClick={() => abrirSubstituicao(quote)}
@@ -308,7 +347,9 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                     </button>
                   )}
 
-                  {editavel && (
+                  {/* Rascunho nunca saiu da clínica: apaga de verdade. Já enviado vira
+                      cancelado, porque o link que a cliente tem precisa avisar disso */}
+                  {editavel ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -326,7 +367,25 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
-                  )}
+                  ) : status !== 'cancelado' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Cancelar o orçamento ${quote.numero}?\n\nEle sai da lista de ativos e o link que a cliente recebeu passa a avisar que foi cancelado.`
+                          )
+                        ) {
+                          handleSetStatus(quote, 'cancelado');
+                        }
+                      }}
+                      aria-label={`Cancelar ${quote.numero}`}
+                      title="Cancelar orçamento"
+                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                    >
+                      <Ban className="w-4 h-4" />
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );
@@ -343,6 +402,18 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
         procedures={catalogProcedures}
         patients={patients}
         clinic={clinic}
+      />
+
+      <QuotePreviewModal
+        quote={quoteNaPrevia}
+        clinic={clinic}
+        onClose={() => setQuoteNaPrevia(null)}
+      />
+
+      <QuoteShareModal
+        quote={quoteParaCompartilhar}
+        onClose={() => setQuoteParaCompartilhar(null)}
+        onCompartilhado={handleCompartilhado}
       />
     </div>
   );
