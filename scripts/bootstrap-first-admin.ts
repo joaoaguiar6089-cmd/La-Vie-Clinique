@@ -49,10 +49,27 @@ async function main() {
     uid = cred.user.uid;
     console.log('Conta criada no Firebase Auth. uid:', uid);
   } catch (err: any) {
-    if (err?.code === 'auth/email-already-in-use') {
+    if (err?.code === 'auth/operation-not-allowed') {
+      console.error('\n❌ ERRO: O provedor "E-mail/senha" está DESATIVADO no Firebase Authentication.');
+      console.error('Para ativar (leva menos de 1 minuto):');
+      console.error('1. Acesse: https://console.firebase.google.com/project/' + firebaseConfig.projectId + '/authentication/providers');
+      console.error('2. Clique em "E-mail/senha" (Email/Password).');
+      console.error('3. Ative a primeira chave ("Permitir que os usuários se cadastrem usando o e-mail e a senha") e clique em Salvar.');
+      console.error('4. Em seguida, execute este script novamente: npx tsx scripts/bootstrap-first-admin.ts\n');
+      process.exit(1);
+    } else if (err?.code === 'auth/email-already-in-use') {
       console.log('Conta já existe — entrando com a senha temporária do bootstrap...');
-      const cred = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, TEMP_PASSWORD);
-      uid = cred.user.uid;
+      try {
+        const cred = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, TEMP_PASSWORD);
+        uid = cred.user.uid;
+      } catch (signInErr: any) {
+        // Usuário já pode ter definido sua própria senha ou estar cadastrado
+        console.log('Conta existente encontrada no Firebase Auth.');
+        await sendPasswordResetEmail(auth, ADMIN_EMAIL);
+        console.log(`Link de redefinição de senha enviado para ${ADMIN_EMAIL}.`);
+        console.log('Concluído.');
+        return;
+      }
     } else {
       throw err;
     }
@@ -60,29 +77,61 @@ async function main() {
 
   const clinicRef = doc(db, 'clinic_settings', 'main_profile');
   const snap = await getDoc(clinicRef);
+  let professionals: Array<Record<string, any>> = [];
+
   if (!snap.exists()) {
-    throw new Error('Documento clinic_settings/main_profile não encontrado — a clínica ainda não tem dados no Firestore.');
+    console.log('Documento clinic_settings/main_profile não existia — inicializando perfil padrão...');
+    professionals = [
+      {
+        id: 'doc-karoline',
+        name: 'Dra. Karoline Ferreira',
+        registryNumber: 'Responsável Técnica',
+        title: 'Especialista em Estética Avançada & Tecnologias',
+        specialty: 'Especialista em Estética Avançada & Tecnologias',
+        email: ADMIN_EMAIL,
+        uid,
+        isAdmin: true,
+      },
+    ];
+    await setDoc(clinicRef, {
+      name: 'La Vie - Clínica de Estética Facial e Corporal',
+      tagline: 'Estética Avançada, Tecnologias de Alta Performance e Cuidado Personalizado',
+      professionalName: 'Dra. Karoline Ferreira',
+      professionalTitle: 'Especialista em Estética Avançada & Tecnologias',
+      registryNumber: 'Dra. Karoline Ferreira',
+      professionals,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  } else {
+    const clinic = snap.data() as { professionals?: Array<Record<string, any>> };
+    professionals = clinic.professionals || [];
+    const idx = professionals.findIndex((p) => String(p.name || '').toLowerCase().includes(PROFESSIONAL_NAME_MATCH));
+    
+    if (idx === -1) {
+      professionals.push({
+        id: 'doc-karoline',
+        name: 'Dra. Karoline Ferreira',
+        email: ADMIN_EMAIL,
+        uid,
+        isAdmin: true,
+      });
+    } else {
+      professionals = professionals.map((p, i) =>
+        i === idx ? { ...p, email: ADMIN_EMAIL, uid, isAdmin: true } : p
+      );
+    }
+
+    await setDoc(clinicRef, { professionals, updatedAt: new Date().toISOString() }, { merge: true });
   }
 
-  const clinic = snap.data() as { professionals?: Array<Record<string, any>> };
-  const professionals = clinic.professionals || [];
-  const idx = professionals.findIndex((p) => String(p.name || '').toLowerCase().includes(PROFESSIONAL_NAME_MATCH));
-  if (idx === -1) {
-    throw new Error(`Nenhuma profissional com nome contendo "${PROFESSIONAL_NAME_MATCH}" encontrada em clinic_settings.professionals.`);
-  }
-
-  const updatedProfessionals = professionals.map((p, i) =>
-    i === idx ? { ...p, email: ADMIN_EMAIL, uid, isAdmin: true } : p
-  );
-
-  await setDoc(clinicRef, { professionals: updatedProfessionals, updatedAt: new Date().toISOString() }, { merge: true });
-  console.log(`Profissional "${professionals[idx].name}" atualizada com email/uid/isAdmin=true.`);
+  console.log(`Profissional Karoline atualizada com email/uid/isAdmin=true no Firestore.`);
 
   await sendPasswordResetEmail(auth, ADMIN_EMAIL);
   console.log(`E-mail de definição de senha enviado para ${ADMIN_EMAIL}.`);
 
   await signOut(auth);
-  console.log('Concluído.');
+  console.log('Bootstrap finalizado com sucesso!');
 }
 
 main().catch((err) => {
