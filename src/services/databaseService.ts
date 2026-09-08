@@ -657,7 +657,7 @@ export async function setQuoteStatus(quoteId: string, status: QuoteStoredStatus)
   await updateDoc(docRef, { status, updatedAt: new Date().toISOString() });
 }
 
-/** Exclusão só de rascunho — orçamento enviado se substitui, não se apaga. */
+/** Exclusão de rascunho ou orçamento cancelado. */
 export async function deleteQuote(quoteId: string): Promise<void> {
   await deleteDoc(doc(db, QUOTES_COLLECTION, quoteId));
 }

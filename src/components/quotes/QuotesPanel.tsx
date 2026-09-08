@@ -347,8 +347,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                     </button>
                   )}
 
-                  {/* Rascunho nunca saiu da clínica: apaga de verdade. Já enviado vira
-                      cancelado, porque o link que a cliente tem precisa avisar disso */}
+                  {/* Rascunho ou cancelado podem ser excluídos definitivamente */}
                   {editavel ? (
                     <button
                       type="button"
@@ -367,7 +366,25 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
-                  ) : status !== 'cancelado' ? (
+                  ) : status === 'cancelado' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Excluir definitivamente o orçamento cancelado ${quote.numero}?\n\nEsta ação removerá o registro do sistema.`
+                          )
+                        ) {
+                          handleDelete(quote);
+                        }
+                      }}
+                      aria-label={`Excluir orçamento cancelado ${quote.numero}`}
+                      title="Excluir orçamento cancelado"
+                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  ) : (
                     <button
                       type="button"
                       onClick={() => {
@@ -385,7 +402,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                     >
                       <Ban className="w-4 h-4" />
                     </button>
-                  ) : null}
+                  )}
                 </div>
               </div>
             );

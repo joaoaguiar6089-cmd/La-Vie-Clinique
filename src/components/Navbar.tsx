@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, ListOrdered, ClipboardList, Share2, LogOut, Receipt } from 'lucide-react';
+import { Settings, Syringe, ClipboardList, Share2, LogOut, Receipt } from 'lucide-react';
 import { ClinicProfile, AppView } from '../types';
 
 interface NavbarProps {
@@ -29,7 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     {
       id: 'procedures' as const,
       label: 'Procedimentos',
-      icon: ListOrdered,
+      icon: Syringe,
       active: currentView === 'procedures',
       count: proceduresCount,
       onClick: () => {
