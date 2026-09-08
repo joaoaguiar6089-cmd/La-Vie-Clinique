@@ -7,9 +7,10 @@ import { ShareExportModal } from './components/ShareExportModal';
 import { ClinicSettingsModal } from './components/ClinicSettingsModal';
 import { AnamnesisModule } from './components/anamnesis/AnamnesisModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
+import { LoginScreen } from './components/auth/LoginScreen';
 import { Procedure, ClinicProfile } from './types';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
-import { RefreshCw, Check } from 'lucide-react';
+import { RefreshCw, Check, Loader2 } from 'lucide-react';
 import {
   seedInitialDataIfEmpty,
   subscribeToProcedures,
@@ -19,6 +20,7 @@ import {
   saveClinicProfileToDb,
   replaceAllProceduresWithOfficialPdfCatalog,
 } from './services/databaseService';
+import { onAuthChange, logout, type User } from './services/authService';
 
 const STORAGE_KEY_PROCEDURES = 'aura_bronze_procedures_v1';
 const STORAGE_KEY_CLINIC = 'aura_bronze_clinic_v1';
@@ -61,6 +63,18 @@ export default function App() {
     return DEFAULT_CLINIC_PROFILE;
   });
 
+  // Firebase Authentication — o painel inteiro fica atrás deste gate
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthChange((user) => {
+      setAuthUser(user);
+      setAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
   // Firebase Real-time Synchronization Status
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced');
 
@@ -81,8 +95,10 @@ export default function App() {
   const [singleProcedureToExport, setSingleProcedureToExport] = useState<Procedure | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Initialize Firebase and subscribe to real-time updates
+  // Initialize Firebase and subscribe to real-time updates — só depois de autenticado,
+  // já que as regras do Firestore agora exigem login para procedures/clinic_settings.
   useEffect(() => {
+    if (!authUser) return;
     let unsubscribeProcedures: (() => void) | undefined;
     let unsubscribeClinic: (() => void) | undefined;
 
@@ -133,7 +149,7 @@ export default function App() {
       if (unsubscribeProcedures) unsubscribeProcedures();
       if (unsubscribeClinic) unsubscribeClinic();
     };
-  }, []);
+  }, [authUser]);
 
   // Backup sync to localStorage
   useEffect(() => {
@@ -295,6 +311,21 @@ export default function App() {
     setIsExportModalOpen(true);
   };
 
+  const currentProfessional = clinic.professionals?.find((p) => p.uid === authUser?.uid) || null;
+  const isAdminUser = !!currentProfessional?.isAdmin;
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#A67C52] animate-spin" />
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return <LoginScreen />;
+  }
+
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] sm:flex selection:bg-[#A67C52]/25 selection:text-[#1A1A1A]">
       {/* Toast Notification */}
@@ -316,6 +347,8 @@ export default function App() {
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         clinic={clinic}
         proceduresCount={procedures.length}
+        currentProfessionalName={currentProfessional?.name}
+        onLogout={logout}
       />
 
       {/* Content Column */}
@@ -487,6 +520,8 @@ export default function App() {
         onClose={() => setIsSettingsModalOpen(false)}
         clinic={clinic}
         onSave={handleSaveClinic}
+        currentUserUid={authUser?.uid}
+        isAdminUser={isAdminUser}
       />
 
     </div>

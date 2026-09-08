@@ -22,7 +22,107 @@ import {
   Edit3,
   FileDown,
   Sparkles,
+  IdCard,
+  Calendar,
+  ShieldCheck,
 } from 'lucide-react';
+
+const formatCpf = (raw: string): string => {
+  const digits = raw.replace(/\D/g, '').slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
+
+/**
+ * Confirmação de identidade antes de exibir uma ficha já anotada pela equipe. O elo real de
+ * segurança continua sendo o ID (imprevisível) do link — isto é só uma camada de UX para
+ * evitar que alguém que receba o link por engano (encaminhamento errado) veja os dados sem
+ * saber o CPF e a data de nascimento da paciente.
+ */
+const IdentityConfirmGate: React.FC<{
+  expectedCpf: string;
+  expectedBirth?: string;
+  onConfirmed: () => void;
+}> = ({ expectedCpf, expectedBirth, onConfirmed }) => {
+  const [cpf, setCpf] = useState('');
+  const [birth, setBirth] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cpfMatches = cpf.replace(/\D/g, '') === expectedCpf.replace(/\D/g, '');
+    const birthMatches = !expectedBirth || birth === expectedBirth;
+    if (cpfMatches && birthMatches) {
+      onConfirmed();
+    } else {
+      setError('CPF ou data de nascimento não confere. Confira os dados e tente novamente.');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center px-4">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm bg-white rounded-3xl shadow-[0_6px_22px_rgba(0,0,0,.06)] p-6 space-y-4">
+        <div className="text-center space-y-2">
+          <div className="w-12 h-12 rounded-full bg-[#F9F8F6] border border-[rgba(26,26,26,.1)] flex items-center justify-center mx-auto">
+            <ShieldCheck className="w-6 h-6 text-[#A67C52]" />
+          </div>
+          <h2 className="font-serif-luxury text-[21px] font-semibold text-[#1A1A1A]">Confirme sua identidade</h2>
+          <p className="text-[13px] text-[#8a8578]">
+            Sua ficha já foi complementada pela equipe. Confirme seus dados para visualizá-la.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">CPF</label>
+          <div className="relative">
+            <IdCard className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+            <input
+              type="text"
+              inputMode="numeric"
+              value={cpf}
+              onChange={(e) => setCpf(formatCpf(e.target.value))}
+              placeholder="000.000.000-00"
+              required
+              className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+            />
+          </div>
+        </div>
+
+        {expectedBirth && (
+          <div>
+            <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">Data de nascimento</label>
+            <div className="relative">
+              <Calendar className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+              <input
+                type="date"
+                value={birth}
+                onChange={(e) => setBirth(e.target.value)}
+                required
+                className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+              />
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[13px]">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <button
+          type="submit"
+          className="w-full h-[50px] rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all"
+        >
+          Ver minha ficha
+        </button>
+      </form>
+    </div>
+  );
+};
 
 type Screen = 'loading' | 'error' | 'form' | 'success';
 
@@ -55,6 +155,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
   const [savedRecord, setSavedRecord] = useState<AnamnesisRecord | null>(null);
   const [copied, setCopied] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
+  const [identityConfirmed, setIdentityConfirmed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -337,6 +438,21 @@ export const PublicAnamnesisEntry: React.FC = () => {
   if (!template) return null;
 
   const isLocked = !!existingRecord?.profissionalPreenchidoEm;
+
+  // Só pedimos a confirmação de identidade quando temos um CPF salvo para conferir contra —
+  // fichas antigas (criadas antes deste recurso) não têm CPF e continuam com acesso direto.
+  const gateCpf = initialPatient?.cpf;
+  const needsIdentityGate = isLocked && !!gateCpf && !identityConfirmed;
+
+  if (needsIdentityGate && existingRecord) {
+    return (
+      <IdentityConfirmGate
+        expectedCpf={gateCpf!}
+        expectedBirth={initialPatient?.dataNascimento || existingRecord.pacienteDataNascimento}
+        onConfirmed={() => setIdentityConfirmed(true)}
+      />
+    );
+  }
 
   if (isLocked && existingRecord) {
     return (

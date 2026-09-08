@@ -23,7 +23,18 @@ import {
   X,
   ArrowLeft,
   ArrowRight,
+  IdCard,
 } from 'lucide-react';
+
+const formatCpf = (raw: string): string => {
+  const digits = raw.replace(/\D/g, '').slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
+
+const isValidCpf = (raw: string): boolean => raw.replace(/\D/g, '').length === 11;
 
 interface OnlinePatientAnamnesisFormProps {
   template: AnamnesisTemplate;
@@ -104,6 +115,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
   const [genero, setGenero] = useState<PatientGender | ''>(
     existingRecord?.pacienteGenero || initialPatient?.genero || ''
   );
+  const [cpf, setCpf] = useState(initialPatient?.cpf || '');
   const [email, setEmail] = useState(initialPatient?.email || '');
   const [tipoMusica, setTipoMusica] = useState(
     existingRecord?.respostasGerais?.['gen-musica'] ||
@@ -185,6 +197,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
     const stepErrors: Record<string, string> = {};
     if (!nome.trim()) stepErrors['nome'] = 'Informe seu nome completo.';
     if (!genero) stepErrors['genero'] = 'Selecione uma opção.';
+    if (!isValidCpf(cpf)) stepErrors['cpf'] = 'Informe um CPF válido (11 dígitos).';
     patientGeneralQuestions.forEach((q) => {
       if (q.obrigatoria && isAnswerEmpty(respostasGerais[q.id])) {
         stepErrors[q.id] = 'Esta pergunta é obrigatória.';
@@ -212,6 +225,9 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
     }
     if (!genero) {
       newErrors['genero'] = 'Selecione uma opção.';
+    }
+    if (!isValidCpf(cpf)) {
+      newErrors['cpf'] = 'Informe um CPF válido (11 dígitos).';
     }
     patientGeneralQuestions.forEach((q) => {
       if (q.obrigatoria && isAnswerEmpty(respostasGerais[q.id])) {
@@ -241,7 +257,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
-      if (errors['nome'] || errors['genero'] || Object.keys(errors).some((k) => patientGeneralQuestions.some((q) => q.id === k))) {
+      if (errors['nome'] || errors['genero'] || errors['cpf'] || Object.keys(errors).some((k) => patientGeneralQuestions.some((q) => q.id === k))) {
         goToStep(1);
         return;
       }
@@ -262,6 +278,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
         contato: contato.trim() || undefined,
         dataNascimento: dataNascimento || undefined,
         genero: genero || undefined,
+        cpf: cpf.replace(/\D/g, '') || undefined,
         email: email.trim() || undefined,
         createdAt: initialPatient?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -494,6 +511,29 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                     className="w-full h-[52px] pl-11 pr-4 text-[15px] rounded-[13px] bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1.5">
+                  CPF * <span className="text-[13px] text-[#8a8578] font-normal">— usado para você acessar sua ficha depois</span>
+                </label>
+                <div className="relative">
+                  <IdCard className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={cpf}
+                    onChange={(e) => {
+                      setCpf(formatCpf(e.target.value));
+                      if (errors['cpf']) clearError('cpf');
+                    }}
+                    placeholder="000.000.000-00"
+                    className={`w-full h-[52px] pl-11 pr-4 text-[15px] rounded-[13px] bg-white border transition-colors ${
+                      errors['cpf'] ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
+                    } text-[#1A1A1A] focus:outline-hidden`}
+                  />
+                </div>
+                {errors['cpf'] && <p className="text-[13px] text-[#E11D48] font-medium mt-1">{errors['cpf']}</p>}
               </div>
 
               <div>

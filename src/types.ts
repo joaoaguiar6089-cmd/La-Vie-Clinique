@@ -7,6 +7,9 @@ export interface Professional {
   phone?: string;
   instagram?: string;
   photoUrl?: string;
+  email?: string; // E-mail de login (Firebase Auth) — ausente = ainda sem conta de acesso
+  uid?: string; // UID do Firebase Auth vinculado, presente somente após "Criar login"
+  isAdmin?: boolean; // Concede acesso administrativo (gerenciar contas de outras profissionais)
 }
 
 export interface Procedure {

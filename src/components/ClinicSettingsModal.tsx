@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera } from 'lucide-react';
+import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2 } from 'lucide-react';
 import { ClinicProfile, Professional } from '../types';
+import { createProfessionalLogin } from '../services/authService';
 
 interface ClinicSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   clinic: ClinicProfile;
   onSave: (updatedClinic: ClinicProfile) => void;
+  /** UID (Firebase Auth) da profissional logada agora — usado para impedir que ela se auto-exclua. */
+  currentUserUid?: string;
+  /** Se a profissional logada tem poderes de admin (excluir contas, conceder/revogar admin). */
+  isAdminUser: boolean;
 }
 
 export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
@@ -14,6 +19,8 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   onClose,
   clinic,
   onSave,
+  currentUserUid,
+  isAdminUser,
 }) => {
   if (!isOpen) return null;
 
@@ -67,7 +74,9 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   const [docTitle, setDocTitle] = useState('');
   const [docSpecialty, setDocSpecialty] = useState('');
   const [docPhotoUrl, setDocPhotoUrl] = useState('');
+  const [docEmail, setDocEmail] = useState('');
   const [showDoctorForm, setShowDoctorForm] = useState(false);
+  const [creatingLoginForId, setCreatingLoginForId] = useState<string | null>(null);
 
   const handleDoctorPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -114,6 +123,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setDocTitle('');
     setDocSpecialty('');
     setDocPhotoUrl('');
+    setDocEmail('');
     setShowDoctorForm(true);
   };
 
@@ -124,6 +134,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setDocTitle(doc.title || doc.specialty || '');
     setDocSpecialty(doc.specialty || doc.title || '');
     setDocPhotoUrl(doc.photoUrl || '');
+    setDocEmail(doc.email || '');
     setShowDoctorForm(true);
   };
 
@@ -137,7 +148,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         ...prev,
         professionals: prev.professionals.map((d) =>
           d.id === editingDocId
-            ? { ...d, name: docName.trim(), registryNumber: docRegistry.trim(), title: docTitle.trim(), specialty: docTitle.trim(), photoUrl: docPhotoUrl.trim() || undefined }
+            ? { ...d, name: docName.trim(), registryNumber: docRegistry.trim(), title: docTitle.trim(), specialty: docTitle.trim(), photoUrl: docPhotoUrl.trim() || undefined, email: docEmail.trim() || undefined }
             : d
         ),
       }));
@@ -150,6 +161,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         title: docTitle.trim(),
         specialty: docTitle.trim(),
         photoUrl: docPhotoUrl.trim() || undefined,
+        email: docEmail.trim() || undefined,
       };
       setFormData((prev) => ({
         ...prev,
@@ -164,14 +176,28 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setDocTitle('');
     setDocSpecialty('');
     setDocPhotoUrl('');
+    setDocEmail('');
     setShowDoctorForm(false);
   };
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const adminCount = formData.professionals.filter((d) => d.isAdmin).length;
+
   const handleDeleteDoctor = (id: string) => {
+    const target = formData.professionals.find((d) => d.id === id);
     if (formData.professionals.length <= 1) {
       setErrorMessage('A clínica deve ter ao menos uma profissional cadastrada.');
+      setTimeout(() => setErrorMessage(null), 3500);
+      return;
+    }
+    if (target?.uid && target.uid === currentUserUid) {
+      setErrorMessage('Você não pode excluir a própria conta enquanto está logada.');
+      setTimeout(() => setErrorMessage(null), 3500);
+      return;
+    }
+    if (target?.isAdmin && adminCount <= 1) {
+      setErrorMessage('A clínica deve ter ao menos uma profissional admin. Torne outra pessoa admin antes de excluir esta conta.');
       setTimeout(() => setErrorMessage(null), 3500);
       return;
     }
@@ -181,6 +207,43 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     }));
     setDeletingDocId(null);
     setErrorMessage(null);
+  };
+
+  const handleCreateLogin = async (doc: Professional) => {
+    if (!doc.email?.trim()) {
+      setErrorMessage(`Informe um e-mail para "${doc.name}" antes de criar o login.`);
+      setTimeout(() => setErrorMessage(null), 3500);
+      return;
+    }
+    setCreatingLoginForId(doc.id);
+    try {
+      const uid = await createProfessionalLogin(doc.email);
+      setFormData((prev) => ({
+        ...prev,
+        professionals: prev.professionals.map((d) => (d.id === doc.id ? { ...d, uid } : d)),
+      }));
+    } catch (err: any) {
+      const msg =
+        err?.code === 'auth/email-already-in-use'
+          ? 'Este e-mail já possui uma conta de login no Firebase.'
+          : 'Não foi possível criar o login agora. Tente novamente.';
+      setErrorMessage(msg);
+      setTimeout(() => setErrorMessage(null), 4500);
+    } finally {
+      setCreatingLoginForId(null);
+    }
+  };
+
+  const handleToggleAdmin = (doc: Professional) => {
+    if (doc.isAdmin && adminCount <= 1) {
+      setErrorMessage('A clínica deve ter ao menos uma profissional admin.');
+      setTimeout(() => setErrorMessage(null), 3500);
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      professionals: prev.professionals.map((d) => (d.id === doc.id ? { ...d, isAdmin: !d.isAdmin } : d)),
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -363,6 +426,20 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                     />
                   </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-medium text-gray-700 mb-1 flex items-center gap-1">
+                      <Mail className="w-3 h-3" />
+                      E-mail de login (usado para criar o acesso ao painel)
+                    </label>
+                    <input
+                      type="email"
+                      value={docEmail}
+                      onChange={(e) => setDocEmail(e.target.value)}
+                      placeholder="profissional@lavieclinique.com"
+                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
@@ -404,7 +481,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   key={doc.id || idx}
                   className="flex items-center justify-between p-3 rounded-xs bg-white/60 backdrop-blur-xs border border-white/80 hover:border-[#A67C52]/30 transition-all"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div className="w-8 h-8 rounded-full bg-[#1A1A1A] text-[#C49B74] flex items-center justify-center text-xs font-bold font-serif-luxury shadow-xs overflow-hidden shrink-0">
                       {doc.photoUrl ? (
                         <img src={doc.photoUrl} alt={doc.name} className="w-full h-full object-cover" />
@@ -412,12 +489,26 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                         doc.name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'DR'
                       )}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-xs font-semibold text-[#1A1A1A]">{doc.name}</p>
                         {doc.registryNumber && (
                           <span className="text-[10px] px-1.5 py-0.2 rounded-xs bg-[#A67C52]/15 text-[#A67C52] font-semibold">
                             {doc.registryNumber}
+                          </span>
+                        )}
+                        {doc.isAdmin && (
+                          <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.2 rounded-xs bg-[#1A1A1A] text-[#C49B74] font-semibold">
+                            <ShieldCheck className="w-2.5 h-2.5" /> Admin
+                          </span>
+                        )}
+                        {doc.uid ? (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded-xs bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
+                            Login ativo
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded-xs bg-gray-100 text-gray-500 font-medium">
+                            Sem login
                           </span>
                         )}
                       </div>
@@ -428,7 +519,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   </div>
 
                   {deletingDocId === doc.id ? (
-                    <div className="flex items-center gap-1.5 animate-fadeIn">
+                    <div className="flex items-center gap-1.5 animate-fadeIn shrink-0">
                       <span className="text-[11px] text-red-600 font-medium mr-1">Excluir?</span>
                       <button
                         type="button"
@@ -446,7 +537,36 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {!doc.uid && (
+                        <button
+                          type="button"
+                          disabled={creatingLoginForId === doc.id}
+                          onClick={() => handleCreateLogin(doc)}
+                          className="p-1.5 rounded-xs text-gray-400 hover:text-[#A67C52] hover:bg-white transition-colors disabled:opacity-50"
+                          title="Criar login para esta profissional"
+                        >
+                          {creatingLoginForId === doc.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <KeyRound className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+                      {isAdminUser && doc.uid && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAdmin(doc)}
+                          className={`p-1.5 rounded-xs transition-colors ${
+                            doc.isAdmin
+                              ? 'text-[#A67C52] hover:text-gray-400 hover:bg-white'
+                              : 'text-gray-400 hover:text-[#A67C52] hover:bg-white'
+                          }`}
+                          title={doc.isAdmin ? 'Remover admin' : 'Tornar admin'}
+                        >
+                          {doc.isAdmin ? <ShieldCheck className="w-3.5 h-3.5" /> : <Shield className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleStartEditDoctor(doc)}
@@ -455,14 +575,16 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingDocId(doc.id)}
-                        className="p-1.5 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="Remover Médica"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {isAdminUser && (
+                        <button
+                          type="button"
+                          onClick={() => setDeletingDocId(doc.id)}
+                          className="p-1.5 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Remover Médica"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

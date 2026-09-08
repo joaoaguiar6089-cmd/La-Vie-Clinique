@@ -1,40 +1,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Procedures collection: Read and write permissions for clinic catalog management
+    // Procedures collection: só a equipe logada (profissionais/admin) gerencia o catálogo.
     match /procedures/{procedureId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
-    
-    // Clinic settings document: Clinic identity, tagline, professionals, contact info
+
+    // Clinic settings document: identidade da clínica, profissionais cadastradas, contato.
+    // Contém os vínculos de login (email/uid/isAdmin) das profissionais — não pode ser público.
     match /clinic_settings/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
 
-    // Anamnesis Module: General questions inherited by all procedure forms
+    // Anamnesis Module: perguntas gerais herdadas por todas as fichas. Precisa ser lida sem
+    // login pelo formulário público (link exclusivo do paciente); só a equipe edita.
     match /anamnesis_general_questions/{questionId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if request.auth != null;
     }
 
-    // Anamnesis Module: Procedure template configurations and specific questions
+    // Anamnesis Module: modelos de ficha por procedimento. Mesma lógica acima.
     match /anamnesis_templates/{templateId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if request.auth != null;
     }
 
-    // Patients registry
+    // Cadastro de pacientes: pacientes nunca têm login — o acesso deles é sempre pelo link
+    // exclusivo da ficha (protegido por confirmação de CPF + data de nascimento na aplicação,
+    // não nestas regras). Mantido aberto para preservar o preenchimento online sem conta.
     match /patients/{patientId} {
       allow read, write: if true;
     }
 
-    // Filled anamnesis attendance records & history
+    // Fichas de anamnese preenchidas: mesma razão do patients acima — o paciente preenche e
+    // revisita a própria ficha sem login, usando o ID exclusivo do link como segredo de acesso.
     match /anamnesis_records/{recordId} {
       allow read, write: if true;
     }
 
-    // Default fallback
+    // Qualquer coleção não prevista acima fica fechada por padrão (nega tudo), em vez do
+    // catch-all aberto anterior — reduz a superfície de dados expostos sem querer.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
-

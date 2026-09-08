@@ -20,7 +20,16 @@ import {
   Printer,
   Music,
   PenTool,
+  IdCard,
 } from 'lucide-react';
+
+const formatCpf = (raw: string): string => {
+  const digits = raw.replace(/\D/g, '').slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
 
 interface GenderToggleProps {
   value: PatientGender | '';
@@ -106,6 +115,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   const [newPatientPhone, setNewPatientPhone] = useState('');
   const [newPatientBirth, setNewPatientBirth] = useState('');
   const [newPatientGender, setNewPatientGender] = useState<PatientGender | ''>('');
+  const [newPatientCpf, setNewPatientCpf] = useState('');
   const [newPatientEmail, setNewPatientEmail] = useState('');
   const [tipoMusica, setTipoMusica] = useState('');
   const [selectedPatientGender, setSelectedPatientGender] = useState<PatientGender | ''>('');
@@ -269,6 +279,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           contato: newPatientPhone.trim() || undefined,
           dataNascimento: newPatientBirth || undefined,
           genero: newPatientGender || undefined,
+          cpf: newPatientCpf.replace(/\D/g, '') || undefined,
           email: newPatientEmail.trim() || undefined,
           createdAt: new Date().toISOString(),
         };
@@ -542,6 +553,21 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     value={tipoMusica}
                     onChange={(e) => setTipoMusica(e.target.value)}
                     placeholder="Ex: MPB, Jazz, Pop, Lounge, Clássica..."
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5 flex items-center gap-1.5">
+                    <IdCard className="w-3.5 h-3.5 text-[#A67C52]" />
+                    CPF <span className="text-[#8a8578] font-normal">(opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={newPatientCpf}
+                    onChange={(e) => setNewPatientCpf(formatCpf(e.target.value))}
+                    placeholder="000.000.000-00"
                     className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                   />
                 </div>

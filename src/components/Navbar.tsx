@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, ListOrdered, ClipboardList, Share2 } from 'lucide-react';
+import { Settings, ListOrdered, ClipboardList, Share2, LogOut } from 'lucide-react';
 import { ClinicProfile } from '../types';
 
 interface NavbarProps {
@@ -9,6 +9,8 @@ interface NavbarProps {
   onOpenSettings: () => void;
   clinic: ClinicProfile;
   proceduresCount: number;
+  currentProfessionalName?: string;
+  onLogout: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -18,6 +20,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettings,
   clinic,
   proceduresCount,
+  currentProfessionalName,
+  onLogout,
 }) => {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -81,13 +85,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               {clinic.name}
             </span>
           </button>
-          <button
-            onClick={onOpenSettings}
-            className="w-11 h-11 rounded-xl flex items-center justify-center text-[#1A1A1A] hover:bg-white/60 active:scale-95 transition-all shrink-0"
-            title="Configurações"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={onOpenSettings}
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-[#1A1A1A] hover:bg-white/60 active:scale-95 transition-all"
+              title="Configurações"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+            <button
+              onClick={onLogout}
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-[#1A1A1A] hover:bg-white/60 active:scale-95 transition-all"
+              title="Sair"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <nav className="px-5 flex items-center gap-6 border-t border-[rgba(26,26,26,.07)]">
           <button
@@ -167,8 +180,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Reservado para o perfil do profissional quando existir login */}
-        <div className="h-2" />
+        {/* Perfil da profissional logada + sair */}
+        <div className="pt-3 mt-2 border-t border-white/10 space-y-1.5">
+          {currentProfessionalName && (
+            <p className="hidden lg:block px-3 text-[12px] font-medium text-[rgba(246,239,228,.6)] truncate">
+              {currentProfessionalName}
+            </p>
+          )}
+          <button
+            onClick={onLogout}
+            title="Sair"
+            className="w-full flex items-center gap-3 h-[42px] px-3 rounded-xl text-[rgba(246,239,228,.7)] hover:bg-white/5 hover:text-[#F6EFE4] transition-colors"
+          >
+            <LogOut className="w-[18px] h-[18px] shrink-0" />
+            <span className="hidden lg:inline text-[14px] font-medium">Sair</span>
+          </button>
+        </div>
       </aside>
     </>
   );
