@@ -1,4 +1,11 @@
-import { Quote, QuoteItem, QuotePayment, QuoteStatus, ClinicProfile } from "../types";
+import {
+  ClinicProfile,
+  PaymentMethod,
+  Quote,
+  QuoteItem,
+  QuotePayment,
+  QuoteStatus,
+} from "../types";
 
 /** Padrões do módulo quando a clínica ainda não configurou nada. */
 export const QUOTE_DEFAULTS = {
@@ -47,20 +54,40 @@ export const itemTemDescontoVisivel = (item: QuoteItem): boolean =>
 export const itemSessoes = (item: QuoteItem): number =>
   item.maisDeUmaSessao && isPositive(item.sessoes) ? Math.floor(item.sessoes) : 1;
 
+/** Nome de exibição de cada forma — usado no formulário, no PDF e na página pública. */
+export const NOME_FORMA_PAGAMENTO: Record<PaymentMethod, string> = {
+  pix: "Pix",
+  cartao: "Cartão de crédito",
+  dinheiro: "Dinheiro",
+};
+
+export interface QuotePaymentOptionResult {
+  id: string;
+  forma: PaymentMethod;
+  /** totalBruto já com o desconto desta opção aplicado — o que essa forma efetivamente cobra. */
+  valorFinal: number;
+  descontoValor: number;
+  parcelas: number; // 1 quando não é cartão ou não foi parcelado
+  parcela: number | null; // valorFinal / parcelas, só quando parcelas > 1
+  /**
+   * Primeira parcela que pode carregar juros da operadora, ou null quando todas as
+   * parcelas escolhidas estão dentro do limite sem juros. O valor da parcela continua
+   * sendo nominal (valorFinal/parcelas): sem a taxa da maquininha não há como calcular
+   * o valor real com juros, então o PDF apenas avisa a partir de qual parcela isso pode entrar.
+   */
+  parcelasComJurosAPartir: number | null;
+}
+
 export interface QuoteTotals {
   /** Soma dos valores já com o desconto de cada item. */
   subtotal: number;
   descontoCombinadoValor: number;
-  /** Subtotal menos o desconto de plano combinado. */
+  /** Subtotal menos o desconto de plano combinado — base de cálculo de toda forma de pagamento. */
   totalBruto: number;
-  /** Valor do desconto de pagamento — abatido do total (Pix/dinheiro) ou apenas ofertado (cartão). */
-  descontoPagamentoValor: number;
-  /** O número grande do bloco preto. */
+  /** Uma linha por forma de pagamento aceita, na ordem cadastrada. */
+  opcoesPagamento: QuotePaymentOptionResult[];
+  /** O número grande do bloco preto — valor da primeira forma de pagamento (a principal). */
   total: number;
-  /** `total / parcelas`, somente em cartão parcelado em 2× ou mais. Sem juros. */
-  parcela: number | null;
-  /** Valor da linha "se preferir Pix ou dinheiro à vista" — só existe em cartão com desconto. */
-  alternativaAVista: number | null;
   /** Quanto o total representa de abatimento sobre a soma dos valores de tabela, em %. */
   descontoEfetivoPercentual: number;
 }
@@ -79,9 +106,10 @@ const percentualValido = (value: number | undefined): number => {
 };
 
 /**
- * Regra híbrida do desconto de pagamento, que é o que faz o design fechar:
- * em Pix ou dinheiro o desconto entra no total; em cartão o total continua sendo
- * o valor do cartão e o desconto vira a alternativa à vista logo abaixo.
+ * Cada forma de pagamento aceita é uma linha independente, com seu próprio desconto —
+ * a primeira da lista é a "principal" e dá o número grande do bloco preto; as demais
+ * aparecem como alternativas logo abaixo, no mesmo espírito da linha "se preferir
+ * Pix à vista" do design original, agora generalizada para N formas.
  */
 export const calcularOrcamento = (input: QuoteCalcInput): QuoteTotals => {
   const itens = input.itens ?? [];
@@ -97,17 +125,24 @@ export const calcularOrcamento = (input: QuoteCalcInput): QuoteTotals => {
   const descontoCombinadoValor = round2((subtotal * pctCombinado) / 100);
   const totalBruto = round2(subtotal - descontoCombinadoValor);
 
-  const pagamento = input.pagamento;
-  const pctPagamento = pagamento?.temDesconto ? percentualValido(pagamento.descontoPercentual) : 0;
-  const descontoPagamentoValor = round2((totalBruto * pctPagamento) / 100);
-  const ehCartao = pagamento?.forma === "cartao";
+  const opcoesPagamento: QuotePaymentOptionResult[] = (input.pagamento?.opcoes ?? []).map(
+    (opcao) => {
+      const pct = opcao.temDesconto ? percentualValido(opcao.descontoPercentual) : 0;
+      const descontoValor = round2((totalBruto * pct) / 100);
+      const valorFinal = round2(totalBruto - descontoValor);
+      const parcelas = opcao.forma === "cartao" ? Math.max(1, Math.round(opcao.parcelas ?? 1)) : 1;
+      const parcela = parcelas > 1 ? round2(valorFinal / parcelas) : null;
+      const semJuros = opcao.parcelasSemJuros;
+      const parcelasComJurosAPartir =
+        opcao.forma === "cartao" && typeof semJuros === "number" && parcelas > semJuros
+          ? semJuros + 1
+          : null;
 
-  const total = ehCartao ? totalBruto : round2(totalBruto - descontoPagamentoValor);
-  const alternativaAVista =
-    ehCartao && pctPagamento > 0 ? round2(totalBruto - descontoPagamentoValor) : null;
+      return { id: opcao.id, forma: opcao.forma, valorFinal, descontoValor, parcelas, parcela, parcelasComJurosAPartir };
+    }
+  );
 
-  const parcelas = pagamento?.parcelas ?? 1;
-  const parcela = ehCartao && parcelas > 1 ? round2(total / parcelas) : null;
+  const total = opcoesPagamento[0]?.valorFinal ?? totalBruto;
 
   const descontoEfetivoPercentual =
     somaTabela > 0 ? round2(((somaTabela - total) / somaTabela) * 100) : 0;
@@ -116,10 +151,8 @@ export const calcularOrcamento = (input: QuoteCalcInput): QuoteTotals => {
     subtotal,
     descontoCombinadoValor,
     totalBruto,
-    descontoPagamentoValor,
+    opcoesPagamento,
     total,
-    parcela,
-    alternativaAVista,
     descontoEfetivoPercentual,
   };
 };

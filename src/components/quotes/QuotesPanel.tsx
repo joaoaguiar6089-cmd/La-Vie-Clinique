@@ -34,6 +34,7 @@ import {
   setQuoteStatus,
   markQuoteAsSent,
 } from '../../services/databaseService';
+import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { QuoteFormModal } from './QuoteFormModal';
 import { QuotePreviewModal } from './QuotePreviewModal';
 import { QuoteShareModal } from './QuoteShareModal';
@@ -71,6 +72,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
   const [modoSubstituicao, setModoSubstituicao] = useState<Quote | null>(null);
   const [quoteNaPrevia, setQuoteNaPrevia] = useState<Quote | null>(null);
   const [quoteParaCompartilhar, setQuoteParaCompartilhar] = useState<Quote | null>(null);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
 
   const handleCompartilhado = async (quote: Quote) => {
     if (quote.status !== 'rascunho') return;
@@ -101,7 +103,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
       return (
         q.pacienteNome.toLowerCase().includes(termo) ||
         q.numero.toLowerCase().includes(termo) ||
-        (q.profissionalNome || '').toLowerCase().includes(termo)
+        q.itens.some((i) => (i.profissionalNome || '').toLowerCase().includes(termo))
       );
     });
   }, [quotes, busca, filtroStatus]);
@@ -254,7 +256,12 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                   <p className="text-sm text-[#1A1A1A] truncate">{quote.pacienteNome}</p>
                   <p className="text-[11px] text-gray-400 truncate">
                     {quote.itens.length} procedimento{quote.itens.length === 1 ? '' : 's'}
-                    {quote.profissionalNome ? ` · ${quote.profissionalNome}` : ''}
+                    {(() => {
+                      const nomes = Array.from(
+                        new Set(quote.itens.map((i) => i.profissionalNome).filter(Boolean))
+                      );
+                      return nomes.length > 0 ? ` · ${nomes.join(', ')}` : '';
+                    })()}
                   </p>
                 </div>
 
@@ -351,15 +358,15 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                   {editavel ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Excluir o rascunho ${quote.numero}? O número não será reaproveitado.`
-                          )
-                        ) {
-                          handleDelete(quote);
-                        }
-                      }}
+                      onClick={() =>
+                        setConfirmacao({
+                          titulo: `Excluir o rascunho ${quote.numero}?`,
+                          mensagem:
+                            'O rascunho some para sempre e o número não será reaproveitado. Como ele nunca foi enviado, ninguém tem link para ele.',
+                          textoConfirmar: 'Excluir',
+                          onConfirmar: () => handleDelete(quote),
+                        })
+                      }
                       aria-label={`Excluir ${quote.numero}`}
                       title="Excluir rascunho"
                       className="p-2 text-gray-400 hover:text-red-600 transition-colors"
@@ -369,15 +376,15 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                   ) : status === 'cancelado' ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Excluir definitivamente o orçamento cancelado ${quote.numero}?\n\nEsta ação removerá o registro do sistema.`
-                          )
-                        ) {
-                          handleDelete(quote);
-                        }
-                      }}
+                      onClick={() =>
+                        setConfirmacao({
+                          titulo: `Excluir o orçamento ${quote.numero}?`,
+                          mensagem:
+                            'O registro sai do sistema para sempre. Se a cliente ainda tiver o link, ele passa a mostrar "orçamento não encontrado" em vez do aviso de cancelamento.',
+                          textoConfirmar: 'Excluir',
+                          onConfirmar: () => handleDelete(quote),
+                        })
+                      }
                       aria-label={`Excluir orçamento cancelado ${quote.numero}`}
                       title="Excluir orçamento cancelado"
                       className="p-2 text-gray-400 hover:text-red-600 transition-colors"
@@ -387,15 +394,15 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                   ) : (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Cancelar o orçamento ${quote.numero}?\n\nEle sai da lista de ativos e o link que a cliente recebeu passa a avisar que foi cancelado.`
-                          )
-                        ) {
-                          handleSetStatus(quote, 'cancelado');
-                        }
-                      }}
+                      onClick={() =>
+                        setConfirmacao({
+                          titulo: `Cancelar o orçamento ${quote.numero}?`,
+                          mensagem:
+                            'Ele sai da lista de ativos e o link que a cliente recebeu passa a avisar que foi cancelado.',
+                          textoConfirmar: 'Cancelar orçamento',
+                          onConfirmar: () => handleSetStatus(quote, 'cancelado'),
+                        })
+                      }
                       aria-label={`Cancelar ${quote.numero}`}
                       title="Cancelar orçamento"
                       className="p-2 text-gray-400 hover:text-red-600 transition-colors"
@@ -432,6 +439,8 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
         onClose={() => setQuoteParaCompartilhar(null)}
         onCompartilhado={handleCompartilhado}
       />
+
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 };

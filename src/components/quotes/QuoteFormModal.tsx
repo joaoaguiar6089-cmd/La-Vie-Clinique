@@ -12,11 +12,11 @@ import {
 import {
   ClinicProfile,
   Patient,
-  PaymentMethod,
   Procedure,
   Quote,
   QuoteDraft,
   QuoteItem,
+  QuotePaymentOption,
 } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import {
@@ -26,6 +26,7 @@ import {
   sugerirDescontoCombinado,
 } from '../../utils/quoteCalc';
 import {
+  criarOpcaoPagamento,
   montarItemAvulso,
   montarItemDoProcedimento,
   montarSnapshotClinica,
@@ -33,6 +34,7 @@ import {
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { ProcedureSearchAdd } from './ProcedureSearchAdd';
 import { QuoteItemEditor } from './QuoteItemEditor';
+import { QuotePaymentOptionEditor } from './QuotePaymentOptionEditor';
 
 interface QuoteFormModalProps {
   isOpen: boolean;
@@ -92,16 +94,12 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   const [pacienteContato, setPacienteContato] = useState('');
   const [jaTeveAvaliacao, setJaTeveAvaliacao] = useState(false);
   const [dataAvaliacao, setDataAvaliacao] = useState('');
-  const [professionalId, setProfessionalId] = useState('');
   const [textoApresentacao, setTextoApresentacao] = useState('');
   const [textoEditadoManualmente, setTextoEditadoManualmente] = useState(false);
   const [itens, setItens] = useState<QuoteItem[]>([]);
   const [temDescontoCombinado, setTemDescontoCombinado] = useState(false);
   const [descontoCombinadoPercentual, setDescontoCombinadoPercentual] = useState(0);
-  const [forma, setForma] = useState<PaymentMethod>('pix');
-  const [parcelas, setParcelas] = useState(1);
-  const [pagamentoTemDesconto, setPagamentoTemDesconto] = useState(false);
-  const [pagamentoDescontoPercentual, setPagamentoDescontoPercentual] = useState(0);
+  const [opcoesPagamento, setOpcoesPagamento] = useState<QuotePaymentOption[]>([]);
   const [negociacao, setNegociacao] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -121,16 +119,13 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       setPacienteContato(base.pacienteContato || '');
       setJaTeveAvaliacao(base.jaTeveAvaliacao);
       setDataAvaliacao(base.dataAvaliacao || '');
-      setProfessionalId(base.professionalId);
       setTextoApresentacao(base.textoApresentacao);
       setTextoEditadoManualmente(true);
       setItens(base.itens);
       setTemDescontoCombinado(base.temDescontoCombinado);
       setDescontoCombinadoPercentual(base.descontoCombinadoPercentual || 0);
-      setForma(base.pagamento.forma);
-      setParcelas(base.pagamento.parcelas || 1);
-      setPagamentoTemDesconto(base.pagamento.temDesconto);
-      setPagamentoDescontoPercentual(base.pagamento.descontoPercentual || 0);
+      // Cópia rasa: editar aqui não pode mexer no objeto do orçamento de origem
+      setOpcoesPagamento(base.pagamento.opcoes.map((o) => ({ ...o })));
       setNegociacao(base.pagamento.negociacao || '');
       setObservacoes(base.observacoes || '');
     } else {
@@ -142,16 +137,12 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       setPacienteContato('');
       setJaTeveAvaliacao(false);
       setDataAvaliacao('');
-      setProfessionalId(professionals[0]?.id || '');
       setTextoApresentacao('');
       setTextoEditadoManualmente(false);
       setItens([]);
       setTemDescontoCombinado(false);
       setDescontoCombinadoPercentual(0);
-      setForma('pix');
-      setParcelas(1);
-      setPagamentoTemDesconto(false);
-      setPagamentoDescontoPercentual(0);
+      setOpcoesPagamento([criarOpcaoPagamento('pix')]);
       setNegociacao('');
       setObservacoes('');
     }
@@ -171,13 +162,10 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
 
   const pagamento = useMemo(
     () => ({
-      forma,
-      parcelas: forma === 'cartao' ? parcelas : undefined,
-      temDesconto: pagamentoTemDesconto,
-      descontoPercentual: pagamentoTemDesconto ? pagamentoDescontoPercentual : undefined,
+      opcoes: opcoesPagamento,
       negociacao: negociacao.trim() || undefined,
     }),
-    [forma, parcelas, pagamentoTemDesconto, pagamentoDescontoPercentual, negociacao]
+    [opcoesPagamento, negociacao]
   );
 
   const totais = useMemo(
@@ -194,10 +182,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   if (!isOpen) return null;
 
   const addProcedure = (procedure: Procedure) =>
-    setItens((prev) => [
-      ...prev,
-      montarItemDoProcedimento(procedure, professionals, professionalId),
-    ]);
+    setItens((prev) => [...prev, montarItemDoProcedimento(procedure, professionals)]);
 
   const updateItem = (item: QuoteItem) =>
     setItens((prev) => prev.map((i) => (i.id === item.id ? item : i)));
@@ -221,12 +206,20 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     }
   };
 
+  const addOpcaoPagamento = () =>
+    setOpcoesPagamento((prev) => [...prev, criarOpcaoPagamento('pix')]);
+
+  const updateOpcaoPagamento = (opcao: QuotePaymentOption) =>
+    setOpcoesPagamento((prev) => prev.map((o) => (o.id === opcao.id ? opcao : o)));
+
+  const removeOpcaoPagamento = (id: string) =>
+    setOpcoesPagamento((prev) => (prev.length > 1 ? prev.filter((o) => o.id !== id) : prev));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const novosErros: Record<string, string> = {};
 
     if (!pacienteNome.trim()) novosErros.paciente = 'Informe a paciente';
-    if (!professionalId) novosErros.professional = 'Escolha o profissional responsável';
     if (itens.length === 0) novosErros.itens = 'Adicione ao menos um procedimento';
     if (itens.some((i) => !i.titulo.trim())) novosErros.itens = 'Todo procedimento precisa de um título';
     if (!dataValidade) novosErros.validade = 'Informe a data de validade';
@@ -237,8 +230,6 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       return;
     }
 
-    const profissional = professionals.find((p) => p.id === professionalId);
-
     const draft: QuoteDraft = {
       dataEmissao,
       dataValidade,
@@ -247,9 +238,6 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       pacienteContato: pacienteContato.trim() || undefined,
       jaTeveAvaliacao,
       dataAvaliacao: jaTeveAvaliacao ? dataAvaliacao : undefined,
-      professionalId,
-      profissionalNome: profissional?.name || '',
-      profissionalTitulo: profissional?.specialty || profissional?.title || undefined,
       textoApresentacao: textoApresentacao.trim(),
       itens,
       temDescontoCombinado,
@@ -367,56 +355,29 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={jaTeveAvaliacao}
+                  onChange={(e) => setJaTeveAvaliacao(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-[#A67C52]"
+                />
+                <span className="text-xs font-medium text-[#1A1A1A]">Já teve avaliação</span>
+              </label>
+              {jaTeveAvaliacao && (
+                <div className="max-w-xs">
                   <input
-                    type="checkbox"
-                    checked={jaTeveAvaliacao}
-                    onChange={(e) => setJaTeveAvaliacao(e.target.checked)}
-                    className="w-3.5 h-3.5 accent-[#A67C52]"
+                    type="date"
+                    value={toDateInput(dataAvaliacao)}
+                    onChange={(e) => setDataAvaliacao(fromDateInput(e.target.value))}
+                    className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
                   />
-                  <span className="text-xs font-medium text-[#1A1A1A]">Já teve avaliação</span>
-                </label>
-                {jaTeveAvaliacao && (
-                  <div>
-                    <input
-                      type="date"
-                      value={toDateInput(dataAvaliacao)}
-                      onChange={(e) => setDataAvaliacao(fromDateInput(e.target.value))}
-                      className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
-                    />
-                    {errors.avaliacao && (
-                      <p className="mt-1 text-[11px] text-red-500">{errors.avaliacao}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
-                  Responsável pelo orçamento *
-                </label>
-                <select
-                  value={professionalId}
-                  onChange={(e) => setProfessionalId(e.target.value)}
-                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
-                >
-                  <option value="">Selecione</option>
-                  {professionals.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.professional ? (
-                  <p className="mt-1 text-[11px] text-red-500">{errors.professional}</p>
-                ) : (
-                  <p className="mt-1 text-[11px] text-gray-400">
-                    Padrão para os procedimentos novos — cada um pode ter outra profissional
-                  </p>
-                )}
-              </div>
+                  {errors.avaliacao && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.avaliacao}</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -473,9 +434,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
               <ProcedureSearchAdd procedures={procedures} onAdd={addProcedure} />
               <button
                 type="button"
-                onClick={() =>
-                  setItens((prev) => [...prev, montarItemAvulso(professionals, professionalId)])
-                }
+                onClick={() => setItens((prev) => [...prev, montarItemAvulso()])}
                 className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -532,12 +491,6 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   <span>− {formatBRL(totais.descontoCombinadoValor)}</span>
                 </div>
               )}
-              {pagamentoTemDesconto && forma !== 'cartao' && totais.descontoPagamentoValor > 0 && (
-                <div className="flex justify-between text-gray-600">
-                  <span>Desconto no pagamento ({pagamentoDescontoPercentual}%)</span>
-                  <span>− {formatBRL(totais.descontoPagamentoValor)}</span>
-                </div>
-              )}
               <div className="flex justify-between pt-2 mt-1 border-t border-[#E2DFD8] text-[#1A1A1A] font-semibold">
                 <span>Total</span>
                 <span className="text-lg font-serif-luxury">{formatBRL(totais.total)}</span>
@@ -553,80 +506,41 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
 
           {/* Seção 5 — Pagamento */}
           <div className="space-y-4">
-            <SectionHeader icon={<CreditCard className="w-3.5 h-3.5" />}>Pagamento</SectionHeader>
+            <SectionHeader icon={<CreditCard className="w-3.5 h-3.5" />}>
+              Pagamento ({opcoesPagamento.length})
+            </SectionHeader>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">Forma</label>
-                <select
-                  value={forma}
-                  onChange={(e) => setForma(e.target.value as PaymentMethod)}
-                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
-                >
-                  <option value="pix">Pix</option>
-                  <option value="cartao">Cartão de crédito</option>
-                  <option value="dinheiro">Dinheiro</option>
-                </select>
-              </div>
+            <p className="text-[11px] text-gray-500 -mt-1">
+              A primeira forma é a principal — dá o valor do bloco preto no PDF. As demais aparecem
+              como alternativas, ex.: cartão parcelado com Pix à vista com desconto ao lado.
+            </p>
 
-              {forma === 'cartao' && (
-                <div>
-                  <label className="block text-xs font-medium text-[#1A1A1A] mb-1">Parcelas</label>
-                  <select
-                    value={parcelas}
-                    onChange={(e) => setParcelas(Number(e.target.value))}
-                    className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
-                  >
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
-                      <option key={n} value={n}>
-                        {n}× sem juros
-                      </option>
-                    ))}
-                  </select>
-                  {totais.parcela !== null && (
-                    <p className="mt-1 text-[11px] text-[#A67C52] tabular-nums">
-                      {parcelas} × {formatBRL(totais.parcela)}
-                    </p>
-                  )}
-                </div>
-              )}
+            <div className="space-y-3">
+              {opcoesPagamento.map((opcao, index) => {
+                const resultado = totais.opcoesPagamento[index];
+                return (
+                  <QuotePaymentOptionEditor
+                    key={opcao.id}
+                    opcao={opcao}
+                    valorFinal={resultado?.valorFinal ?? 0}
+                    parcela={resultado?.parcela ?? null}
+                    principal={index === 0}
+                    podeRemover={opcoesPagamento.length > 1}
+                    onChange={updateOpcaoPagamento}
+                    onRemove={() => removeOpcaoPagamento(opcao.id)}
+                  />
+                );
+              })}
             </div>
 
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={pagamentoTemDesconto}
-                  onChange={(e) => setPagamentoTemDesconto(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-[#A67C52]"
-                />
-                <span className="text-xs font-medium text-[#1A1A1A]">
-                  Desconto {forma === 'cartao' ? 'para pagamento à vista' : 'no pagamento'}
-                </span>
-              </label>
-
-              {pagamentoTemDesconto && (
-                <div className="flex items-end gap-3">
-                  <div className="w-32">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.5"
-                      value={pagamentoDescontoPercentual}
-                      onChange={(e) => setPagamentoDescontoPercentual(Number(e.target.value) || 0)}
-                      placeholder="%"
-                      className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
-                    />
-                  </div>
-                  <p className="text-[11px] text-gray-500 pb-2">
-                    {forma === 'cartao'
-                      ? `No PDF: "se preferir Pix ou dinheiro à vista — ${pagamentoDescontoPercentual}% de desconto: ${formatBRL(totais.alternativaAVista || 0)}". O total continua sendo o do cartão.`
-                      : `Abatido do total — economia de ${formatBRL(totais.descontoPagamentoValor)}`}
-                  </p>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={addOpcaoPagamento}
+              className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Adicionar forma de pagamento
+            </button>
 
             <div>
               <label className="block text-xs font-medium text-[#1A1A1A] mb-1">

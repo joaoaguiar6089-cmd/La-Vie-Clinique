@@ -9,6 +9,7 @@ import {
   itemSessoes,
   itemTemDescontoVisivel,
   itemValorFinal,
+  NOME_FORMA_PAGAMENTO,
   resolveQuoteStatus,
 } from '../../utils/quoteCalc';
 import { SNAPSHOT_CLINICA_PADRAO } from '../../utils/quoteFactory';
@@ -84,14 +85,6 @@ export const PublicQuoteEntry: React.FC = () => {
   const clinica = quote.clinica || SNAPSHOT_CLINICA_PADRAO;
   const totais = calcularOrcamento(quote);
   const status = resolveQuoteStatus(quote);
-  const ehCartao = quote.pagamento.forma === 'cartao';
-  const parcelas = quote.pagamento.parcelas || 1;
-  const nomeForma =
-    quote.pagamento.forma === 'pix'
-      ? 'Pix'
-      : quote.pagamento.forma === 'dinheiro'
-        ? 'Dinheiro'
-        : `Cartão de crédito, ${parcelas}× sem juros`;
 
   const mensagemWhatsApp = `Olá! Quero falar sobre o orçamento ${quote.numero}: ${window.location.href}`;
 
@@ -231,12 +224,6 @@ export const PublicQuoteEntry: React.FC = () => {
               <span>− {formatBRL(totais.descontoCombinadoValor)}</span>
             </div>
           )}
-          {!ehCartao && quote.pagamento.temDesconto && totais.descontoPagamentoValor > 0 && (
-            <div className="flex justify-between text-xs mb-2 tabular-nums">
-              <span>Desconto no pagamento ({quote.pagamento.descontoPercentual}%)</span>
-              <span>− {formatBRL(totais.descontoPagamentoValor)}</span>
-            </div>
-          )}
           <div className="h-px bg-[rgba(196,155,116,.35)] my-3" />
           <p className="text-[10px] uppercase tracking-[.16em] text-[#A67C52]">Total</p>
           <p className="font-serif-luxury text-3xl text-right tabular-nums">
@@ -249,25 +236,44 @@ export const PublicQuoteEntry: React.FC = () => {
           <p className="text-[10px] uppercase tracking-[.16em] text-[#A67C52] mb-2">
             Forma de pagamento
           </p>
-          <div className="flex justify-between text-sm">
-            <span>{nomeForma}</span>
-            {totais.parcela !== null && (
-              <span className="font-semibold tabular-nums">
-                {parcelas} × {formatBRL(totais.parcela)}
-              </span>
-            )}
-          </div>
-          {totais.alternativaAVista !== null && (
-            <div className="flex justify-between text-sm mt-2 pt-2 border-t border-[#E2DFD8] gap-3">
-              <span>
-                Se preferir Pix ou dinheiro à vista — {quote.pagamento.descontoPercentual}% de
-                desconto
-              </span>
-              <span className="font-semibold tabular-nums shrink-0">
-                {formatBRL(totais.alternativaAVista)}
-              </span>
-            </div>
-          )}
+
+          {totais.opcoesPagamento.map((resultado, i) => {
+            const opcao = quote.pagamento.opcoes.find((o) => o.id === resultado.id);
+            const rotulo =
+              resultado.forma === 'cartao' && resultado.parcelas > 1
+                ? `${NOME_FORMA_PAGAMENTO[resultado.forma]}, ${resultado.parcelas}×`
+                : NOME_FORMA_PAGAMENTO[resultado.forma];
+            const notas = [
+              opcao?.temDesconto && resultado.descontoValor > 0
+                ? `${opcao.descontoPercentual}% de desconto`
+                : null,
+              resultado.parcelasComJurosAPartir
+                ? `sem juros até ${resultado.parcelasComJurosAPartir - 1}×`
+                : null,
+            ].filter(Boolean);
+
+            return (
+              <div
+                key={resultado.id}
+                className={`flex justify-between text-sm gap-3 ${i === 0 ? '' : 'mt-2 pt-2 border-t border-[#E2DFD8]'}`}
+              >
+                <span>
+                  {rotulo}
+                  {notas.length > 0 && (
+                    <span className="block text-[11px] text-[#8A857C] mt-0.5">
+                      {notas.join(' · ')}
+                    </span>
+                  )}
+                </span>
+                <span className="font-semibold tabular-nums shrink-0">
+                  {resultado.parcela !== null
+                    ? `${resultado.parcelas} × ${formatBRL(resultado.parcela)}`
+                    : formatBRL(resultado.valorFinal)}
+                </span>
+              </div>
+            );
+          })}
+
           {quote.pagamento.negociacao && (
             <p className="text-xs text-[#6B6862] mt-3 leading-relaxed">
               {quote.pagamento.negociacao}

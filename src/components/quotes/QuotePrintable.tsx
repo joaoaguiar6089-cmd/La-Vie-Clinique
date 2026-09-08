@@ -7,6 +7,7 @@ import {
   itemSessoes,
   itemTemDescontoVisivel,
   itemValorFinal,
+  NOME_FORMA_PAGAMENTO,
 } from '../../utils/quoteCalc';
 
 /** A4 a 96dpi — mesma métrica que o exportElementAsPDF já usa no catálogo. */
@@ -297,15 +298,6 @@ const BlocoItem: React.FC<{ item: QuoteItem; semSeparador: boolean }> = ({ item,
 
 const RodapeValores: React.FC<{ quote: Quote }> = ({ quote }) => {
   const totais = calcularOrcamento(quote);
-  const ehCartao = quote.pagamento.forma === 'cartao';
-  const parcelas = quote.pagamento.parcelas || 1;
-
-  const nomeForma =
-    quote.pagamento.forma === 'pix'
-      ? 'Pix'
-      : quote.pagamento.forma === 'dinheiro'
-        ? 'Dinheiro'
-        : `Cartão de crédito, ${parcelas}× sem juros`;
 
   return (
     <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start', flexShrink: 0, paddingTop: 11, borderTop: `1px solid ${HAIRLINE}` }}>
@@ -322,36 +314,58 @@ const RodapeValores: React.FC<{ quote: Quote }> = ({ quote }) => {
           Forma de pagamento
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 11.5, color: PRETO }}>
-          <span>{nomeForma}</span>
-          {totais.parcela !== null && (
-            <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-              {parcelas} × {formatBRL(totais.parcela)}
-            </span>
-          )}
-        </div>
+        {totais.opcoesPagamento.map((resultado, i) => {
+          const opcao = quote.pagamento.opcoes.find((o) => o.id === resultado.id);
+          const rotulo =
+            resultado.forma === 'cartao' && resultado.parcelas > 1
+              ? `${NOME_FORMA_PAGAMENTO[resultado.forma]}, ${resultado.parcelas}×`
+              : NOME_FORMA_PAGAMENTO[resultado.forma];
+          const notas = [
+            opcao?.temDesconto && resultado.descontoValor > 0
+              ? `${opcao.descontoPercentual}% de desconto`
+              : null,
+            resultado.parcelasComJurosAPartir
+              ? `sem juros até ${resultado.parcelasComJurosAPartir - 1}×`
+              : null,
+          ].filter(Boolean);
 
-        {totais.alternativaAVista !== null && (
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: 12,
-              fontSize: 11.5,
-              color: PRETO,
-              marginTop: 7,
-              paddingTop: 7,
-              borderTop: `1px solid ${HAIRLINE}`,
-            }}
-          >
-            <span>
-              Se preferir Pix ou dinheiro à vista — {quote.pagamento.descontoPercentual}% de desconto
-            </span>
-            <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-              {formatBRL(totais.alternativaAVista)}
-            </span>
-          </div>
-        )}
+          return (
+            <div
+              key={resultado.id}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 12,
+                fontSize: 11.5,
+                color: PRETO,
+                marginTop: i === 0 ? 0 : 7,
+                paddingTop: i === 0 ? 0 : 7,
+                borderTop: i === 0 ? 'none' : `1px solid ${HAIRLINE}`,
+              }}
+            >
+              <div>
+                <div>{rotulo}</div>
+                {notas.length > 0 && (
+                  <div style={{ fontSize: 9.5, color: '#8A857C', marginTop: 2 }}>
+                    {notas.join(' · ')}
+                  </div>
+                )}
+              </div>
+              <span
+                style={{
+                  fontWeight: i === 0 ? 600 : 500,
+                  fontVariantNumeric: 'tabular-nums',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {resultado.parcela !== null
+                  ? `${resultado.parcelas} × ${formatBRL(resultado.parcela)}`
+                  : formatBRL(resultado.valorFinal)}
+              </span>
+            </div>
+          );
+        })}
 
         {quote.pagamento.negociacao && (
           <div style={{ fontSize: 10.5, color: CINZA, marginTop: 9, lineHeight: 1.55 }}>
@@ -385,15 +399,6 @@ const RodapeValores: React.FC<{ quote: Quote }> = ({ quote }) => {
             <span>Desconto plano combinado ({quote.descontoCombinadoPercentual}%)</span>
             <span style={{ fontVariantNumeric: 'tabular-nums' }}>
               − {formatBRL(totais.descontoCombinadoValor)}
-            </span>
-          </div>
-        )}
-
-        {!ehCartao && quote.pagamento.temDesconto && totais.descontoPagamentoValor > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 6 }}>
-            <span>Desconto no pagamento ({quote.pagamento.descontoPercentual}%)</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-              − {formatBRL(totais.descontoPagamentoValor)}
             </span>
           </div>
         )}

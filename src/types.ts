@@ -195,11 +195,23 @@ export interface QuoteItem {
 
 export type PaymentMethod = 'pix' | 'cartao' | 'dinheiro';
 
-export interface QuotePayment {
+/**
+ * Uma forma de pagamento aceita para este orçamento. Pode haver mais de uma — por
+ * exemplo Pix à vista OU cartão parcelado — cada uma listada como uma linha
+ * independente, com seu próprio valor e desconto.
+ */
+export interface QuotePaymentOption {
+  id: string;
   forma: PaymentMethod;
-  parcelas?: number; // 1 a 12, somente quando forma === 'cartao'. Sem juros
+  parcelas?: number; // 1 a 12, somente quando forma === 'cartao'
+  parcelasSemJuros?: number; // Até qual parcela a operadora não cobra juros; acima disso o PDF avisa
   temDesconto: boolean;
-  descontoPercentual?: number; // Abate no total quando Pix/dinheiro; vira alternativa à vista quando cartão
+  descontoPercentual?: number; // Abate do valor desta opção
+}
+
+/** Seção de pagamento: uma ou mais formas aceitas, mais a negociação em texto livre. */
+export interface QuotePayment {
+  opcoes: QuotePaymentOption[]; // Sempre ao menos uma
   negociacao?: string; // Texto livre — sai como nota abaixo das formas de pagamento
 }
 
@@ -248,9 +260,8 @@ export interface Quote {
   pacienteContato?: string;
   jaTeveAvaliacao: boolean;
   dataAvaliacao?: string; // Só aparece no PDF quando jaTeveAvaliacao
-  professionalId: string;
-  profissionalNome: string; // Espelha o profissional no momento da emissão
-  profissionalTitulo?: string;
+  // Sem "responsável pelo orçamento": cada procedimento tem sua própria profissional
+  // (QuoteItem.professionalId), porque nem sempre é a mesma pessoa que faz tudo.
   textoApresentacao: string;
   itens: QuoteItem[];
   temDescontoCombinado: boolean;

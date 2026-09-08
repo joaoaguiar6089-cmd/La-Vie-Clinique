@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Patient, AnamnesisRecord, AnamnesisTemplate, ClinicProfile } from '../../types';
+import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import {
   Search,
   Plus,
@@ -39,6 +40,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
   onDeletePatient,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [selectedPatientFilter, setSelectedPatientFilter] = useState<string>('all');
   const [viewTab, setViewTab] = useState<'records' | 'patients'>('records');
 
@@ -270,15 +272,14 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Deseja realmente excluir esta ficha de ${rec.pacienteNome} (${rec.procedimentoNome})?`
-                      )
-                    ) {
-                      onDeleteRecord(rec.id);
-                    }
-                  }}
+                  onClick={() =>
+                    setConfirmacao({
+                      titulo: 'Excluir esta ficha?',
+                      mensagem: `Ficha de ${rec.pacienteNome} — ${rec.procedimentoNome}.\n\nTodas as respostas e anotações registradas nela são apagadas para sempre.`,
+                      textoConfirmar: 'Excluir ficha',
+                      onConfirmar: () => onDeleteRecord(rec.id),
+                    })
+                  }
                   className="p-1.5 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                   title="Excluir ficha"
                 >
@@ -367,6 +368,8 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
           })}
         </div>
       )}
+
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 };

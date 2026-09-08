@@ -10,6 +10,7 @@ import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntr
 import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
+import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { Procedure, ClinicProfile, AppView } from './types';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { RefreshCw, Check, Loader2 } from 'lucide-react';
@@ -102,6 +103,7 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [singleProcedureToExport, setSingleProcedureToExport] = useState<Procedure | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
 
   // Initialize Firebase and subscribe to real-time updates — só depois de autenticado,
   // já que as regras do Firestore agora exigem login para procedures/clinic_settings.
@@ -217,27 +219,34 @@ export default function App() {
     }
   };
 
-  const handleDeleteProcedure = async (id: string) => {
+  const handleDeleteProcedure = (id: string) => {
     const proc = procedures.find((p) => p.id === id);
     if (!proc) return;
-    if (window.confirm(`Tem certeza que deseja remover o procedimento "${proc.title}"?`)) {
-      try {
-        setSyncStatus('syncing');
-        setProcedures((prev) => prev.filter((p) => p.id !== id));
-        if (selectedProcedureForDetails?.id === id) {
-          setSelectedProcedureForDetails(null);
-        }
 
-        // Delete from Firebase Firestore
-        await deleteProcedureFromDb(id);
-        setSyncStatus('synced');
-        showToast(`Procedimento "${proc.title}" removido com sucesso.`);
-      } catch (err) {
-        console.error('Error deleting procedure from Firestore:', err);
-        setSyncStatus('error');
-        showToast(`Procedimento removido.`);
-      }
-    }
+    setConfirmacao({
+      titulo: `Remover "${proc.title}"?`,
+      mensagem:
+        'O procedimento sai do catálogo e deixa de aparecer para as clientes. Orçamentos já emitidos com ele não são afetados.',
+      textoConfirmar: 'Remover',
+      onConfirmar: async () => {
+        try {
+          setSyncStatus('syncing');
+          setProcedures((prev) => prev.filter((p) => p.id !== id));
+          if (selectedProcedureForDetails?.id === id) {
+            setSelectedProcedureForDetails(null);
+          }
+
+          // Delete from Firebase Firestore
+          await deleteProcedureFromDb(id);
+          setSyncStatus('synced');
+          showToast(`Procedimento "${proc.title}" removido com sucesso.`);
+        } catch (err) {
+          console.error('Error deleting procedure from Firestore:', err);
+          setSyncStatus('error');
+          showToast(`Procedimento removido.`);
+        }
+      },
+    });
   };
 
   const handleDuplicateProcedure = async (procedure: Procedure) => {
@@ -294,24 +303,26 @@ export default function App() {
     }
   };
 
-  const handleResetToDefaultSamples = async () => {
-    if (
-      window.confirm(
-        'Deseja sincronizar e restaurar o catálogo oficial de procedimentos da Dra. Karoline Ferreira no Firebase?'
-      )
-    ) {
-      try {
-        setSyncStatus('syncing');
-        setProcedures(SAMPLE_PROCEDURES);
-        setClinic(DEFAULT_CLINIC_PROFILE);
-        await replaceAllProceduresWithOfficialPdfCatalog();
-        setSyncStatus('synced');
-        showToast('Catálogo oficial sincronizado no Firebase com sucesso!');
-      } catch (err) {
-        console.error('Error resetting Firestore samples:', err);
-        showToast('Catálogo atualizado localmente.');
-      }
-    }
+  const handleResetToDefaultSamples = () => {
+    setConfirmacao({
+      titulo: 'Restaurar o catálogo oficial?',
+      mensagem:
+        'Todos os procedimentos atuais são apagados e substituídos pelo catálogo oficial da Dra. Karoline Ferreira, e os dados da clínica voltam ao padrão. Qualquer edição feita no catálogo se perde.',
+      textoConfirmar: 'Restaurar catálogo',
+      onConfirmar: async () => {
+        try {
+          setSyncStatus('syncing');
+          setProcedures(SAMPLE_PROCEDURES);
+          setClinic(DEFAULT_CLINIC_PROFILE);
+          await replaceAllProceduresWithOfficialPdfCatalog();
+          setSyncStatus('synced');
+          showToast('Catálogo oficial sincronizado no Firebase com sucesso!');
+        } catch (err) {
+          console.error('Error resetting Firestore samples:', err);
+          showToast('Catálogo atualizado localmente.');
+        }
+      },
+    });
   };
 
   const handleShareSingle = (procedure: Procedure) => {
@@ -534,6 +545,8 @@ export default function App() {
         isAdminUser={isAdminUser}
       />
 
+      {/* 5. Confirmação de ações destrutivas */}
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 }

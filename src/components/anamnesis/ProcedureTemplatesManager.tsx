@@ -9,6 +9,7 @@ import {
   Patient,
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
+import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import {
   Plus,
@@ -120,6 +121,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
   onDeleteTemplate,
 }) => {
   const [selectedTemplate, setSelectedTemplate] = useState<AnamnesisTemplate | null>(null);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
@@ -479,15 +481,14 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Deseja realmente excluir o modelo de anamnese para "${tpl.procedimentoNome}"?`
-                    )
-                  ) {
-                    onDeleteTemplate(tpl.id);
-                  }
-                }}
+                onClick={() =>
+                  setConfirmacao({
+                    titulo: 'Excluir este modelo de ficha?',
+                    mensagem: `Modelo de "${tpl.procedimentoNome}".\n\nEle deixa de estar disponível para novos atendimentos. As fichas já preenchidas com ele continuam guardadas.`,
+                    textoConfirmar: 'Excluir modelo',
+                    onConfirmar: () => onDeleteTemplate(tpl.id),
+                  })
+                }
                 className="p-1.5 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                 title="Excluir modelo"
               >
@@ -1052,6 +1053,8 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
           initialTemplateId={shareTemplateId}
         />
       )}
+
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 };

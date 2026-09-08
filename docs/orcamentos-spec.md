@@ -43,6 +43,13 @@ Status: **aprovado, pronto para implementar** — 2026-09-08.
   link que a paciente tem no WhatsApp precisa continuar existindo para avisar que
   aquele orçamento não vale mais. Cancelado perde as ações de substituir e aceitar,
   e a página pública abre com uma tarja preta de cancelamento acima de tudo.
+- Um orçamento **cancelado pode ser excluído em definitivo** depois — aí o link
+  passa a mostrar "orçamento não encontrado", o que a confirmação avisa antes.
+- Toda confirmação usa o `ConfirmDialog` (`src/components/ConfirmDialog.tsx`), nunca
+  `window.confirm`: a caixa nativa é suprimida em contextos embutidos (iframe sem
+  `allow-modals`, webviews, PWA) e devolve um valor sozinha sem mostrar nada — foi
+  medido retornando `false` em 1ms aqui, e passando direto em outro navegador. Ou a
+  exclusão nunca acontecia, ou acontecia sem perguntar.
 - Valores em **reais** (`number`), consistente com `Procedure.price` e `formatBRL`.
 - O documento guarda um **retrato dos dados da clínica** (`Quote.clinica`) gravado na
   emissão: nome, tagline, cidade, telefone, e-mail, Instagram e o aviso legal. Existe
@@ -75,7 +82,9 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
   nome e contato; permite paciente avulso digitado na hora.
 - Checkbox "Já teve avaliação" → revela campo de data; a data só aparece no PDF se o
   checkbox estiver marcado.
-- Profissional responsável: select de `clinic.professionals`.
+- **Sem "responsável pelo orçamento"**: esse campo foi removido. A única profissional
+  que existe no orçamento é a de cada procedimento (seção seguinte) — nem sempre é a
+  mesma pessoa que faz tudo, então não fazia sentido ter uma "responsável geral".
 
 **Mensagem de abertura**
 - Textarea pré-preenchida pelo template configurável
@@ -90,7 +99,8 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
   com "+ adicionar campo".
 - **Profissional por procedimento**: cada item tem a sua, porque nem sempre é a mesma
   pessoa que realiza tudo. Vem da atribuição do próprio procedimento no catálogo
-  (`assignedDoctorIds`) e, na falta dela, da responsável escolhida no orçamento.
+  (`assignedDoctorIds`); sem atribuição, o item nasce sem profissional e quem emite
+  escolhe na hora, item a item — não existe mais um padrão herdado do orçamento.
 - Valor: editável.
 - Checkbox **desconto** → digita-se o **novo valor**; o sistema calcula o percentual,
   que é o que aparece no PDF ("desconto de 11%").
@@ -98,23 +108,30 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
 - **Sem nota de preço.** A linha abaixo do valor mostra apenas o desconto e, quando
   houver, a quantidade de sessões.
 
-O campo "responsável pelo orçamento" continua na identificação, mas agora serve só
-como padrão dos itens novos e como referência na listagem — quem aparece no documento
-é a profissional de cada procedimento.
-
 **Totais**
 - Subtotal = soma dos valores finais.
 - Checkbox **desconto plano combinado** → percentual digitado, com sugestão de
   2% × nº de procedimentos limitada ao teto configurável. Abatimento visível em
   tempo real.
 
-**Pagamento**
-- Forma: Pix · Cartão · Dinheiro.
-- Cartão → parcelas de 1× a 12×, **sem juros**: parcela = total ÷ parcelas, exibida
-  como `N × R$ x,xx` e rotulada "N× sem juros".
-- Checkbox de desconto com percentual.
+**Pagamento — uma ou mais formas aceitas**
+- Lista repetível de formas de pagamento, no mesmo padrão dos procedimentos: cada
+  linha tem forma (Pix/Cartão/Dinheiro), desconto opcional e — se for cartão —
+  parcelas e o limite de parcelas sem juros. Botão **"+ Adicionar forma de
+  pagamento"**; sempre ao menos uma.
+- **A primeira da lista é a principal**: o valor dela é o que aparece no bloco preto
+  do total. As demais entram como alternativas logo abaixo — o mesmo padrão do
+  design original ("se preferir Pix à vista"), agora generalizado para N formas em
+  vez de só duas fixas.
+- **Cartão parcelado com limite de parcelas sem juros**: cada forma "cartão" tem um
+  campo "sem juros até quantas parcelas" (padrão: até 12×, ou seja todas). Quando o
+  número de parcelas escolhido passa desse limite, o formulário, o PDF e a página
+  pública mostram o aviso "sem juros até Nx" — o valor da parcela continua nominal
+  (`valor ÷ parcelas`), porque sem a taxa da operadora não há como calcular o valor
+  real com juros; é só um aviso de que a partir dali pode entrar juros da maquininha.
 - Textarea de negociação (entrada, datas combinadas) e campo de observações — ambos
-  saem como notas abaixo das formas de pagamento no PDF.
+  saem como notas abaixo das formas de pagamento no PDF, aplicando-se ao orçamento
+  inteiro, não a uma forma específica.
 
 ## 5. Regras de cálculo (`src/utils/quoteCalc.ts`)
 
@@ -126,16 +143,25 @@ descontoCombinadoValor= temDescontoCombinado ? subtotal * pct / 100 : 0
 totalBruto            = subtotal - descontoCombinadoValor
 ```
 
-**Desconto de pagamento — regra híbrida** (é o que faz o design bater):
+**Pagamento — uma linha por forma aceita** (generaliza a regra híbrida original,
+que valia só para "cartão principal + Pix alternativo"):
 
-- forma = **Pix ou dinheiro** com desconto → o desconto entra no total.
-  `total = totalBruto - (totalBruto * pct / 100)`
-- forma = **cartão** com desconto à vista → o bloco preto mostra o valor no cartão
-  (`total = totalBruto`) e o PDF ganha a linha alternativa
-  *"Se preferir Pix ou dinheiro à vista — X% de desconto: R$ Y"*.
-- `parcela = forma === 'cartao' ? total / parcelas : null`
+```
+para cada opção de pagamento:
+  descontoValor = temDesconto ? totalBruto * pct / 100 : 0
+  valorFinal    = totalBruto - descontoValor
+  parcelas      = forma === 'cartao' ? parcelas escolhidas : 1
+  parcela       = parcelas > 1 ? valorFinal / parcelas : null
+  parcelasComJurosAPartir =
+    forma === 'cartao' && parcelas > parcelasSemJuros ? parcelasSemJuros + 1 : null
 
-Arredondar para 2 casas na exibição.
+total = opcoesPagamento[0].valorFinal   // a primeira da lista é a principal
+```
+
+A primeira opção dá o número do bloco preto; as demais aparecem como linhas
+alternativas logo abaixo, cada uma com seu próprio valor e (se cartão) o aviso de
+"sem juros até Nx" quando as parcelas escolhidas passam do limite. Arredondar para
+2 casas na exibição.
 
 ## 6. PDF
 
@@ -210,6 +236,8 @@ Quatro parâmetros, com os valores do design como padrão:
 | `src/utils/quoteFactory.ts` | montagem de itens, detalhes e retrato da clínica |
 | `src/components/quotes/QuoteFormModal.tsx` | formulário gerador |
 | `src/components/quotes/QuoteItemEditor.tsx` | edição de um procedimento do orçamento |
+| `src/components/quotes/QuotePaymentOptionEditor.tsx` | edição de uma forma de pagamento |
+| `src/components/ConfirmDialog.tsx` | confirmação de ações destrutivas (não é `window.confirm` — ver seção 2) |
 | `src/components/quotes/PatientSearchSelect.tsx` | busca de paciente |
 | `src/components/quotes/ProcedureSearchAdd.tsx` | busca no catálogo para adicionar |
 | `src/components/quotes/QuotePrintable.tsx` | páginas A4 + paginação medida |
@@ -223,8 +251,14 @@ Quatro parâmetros, com os valores do design como padrão:
 - Firebase Storage / hospedagem do PDF (não existe Storage configurado no projeto;
   imagens hoje são base64 dentro do Firestore).
 - Botão de aceite pela cliente na página online.
-- Juros no cartão.
-- Status "cancelado".
+- **Cálculo real de juros no cartão**: o sistema sabe até qual parcela é sem juros e
+  avisa quando a escolha passa desse limite, mas o valor da parcela continua nominal
+  (`valor ÷ parcelas`) — calcular o valor real com juros exigiria a taxa da operadora,
+  que o app não tem.
+
+Implementado além do previsto originalmente: status **cancelado** (era "fora de
+escopo" na versão inicial desta spec — ver seção 2), e **múltiplas formas de
+pagamento por orçamento** (a versão inicial previa uma só).
 
 ## 11. Pendência anterior a este módulo
 

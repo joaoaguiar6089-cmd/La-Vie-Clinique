@@ -27,7 +27,7 @@ import {
   QuoteStoredStatus,
 } from '../types';
 import { formatQuoteNumber } from '../utils/quoteCalc';
-import { clonarItens } from '../utils/quoteFactory';
+import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
 import {
   DEFAULT_GENERAL_QUESTIONS,
@@ -584,7 +584,7 @@ export function subscribeToQuotes(
     (snapshot) => {
       const items: Quote[] = [];
       snapshot.forEach((docSnap) => {
-        items.push({ ...(docSnap.data() as Quote), id: docSnap.id });
+        items.push(normalizarQuote({ ...(docSnap.data() as Quote), id: docSnap.id }));
       });
       items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
       onUpdate(items);
@@ -694,6 +694,6 @@ export async function replaceQuote(
 export async function getQuoteById(quoteId: string): Promise<Quote | null> {
   const snap = await getDoc(doc(db, QUOTES_COLLECTION, quoteId));
   if (!snap.exists()) return null;
-  return { ...(snap.data() as Quote), id: snap.id };
+  return normalizarQuote({ ...(snap.data() as Quote), id: snap.id });
 }
 

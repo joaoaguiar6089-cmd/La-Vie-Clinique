@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AnamnesisQuestion, QuestionAudience, QuestionFieldType } from '../../types';
+import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import {
   Plus,
   Trash2,
@@ -31,6 +32,7 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
   const [editingQuestion, setEditingQuestion] = useState<AnamnesisQuestion | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
 
   // Form State
   const [texto, setTexto] = useState('');
@@ -126,14 +128,16 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
     await onSaveAllQuestions(updated);
   };
 
-  const handleResetDefaults = async () => {
-    if (
-      window.confirm(
-        'Deseja restaurar as perguntas gerais para o padrão da La Vie (Tipo de Música preferido)?'
-      )
-    ) {
-      await onSaveAllQuestions(DEFAULT_GENERAL_QUESTIONS);
-    }
+  const handleResetDefaults = () => {
+    setConfirmacao({
+      titulo: 'Restaurar as perguntas padrão?',
+      mensagem:
+        'As perguntas gerais atuais são substituídas pelo conjunto padrão da La Vie. Perguntas que você criou aqui se perdem; as fichas já preenchidas não mudam.',
+      textoConfirmar: 'Restaurar',
+      onConfirmar: () => {
+        onSaveAllQuestions(DEFAULT_GENERAL_QUESTIONS);
+      },
+    });
   };
 
   const fieldTypeLabels: Record<QuestionFieldType, string> = {
@@ -288,11 +292,14 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (window.confirm(`Deseja remover a pergunta geral "${q.texto}"?`)) {
-                      onDeleteQuestion(q.id);
-                    }
-                  }}
+                  onClick={() =>
+                    setConfirmacao({
+                      titulo: 'Remover esta pergunta?',
+                      mensagem: `"${q.texto}"\n\nEla deixa de aparecer nas próximas fichas. As respostas já registradas continuam guardadas.`,
+                      textoConfirmar: 'Remover',
+                      onConfirmar: () => onDeleteQuestion(q.id),
+                    })
+                  }
                   className="p-1.5 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                   title="Excluir pergunta"
                 >
@@ -490,6 +497,8 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
           </div>
         </div>
       )}
+
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 };
