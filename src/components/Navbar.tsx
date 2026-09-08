@@ -1,10 +1,10 @@
 import React from 'react';
-import { Settings, ListOrdered, ClipboardList, Share2, LogOut } from 'lucide-react';
-import { ClinicProfile } from '../types';
+import { Settings, ListOrdered, ClipboardList, Share2, LogOut, Receipt } from 'lucide-react';
+import { ClinicProfile, AppView } from '../types';
 
 interface NavbarProps {
-  currentView: 'procedures' | 'anamnesis';
-  onSelectView: (view: 'procedures' | 'anamnesis') => void;
+  currentView: AppView;
+  onSelectView: (view: AppView) => void;
   onOpenExport: () => void;
   onOpenSettings: () => void;
   clinic: ClinicProfile;
@@ -45,6 +45,17 @@ export const Navbar: React.FC<NavbarProps> = ({
       count: undefined,
       onClick: () => {
         onSelectView('anamnesis');
+        scrollToTop();
+      },
+    },
+    {
+      id: 'quotes' as const,
+      label: 'Orçamentos',
+      icon: Receipt,
+      active: currentView === 'quotes',
+      count: undefined,
+      onClick: () => {
+        onSelectView('quotes');
         scrollToTop();
       },
     },
@@ -102,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
         </div>
-        <nav className="px-5 flex items-center gap-6 border-t border-[rgba(26,26,26,.07)]">
+        <nav className="px-5 flex items-center gap-6 border-t border-[rgba(26,26,26,.07)] overflow-x-auto whitespace-nowrap">
           <button
             onClick={() => onSelectView('procedures')}
             className={`py-3 text-[16px] transition-colors ${
@@ -132,6 +143,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             }
           >
             Fichas dos pacientes
+          </button>
+          <button
+            onClick={() => onSelectView('quotes')}
+            className={`py-3 text-[16px] transition-colors ${
+              currentView === 'quotes'
+                ? 'font-semibold text-[#1A1A1A]'
+                : 'font-medium text-[#8a8578] hover:text-[#1A1A1A]'
+            }`}
+            style={
+              currentView === 'quotes' ? { boxShadow: 'inset 0 -2px 0 #A67C52' } : undefined
+            }
+          >
+            Orçamentos
           </button>
         </nav>
       </header>

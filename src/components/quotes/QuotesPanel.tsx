@@ -1,0 +1,349 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Plus,
+  Search,
+  Pencil,
+  Copy,
+  RefreshCw,
+  Trash2,
+  Check,
+  FileText,
+  AlertCircle,
+} from 'lucide-react';
+import {
+  ClinicProfile,
+  Patient,
+  Procedure,
+  Quote,
+  QuoteDraft,
+  QuoteStatus,
+  QuoteStoredStatus,
+} from '../../types';
+import { formatBRL, formatDate } from '../../utils/formatters';
+import { resolveQuoteStatus, isQuoteEditavel } from '../../utils/quoteCalc';
+import {
+  subscribeToQuotes,
+  subscribeToPatients,
+  createQuote,
+  updateQuote,
+  replaceQuote,
+  deleteQuote,
+  setQuoteStatus,
+} from '../../services/databaseService';
+import { QuoteFormModal } from './QuoteFormModal';
+
+interface QuotesPanelProps {
+  clinic: ClinicProfile;
+  catalogProcedures: Procedure[];
+}
+
+const STATUS_LABEL: Record<QuoteStatus, string> = {
+  rascunho: 'Rascunho',
+  enviado: 'Enviado',
+  aceito: 'Aceito',
+  expirado: 'Expirado',
+};
+
+const STATUS_CLASS: Record<QuoteStatus, string> = {
+  rascunho: 'bg-gray-100 text-gray-500 border-gray-200',
+  enviado: 'bg-[#A67C52]/10 text-[#8E653D] border-[#A67C52]/25',
+  aceito: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  expirado: 'bg-amber-50 text-amber-700 border-amber-200',
+};
+
+export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedures }) => {
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [erro, setErro] = useState<string | null>(null);
+  const [busca, setBusca] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | QuoteStatus>('todos');
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [quoteToEdit, setQuoteToEdit] = useState<Quote | null>(null);
+  const [seedFrom, setSeedFrom] = useState<Quote | null>(null);
+  const [modoSubstituicao, setModoSubstituicao] = useState<Quote | null>(null);
+
+  useEffect(() => {
+    const unsubQuotes = subscribeToQuotes(setQuotes, (e) =>
+      setErro(`Não foi possível carregar os orçamentos: ${e.message}`)
+    );
+    const unsubPatients = subscribeToPatients(setPatients);
+    return () => {
+      unsubQuotes();
+      unsubPatients();
+    };
+  }, []);
+
+  const listaFiltrada = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return quotes.filter((q) => {
+      const status = resolveQuoteStatus(q);
+      if (filtroStatus !== 'todos' && status !== filtroStatus) return false;
+      if (!termo) return true;
+      return (
+        q.pacienteNome.toLowerCase().includes(termo) ||
+        q.numero.toLowerCase().includes(termo) ||
+        (q.profissionalNome || '').toLowerCase().includes(termo)
+      );
+    });
+  }, [quotes, busca, filtroStatus]);
+
+  const abrirNovo = () => {
+    setQuoteToEdit(null);
+    setSeedFrom(null);
+    setModoSubstituicao(null);
+    setIsFormOpen(true);
+  };
+
+  const abrirEdicao = (quote: Quote) => {
+    setQuoteToEdit(quote);
+    setSeedFrom(null);
+    setModoSubstituicao(null);
+    setIsFormOpen(true);
+  };
+
+  const abrirDuplicacao = (quote: Quote) => {
+    setQuoteToEdit(null);
+    setSeedFrom(quote);
+    setModoSubstituicao(null);
+    setIsFormOpen(true);
+  };
+
+  const abrirSubstituicao = (quote: Quote) => {
+    setQuoteToEdit(null);
+    setSeedFrom(quote);
+    setModoSubstituicao(quote);
+    setIsFormOpen(true);
+  };
+
+  const handleSave = async (draft: QuoteDraft, existing?: Quote) => {
+    setErro(null);
+    if (existing) {
+      await updateQuote(existing, draft);
+    } else if (modoSubstituicao) {
+      await replaceQuote(modoSubstituicao, draft);
+    } else {
+      await createQuote(draft);
+    }
+  };
+
+  const handleSetStatus = async (quote: Quote, status: QuoteStoredStatus) => {
+    try {
+      await setQuoteStatus(quote.id, status);
+    } catch (e) {
+      setErro(`Não foi possível atualizar o status: ${(e as Error).message}`);
+    }
+  };
+
+  const handleDelete = async (quote: Quote) => {
+    try {
+      await deleteQuote(quote.id);
+    } catch (e) {
+      setErro(`Não foi possível excluir: ${(e as Error).message}`);
+    }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+      {/* Cabeçalho */}
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div>
+          <h1 className="font-serif-luxury text-3xl sm:text-4xl text-[#1A1A1A]">Orçamentos</h1>
+          <p className="text-xs text-gray-500 mt-1">
+            {quotes.length} orçamento{quotes.length === 1 ? '' : 's'}
+            {listaFiltrada.length !== quotes.length && ` · ${listaFiltrada.length} no filtro`}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={abrirNovo}
+          className="px-5 py-2.5 bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-[#8E653D] transition-colors flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Novo orçamento
+        </button>
+      </div>
+
+      {erro && (
+        <div className="mb-4 px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {erro}
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por cliente, número ou profissional"
+            className="w-full glass-input pl-9 pr-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {(['todos', 'rascunho', 'enviado', 'aceito', 'expirado'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setFiltroStatus(s)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-sm border transition-colors ${
+                filtroStatus === s
+                  ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+                  : 'bg-white/60 text-gray-600 border-white/80 hover:bg-white/80'
+              }`}
+            >
+              {s === 'todos' ? 'Todos' : STATUS_LABEL[s]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Lista */}
+      {listaFiltrada.length === 0 ? (
+        <div className="glass-card rounded-sm py-16 text-center">
+          <FileText className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+          <p className="text-sm text-gray-500">
+            {quotes.length === 0
+              ? 'Nenhum orçamento ainda. Crie o primeiro no botão acima.'
+              : 'Nenhum orçamento encontrado com esses filtros.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {listaFiltrada.map((quote) => {
+            const status = resolveQuoteStatus(quote);
+            const editavel = isQuoteEditavel(quote);
+            const substituido = !!quote.substituidoPor;
+
+            return (
+              <div
+                key={quote.id}
+                className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
+              >
+                <div className="min-w-[110px]">
+                  <p className="font-serif-luxury text-lg text-[#1A1A1A] tabular-nums">
+                    {quote.numero}
+                  </p>
+                  <p className="text-[11px] text-gray-400">{formatDate(quote.dataEmissao)}</p>
+                </div>
+
+                <div className="flex-1 min-w-[160px]">
+                  <p className="text-sm text-[#1A1A1A] truncate">{quote.pacienteNome}</p>
+                  <p className="text-[11px] text-gray-400 truncate">
+                    {quote.itens.length} procedimento{quote.itens.length === 1 ? '' : 's'}
+                    {quote.profissionalNome ? ` · ${quote.profissionalNome}` : ''}
+                  </p>
+                </div>
+
+                <div className="text-right min-w-[110px]">
+                  <p className="text-sm font-semibold text-[#1A1A1A] tabular-nums">
+                    {formatBRL(quote.total)}
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    válido até {formatDate(quote.dataValidade)}
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-start gap-1">
+                  <span
+                    className={`px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-xs border ${STATUS_CLASS[status]}`}
+                  >
+                    {STATUS_LABEL[status]}
+                  </span>
+                  {substituido && (
+                    <span className="text-[10px] text-gray-400">
+                      substituído por {quote.substituidoPor?.numero}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-0.5 ml-auto">
+                  {editavel && (
+                    <button
+                      type="button"
+                      onClick={() => abrirEdicao(quote)}
+                      aria-label={`Editar ${quote.numero}`}
+                      title="Editar rascunho"
+                      className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {!editavel && !substituido && (
+                    <button
+                      type="button"
+                      onClick={() => abrirSubstituicao(quote)}
+                      aria-label={`Substituir ${quote.numero}`}
+                      title="Substituir — cria um novo com número próprio"
+                      className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => abrirDuplicacao(quote)}
+                    aria-label={`Duplicar ${quote.numero}`}
+                    title="Duplicar para outra cliente"
+                    className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+
+                  {status === 'enviado' && (
+                    <button
+                      type="button"
+                      onClick={() => handleSetStatus(quote, 'aceito')}
+                      aria-label={`Marcar ${quote.numero} como aceito`}
+                      title="Marcar como aceito"
+                      className="p-2 text-gray-400 hover:text-emerald-600 transition-colors"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {editavel && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Excluir o rascunho ${quote.numero}? O número não será reaproveitado.`
+                          )
+                        ) {
+                          handleDelete(quote);
+                        }
+                      }}
+                      aria-label={`Excluir ${quote.numero}`}
+                      title="Excluir rascunho"
+                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <QuoteFormModal
+        isOpen={isFormOpen}
+        onClose={() => setIsFormOpen(false)}
+        onSave={handleSave}
+        quoteToEdit={quoteToEdit}
+        seedFrom={seedFrom}
+        procedures={catalogProcedures}
+        patients={patients}
+        clinic={clinic}
+      />
+    </div>
+  );
+};

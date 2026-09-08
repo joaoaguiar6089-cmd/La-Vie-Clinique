@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope } from 'lucide-react';
-import { Procedure, Professional } from '../types';
+import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope, FileText } from 'lucide-react';
+import { Procedure, Professional, QuoteItemDetail } from '../types';
 import { PRESET_IMAGE_LIBRARY, INITIAL_CATEGORIES } from '../data/initialData';
 import { formatBRL } from '../utils/formatters';
 
@@ -66,6 +66,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [contraindications, setContraindications] = useState('');
   const [idealCandidate, setIdealCandidate] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
+  const [quoteDetails, setQuoteDetails] = useState<QuoteItemDetail[]>([]);
 
   // Doctors assignment state
   const [assignedDoctorIds, setAssignedDoctorIds] = useState<string[]>([]);
@@ -94,6 +95,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setContraindications(procedureToEdit.contraindications || '');
       setIdealCandidate(procedureToEdit.idealCandidate || '');
       setIsFeatured(Boolean(procedureToEdit.isFeatured));
+      setQuoteDetails(procedureToEdit.quoteDetails || []);
       setAssignedDoctorIds(procedureToEdit.assignedDoctorIds || []);
       setCustomDoctorNames(
         procedureToEdit.assignedDoctorNames
@@ -121,6 +123,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setContraindications('Gestantes e infecção ativa na área');
       setIdealCandidate('Pessoas que buscam harmonia e prevenção do envelhecimento');
       setIsFeatured(false);
+      setQuoteDetails([]);
       // Default to first doctor if available
       setAssignedDoctorIds(availableDoctors.length > 0 ? [availableDoctors[0].id] : []);
       setCustomDoctorNames([]);
@@ -196,6 +199,21 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setAreasTreated((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleAddQuoteDetail = () => {
+    setQuoteDetails((prev) => [
+      ...prev,
+      { id: `qd-${Date.now()}-${prev.length}`, titulo: '', valor: '' },
+    ]);
+  };
+
+  const handleUpdateQuoteDetail = (id: string, field: 'titulo' | 'valor', value: string) => {
+    setQuoteDetails((prev) => prev.map((d) => (d.id === id ? { ...d, [field]: value } : d)));
+  };
+
+  const handleRemoveQuoteDetail = (id: string) => {
+    setQuoteDetails((prev) => prev.filter((d) => d.id !== id));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
@@ -226,6 +244,11 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       ? images
       : ['https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80'];
 
+    // Linhas em branco (ou só com título) não viram detalhe: iriam para o PDF como rótulo sem resposta
+    const cleanedQuoteDetails: QuoteItemDetail[] = quoteDetails
+      .map((d) => ({ ...d, titulo: d.titulo.trim(), valor: d.valor.trim() }))
+      .filter((d) => d.titulo && d.valor);
+
     const procedureData: Procedure = {
       id: procedureToEdit ? procedureToEdit.id : `proc-${Date.now()}`,
       title: title.trim(),
@@ -245,6 +268,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       contraindications: contraindications.trim() || undefined,
       idealCandidate: idealCandidate.trim() || undefined,
       isFeatured: isFeatured,
+      // Array sempre presente (mesmo vazio): saveProcedureToDb usa merge:true e descarta
+      // undefined, então `undefined` deixaria os detalhes antigos gravados ao apagar todos
+      quoteDetails: cleanedQuoteDetails,
       assignedDoctorIds: assignedDoctorIds.length > 0 ? assignedDoctorIds : undefined,
       assignedDoctorNames: finalDoctorNames.length > 0 ? finalDoctorNames : undefined,
       order: procedureToEdit?.order || 99,
@@ -753,6 +779,61 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   </span>
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* Section 3.5: Quote Details — pré-preenchem a grade de detalhes do item no orçamento */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+              <FileText className="w-3.5 h-3.5" />
+              Detalhes para Orçamento ({quoteDetails.length})
+            </h3>
+
+            <p className="text-[11px] leading-relaxed text-gray-500">
+              Campos que já nascem preenchidos no orçamento deste procedimento — produto, unidades,
+              duração do efeito, anestesia, intervalo. Quem emitir pode editar ou remover cada um.
+              <span className="block mt-1 text-gray-400">
+                Duração, sessões, recuperação e regiões aplicadas já entram automaticamente, não
+                precisa repetir aqui.
+              </span>
+            </p>
+
+            <div className="space-y-2">
+              {quoteDetails.map((detail) => (
+                <div key={detail.id} className="flex gap-2 items-start">
+                  <input
+                    type="text"
+                    value={detail.titulo}
+                    onChange={(e) => handleUpdateQuoteDetail(detail.id, 'titulo', e.target.value)}
+                    placeholder="Produto / marca"
+                    className="w-2/5 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-[#1A1A1A]"
+                  />
+                  <input
+                    type="text"
+                    value={detail.valor}
+                    onChange={(e) => handleUpdateQuoteDetail(detail.id, 'valor', e.target.value)}
+                    placeholder="Botulift® 100U"
+                    className="flex-1 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-[#1A1A1A]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveQuoteDetail(detail.id)}
+                    aria-label={`Remover detalhe ${detail.titulo || 'sem título'}`}
+                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-sm transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={handleAddQuoteDetail}
+                className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Adicionar campo
+              </button>
             </div>
           </div>
 

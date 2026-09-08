@@ -7,8 +7,9 @@ import { ShareExportModal } from './components/ShareExportModal';
 import { ClinicSettingsModal } from './components/ClinicSettingsModal';
 import { AnamnesisModule } from './components/anamnesis/AnamnesisModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
+import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { LoginScreen } from './components/auth/LoginScreen';
-import { Procedure, ClinicProfile } from './types';
+import { Procedure, ClinicProfile, AppView } from './types';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { RefreshCw, Check, Loader2 } from 'lucide-react';
 import {
@@ -86,7 +87,7 @@ export default function App() {
   }, [syncStatus]);
 
   // Navigation and Modals State
-  const [currentView, setCurrentView] = useState<'procedures' | 'anamnesis'>('procedures');
+  const [currentView, setCurrentView] = useState<AppView>('procedures');
   const [selectedProcedureForDetails, setSelectedProcedureForDetails] = useState<Procedure | null>(null);
   const [selectedProcedureForEdit, setSelectedProcedureForEdit] = useState<Procedure | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -377,11 +378,13 @@ export default function App() {
               onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
               onShareSingle={handleShareSingle}
             />
-          ) : (
+          ) : currentView === 'anamnesis' ? (
             <AnamnesisModule
               clinicProfile={clinic}
               catalogProcedures={procedures}
             />
+          ) : (
+            <QuotesPanel clinic={clinic} catalogProcedures={procedures} />
           )}
         </main>
 

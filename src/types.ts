@@ -31,6 +31,7 @@ export interface Procedure {
   contraindications?: string;
   idealCandidate?: string;
   isFeatured?: boolean;
+  quoteDetails?: QuoteItemDetail[]; // "Detalhes para orçamento" — pares título/resposta que pré-preenchem o item no orçamento
   assignedDoctorIds?: string[]; // IDs of assigned doctors
   assignedDoctorNames?: string[]; // Names/credentials for display or custom entry
   order: number;
@@ -55,7 +56,16 @@ export interface ClinicProfile {
   coverBannerUrl?: string;
   catalogWelcomeNote?: string;
   consultationNote?: string;
+  // Módulo de orçamentos — ausentes = usar QUOTE_DEFAULTS de utils/quoteCalc.ts
+  quoteValidityDays?: number; // Prazo padrão de validade, em dias (padrão 30)
+  quoteCombinedDiscountPerItem?: number; // % sugerido por procedimento no desconto de plano combinado (padrão 2)
+  quoteCombinedDiscountCap?: number; // Teto do desconto de plano combinado, em % (padrão 10)
+  quoteLegalNotice?: string; // Aviso legal do rodapé do orçamento
+  quoteOpeningTemplate?: string; // Mensagem de abertura sugerida; aceita {primeiroNome}
 }
+
+/** Telas do painel autenticado — a navegação é por estado, o app não tem rotas. */
+export type AppView = 'procedures' | 'anamnesis' | 'quotes';
 
 export interface FilterState {
   search: string;
@@ -156,4 +166,90 @@ export interface AnamnesisRecord {
   createdAt: string;
   updatedAt?: string;
 }
+
+// ==========================================
+// MÓDULO DE ORÇAMENTOS — TIPOS
+// ==========================================
+
+/** Par título/resposta exibido na grade de detalhes do procedimento. */
+export interface QuoteItemDetail {
+  id: string;
+  titulo: string; // "Áreas tratadas", "Volume por sessão"
+  valor: string; // "Testa, glabela e periorbital", "3 ml"
+}
+
+export interface QuoteItem {
+  id: string;
+  procedureId?: string; // Origem no catálogo; ausente quando o item foi digitado à mão
+  categoria: string;
+  titulo: string;
+  valorTabela: number; // Nasce de Procedure.promotionalPrice ?? price, editável
+  temDesconto: boolean;
+  valorComDesconto?: number; // Novo valor digitado; o percentual exibido é derivado, nunca digitado
+  maisDeUmaSessao: boolean;
+  sessoes: number; // 1 quando maisDeUmaSessao = false. Informativo: NÃO multiplica o valor
+  notaPreco?: string; // "por aplicação", "pacote fechado", "por sessão"
+  detalhes: QuoteItemDetail[];
+}
+
+export type PaymentMethod = 'pix' | 'cartao' | 'dinheiro';
+
+export interface QuotePayment {
+  forma: PaymentMethod;
+  parcelas?: number; // 1 a 12, somente quando forma === 'cartao'. Sem juros
+  temDesconto: boolean;
+  descontoPercentual?: number; // Abate no total quando Pix/dinheiro; vira alternativa à vista quando cartão
+  negociacao?: string; // Texto livre — sai como nota abaixo das formas de pagamento
+}
+
+/** Status gravado no documento. `expirado` nunca é gravado: deriva da validade. */
+export type QuoteStoredStatus = 'rascunho' | 'enviado' | 'aceito';
+
+/** Status exibido na interface, já considerando a data de validade. */
+export type QuoteStatus = QuoteStoredStatus | 'expirado';
+
+/** Referência a outro orçamento na cadeia de substituição. */
+export interface QuoteReference {
+  id: string;
+  numero: string;
+}
+
+export interface Quote {
+  id: string; // crypto.randomUUID() — o link público é secreto por ser imprevisível
+  numero: string; // "2026-0148", gerado no 1º salvamento e imutável a partir dali
+  ano: number;
+  sequencia: number;
+  status: QuoteStoredStatus;
+  dataEmissao: string; // ISO
+  dataValidade: string; // ISO — emissão + ClinicProfile.quoteValidityDays, editável
+  pacienteId?: string; // Ausente quando é paciente avulso, digitado na hora
+  pacienteNome: string;
+  pacienteContato?: string;
+  jaTeveAvaliacao: boolean;
+  dataAvaliacao?: string; // Só aparece no PDF quando jaTeveAvaliacao
+  professionalId: string;
+  profissionalNome: string; // Espelha o profissional no momento da emissão
+  profissionalTitulo?: string;
+  textoApresentacao: string;
+  itens: QuoteItem[];
+  temDescontoCombinado: boolean;
+  descontoCombinadoPercentual?: number; // Digitado; sugestão = 2% × nº de itens, limitada ao teto
+  pagamento: QuotePayment;
+  observacoes?: string;
+  total: number; // Snapshot denormalizado apenas para a listagem — a verdade é calcularOrcamento()
+  enviadoEm?: string; // ISO do 1º compartilhamento do link; presença trava a edição
+  substituidoPor?: QuoteReference; // Preenchido no antigo quando um novo o substitui
+  substituiu?: QuoteReference; // Preenchido no novo, apontando para o que ele substituiu
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/**
+ * Campos que o formulário edita. Fora daqui ficam id, numero, ano, sequencia e as
+ * datas de controle: quem gera esses é o serviço, na transação do primeiro salvamento.
+ */
+export type QuoteDraft = Omit<
+  Quote,
+  'id' | 'numero' | 'ano' | 'sequencia' | 'status' | 'enviadoEm' | 'substituidoPor' | 'substituiu' | 'createdAt' | 'updatedAt'
+>;
 

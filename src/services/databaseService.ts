@@ -11,7 +11,8 @@ import {
   query,
   orderBy,
   where,
-  writeBatch
+  writeBatch,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import {
@@ -21,7 +22,12 @@ import {
   AnamnesisTemplate,
   Patient,
   AnamnesisRecord,
+  Quote,
+  QuoteDraft,
+  QuoteStoredStatus,
 } from '../types';
+import { formatQuoteNumber } from '../utils/quoteCalc';
+import { clonarItens } from '../utils/quoteFactory';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
 import {
   DEFAULT_GENERAL_QUESTIONS,
@@ -38,6 +44,9 @@ const ANAMNESIS_GENERAL_QUESTIONS_COLLECTION = 'anamnesis_general_questions';
 const ANAMNESIS_TEMPLATES_COLLECTION = 'anamnesis_templates';
 const PATIENTS_COLLECTION = 'patients';
 const ANAMNESIS_RECORDS_COLLECTION = 'anamnesis_records';
+
+const QUOTES_COLLECTION = 'quotes';
+const COUNTERS_COLLECTION = 'counters';
 
 /**
  * Deeply removes undefined values so Firestore never throws 'Unsupported field value: undefined'
@@ -556,5 +565,135 @@ export async function getClinicProfileOnce(): Promise<ClinicProfile | null> {
   const snap = await getDoc(clinicRef);
   if (!snap.exists()) return null;
   return snap.data() as ClinicProfile;
+}
+
+// ==========================================
+// ORÇAMENTOS
+// ==========================================
+
+/**
+ * Subscribe to Quotes collection (mais recentes primeiro).
+ */
+export function subscribeToQuotes(
+  onUpdate: (quotes: Quote[]) => void,
+  onError?: (err: Error) => void
+) {
+  const colRef = collection(db, QUOTES_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const items: Quote[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ ...(docSnap.data() as Quote), id: docSnap.id });
+      });
+      items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      onUpdate(items);
+    },
+    (error) => {
+      console.error('Quotes subscription error:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Cria o orçamento e reserva o número na mesma transação: se a gravação falhar,
+ * a sequência não avança e nenhum número fica queimado. A sequência reinicia a
+ * cada ano, e o ID é aleatório porque é ele que torna o link público secreto.
+ */
+export async function createQuote(draft: QuoteDraft): Promise<Quote> {
+  const emissao = new Date(draft.dataEmissao);
+  const ano = isNaN(emissao.getTime()) ? new Date().getFullYear() : emissao.getFullYear();
+  const counterRef = doc(db, COUNTERS_COLLECTION, `quotes_${ano}`);
+  const id = crypto.randomUUID();
+  const quoteRef = doc(db, QUOTES_COLLECTION, id);
+
+  return await runTransaction(db, async (tx) => {
+    const counterSnap = await tx.get(counterRef);
+    const ultimo = counterSnap.exists() ? Number(counterSnap.data().ultimo) || 0 : 0;
+    const sequencia = ultimo + 1;
+
+    const quote: Quote = {
+      ...draft,
+      id,
+      numero: formatQuoteNumber(ano, sequencia),
+      ano,
+      sequencia,
+      status: 'rascunho',
+      createdAt: new Date().toISOString(),
+    };
+
+    tx.set(counterRef, { ultimo: sequencia }, { merge: true });
+    tx.set(quoteRef, cleanForFirestore(quote));
+    return quote;
+  });
+}
+
+/**
+ * Atualiza um orçamento existente. Só faz sentido em rascunho — depois de enviado
+ * a interface bloqueia a edição e o caminho passa a ser a substituição.
+ */
+export async function updateQuote(quote: Quote, draft: QuoteDraft): Promise<Quote> {
+  const atualizado: Quote = { ...quote, ...draft, updatedAt: new Date().toISOString() };
+  const docRef = doc(db, QUOTES_COLLECTION, quote.id);
+  // setDoc sem merge: campos removidos (desconto desmarcado, item excluído) precisam sumir
+  await setDoc(docRef, cleanForFirestore(atualizado));
+  return atualizado;
+}
+
+/** Marca o orçamento como enviado na primeira vez que o link é compartilhado. */
+export async function markQuoteAsSent(quoteId: string): Promise<void> {
+  const docRef = doc(db, QUOTES_COLLECTION, quoteId);
+  await updateDoc(docRef, {
+    status: 'enviado' as QuoteStoredStatus,
+    enviadoEm: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/** Troca manual de status na listagem (marcar como aceito, voltar para enviado). */
+export async function setQuoteStatus(quoteId: string, status: QuoteStoredStatus): Promise<void> {
+  const docRef = doc(db, QUOTES_COLLECTION, quoteId);
+  await updateDoc(docRef, { status, updatedAt: new Date().toISOString() });
+}
+
+/** Exclusão só de rascunho — orçamento enviado se substitui, não se apaga. */
+export async function deleteQuote(quoteId: string): Promise<void> {
+  await deleteDoc(doc(db, QUOTES_COLLECTION, quoteId));
+}
+
+/**
+ * Substitui um orçamento: cria um novo com número próprio e liga os dois. O antigo
+ * continua existindo — o link que a paciente já tem passa a apontar para o novo.
+ */
+export async function replaceQuote(
+  anterior: Quote,
+  draft: QuoteDraft
+): Promise<Quote> {
+  const novo = await createQuote({ ...draft, itens: clonarItens(draft.itens) });
+
+  const novoComVinculo: Quote = {
+    ...novo,
+    substituiu: { id: anterior.id, numero: anterior.numero },
+  };
+
+  const batch = writeBatch(db);
+  batch.update(doc(db, QUOTES_COLLECTION, novo.id), {
+    substituiu: { id: anterior.id, numero: anterior.numero },
+  });
+  batch.update(doc(db, QUOTES_COLLECTION, anterior.id), {
+    substituidoPor: { id: novo.id, numero: novo.numero },
+    updatedAt: new Date().toISOString(),
+  });
+  await batch.commit();
+
+  return novoComVinculo;
+}
+
+/** Busca um orçamento pelo ID — usado pela página pública do link. */
+export async function getQuoteById(quoteId: string): Promise<Quote | null> {
+  const snap = await getDoc(doc(db, QUOTES_COLLECTION, quoteId));
+  if (!snap.exists()) return null;
+  return { ...(snap.data() as Quote), id: snap.id };
 }
 

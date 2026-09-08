@@ -38,6 +38,20 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Orçamentos: a paciente abre o dela pelo link (?orcamento=<id>) sem login, então a
+    // leitura é pública — o segredo é o ID, gerado com crypto.randomUUID() e portanto não
+    // adivinhável. Escrita é só da equipe: a página pública não grava nada, nem o aceite.
+    match /quotes/{quoteId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Contadores da numeração sequencial dos orçamentos (counters/quotes_<ano>). Nunca são
+    // lidos pela página pública — só pela transação que emite um orçamento novo.
+    match /counters/{counterId} {
+      allow read, write: if request.auth != null;
+    }
+
     // Qualquer coleção não prevista acima fica fechada por padrão (nega tudo), em vez do
     // catch-all aberto anterior — reduz a superfície de dados expostos sem querer.
     match /{document=**} {
