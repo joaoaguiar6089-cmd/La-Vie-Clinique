@@ -25,8 +25,6 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   categories,
   singleProcedureToExport,
 }) => {
-  if (!isOpen) return null;
-
   const [activeTab, setActiveTab] = useState<'pdf' | 'image' | 'single-card' | 'whatsapp' | 'qrcode'>(
     singleProcedureToExport ? 'single-card' : 'pdf'
   );
@@ -126,6 +124,8 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   };
 
   const shareCatalogUrl = window.location.href;
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">

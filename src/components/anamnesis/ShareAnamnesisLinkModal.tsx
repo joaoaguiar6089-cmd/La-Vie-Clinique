@@ -42,8 +42,6 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
   const [isCopied, setIsCopied] = useState(false);
   const [customPhone, setCustomPhone] = useState<string>('');
 
-  if (!isOpen) return null;
-
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
 
   // As fotos por gênero substituíram a foto única `fotoModeloUrl`, mas este resumo continuava
@@ -97,6 +95,8 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
   const handlePreviewAsPatient = () => {
     window.open(shareableUrl, '_blank');
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn">

@@ -74,15 +74,6 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
   const [quoteParaCompartilhar, setQuoteParaCompartilhar] = useState<Quote | null>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
 
-  const handleCompartilhado = async (quote: Quote) => {
-    if (quote.status !== 'rascunho') return;
-    try {
-      await markQuoteAsSent(quote.id);
-    } catch (e) {
-      setErro(`O link foi compartilhado, mas o status não mudou: ${(e as Error).message}`);
-    }
-  };
-
   useEffect(() => {
     const unsubQuotes = subscribeToQuotes(setQuotes, (e) =>
       setErro(`Não foi possível carregar os orçamentos: ${e.message}`)
@@ -107,6 +98,15 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
       );
     });
   }, [quotes, busca, filtroStatus]);
+
+  const handleCompartilhado = async (quote: Quote) => {
+    if (quote.status !== 'rascunho') return;
+    try {
+      await markQuoteAsSent(quote.id);
+    } catch (e) {
+      setErro(`O link foi compartilhado, mas o status não mudou: ${(e as Error).message}`);
+    }
+  };
 
   const abrirNovo = () => {
     setQuoteToEdit(null);

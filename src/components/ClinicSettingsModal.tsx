@@ -22,8 +22,6 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   currentUserUid,
   isAdminUser,
 }) => {
-  if (!isOpen) return null;
-
   const [formData, setFormData] = useState<ClinicProfile>(() => {
     const initialProfessionals: Professional[] = clinic.professionals && clinic.professionals.length > 0
       ? clinic.professionals
@@ -77,6 +75,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   const [docEmail, setDocEmail] = useState('');
   const [showDoctorForm, setShowDoctorForm] = useState(false);
   const [creatingLoginForId, setCreatingLoginForId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleDoctorPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -180,8 +179,6 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setShowDoctorForm(false);
   };
 
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
   const adminCount = formData.professionals.filter((d) => d.isAdmin).length;
 
   const handleDeleteDoctor = (id: string) => {
@@ -259,6 +256,8 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     onSave(finalData);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">

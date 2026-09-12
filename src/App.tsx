@@ -36,16 +36,7 @@ const publicSearchParams = typeof window !== 'undefined' ? new URLSearchParams(w
 const isPublicAnamnesisRoute = !!(publicSearchParams?.get('anamnese') || publicSearchParams?.get('ficha'));
 const isPublicQuoteRoute = !!publicSearchParams?.get('orcamento');
 
-export default function App() {
-  if (isPublicAnamnesisRoute) {
-    return <PublicAnamnesisEntry />;
-  }
-
-  // Mesmo padrão da anamnese: a paciente abre o orçamento pelo link, sem login
-  if (isPublicQuoteRoute) {
-    return <PublicQuoteEntry />;
-  }
-
+function MainCatalogApp() {
   // Load procedures from localStorage or default samples initial fallback
   const [procedures, setProcedures] = useState<Procedure[]>(() => {
     try {
@@ -589,3 +580,17 @@ export default function App() {
     </div>
   );
 }
+
+export default function App() {
+  if (isPublicAnamnesisRoute) {
+    return <PublicAnamnesisEntry />;
+  }
+
+  // Mesmo padrão da anamnese: a paciente abre o orçamento pelo link, sem login
+  if (isPublicQuoteRoute) {
+    return <PublicQuoteEntry />;
+  }
+
+  return <MainCatalogApp />;
+}
+

@@ -92,7 +92,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#A67C52]" />
             <h3 className="font-serif-luxury text-xl font-medium text-[#1A1A1A]">
-              Atendimentos & Histórico de Pacientes
+              Anamneses Preenchidas & Enviadas
             </h3>
             <span className="px-2 py-0.5 rounded-full bg-[#A67C52]/15 text-[#A67C52] text-[10px] font-mono font-bold">
               {records.length} Fichas Registradas

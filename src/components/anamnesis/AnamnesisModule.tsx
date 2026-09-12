@@ -137,8 +137,8 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
         {/* The 3 Core Sub-Tabs requested by User — vertical stack on mobile/tablet, horizontal on desktop */}
         <div className="flex flex-col gap-1.5 mt-6 lg:flex-row lg:items-center lg:gap-2 lg:border-b lg:border-[rgba(26,26,26,.07)] lg:pb-px">
           {[
-            { id: 'records' as const, icon: ClipboardList, label: 'Atendimentos & histórico por paciente', count: records.length },
-            { id: 'templates' as const, icon: Layers, label: 'Fichas por procedimento', count: templates.length },
+            { id: 'records' as const, icon: ClipboardList, label: 'Anamneses preenchidas/enviadas', count: records.length },
+            { id: 'templates' as const, icon: Layers, label: 'Anamneses dos procedimentos', count: templates.length },
             { id: 'general' as const, icon: Sparkles, label: 'Configuração das perguntas gerais', count: generalQuestions.length },
           ].map((tab) => {
             const Icon = tab.icon;

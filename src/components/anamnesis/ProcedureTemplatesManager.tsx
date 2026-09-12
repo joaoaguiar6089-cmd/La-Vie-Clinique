@@ -435,7 +435,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#1A1A1A]" />
             <h3 className="font-serif-luxury text-xl font-medium text-[#1A1A1A]">
-              Fichas-Modelo por Procedimento
+              Anamneses dos Procedimentos
             </h3>
             <span className="px-2 py-0.5 rounded-full bg-[#1A1A1A] text-[#C49B74] text-[10px] font-mono font-bold">
               {templates.length} Modelos

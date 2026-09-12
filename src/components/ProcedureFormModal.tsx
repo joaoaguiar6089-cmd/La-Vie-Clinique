@@ -22,8 +22,6 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   existingCategories,
   availableDoctors = [],
 }) => {
-  if (!isOpen) return null;
-
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [category, setCategory] = useState('Harmonização & Injetáveis');
@@ -314,6 +312,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     onSave(procedureData);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
