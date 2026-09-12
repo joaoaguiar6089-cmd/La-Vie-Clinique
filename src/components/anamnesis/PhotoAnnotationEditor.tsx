@@ -14,6 +14,7 @@ import {
   ZoomIn,
   ZoomOut,
   SlidersHorizontal,
+  Copy,
 } from 'lucide-react';
 
 interface PhotoAnnotationEditorProps {
@@ -101,10 +102,16 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
   const [zoomPercent, setZoomPercent] = useState(100);
   const [isReady, setIsReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasSelection, setHasSelection] = useState(false);
+  // Guarda o que está selecionado, não só "se" há seleção: a barra contextual precisa saber o
+  // tipo para oferecer espessura (traço/linha) ou tamanho de fonte (texto).
+  const [selectionInfo, setSelectionInfo] = useState<{ count: number; isText: boolean } | null>(null);
+  const hasSelection = !!selectionInfo;
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
   const [isAdjustOpen, setIsAdjustOpen] = useState(false);
 
+  // A ferramenta corrente lida por callbacks que vivem fora do efeito de ferramentas (undo/redo,
+  // por exemplo) — sem isto eles enxergariam sempre o valor da primeira renderização.
+  const toolRef = useRef<Tool>('select');
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef(-1);
   const suppressHistoryRef = useRef(false);
@@ -113,6 +120,48 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
   // the previous instance finished disposing corrupts Fabric's internal DOM wrapper. Gating the
   // next setup on the prior disposal promise avoids that race.
   const pendingDisposalRef = useRef<Promise<unknown>>(Promise.resolve());
+  const historyDebounceRef = useRef<number | null>(null);
+
+  /**
+   * Só a ferramenta "Mover" deixa os objetos clicáveis — nas outras o clique pertence à própria
+   * ferramenta. Precisa ser reaplicado depois de qualquer `loadFromJSON` (desfazer/refazer), que
+   * restaura `selectable`/`evented` como estavam no momento em que o estado foi serializado: um
+   * objeto desenhado com a ferramenta de traço era salvo como não-selecionável e, depois de um
+   * desfazer, nunca mais podia ser selecionado nem apagado.
+   */
+  const applySelectability = useCallback((canvas: Canvas) => {
+    const interativo = toolRef.current === 'select';
+    canvas.forEachObject((obj) => {
+      if (obj === canvas.backgroundImage) return;
+      obj.selectable = interativo;
+      obj.evented = interativo;
+    });
+  }, []);
+
+  /** Espelha na barra contextual o tipo e os parâmetros atuais do que está selecionado. */
+  const syncSelection = useCallback(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    const ativos = canvas.getActiveObjects();
+    if (ativos.length === 0) {
+      setSelectionInfo(null);
+      return;
+    }
+
+    const principal = ativos[0] as any;
+    const isText = isTextObject(principal);
+    setSelectionInfo({ count: ativos.length, isText });
+
+    // Os controles passam a refletir o objeto selecionado, e não o último valor usado para
+    // desenhar — é o que permite "editar os parâmetros" de algo já anotado.
+    const corAtual = isText ? principal.fill : principal.stroke;
+    if (typeof corAtual === 'string' && corAtual) setColor(corAtual);
+    if (isText && typeof principal.fontSize === 'number') {
+      setFontSize(Math.round(principal.fontSize));
+    } else if (!isText && typeof principal.strokeWidth === 'number') {
+      setStrokeWidth(Math.round(principal.strokeWidth));
+    }
+  }, []);
 
   const refreshHistoryButtons = useCallback(() => {
     setHistoryState({
@@ -130,6 +179,27 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
     historyIndexRef.current = historyRef.current.length - 1;
     refreshHistoryButtons();
   }, [refreshHistoryButtons]);
+
+  /**
+   * Arrastar um controle deslizante dispara uma mudança por pixel percorrido. Empilhar um estado
+   * de histórico em cada uma delas enche a pilha com dezenas de passos intermediários e faz
+   * "desfazer" parecer travado — coalescer o arrasto inteiro em um único passo é o que mantém o
+   * desfazer utilizável agora que espessura e tamanho ficaram à mão na barra da seleção.
+   */
+  const pushHistoryDebounced = useCallback(() => {
+    if (historyDebounceRef.current !== null) window.clearTimeout(historyDebounceRef.current);
+    historyDebounceRef.current = window.setTimeout(() => {
+      historyDebounceRef.current = null;
+      pushHistory();
+    }, 400);
+  }, [pushHistory]);
+
+  useEffect(() => {
+    return () => {
+      if (historyDebounceRef.current !== null) window.clearTimeout(historyDebounceRef.current);
+    };
+  }, []);
+
 
   /** Scales + centers the image so it's fully visible in the current canvas viewport. */
   const fitToScreen = useCallback((canvas: Canvas, imgW: number, imgH: number) => {
@@ -155,6 +225,10 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
     canvas.requestRenderAll();
     setZoomPercent(Math.round(clamped * 100));
   }, []);
+
+  useEffect(() => {
+    toolRef.current = tool;
+  }, [tool]);
 
   // ============ Canvas bootstrap (once) ============
   useEffect(() => {
@@ -220,8 +294,8 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
       const onModified = () => pushHistory();
       const onRemoved = () => pushHistory();
       const onPathCreated = () => pushHistory();
-      const onSelection = () => setHasSelection(!!canvas.getActiveObject());
-      const onSelectionCleared = () => setHasSelection(false);
+      const onSelection = () => syncSelection();
+      const onSelectionCleared = () => setSelectionInfo(null);
 
       canvas.on('object:added', onAdded);
       canvas.on('object:modified', onModified);
@@ -333,11 +407,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
 
     canvas.isDrawingMode = tool === 'draw';
     canvas.defaultCursor = tool === 'select' ? 'grab' : 'crosshair';
-    canvas.forEachObject((obj) => {
-      if (obj === canvas.backgroundImage) return;
-      obj.selectable = tool === 'select';
-      obj.evented = tool === 'select';
-    });
+    applySelectability(canvas);
 
     if (tool === 'draw') {
       const brush = new PencilBrush(canvas);
@@ -432,7 +502,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
       canvas.off('mouse:move', handleMouseMove);
       canvas.off('mouse:up', handleMouseUp);
     };
-  }, [tool, color, strokeWidth, fontSize, isReady, pushHistory]);
+  }, [tool, color, strokeWidth, fontSize, isReady, pushHistory, applySelectability]);
 
   // ============ Keyboard delete ============
   useEffect(() => {
@@ -457,6 +527,35 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
     if (!canvas) return;
     canvas.getActiveObjects().forEach((obj) => canvas.remove(obj));
     canvas.discardActiveObject();
+    setSelectionInfo(null);
+    canvas.requestRenderAll();
+  };
+
+  /** Duplica o que está selecionado, deslocado para não ficar exatamente por cima do original. */
+  const duplicateSelected = async () => {
+    const canvas = fabricCanvasRef.current;
+    const ativo = canvas?.getActiveObject();
+    if (!canvas || !ativo) return;
+    const copia = await ativo.clone();
+    copia.set({
+      left: (ativo.left || 0) + 24,
+      top: (ativo.top || 0) + 24,
+      selectable: true,
+      evented: true,
+    });
+    canvas.add(copia);
+    canvas.setActiveObject(copia);
+    canvas.requestRenderAll();
+    syncSelection();
+  };
+
+  /** Entra no modo de edição do texto selecionado (equivalente ao duplo clique). */
+  const editSelectedText = () => {
+    const canvas = fabricCanvasRef.current;
+    const ativo = canvas?.getActiveObject() as any;
+    if (!canvas || !ativo || !isTextObject(ativo)) return;
+    ativo.enterEditing?.();
+    ativo.selectAll?.();
     canvas.requestRenderAll();
   };
 
@@ -467,7 +566,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
     if (active) {
       active.set(isTextObject(active) ? 'fill' : 'stroke', newColor);
       canvas?.requestRenderAll();
-      pushHistory();
+      pushHistoryDebounced();
     }
   };
 
@@ -477,8 +576,9 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
     const active = canvas?.getActiveObject();
     if (active && !isTextObject(active)) {
       active.set('strokeWidth', value);
+      active.setCoords();
       canvas?.requestRenderAll();
-      pushHistory();
+      pushHistoryDebounced();
     }
   };
 
@@ -488,8 +588,9 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
     const active = canvas?.getActiveObject();
     if (active && isTextObject(active)) {
       active.set('fontSize', value);
+      active.setCoords();
       canvas?.requestRenderAll();
-      pushHistory();
+      pushHistoryDebounced();
     }
   };
 
@@ -498,6 +599,11 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
     if (!canvas) return;
     suppressHistoryRef.current = true;
     await canvas.loadFromJSON(JSON.parse(historyRef.current[idx]));
+    // loadFromJSON recria todos os objetos: a seleção anterior aponta para objetos que já não
+    // existem, e a interatividade volta como estava serializada.
+    canvas.discardActiveObject();
+    setSelectionInfo(null);
+    applySelectability(canvas);
     canvas.renderAll();
     suppressHistoryRef.current = false;
     refreshHistoryButtons();
@@ -778,6 +884,113 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
           )}
         </div>
 
+        {/* ===== Barra contextual da seleção =====
+            Antes, a única forma de apagar uma anotação era a lixeira no canto da barra superior
+            (escondida atrás de "Ajustes" no celular) ou a tecla Delete — nada disso aparecia ao
+            selecionar o objeto. Esta barra surge junto com a seleção, com excluir à mão e os
+            parâmetros do próprio objeto já carregados para edição. */}
+        {selectionInfo && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 w-[calc(100%-1.5rem)] max-w-2xl">
+            <div className="bg-[rgba(26,26,26,.93)] backdrop-blur-md rounded-2xl shadow-2xl border border-white/10 px-3 py-2.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2.5">
+              <span className="text-[11px] font-semibold text-[#C49B74] uppercase tracking-wider whitespace-nowrap">
+                {selectionInfo.count > 1
+                  ? `${selectionInfo.count} itens`
+                  : selectionInfo.isText
+                  ? 'Texto'
+                  : 'Desenho'}
+              </span>
+
+              <span className="w-px h-6 bg-white/15" aria-hidden />
+
+              {/* Cor */}
+              <div className="flex items-center gap-1.5">
+                {COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    title={`Mudar a cor para ${c}`}
+                    onClick={() => applyColor(c)}
+                    className={`w-7 h-7 rounded-full border-2 transition-all ${
+                      color === c ? 'border-[#C49B74] scale-110' : 'border-white/30'
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+
+              <span className="w-px h-6 bg-white/15" aria-hidden />
+
+              {/* Parâmetro do tipo selecionado */}
+              {selectionInfo.isText ? (
+                <div className="flex items-center gap-2 text-gray-300 text-[11px]">
+                  <span className="whitespace-nowrap">Tamanho</span>
+                  <input
+                    type="range"
+                    min={20}
+                    max={200}
+                    value={fontSize}
+                    onChange={(e) => applyFontSize(Number(e.target.value))}
+                    className={`w-24 h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
+                  />
+                  <span style={{ fontFamily: 'ui-monospace, Menlo, monospace' }} className="w-7">
+                    {fontSize}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-gray-300 text-[11px]">
+                  <span className="whitespace-nowrap">Espessura</span>
+                  <input
+                    type="range"
+                    min={2}
+                    max={40}
+                    value={strokeWidth}
+                    onChange={(e) => applyStrokeWidth(Number(e.target.value))}
+                    className={`w-24 h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
+                  />
+                  <span style={{ fontFamily: 'ui-monospace, Menlo, monospace' }} className="w-6">
+                    {strokeWidth}
+                  </span>
+                </div>
+              )}
+
+              <span className="w-px h-6 bg-white/15" aria-hidden />
+
+              <div className="flex items-center gap-1">
+                {selectionInfo.isText && selectionInfo.count === 1 && (
+                  <button
+                    type="button"
+                    onClick={editSelectedText}
+                    title="Editar o texto"
+                    className="flex items-center gap-1.5 h-9 px-3 rounded-lg text-gray-200 hover:bg-white/10 text-[12px] font-medium transition-colors"
+                  >
+                    <Type className="w-4 h-4" />
+                    Editar
+                  </button>
+                )}
+                {selectionInfo.count === 1 && (
+                  <button
+                    type="button"
+                    onClick={duplicateSelected}
+                    title="Duplicar"
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-200 hover:bg-white/10 transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={deleteSelected}
+                  title="Excluir seleção (ou tecla Delete)"
+                  className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-[#E11D48]/15 text-[#FF8095] hover:bg-[#E11D48]/30 text-[12px] font-semibold transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Excluir
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Mobile floating controls */}
         <div className="sm:hidden absolute top-3 right-3 flex items-center gap-1 bg-[rgba(0,0,0,.55)] backdrop-blur-md rounded-full px-1 py-1">
           <button type="button" onClick={handleZoomOut} className="w-9 h-9 rounded-full flex items-center justify-center text-white/90">
@@ -803,9 +1016,11 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
             <Redo2 className="w-4 h-4" />
           </button>
         </div>
-        <p className="sm:hidden absolute bottom-3 left-1/2 -translate-x-1/2 text-[12px] text-white/70 bg-[rgba(0,0,0,.55)] backdrop-blur-md px-3 py-1.5 rounded-full whitespace-nowrap">
-          Pinça para dar zoom · dois dedos para mover
-        </p>
+        {!selectionInfo && (
+          <p className="sm:hidden absolute bottom-3 left-1/2 -translate-x-1/2 text-[12px] text-white/70 bg-[rgba(0,0,0,.55)] backdrop-blur-md px-3 py-1.5 rounded-full whitespace-nowrap">
+            Pinça para dar zoom · dois dedos para mover
+          </p>
+        )}
       </div>
 
       {/* ============ Toolbar — mobile (<640px) ============ */}

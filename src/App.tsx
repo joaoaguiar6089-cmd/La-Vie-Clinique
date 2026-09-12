@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { ProcedureManager } from './components/ProcedureManager';
 import { ProcedureDetailModal } from './components/ProcedureDetailModal';
@@ -13,7 +13,7 @@ import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { Procedure, ClinicProfile, AppView } from './types';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
-import { RefreshCw, Check, Loader2 } from 'lucide-react';
+import { RefreshCw, Check, Loader2, AlertTriangle } from 'lucide-react';
 import {
   seedInitialDataIfEmpty,
   subscribeToProcedures,
@@ -21,6 +21,7 @@ import {
   saveProcedureToDb,
   deleteProcedureFromDb,
   saveClinicProfileToDb,
+  publishPublicClinicProfile,
   replaceAllProceduresWithOfficialPdfCatalog,
 } from './services/databaseService';
 import { onAuthChange, logout, type User } from './services/authService';
@@ -86,6 +87,7 @@ export default function App() {
 
   // Firebase Real-time Synchronization Status
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced');
+  const publicProfilePublishedRef = useRef(false);
 
   useEffect(() => {
     if (syncStatus === 'error') {
@@ -103,6 +105,7 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [singleProcedureToExport, setSingleProcedureToExport] = useState<Procedure | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastTone, setToastTone] = useState<'ok' | 'erro'>('ok');
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
 
   // Initialize Firebase and subscribe to real-time updates — só depois de autenticado,
@@ -139,6 +142,16 @@ export default function App() {
             if (firebaseClinic) {
               setClinic(firebaseClinic);
               localStorage.setItem(STORAGE_KEY_CLINIC, JSON.stringify(firebaseClinic));
+
+              // Garante que o espelho público exista mesmo em clínicas que nunca reabriram as
+              // configurações desde que ele passou a ser usado — é dele que a página da paciente
+              // tira nome, telefone e equipe. Uma vez por sessão, e nunca bloqueante.
+              if (!publicProfilePublishedRef.current) {
+                publicProfilePublishedRef.current = true;
+                publishPublicClinicProfile(firebaseClinic).catch((err) =>
+                  console.warn('Não foi possível publicar o espelho público da clínica:', err)
+                );
+              }
             }
             setSyncStatus('synced');
           },
@@ -178,9 +191,11 @@ export default function App() {
     }
   }, [clinic]);
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, tone: 'ok' | 'erro' = 'ok') => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setToastTone(tone);
+    // Um erro precisa de tempo para ser lido inteiro — ele diz o que fazer, não só que falhou.
+    setTimeout(() => setToastMessage(null), tone === 'erro' ? 8000 : 3500);
   };
 
   // Derive unique categories
@@ -194,6 +209,11 @@ export default function App() {
 
   // Handlers with Firestore Persistence
   const handleSaveProcedure = async (procedure: Procedure) => {
+    // Guardado antes da atualização otimista: se a gravação falhar, o estado volta ao que era.
+    // Sem isso a tela (e o localStorage) continuavam mostrando a foto nova de um procedimento que
+    // o Firestore recusou — e a alteração "sumia" sozinha no próximo sync.
+    const anterior = procedures.find((p) => p.id === procedure.id) || null;
+
     try {
       setSyncStatus('syncing');
       // Optimistic update
@@ -215,7 +235,16 @@ export default function App() {
     } catch (err) {
       console.error('Error saving procedure to Firestore:', err);
       setSyncStatus('error');
-      showToast(`Procedimento salvo localmente.`);
+
+      // Reverte para o estado anterior — nada de manter na tela algo que não foi gravado.
+      setProcedures((prev) =>
+        anterior
+          ? prev.map((p) => (p.id === procedure.id ? anterior : p))
+          : prev.filter((p) => p.id !== procedure.id)
+      );
+
+      const motivo = err instanceof Error ? err.message : 'Erro desconhecido ao gravar na nuvem.';
+      showToast(`Não foi possível salvar "${procedure.title}". ${motivo}`, 'erro');
     }
   };
 
@@ -349,9 +378,19 @@ export default function App() {
     <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] sm:flex selection:bg-[#A67C52]/25 selection:text-[#1A1A1A]">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#1A1A1A]/90 backdrop-blur-xl text-white px-5 py-3 rounded-lg shadow-2xl border border-white/20 flex items-center gap-3 text-xs font-medium animate-bounce">
-          <Check className="w-4 h-4 text-[#C49B74]" />
-          <span>{toastMessage}</span>
+        <div
+          className={`fixed bottom-6 right-6 z-50 max-w-sm backdrop-blur-xl text-white px-5 py-3 rounded-lg shadow-2xl border flex items-start gap-3 text-xs font-medium ${
+            toastTone === 'erro'
+              ? 'bg-[#7F1D1D]/95 border-red-300/40'
+              : 'bg-[#1A1A1A]/90 border-white/20 animate-bounce'
+          }`}
+        >
+          {toastTone === 'erro' ? (
+            <AlertTriangle className="w-4 h-4 text-red-200 shrink-0 mt-px" />
+          ) : (
+            <Check className="w-4 h-4 text-[#C49B74] shrink-0 mt-px" />
+          )}
+          <span className="leading-relaxed">{toastMessage}</span>
         </div>
       )}
 

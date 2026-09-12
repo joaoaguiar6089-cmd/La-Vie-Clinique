@@ -101,6 +101,19 @@ const GenderPhotoSlot: React.FC<GenderPhotoSlotProps> = ({
   </div>
 );
 
+/**
+ * Nomes iguais escritos de formas diferentes ("Botox (Toxina Botulínica)" x "botox – toxina
+ * botulinica") precisam casar, senão um procedimento do catálogo que já tem ficha aparece como
+ * se não tivesse. Compara sem acento, sem caixa e sem pontuação.
+ */
+const chaveDeNome = (nome: string): string =>
+  nome
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
 interface ProcedureTemplatesManagerProps {
   templates: AnamnesisTemplate[];
   catalogProcedures: Procedure[];
@@ -149,6 +162,37 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
 
   const categories = ['Todas', ...Array.from(new Set(templates.map((t) => t.categoria || 'Geral')))];
 
+  // ---- Cruzamento entre o catálogo de procedimentos e as fichas-modelo ----
+  // As duas listas nasceram independentes: as fichas vieram de um conjunto fixo de exemplo e nunca
+  // olharam para o catálogo cadastrado, então era normal a lista da anamnese não bater com os
+  // procedimentos reais da clínica. O vínculo é por `procedimentoId` quando existe e, para as
+  // fichas antigas que nunca tiveram esse campo, pelo nome normalizado.
+  const procedimentoPorId = new Map<string, Procedure>(catalogProcedures.map((p) => [p.id, p]));
+  const procedimentoPorNome = new Map<string, Procedure>(
+    catalogProcedures.map((p) => [chaveDeNome(p.title), p])
+  );
+
+  // Três estados para `procedimentoId`: um ID (vínculo explícito), `''` (desvinculado de
+  // propósito) e `undefined` (ficha antiga, anterior ao campo — aí o nome é a única pista).
+  const procedimentoDoTemplate = (tpl: AnamnesisTemplate): Procedure | undefined => {
+    if (tpl.procedimentoId === '') return undefined;
+    if (tpl.procedimentoId) {
+      const porId = procedimentoPorId.get(tpl.procedimentoId);
+      if (porId) return porId;
+      // ID órfão (procedimento removido do catálogo): ainda vale tentar pelo nome.
+    }
+    return procedimentoPorNome.get(chaveDeNome(tpl.procedimentoNome));
+  };
+
+  const idsComFicha = new Set(
+    templates.map((tpl) => procedimentoDoTemplate(tpl)?.id).filter((id): id is string => !!id)
+  );
+  const procedimentosSemFicha = catalogProcedures.filter((p) => !idsComFicha.has(p.id));
+
+  // Valor do seletor no editor. Fichas antigas não têm `procedimentoId`, então o casamento por
+  // nome é o que faz o seletor já abrir na opção certa em vez de "Não vinculado".
+  const vinculoSelecionado = draftTemplate ? procedimentoDoTemplate(draftTemplate)?.id || '' : '';
+
   const filteredTemplates = templates.filter((tpl) => {
     const matchesSearch =
       tpl.procedimentoNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -168,6 +212,44 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
     };
     setDraftTemplate(newTpl);
     setIsEditorOpen(true);
+  };
+
+  /** Abre o editor já vinculado a um procedimento do catálogo, herdando nome, categoria e descrição. */
+  const handleOpenNewTemplateForProcedure = (proc: Procedure) => {
+    setDraftTemplate({
+      id: `tpl-${Date.now()}`,
+      procedimentoId: proc.id,
+      procedimentoNome: proc.title,
+      categoria: proc.category || 'Geral',
+      tem_foto: false,
+      descricao: proc.subtitle || proc.description || '',
+      perguntasEspecificas: [],
+    });
+    setIsEditorOpen(true);
+  };
+
+  /** Troca o procedimento vinculado no editor. `''` volta ao nome livre (fora do catálogo). */
+  const handleSelecionarProcedimentoDoCatalogo = (procedureId: string) => {
+    if (!draftTemplate) return;
+    if (!procedureId) {
+      // `''`, não `undefined`: marca a escolha deliberada de não vincular, senão o casamento por
+      // nome reativaria o vínculo e o seletor voltaria sozinho para o procedimento anterior.
+      setDraftTemplate({ ...draftTemplate, procedimentoId: '' });
+      return;
+    }
+    const proc = procedimentoPorId.get(procedureId);
+    if (!proc) return;
+    setDraftTemplate({
+      ...draftTemplate,
+      procedimentoId: proc.id,
+      procedimentoNome: proc.title,
+      // Só preenche categoria/descrição quando ainda estão vazias — o texto clínico já ajustado
+      // à mão na ficha vale mais do que o texto comercial do catálogo.
+      categoria: draftTemplate.categoria?.trim() ? draftTemplate.categoria : proc.category || 'Geral',
+      descricao: draftTemplate.descricao?.trim()
+        ? draftTemplate.descricao
+        : proc.subtitle || proc.description || '',
+    });
   };
 
   const handleOpenEditTemplate = (tpl: AnamnesisTemplate) => {
@@ -317,7 +399,13 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
 
     setIsSaving(true);
     try {
-      await onSaveTemplate(draftTemplate);
+      // Grava o vínculo resolvido por nome: a partir daqui a ficha fica presa ao ID do
+      // procedimento e sobrevive a uma renomeação no catálogo.
+      await onSaveTemplate(
+        draftTemplate.procedimentoId || !vinculoSelecionado
+          ? draftTemplate
+          : { ...draftTemplate, procedimentoId: vinculoSelecionado }
+      );
       setIsEditorOpen(false);
       setDraftTemplate(null);
     } catch (err) {
@@ -400,6 +488,43 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
         </div>
       </div>
 
+      {/* Procedimentos do catálogo que ainda não têm ficha-modelo — é o que fazia a lista da
+          anamnese divergir dos procedimentos cadastrados. */}
+      {procedimentosSemFicha.length > 0 && (
+        <div className="bg-amber-50/70 border border-amber-200 rounded-sm p-4 sm:p-5 space-y-3">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                {procedimentosSemFicha.length}{' '}
+                {procedimentosSemFicha.length === 1
+                  ? 'procedimento cadastrado ainda sem ficha'
+                  : 'procedimentos cadastrados ainda sem ficha'}
+              </h4>
+              <p className="text-[11px] text-amber-800/80 mt-0.5 leading-relaxed">
+                Eles estão no catálogo, mas não aparecem na hora de preencher uma anamnese nem no link
+                enviado à paciente. Clique em um deles para criar a ficha já vinculada.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {procedimentosSemFicha.map((proc) => (
+              <button
+                key={proc.id}
+                type="button"
+                onClick={() => handleOpenNewTemplateForProcedure(proc)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xs bg-white border border-amber-300 text-[11px] font-medium text-amber-900 hover:border-[#A67C52] hover:text-[#A67C52] transition-colors shadow-2xs"
+                title={`Criar a ficha de anamnese de "${proc.title}"`}
+              >
+                <Plus className="w-3 h-3" />
+                {proc.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Templates Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredTemplates.map((tpl) => (
@@ -439,6 +564,16 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
               <h4 className="font-serif-luxury text-base font-semibold text-[#1A1A1A] mt-2 group-hover:text-[#A67C52] transition-colors">
                 {tpl.procedimentoNome}
               </h4>
+
+              {catalogProcedures.length > 0 && !procedimentoDoTemplate(tpl) && (
+                <span
+                  className="inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 rounded-xs bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold"
+                  title="Nenhum procedimento com este nome no catálogo. Abra 'Configurar' e vincule ao procedimento correto."
+                >
+                  <AlertCircle className="w-3 h-3" />
+                  Fora do catálogo
+                </span>
+              )}
 
               {tpl.descricao && (
                 <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
@@ -541,6 +676,35 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   <Layers className="w-3.5 h-3.5 text-[#A67C52]" />
                   Dados do Procedimento
                 </h4>
+
+                {/* Vínculo com o catálogo: é o que mantém a lista de procedimentos da anamnese
+                    igual à dos procedimentos cadastrados. O campo de texto livre continua abaixo
+                    para fichas que de propósito não correspondem a um item do catálogo. */}
+                {catalogProcedures.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-800 mb-1">
+                      Procedimento do Catálogo
+                    </label>
+                    <select
+                      value={vinculoSelecionado}
+                      onChange={(e) => handleSelecionarProcedimentoDoCatalogo(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] font-medium"
+                    >
+                      <option value="">-- Não vinculado (nome livre) --</option>
+                      {catalogProcedures.map((proc) => (
+                        <option key={proc.id} value={proc.id}>
+                          {proc.title}
+                          {proc.category ? ` — ${proc.category}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                      {vinculoSelecionado
+                        ? 'Vinculado ao catálogo: o nome acompanha o procedimento cadastrado.'
+                        : 'Sem vínculo, esta ficha não conta como cobertura do procedimento no catálogo e aparece marcada como "Fora do catálogo".'}
+                    </p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="sm:col-span-2">

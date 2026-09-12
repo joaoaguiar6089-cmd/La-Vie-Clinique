@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Patient, AnamnesisRecord, AnamnesisTemplate, ClinicProfile } from '../../types';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
+import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import {
   Search,
   Plus,
@@ -16,6 +17,7 @@ import {
   Sparkles,
   ChevronRight,
   Filter,
+  Share2,
 } from 'lucide-react';
 
 interface PatientHistoryViewProps {
@@ -43,6 +45,17 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [selectedPatientFilter, setSelectedPatientFilter] = useState<string>('all');
   const [viewTab, setViewTab] = useState<'records' | 'patients'>('records');
+
+  // Envio do link de preenchimento online — a mesma ação que existe na aba "Fichas por
+  // procedimento", disponível também aqui, ao lado de "Preencher Nova Ficha": é daqui que a
+  // equipe parte quando o objetivo é a paciente, não o modelo de ficha.
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [sharePatientId, setSharePatientId] = useState<string | undefined>(undefined);
+
+  const abrirEnvioDeLink = (patientId?: string) => {
+    setSharePatientId(patientId);
+    setShareModalOpen(true);
+  };
 
   // Filtered records
   const filteredRecords = records.filter((rec) => {
@@ -91,14 +104,31 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => onOpenFillModal()}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-sm bg-[#1A1A1A] text-[#C49B74] text-xs font-semibold uppercase tracking-wider hover:bg-black shadow-xs active:scale-95 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          Preencher Nova Ficha
-        </button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => abrirEnvioDeLink()}
+            disabled={templates.length === 0}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-white border border-[#A67C52]/40 text-[#A67C52] text-xs font-semibold uppercase tracking-wider hover:bg-[#A67C52] hover:text-white shadow-xs active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-[#A67C52]"
+            title={
+              templates.length === 0
+                ? 'Cadastre um modelo de ficha antes de enviar o link'
+                : 'Gerar e enviar o link de preenchimento para a paciente'
+            }
+          >
+            <Share2 className="w-4 h-4" />
+            Enviar Link da Ficha
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onOpenFillModal()}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-[#1A1A1A] text-[#C49B74] text-xs font-semibold uppercase tracking-wider hover:bg-black shadow-xs active:scale-95 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Preencher Nova Ficha
+          </button>
+        </div>
       </div>
 
       {/* Filter and Switch bar */}
@@ -355,18 +385,44 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                     Ver Histórico ({count})
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => onOpenFillModal(pat.id)}
-                    className="px-2.5 py-1 rounded-xs bg-[#1A1A1A] text-white text-[11px] font-semibold hover:bg-black transition-colors"
-                  >
-                    + Nova Ficha
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => abrirEnvioDeLink(pat.id)}
+                      disabled={templates.length === 0}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-xs bg-white border border-[#A67C52]/40 text-[#A67C52] text-[11px] font-semibold hover:bg-[#A67C52] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-[#A67C52]"
+                      title="Enviar o link de preenchimento para esta paciente"
+                    >
+                      <Share2 className="w-3 h-3" />
+                      Link
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenFillModal(pat.id)}
+                      className="px-2.5 py-1 rounded-xs bg-[#1A1A1A] text-white text-[11px] font-semibold hover:bg-black transition-colors"
+                    >
+                      + Nova Ficha
+                    </button>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {shareModalOpen && (
+        <ShareAnamnesisLinkModal
+          isOpen={shareModalOpen}
+          onClose={() => {
+            setShareModalOpen(false);
+            setSharePatientId(undefined);
+          }}
+          templates={templates}
+          patients={patients}
+          clinicProfile={clinicProfile}
+          initialPatientId={sharePatientId}
+        />
       )}
 
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />

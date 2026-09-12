@@ -29,6 +29,7 @@ import {
 import { formatQuoteNumber } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
+import { estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
 import {
   DEFAULT_GENERAL_QUESTIONS,
   DEFAULT_PROCEDURE_TEMPLATES,
@@ -39,6 +40,11 @@ import {
 const PROCEDURES_COLLECTION = 'procedures';
 const CLINIC_SETTINGS_COLLECTION = 'clinic_settings';
 const CLINIC_SETTINGS_DOC_ID = 'main_profile';
+// Espelho público do perfil da clínica. O documento principal guarda os vínculos de login
+// (e-mail/uid/isAdmin) de cada profissional e por isso exige autenticação — mas a paciente que
+// abre o link da ficha não tem login, e sem nome/telefone/endereço a página não tem como se
+// identificar nem gerar o botão de WhatsApp. Este documento carrega só o que é publicável.
+const CLINIC_PUBLIC_PROFILE_DOC_ID = 'public_profile';
 
 const ANAMNESIS_GENERAL_QUESTIONS_COLLECTION = 'anamnesis_general_questions';
 const ANAMNESIS_TEMPLATES_COLLECTION = 'anamnesis_templates';
@@ -189,6 +195,12 @@ export function subscribeToClinicProfile(
 
 /**
  * Save or update a single procedure.
+ *
+ * Fotos enviadas pelo formulário viram base64 e ficam dentro do próprio documento. Se o conjunto
+ * passar do teto de 1MB do Firestore, o `setDoc` falha — mas só *depois* que o cache local já
+ * aplicou a alteração, então a tela mostra a foto nova e ela some minutos depois, quando o
+ * listener volta a sincronizar com o servidor. Barrar aqui, com uma mensagem que diz o que fazer,
+ * troca esse "salvou e desfez sozinho" por um erro imediato e acionável.
  */
 export async function saveProcedureToDb(procedure: Procedure): Promise<void> {
   const docRef = doc(db, PROCEDURES_COLLECTION, procedure.id);
@@ -196,6 +208,16 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<void> {
     ...procedure,
     updatedAt: new Date().toISOString(),
   });
+
+  const bytes = estimateFirestoreDocBytes(dataToSave);
+  if (bytes > FIRESTORE_DOC_SAFE_BYTES) {
+    throw new Error(
+      `As imagens deste procedimento somam ${(bytes / 1024 / 1024).toFixed(2)} MB e ultrapassam o ` +
+        `limite de 1 MB por procedimento. Remova alguma foto (ou use um link de imagem em vez do ` +
+        `upload) e salve novamente.`
+    );
+  }
+
   await setDoc(docRef, dataToSave, { merge: true });
 }
 
@@ -208,7 +230,40 @@ export async function deleteProcedureFromDb(procedureId: string): Promise<void> 
 }
 
 /**
+ * Reduz o perfil da clínica ao que pode ser lido sem login: identidade visual, contato e a
+ * equipe apenas com os dados que já saem impressos na ficha. E-mail de login, UID do Firebase
+ * Auth e a flag de admin ficam de fora — eles são exatamente o motivo de o documento principal
+ * ser fechado.
+ */
+function toPublicClinicProfile(profile: ClinicProfile): Partial<ClinicProfile> {
+  return {
+    name: profile.name,
+    tagline: profile.tagline,
+    professionalName: profile.professionalName,
+    professionalTitle: profile.professionalTitle,
+    registryNumber: profile.registryNumber,
+    phone: profile.phone,
+    instagram: profile.instagram,
+    address: profile.address,
+    cityState: profile.cityState,
+    logoUrl: profile.logoUrl,
+    professionals: (profile.professionals || []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      registryNumber: p.registryNumber,
+      title: p.title,
+      specialty: p.specialty,
+      photoUrl: p.photoUrl,
+    })),
+  };
+}
+
+/**
  * Save or update the clinic profile and clinical team settings.
+ *
+ * Grava também o espelho público usado pelas páginas sem login (ficha de anamnese da paciente).
+ * A falha do espelho não derruba o salvamento principal: perder a marca na página pública é um
+ * problema menor do que perder a edição do perfil.
  */
 export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<void> {
   const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
@@ -217,6 +272,25 @@ export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<voi
     updatedAt: new Date().toISOString(),
   });
   await setDoc(clinicRef, dataToSave, { merge: true });
+
+  try {
+    await publishPublicClinicProfile(profile);
+  } catch (err) {
+    console.warn('Perfil salvo, mas o espelho público da clínica não pôde ser atualizado:', err);
+  }
+}
+
+/** Escreve (ou reescreve) o espelho público do perfil da clínica. */
+export async function publishPublicClinicProfile(profile: ClinicProfile): Promise<void> {
+  const publicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_PUBLIC_PROFILE_DOC_ID);
+  await setDoc(
+    publicRef,
+    cleanForFirestore({
+      ...toPublicClinicProfile(profile),
+      updatedAt: new Date().toISOString(),
+    }),
+    { merge: false } // sem merge: um profissional removido da equipe precisa sumir daqui também
+  );
 }
 
 /**
@@ -559,12 +633,28 @@ export async function getGeneralQuestionsOnce(): Promise<AnamnesisQuestion[]> {
 
 /**
  * Fetch the Clinic Profile once (no live subscription) — used by the public form page.
+ *
+ * Tenta primeiro o espelho público (legível sem login) e só então o documento principal, que
+ * funciona quando quem chama é a equipe autenticada. Nunca lança: a marca da clínica é enfeite
+ * na página da paciente, e uma leitura negada pelas regras não pode impedir a ficha de abrir —
+ * era justamente isso que deixava o link público preso em "Carregando...".
  */
 export async function getClinicProfileOnce(): Promise<ClinicProfile | null> {
-  const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
-  const snap = await getDoc(clinicRef);
-  if (!snap.exists()) return null;
-  return snap.data() as ClinicProfile;
+  try {
+    const publicSnap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_PUBLIC_PROFILE_DOC_ID));
+    if (publicSnap.exists()) return publicSnap.data() as ClinicProfile;
+  } catch (err) {
+    console.warn('Espelho público do perfil da clínica indisponível:', err);
+  }
+
+  try {
+    const snap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID));
+    if (snap.exists()) return snap.data() as ClinicProfile;
+  } catch (err) {
+    console.warn('Perfil da clínica não pôde ser lido (esperado sem login):', err);
+  }
+
+  return null;
 }
 
 // ==========================================

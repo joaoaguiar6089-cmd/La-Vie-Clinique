@@ -3,6 +3,7 @@ import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Che
 import { Procedure, Professional, QuoteItemDetail } from '../types';
 import { PRESET_IMAGE_LIBRARY, INITIAL_CATEGORIES } from '../data/initialData';
 import { formatBRL } from '../utils/formatters';
+import { downscaleImage, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
 
 interface ProcedureFormModalProps {
   isOpen: boolean;
@@ -75,6 +76,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
   const [showPresetLibrary, setShowPresetLibrary] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
     if (procedureToEdit) {
@@ -151,22 +154,35 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setCustomDoctorNames((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Handle local image file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle local image file upload.
+  // A foto vai para dentro do documento do procedimento no Firestore, que tem teto de 1MB — uma
+  // foto de celular crua (3 a 8MB em base64) estoura esse teto sozinha. O upload sem redução era
+  // exatamente o motivo de a troca de foto "funcionar" na tela e se desfazer depois: o cache local
+  // aceitava, o servidor recusava. Reduzir aqui é o que torna a gravação confiável.
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file: File) => {
-      if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = (loadEvt) => {
-        const base64 = loadEvt.target?.result as string;
-        if (base64) {
-          setImages((prev) => [...prev, base64]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    const selected: File[] = [];
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files.item(i);
+      if (file && file.type.startsWith('image/')) selected.push(file);
+    }
+    if (selected.length === 0) return;
+
+    setIsUploadingImage(true);
+    setUploadError('');
+    try {
+      const processed = await Promise.all(selected.map((file) => downscaleImage(file, 1400, 0.82)));
+      setImages((prev) => [...prev, ...processed]);
+    } catch (err) {
+      console.error('Erro ao processar imagem do procedimento:', err);
+      setUploadError('Não foi possível processar uma das imagens. Tente outro arquivo.');
+    } finally {
+      setIsUploadingImage(false);
+      // Permite reenviar o mesmo arquivo logo depois de remover
+      e.target.value = '';
+    }
   };
 
   const handleAddImageUrl = () => {
@@ -177,6 +193,13 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
   const handleRemoveImage = (index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
+    // Remover uma foto é exatamente a ação que o aviso de tamanho pede; o aviso some junto.
+    setErrors((prev) => {
+      if (!prev.images) return prev;
+      const { images: _descartado, ...resto } = prev;
+      return resto;
+    });
+    setUploadError('');
   };
 
   const handleAddBenefit = () => {
@@ -277,6 +300,16 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       createdAt: procedureToEdit?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    // Mesma checagem que saveProcedureToDb faz antes de gravar, só que aqui ela ainda dá para
+    // mostrar no formulário com as fotos à vista, em vez de virar um toast depois que o modal fechou.
+    const bytes = estimateFirestoreDocBytes(procedureData);
+    if (bytes > FIRESTORE_DOC_SAFE_BYTES) {
+      setErrors({
+        images: `As imagens somam ${(bytes / 1024 / 1024).toFixed(2)} MB e passam do limite de 1 MB por procedimento. Remova alguma foto (ou use um link de imagem) antes de salvar.`,
+      });
+      return;
+    }
 
     onSave(procedureData);
     onClose();
@@ -878,15 +911,22 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             {/* Upload Box & URL input */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="flex flex-col items-center justify-center p-4 border border-dashed border-white/80 hover:border-[#A67C52] rounded-sm cursor-pointer bg-white/60 backdrop-blur-xs transition-all group">
-                <Upload className="w-6 h-6 text-gray-400 group-hover:text-[#A67C52] mb-1" />
-                <span className="text-xs font-medium text-[#1A1A1A]">Fazer upload de foto</span>
-                <span className="text-[10px] text-gray-500">PNG, JPG, WEBP (armazenado seguro)</span>
+              <label
+                className={`flex flex-col items-center justify-center p-4 border border-dashed border-white/80 rounded-sm bg-white/60 backdrop-blur-xs transition-all group ${
+                  isUploadingImage ? 'opacity-60 cursor-wait' : 'hover:border-[#A67C52] cursor-pointer'
+                }`}
+              >
+                <Upload className={`w-6 h-6 text-gray-400 group-hover:text-[#A67C52] mb-1 ${isUploadingImage ? 'animate-pulse' : ''}`} />
+                <span className="text-xs font-medium text-[#1A1A1A]">
+                  {isUploadingImage ? 'Processando imagem...' : 'Fazer upload de foto'}
+                </span>
+                <span className="text-[10px] text-gray-500">PNG, JPG, WEBP — redimensionada automaticamente</span>
                 <input
                   type="file"
                   multiple
                   accept="image/*"
                   onChange={handleFileUpload}
+                  disabled={isUploadingImage}
                   className="hidden"
                 />
               </label>
@@ -937,7 +977,18 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 ))}
               </div>
             )}
-            {errors.images && <p className="text-xs text-red-600">{errors.images}</p>}
+            {uploadError && (
+              <p className="flex items-start gap-1.5 text-xs text-red-600">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                {uploadError}
+              </p>
+            )}
+            {errors.images && (
+              <p className="flex items-start gap-1.5 text-xs text-red-600">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                {errors.images}
+              </p>
+            )}
           </div>
 
           {/* Form Actions Footer */}
@@ -951,10 +1002,15 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-1.5"
+              disabled={isUploadingImage}
+              className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
               <Check className="w-4 h-4" />
-              {procedureToEdit ? 'Salvar Alterações' : 'Cadastrar Procedimento'}
+              {isUploadingImage
+                ? 'Processando imagem...'
+                : procedureToEdit
+                ? 'Salvar Alterações'
+                : 'Cadastrar Procedimento'}
             </button>
           </div>
         </form>

@@ -6,6 +6,15 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // Espelho público do perfil da clínica: só nome, contato, endereço e a equipe sem os dados
+    // de login. É o que a página da ficha de anamnese (aberta pela paciente, sem conta) lê para
+    // se identificar. Precisa vir ANTES da regra geral de clinic_settings — as regras do Firestore
+    // são unidas por OU, então esta apenas abre a leitura deste documento específico.
+    match /clinic_settings/public_profile {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
     // Clinic settings document: identidade da clínica, profissionais cadastradas, contato.
     // Contém os vínculos de login (email/uid/isAdmin) das profissionais — não pode ser público.
     match /clinic_settings/{docId} {

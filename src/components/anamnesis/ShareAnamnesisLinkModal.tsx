@@ -45,6 +45,15 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
   if (!isOpen) return null;
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
+
+  // As fotos por gênero substituíram a foto única `fotoModeloUrl`, mas este resumo continuava
+  // olhando só para o campo legado — modelos configurados com as versões feminina/masculina
+  // apareciam aqui como "sem foto cadastrada", e os que ainda carregam uma URL legada morta
+  // mostravam "Foto Anexada" com a miniatura quebrada ao lado.
+  const fotoReferenciaUrl =
+    selectedTemplate?.fotoModeloFemininoUrl ||
+    selectedTemplate?.fotoModeloMasculinoUrl ||
+    selectedTemplate?.fotoModeloUrl;
   const selectedPatient = patients.find((p) => p.id === selectedPatientId);
   const canShare = !!selectedProfessionalId;
 
@@ -141,20 +150,24 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
             </div>
             <div className="flex-1">
               <span className="font-bold text-[#1A1A1A] block">
-                {selectedTemplate?.fotoModeloUrl
+                {fotoReferenciaUrl
                   ? 'Foto do Doutor Anexada no Início do Formulário'
                   : 'Nenhuma foto do doutor cadastrada neste modelo'}
               </span>
               <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
-                {selectedTemplate?.fotoModeloUrl
+                {fotoReferenciaUrl
                   ? 'O cliente verá sua foto/mapa de referência no topo do formulário e terá o campo para enviar a foto dele opcionalmente.'
                   : 'Dica: Você pode anexar uma foto ou mapa anatômico editando este modelo na aba "(2) Fichas por Procedimento".'}
               </p>
             </div>
-            {selectedTemplate?.fotoModeloUrl && (
+            {fotoReferenciaUrl && (
               <img
-                src={selectedTemplate.fotoModeloUrl}
+                src={fotoReferenciaUrl}
                 alt="Foto do doutor"
+                // Uma URL legada que saiu do ar não deve deixar um ícone de imagem quebrada no lugar
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
                 className="w-12 h-12 object-cover rounded-xs border border-gray-300 shrink-0"
               />
             )}

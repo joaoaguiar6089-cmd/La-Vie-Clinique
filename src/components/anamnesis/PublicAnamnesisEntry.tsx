@@ -25,6 +25,7 @@ import {
   IdCard,
   Calendar,
   ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 
 const formatCpf = (raw: string): string => {
@@ -156,15 +157,33 @@ export const PublicAnamnesisEntry: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [identityConfirmed, setIdentityConfirmed] = useState(false);
+  // Incrementado por "Tentar novamente" — reexecuta o carregamento sem recarregar a página inteira.
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    // Rede de segurança: nenhuma leitura do Firestore tem timeout próprio, então uma conexão ruim
+    // (ou uma regra de segurança que pendura a resposta) deixava a paciente olhando para
+    // "Carregando sua ficha..." para sempre, sem nada a fazer além de fechar a aba.
+    let settled = false;
+    const watchdog = setTimeout(() => {
+      if (cancelled || settled) return;
+      setErrorMsg(
+        'A ficha está demorando mais do que o esperado para abrir. Verifique sua conexão e toque em "Tentar novamente".'
+      );
+      setScreen('error');
+    }, 20000);
 
     async function load() {
       try {
-        const clinic = await getClinicProfileOnce();
-        if (cancelled) return;
-        if (clinic) setClinicProfile(clinic);
+        // A marca da clínica é enfeite: buscada em paralelo e sem poder derrubar o carregamento.
+        // Quando ela era o primeiro `await` da sequência, uma leitura negada (a paciente não tem
+        // login) travava tudo o que vinha depois — inclusive a própria ficha.
+        void getClinicProfileOnce()
+          .then((clinic) => {
+            if (!cancelled && clinic) setClinicProfile(clinic);
+          })
+          .catch((err) => console.warn('Perfil da clínica indisponível na página pública:', err));
 
         // MODE A — returning to an already-created ficha via its personal link
         if (fichaParam) {
@@ -246,12 +265,16 @@ export const PublicAnamnesisEntry: React.FC = () => {
       }
     }
 
-    load();
+    load().finally(() => {
+      settled = true;
+      clearTimeout(watchdog);
+    });
     return () => {
       cancelled = true;
+      clearTimeout(watchdog);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reloadToken]);
 
   const handleSaved = (record: AnamnesisRecord) => {
     if (!existingRecord) {
@@ -313,6 +336,18 @@ export const PublicAnamnesisEntry: React.FC = () => {
           </div>
           <h2 className="font-serif-luxury text-[21px] font-semibold text-[#1A1A1A]">Não foi possível abrir a ficha</h2>
           <p className="text-[14px] text-[#8a8578] leading-relaxed">{errorMsg}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setErrorMsg('');
+              setScreen('loading');
+              setReloadToken((n) => n + 1);
+            }}
+            className="inline-flex items-center justify-center gap-2 w-full h-[50px] rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Tentar novamente
+          </button>
         </div>
       </div>
     );
