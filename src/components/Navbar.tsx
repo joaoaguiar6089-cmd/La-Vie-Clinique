@@ -53,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
     {
       id: 'anamnesis' as const,
-      label: 'Fichas dos pacientes',
+      label: 'Anamneses',
       icon: ClipboardList,
       active: currentView === 'anamnesis',
       count: undefined,
@@ -125,7 +125,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {currentView === 'procedures'
                     ? 'Procedimentos'
                     : currentView === 'anamnesis'
-                    ? 'Fichas dos pacientes'
+                    ? 'Anamneses'
                     : 'Orçamentos'}
                 </span>
               </div>
