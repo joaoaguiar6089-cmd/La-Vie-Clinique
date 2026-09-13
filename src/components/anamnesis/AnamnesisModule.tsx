@@ -12,7 +12,6 @@ import {
   saveGeneralQuestion,
   saveAllGeneralQuestions,
   deleteGeneralQuestion,
-  subscribeToAnamnesisTemplates,
   saveAnamnesisTemplate,
   deleteAnamnesisTemplate,
   subscribeToPatients,
@@ -38,9 +37,25 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 
+/**
+ * Pedido vindo do catálogo de procedimentos. Chega junto com a troca de aba: o card navega até
+ * aqui e diz o que abrir. O `nonce` distingue dois toques seguidos no mesmo procedimento.
+ */
+export interface AnamnesisOpenRequest {
+  tipo: 'preencher' | 'criar-ficha';
+  procedure: Procedure;
+  /** Ficha-modelo já vinculada ao procedimento, quando existe. */
+  templateId?: string;
+  nonce: number;
+}
+
 interface AnamnesisModuleProps {
   clinicProfile: ClinicProfile;
   catalogProcedures: Procedure[];
+  /** As fichas-modelo são assinadas no App — o catálogo também precisa delas. */
+  templates: AnamnesisTemplate[];
+  openRequest?: AnamnesisOpenRequest | null;
+  onOpenRequestHandled?: () => void;
 }
 
 export type AnamnesisTab = 'records' | 'templates' | 'general';
@@ -48,12 +63,14 @@ export type AnamnesisTab = 'records' | 'templates' | 'general';
 export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
   clinicProfile,
   catalogProcedures,
+  templates,
+  openRequest,
+  onOpenRequestHandled,
 }) => {
   const [activeTab, setActiveTab] = useState<AnamnesisTab>('records');
 
   // Firestore collections state
   const [generalQuestions, setGeneralQuestions] = useState<AnamnesisQuestion[]>([]);
-  const [templates, setTemplates] = useState<AnamnesisTemplate[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [records, setRecords] = useState<AnamnesisRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,12 +81,14 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
   const [fillModalTemplateId, setFillModalTemplateId] = useState<string | undefined>(undefined);
   const [detailRecord, setDetailRecord] = useState<AnamnesisRecord | null>(null);
 
+  /** Procedimento que o catálogo pediu para ganhar uma ficha-modelo nova. */
+  const [criarFichaPara, setCriarFichaPara] = useState<Procedure | null>(null);
+
   // Subscribe to all 4 collections on mount and seed if empty
   useEffect(() => {
     seedAnamnesisInitialDataIfEmpty();
 
     const unsubGenQ = subscribeToGeneralQuestions((data) => setGeneralQuestions(data));
-    const unsubTpl = subscribeToAnamnesisTemplates((data) => setTemplates(data));
     const unsubPat = subscribeToPatients((data) => setPatients(data));
     const unsubRec = subscribeToAnamnesisRecords((data) => {
       setRecords(data);
@@ -78,11 +97,29 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
 
     return () => {
       unsubGenQ();
-      unsubTpl();
       unsubPat();
       unsubRec();
     };
   }, []);
+
+  // Atende o pedido que veio do catálogo de procedimentos.
+  useEffect(() => {
+    if (!openRequest) return;
+
+    if (openRequest.tipo === 'preencher') {
+      setActiveTab('records');
+      setFillModalPatientId(undefined);
+      setFillModalTemplateId(openRequest.templateId);
+      setFillModalOpen(true);
+    } else {
+      setActiveTab('templates');
+      setCriarFichaPara(openRequest.procedure);
+    }
+
+    onOpenRequestHandled?.();
+    // `nonce` é o que torna dois pedidos iguais em pedidos distintos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRequest?.nonce]);
 
   const handleOpenFillModal = (patientId?: string, templateId?: string) => {
     setFillModalPatientId(patientId);
@@ -191,6 +228,8 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
           generalQuestions={generalQuestions}
           clinicProfile={clinicProfile}
           patients={patients}
+          criarFichaPara={criarFichaPara}
+          onCriarFichaHandled={() => setCriarFichaPara(null)}
           onSaveTemplate={saveAnamnesisTemplate}
           onDeleteTemplate={deleteAnamnesisTemplate}
         />

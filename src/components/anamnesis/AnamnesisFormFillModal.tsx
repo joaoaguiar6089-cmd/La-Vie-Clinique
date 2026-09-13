@@ -11,6 +11,7 @@ import { downscaleImage } from '../../utils/imageCompressor';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
+import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import {
   X,
   Camera,
@@ -21,6 +22,7 @@ import {
   Music,
   PenTool,
   IdCard,
+  Share2,
 } from 'lucide-react';
 
 const formatCpf = (raw: string): string => {
@@ -164,6 +166,27 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   // Validation & status
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  // "Link pro paciente": o mesmo atendimento não pode ser preenchido aqui e pelo paciente online,
+  // senão viram duas fichas. Por isso, assim que o link sai, este formulário se encerra — mas só
+  // ao fechar a folha de compartilhamento, para dar tempo de copiar, conferir e mandar de novo.
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [linkFoiCompartilhado, setLinkFoiCompartilhado] = useState(false);
+
+  // O modal devolve `null` quando fechado, mas nunca desmonta — o componente fica sempre no JSX
+  // do módulo. Isso congela os valores iniciais dos useState na primeira montagem: sem sincronizar
+  // a cada abertura, tocar "Anamnese" num card do catálogo abriria sempre a primeira ficha da
+  // lista em vez da ficha do procedimento clicado.
+  useEffect(() => {
+    if (!isOpen) return;
+    setSelectedTemplateId(initialTemplateId || templates[0]?.id || '');
+    if (initialPatientId) {
+      setPatientMode('select');
+      setSelectedPatientId(initialPatientId);
+    }
+    setLinkFoiCompartilhado(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialTemplateId, initialPatientId]);
 
   // When selected patient changes, auto-fill general questions that match
   useEffect(() => {
@@ -388,25 +411,35 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fadeIn">
       <div className="relative w-full max-w-4xl bg-[#F9F8F6] rounded-2xl border border-white/80 shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
         {/* Modal Top Header */}
-        <div className="px-6 py-4 bg-[#1A1A1A] text-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74]" />
-            <div>
-              <h3 className="font-serif-luxury text-[21px] font-medium tracking-tight">
+        <div className="px-4 sm:px-6 py-4 bg-[#1A1A1A] text-white flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74] shrink-0" />
+            <div className="min-w-0">
+              <h3 className="font-serif-luxury text-[18px] sm:text-[21px] font-medium tracking-tight truncate">
                 Nova Ficha de Anamnese
               </h3>
-              <p className="text-[13px] text-[#C49B74] font-medium">
+              <p className="text-[13px] text-[#C49B74] font-medium truncate hidden sm:block">
                 {clinicProfile.name || 'La Vie Clinique'} · Registro médico e estético integrado
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsShareOpen(true)}
+              className="flex items-center gap-2 h-10 px-3 sm:px-4 rounded-xl border border-white/25 text-white text-[13px] sm:text-[14px] font-semibold hover:bg-white/10 active:scale-97 transition-all"
+            >
+              <Share2 className="w-[18px] h-[18px] shrink-0" />
+              Link pro paciente
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Scrollable Body */}
@@ -922,6 +955,26 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           title="Anotar foto do paciente"
           onSave={handleSaveAnnotation}
           onClose={() => setIsAnnotatingPhoto(false)}
+        />
+      )}
+
+      {isShareOpen && (
+        <ShareAnamnesisLinkModal
+          isOpen={isShareOpen}
+          onClose={() => {
+            setIsShareOpen(false);
+            // Só encerra o preenchimento se o link realmente saiu — abrir e desistir não deve
+            // custar o que já foi digitado aqui.
+            if (linkFoiCompartilhado) onClose();
+          }}
+          templates={templates}
+          patients={patients}
+          clinicProfile={clinicProfile}
+          initialTemplateId={selectedTemplateId}
+          // Em "novo paciente" ainda não existe ID (o cadastro só grava ao salvar a ficha), então
+          // o link sai sem identificar o paciente e ele se identifica ao abrir.
+          initialPatientId={patientMode === 'select' ? selectedPatientId || undefined : undefined}
+          onShared={() => setLinkFoiCompartilhado(true)}
         />
       )}
     </div>

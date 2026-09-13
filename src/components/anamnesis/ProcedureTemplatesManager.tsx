@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AnamnesisTemplate,
   AnamnesisQuestion,
@@ -11,6 +11,10 @@ import {
 import { downscaleImage } from '../../utils/imageCompressor';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
+import {
+  criarIndiceDeProcedimentos,
+  procedimentoDoTemplate as procedimentoDoTemplateCompartilhado,
+} from '../../utils/templateMatching';
 import {
   Plus,
   Trash2,
@@ -101,25 +105,15 @@ const GenderPhotoSlot: React.FC<GenderPhotoSlotProps> = ({
   </div>
 );
 
-/**
- * Nomes iguais escritos de formas diferentes ("Botox (Toxina Botulínica)" x "botox – toxina
- * botulinica") precisam casar, senão um procedimento do catálogo que já tem ficha aparece como
- * se não tivesse. Compara sem acento, sem caixa e sem pontuação.
- */
-const chaveDeNome = (nome: string): string =>
-  nome
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-
 interface ProcedureTemplatesManagerProps {
   templates: AnamnesisTemplate[];
   catalogProcedures: Procedure[];
   generalQuestions: AnamnesisQuestion[];
   clinicProfile?: ClinicProfile;
   patients?: Patient[];
+  /** Procedimento que o catálogo mandou criar ficha — abre o editor já vinculado a ele. */
+  criarFichaPara?: Procedure | null;
+  onCriarFichaHandled?: () => void;
   onSaveTemplate: (template: AnamnesisTemplate) => Promise<void>;
   onDeleteTemplate: (templateId: string) => Promise<void>;
 }
@@ -130,6 +124,8 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
   generalQuestions,
   clinicProfile,
   patients = [],
+  criarFichaPara,
+  onCriarFichaHandled,
   onSaveTemplate,
   onDeleteTemplate,
 }) => {
@@ -165,24 +161,14 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
   // ---- Cruzamento entre o catálogo de procedimentos e as fichas-modelo ----
   // As duas listas nasceram independentes: as fichas vieram de um conjunto fixo de exemplo e nunca
   // olharam para o catálogo cadastrado, então era normal a lista da anamnese não bater com os
-  // procedimentos reais da clínica. O vínculo é por `procedimentoId` quando existe e, para as
-  // fichas antigas que nunca tiveram esse campo, pelo nome normalizado.
-  const procedimentoPorId = new Map<string, Procedure>(catalogProcedures.map((p) => [p.id, p]));
-  const procedimentoPorNome = new Map<string, Procedure>(
-    catalogProcedures.map((p) => [chaveDeNome(p.title), p])
-  );
+  // procedimentos reais da clínica. A regra do vínculo mora em `utils/templateMatching` porque o
+  // card do catálogo usa a mesma para decidir se o botão "Anamnese" abre ou fica travado —
+  // divergir aqui deixaria um botão travado num procedimento que esta tela jura ter ficha.
+  const indiceDeProcedimentos = criarIndiceDeProcedimentos(catalogProcedures);
+  const procedimentoPorId = indiceDeProcedimentos.porId;
 
-  // Três estados para `procedimentoId`: um ID (vínculo explícito), `''` (desvinculado de
-  // propósito) e `undefined` (ficha antiga, anterior ao campo — aí o nome é a única pista).
-  const procedimentoDoTemplate = (tpl: AnamnesisTemplate): Procedure | undefined => {
-    if (tpl.procedimentoId === '') return undefined;
-    if (tpl.procedimentoId) {
-      const porId = procedimentoPorId.get(tpl.procedimentoId);
-      if (porId) return porId;
-      // ID órfão (procedimento removido do catálogo): ainda vale tentar pelo nome.
-    }
-    return procedimentoPorNome.get(chaveDeNome(tpl.procedimentoNome));
-  };
+  const procedimentoDoTemplate = (tpl: AnamnesisTemplate): Procedure | undefined =>
+    procedimentoDoTemplateCompartilhado(tpl, indiceDeProcedimentos);
 
   const idsComFicha = new Set(
     templates.map((tpl) => procedimentoDoTemplate(tpl)?.id).filter((id): id is string => !!id)
@@ -227,6 +213,15 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
     });
     setIsEditorOpen(true);
   };
+
+  // "Criar ficha de anamnese" no menu do card de procedimento cai aqui: o catálogo navegou até
+  // esta aba e agora o editor abre já vinculado, sem obrigar a achar o procedimento na lista.
+  useEffect(() => {
+    if (!criarFichaPara) return;
+    handleOpenNewTemplateForProcedure(criarFichaPara);
+    onCriarFichaHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [criarFichaPara]);
 
   /** Troca o procedimento vinculado no editor. `''` volta ao nome livre (fora do catálogo). */
   const handleSelecionarProcedimentoDoCatalogo = (procedureId: string) => {

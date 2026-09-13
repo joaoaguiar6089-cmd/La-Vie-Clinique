@@ -1,17 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Navbar } from './components/Navbar';
 import { ProcedureManager } from './components/ProcedureManager';
 import { ProcedureDetailModal } from './components/ProcedureDetailModal';
 import { ProcedureFormModal } from './components/ProcedureFormModal';
 import { ShareExportModal } from './components/ShareExportModal';
 import { ClinicSettingsModal } from './components/ClinicSettingsModal';
-import { AnamnesisModule } from './components/anamnesis/AnamnesisModule';
+import { AnamnesisModule, AnamnesisOpenRequest } from './components/anamnesis/AnamnesisModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
 import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
-import { Procedure, ClinicProfile, AppView } from './types';
+import { Procedure, ClinicProfile, AppView, AnamnesisTemplate } from './types';
+import { mapearTemplatesPorProcedimento } from './utils/templateMatching';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { RefreshCw, Check, Loader2, AlertTriangle } from 'lucide-react';
 import {
@@ -23,6 +24,7 @@ import {
   saveClinicProfileToDb,
   publishPublicClinicProfile,
   replaceAllProceduresWithOfficialPdfCatalog,
+  subscribeToAnamnesisTemplates,
 } from './services/databaseService';
 import { onAuthChange, logout, type User } from './services/authService';
 
@@ -99,6 +101,19 @@ function MainCatalogApp() {
   const [toastTone, setToastTone] = useState<'ok' | 'erro'>('ok');
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
 
+  // As fichas-modelo de anamnese moravam só dentro do AnamnesisModule. O card do catálogo agora
+  // precisa saber quais procedimentos já têm ficha para habilitar o botão "Anamnese", então a
+  // assinatura subiu para cá — o módulo recebe a mesma lista por prop, sem duplicar a leitura.
+  const [anamnesisTemplates, setAnamnesisTemplates] = useState<AnamnesisTemplate[]>([]);
+  const [templatesCarregando, setTemplatesCarregando] = useState(true);
+
+  /**
+   * Pedido vindo do catálogo para o módulo de anamnese. O `nonce` existe porque tocar "Anamnese"
+   * duas vezes no mesmo procedimento é um pedido novo — sem ele o módulo não veria mudança alguma
+   * e o formulário não reabriria.
+   */
+  const [anamnesisRequest, setAnamnesisRequest] = useState<AnamnesisOpenRequest | null>(null);
+
   // Initialize Firebase and subscribe to real-time updates — só depois de autenticado,
   // já que as regras do Firestore agora exigem login para procedures/clinic_settings.
   useEffect(() => {
@@ -165,6 +180,29 @@ function MainCatalogApp() {
     };
   }, [authUser]);
 
+  // Assinatura das fichas-modelo — mesma condição de login das demais coleções.
+  useEffect(() => {
+    if (!authUser) return;
+    const unsubscribe = subscribeToAnamnesisTemplates(
+      (data) => {
+        setAnamnesisTemplates(data);
+        setTemplatesCarregando(false);
+      },
+      (err) => {
+        console.warn('Firestore anamnesis templates subscription offline/error:', err);
+        // Desistir do estado de carregamento é deliberado: sem isso, uma falha de rede deixaria
+        // todo botão "Anamnese" permanentemente habilitado por engano.
+        setTemplatesCarregando(false);
+      }
+    );
+    return unsubscribe;
+  }, [authUser]);
+
+  const templatesPorProcedimento = useMemo(
+    () => mapearTemplatesPorProcedimento(anamnesisTemplates, procedures),
+    [anamnesisTemplates, procedures]
+  );
+
   // Backup sync to localStorage
   useEffect(() => {
     try {
@@ -197,6 +235,29 @@ function MainCatalogApp() {
       ...procedures.map((p) => p.category).filter(Boolean),
     ])
   );
+
+  /**
+   * "Anamnese" no card do catálogo. Navega para o módulo antes de abrir o formulário — como o
+   * fluxo termina nas Anamneses de qualquer jeito, saltar de contexto agora é menos desorientador
+   * do que saltar depois de salvar. Também evita duplicar aqui o modal de preenchimento, que
+   * continua sendo do AnamnesisModule.
+   */
+  const handleOpenAnamnesis = (procedure: Procedure) => {
+    const template = templatesPorProcedimento.get(procedure.id);
+    setAnamnesisRequest({
+      tipo: 'preencher',
+      procedure,
+      templateId: template?.id,
+      nonce: Date.now(),
+    });
+    setCurrentView('anamnesis');
+  };
+
+  /** Único caminho para destravar o botão "Anamnese" de um procedimento sem ficha-modelo. */
+  const handleCreateAnamnesisTemplate = (procedure: Procedure) => {
+    setAnamnesisRequest({ tipo: 'criar-ficha', procedure, nonce: Date.now() });
+    setCurrentView('anamnesis');
+  };
 
   // Handlers with Firestore Persistence
   const handleSaveProcedure = async (procedure: Procedure) => {
@@ -408,13 +469,13 @@ function MainCatalogApp() {
               procedures={procedures}
               clinic={clinic}
               categories={categories}
+              templatesPorProcedimento={templatesPorProcedimento}
+              templatesCarregando={templatesCarregando}
+              onOpenAnamnesis={handleOpenAnamnesis}
+              onCreateAnamnesisTemplate={handleCreateAnamnesisTemplate}
               onOpenNewProcedure={() => {
                 setSelectedProcedureForEdit(null);
                 setIsFormModalOpen(true);
-              }}
-              onOpenExport={() => {
-                setSingleProcedureToExport(null);
-                setIsExportModalOpen(true);
               }}
               onEditProcedure={(proc) => {
                 setSelectedProcedureForEdit(proc);
@@ -430,6 +491,9 @@ function MainCatalogApp() {
             <AnamnesisModule
               clinicProfile={clinic}
               catalogProcedures={procedures}
+              templates={anamnesisTemplates}
+              openRequest={anamnesisRequest}
+              onOpenRequestHandled={() => setAnamnesisRequest(null)}
             />
           ) : (
             <QuotesPanel clinic={clinic} catalogProcedures={procedures} />

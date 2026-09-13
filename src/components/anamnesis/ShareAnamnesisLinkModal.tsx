@@ -23,6 +23,8 @@ interface ShareAnamnesisLinkModalProps {
   clinicProfile: ClinicProfile;
   initialTemplateId?: string;
   initialPatientId?: string;
+  /** Avisa quem abriu que o link chegou ao paciente (copiado ou mandado no WhatsApp). */
+  onShared?: () => void;
 }
 
 export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = ({
@@ -33,6 +35,7 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
   clinicProfile,
   initialTemplateId,
   initialPatientId,
+  onShared,
 }) => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     initialTemplateId || (templates[0]?.id || '')
@@ -82,6 +85,7 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
     navigator.clipboard.writeText(shareableUrl);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2500);
+    onShared?.();
   };
 
   const handleOpenWhatsApp = () => {
@@ -90,6 +94,7 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
       ? `https://wa.me/${targetPhone.startsWith('55') ? targetPhone : `55${targetPhone}`}?text=${encodedText}`
       : `https://wa.me/?text=${encodedText}`;
     window.open(waUrl, '_blank');
+    onShared?.();
   };
 
   const handlePreviewAsPatient = () => {

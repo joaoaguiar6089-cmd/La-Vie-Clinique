@@ -1,52 +1,81 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Plus,
   Star,
   Clock,
-  Repeat,
   MoreHorizontal,
-  Eye,
-  Edit3,
   Copy,
   Share2,
   Trash2,
-  FileDown,
+  ClipboardList,
+  SlidersHorizontal,
+  Check,
   Image as ImageIcon,
 } from 'lucide-react';
-import { Procedure, ClinicProfile } from '../types';
+import { Procedure, ClinicProfile, AnamnesisTemplate } from '../types';
 import { formatBRL } from '../utils/formatters';
 
 interface ProcedureManagerProps {
   procedures: Procedure[];
   clinic: ClinicProfile;
   categories: string[];
+  /** procedimentoId -> ficha-modelo de anamnese. Vazio enquanto `templatesCarregando`. */
+  templatesPorProcedimento: Map<string, AnamnesisTemplate>;
+  /**
+   * As fichas chegam do Firestore depois da primeira pintura. Enquanto não chegam, o botão
+   * "Anamnese" nasce habilitado: abrir o formulário com o seletor vazio é recuperável, mas achar
+   * que um procedimento não tem ficha leva a cadastrar uma ficha duplicada.
+   */
+  templatesCarregando: boolean;
   onOpenNewProcedure: () => void;
-  onOpenExport: () => void;
   onEditProcedure: (procedure: Procedure) => void;
   onDeleteProcedure: (id: string) => void;
   onDuplicateProcedure: (procedure: Procedure) => void;
   onToggleFeatured: (id: string) => void;
   onViewDetails: (procedure: Procedure) => void;
   onShareSingle: (procedure: Procedure) => void;
+  onOpenAnamnesis: (procedure: Procedure) => void;
+  onCreateAnamnesisTemplate: (procedure: Procedure) => void;
 }
 
 export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
   procedures,
   categories,
+  templatesPorProcedimento,
+  templatesCarregando,
   onOpenNewProcedure,
-  onOpenExport,
   onEditProcedure,
   onDeleteProcedure,
   onDuplicateProcedure,
   onToggleFeatured,
   onViewDetails,
   onShareSingle,
+  onOpenAnamnesis,
+  onCreateAnamnesisTemplate,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  // No celular a grade tem uma coluna só, então o botão flutuante cai bem em cima do terceiro
+  // botão de cada card ("Anamnese") — o choque é sistemático, não acidental. Ele some enquanto a
+  // lista desce e volta assim que ela sobe, que é quando a intenção de criar algo reaparece.
+  const [fabVisivel, setFabVisivel] = useState(true);
+
+  useEffect(() => {
+    let ultimoY = window.scrollY;
+    const aoRolar = () => {
+      const y = window.scrollY;
+      if (Math.abs(y - ultimoY) < 8) return;
+      setFabVisivel(y < ultimoY || y < 80);
+      ultimoY = y;
+    };
+    window.addEventListener('scroll', aoRolar, { passive: true });
+    return () => window.removeEventListener('scroll', aoRolar);
+  }, []);
 
   const filteredProcedures = procedures.filter((p) => {
     const matchesSearch =
@@ -59,6 +88,14 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
 
   const featuredCount = procedures.filter((p) => p.isFeatured).length;
   const categoriesCount = Array.from(new Set(procedures.map((p) => p.category))).length;
+
+  /** Quantos procedimentos cada categoria tem — mostrado na folha de filtro para decidir antes de tocar. */
+  const contagemPorCategoria = (cat: string) =>
+    cat === 'Todos' ? procedures.length : procedures.filter((p) => p.category === cat).length;
+
+  /** Enquanto as fichas não chegaram, todo procedimento é tratado como se tivesse ficha. */
+  const temFichaDeAnamnese = (proc: Procedure) =>
+    templatesCarregando || templatesPorProcedimento.has(proc.id);
 
   const openMenu = (procId: string, e: React.MouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -73,17 +110,39 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
 
   const menuProcedure = procedures.find((p) => p.id === menuFor) || null;
 
+  // "Detalhes" e "Editar" saíram do menu — viraram botões fixos no card. O que sobra aqui são as
+  // ações ocasionais, mais a criação da ficha, que é o único caminho para destravar o botão
+  // "Anamnese" de um procedimento que ainda não tem ficha-modelo.
   const menuActions = menuProcedure
     ? [
-        { label: 'Abrir detalhes', icon: Eye, onClick: () => onViewDetails(menuProcedure) },
-        { label: 'Editar procedimento', icon: Edit3, onClick: () => onEditProcedure(menuProcedure) },
-        { label: 'Enviar cartão em PDF', icon: Share2, onClick: () => onShareSingle(menuProcedure) },
+        ...(!templatesCarregando && !templatesPorProcedimento.has(menuProcedure.id)
+          ? [
+              {
+                label: 'Criar ficha de anamnese',
+                icon: ClipboardList,
+                onClick: () => onCreateAnamnesisTemplate(menuProcedure),
+                danger: false,
+              },
+            ]
+          : []),
+        {
+          label: 'Enviar cartão em PDF',
+          icon: Share2,
+          onClick: () => onShareSingle(menuProcedure),
+          danger: false,
+        },
         {
           label: menuProcedure.isFeatured ? 'Remover destaque' : 'Alternar destaque',
           icon: Star,
           onClick: () => onToggleFeatured(menuProcedure.id),
+          danger: false,
         },
-        { label: 'Duplicar', icon: Copy, onClick: () => onDuplicateProcedure(menuProcedure) },
+        {
+          label: 'Duplicar',
+          icon: Copy,
+          onClick: () => onDuplicateProcedure(menuProcedure),
+          danger: false,
+        },
         {
           label: 'Excluir',
           icon: Trash2,
@@ -94,58 +153,58 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
     : [];
 
   return (
-    <div className="px-5 sm:px-6 lg:px-8 py-5 sm:py-8 pb-28 sm:pb-8">
+    <div className="px-5 sm:px-6 lg:px-8 py-5 sm:py-6 pb-24 sm:pb-8">
       {/* Content header */}
-      <div className="mb-5 sm:mb-6">
-        <div className="sm:hidden flex items-baseline gap-2.5 flex-wrap">
-          <h2 className="font-serif-luxury text-[30px] font-medium text-[#1A1A1A] leading-tight">
-            {procedures.length} procedimentos
-          </h2>
-          {featuredCount > 0 && (
-            <span className="text-[13px] font-semibold text-[#A67C52]">
-              {featuredCount} em destaque
-            </span>
-          )}
-        </div>
-        <div className="hidden sm:block">
-          <h2 className="font-serif-luxury text-[34px] font-medium text-[#1A1A1A] leading-tight">
-            Procedimentos
-          </h2>
-          <p className="text-[16px] text-[#8a8578] mt-1">
-            {procedures.length} procedimentos · {categoriesCount} categorias
-            {featuredCount > 0 && <> · <span className="text-[#A67C52] font-medium">{featuredCount} em destaque</span></>}
-          </p>
-        </div>
+      <div className="mb-4">
+        <h2 className="font-serif-luxury text-[22px] sm:text-[24px] font-medium text-[#1A1A1A] leading-tight">
+          Procedimentos
+        </h2>
+        <p className="text-[13px] text-[#8a8578] mt-0.5">
+          {procedures.length} procedimentos · {categoriesCount} categorias
+          {featuredCount > 0 && <> · {featuredCount} em destaque</>}
+        </p>
       </div>
 
-      {/* Search + new-procedure bar */}
-      <div className="flex items-center gap-3 mb-4 sm:bg-white/50 sm:backdrop-blur-md sm:border sm:border-white/70 sm:rounded-2xl sm:px-4 sm:py-3">
-        <div className="relative flex-1 sm:flex-none sm:w-[340px]">
+      {/* Search + filter + new-procedure bar */}
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="relative flex-1 lg:flex-none lg:w-[340px]">
           <Search className="w-[18px] h-[18px] text-[#a8a29a] absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar procedimento"
-            className="w-full h-12 sm:h-[46px] pl-11 pr-4 rounded-2xl sm:rounded-xl bg-white/60 backdrop-blur-xs border border-white/70 sm:border-[rgba(26,26,26,.1)] text-[15px] text-[#1A1A1A] placeholder-[#a8a29a] focus:outline-hidden focus:border-[#A67C52] transition-colors"
+            className="w-full h-11 pl-11 pr-4 rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-[15px] text-[#1A1A1A] placeholder-[#a8a29a] focus:outline-hidden focus:border-[#A67C52] transition-colors"
           />
         </div>
+
+        {/* Filtro em folha: celular e tablet — os chips só aparecem a partir de 1024px, onde as 9
+            categorias cabem sem virar um carrossel arrastado às cegas. */}
+        <button
+          onClick={() => setIsFilterSheetOpen(true)}
+          className="lg:hidden flex items-center gap-2 h-11 px-3.5 rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-[14px] font-medium text-[#1A1A1A] active:scale-97 transition-all shrink-0 max-w-[52%]"
+        >
+          <SlidersHorizontal className="w-[18px] h-[18px] text-[#A67C52] shrink-0" />
+          <span className="truncate">{selectedCategory}</span>
+        </button>
+
         <button
           onClick={onOpenNewProcedure}
-          className="hidden sm:flex items-center gap-2 h-[46px] px-5 rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all shadow-xs shrink-0"
+          className="hidden sm:flex items-center gap-2 h-11 px-5 rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all shrink-0"
         >
           <Plus className="w-[18px] h-[18px]" />
-          Novo procedimento
+          <span className="hidden lg:inline">Novo procedimento</span>
+          <span className="lg:hidden">Novo</span>
         </button>
       </div>
 
-      {/* Category chips */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-6 -mx-5 px-5 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* Category chips — desktop only */}
+      <div className="hidden lg:flex items-center gap-2 flex-wrap mb-5">
         {categories.map((cat) => (
           <button
             key={cat}
             onClick={() => setSelectedCategory(cat)}
-            className={`shrink-0 h-9 sm:h-10 px-4 rounded-full text-[14px] font-medium border transition-colors whitespace-nowrap ${
+            className={`h-9 px-4 rounded-full text-[14px] font-medium border transition-colors whitespace-nowrap ${
               selectedCategory === cat
                 ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
                 : 'bg-white text-[#4a4740] border-[rgba(26,26,26,.1)] hover:border-[#A67C52]'
@@ -156,115 +215,123 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
         ))}
       </div>
 
-      {/* Cards grid */}
+      {/* Cards grid — 3 colunas só a partir de 1280px: em 1024px a coluna fica com ~218px e o
+          rótulo "Anamnese" trunca, e os três botões são texto puro, sem ícone para encolher. */}
       {filteredProcedures.length === 0 ? (
         <div className="text-center py-16 text-[#8a8578] text-[15px] bg-white/50 rounded-2xl border border-white/70">
           Nenhum procedimento encontrado com os filtros selecionados.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4">
           {filteredProcedures.map((proc) => {
             const hasDiscount = proc.promotionalPrice && proc.promotionalPrice < proc.price;
             const img = proc.images && proc.images.length > 0 ? proc.images[0] : '';
+            const comFicha = temFichaDeAnamnese(proc);
 
             return (
               <article
                 key={proc.id}
-                className="bg-white rounded-[20px] shadow-[0_6px_22px_rgba(0,0,0,.06)] overflow-hidden flex flex-col"
+                className="bg-white rounded-2xl border border-[rgba(26,26,26,.07)] shadow-[0_2px_10px_rgba(0,0,0,.04)] overflow-hidden flex flex-col"
               >
-                {/* Photo */}
-                <div className="relative aspect-[2/3] bg-[#EFEDE7] shrink-0">
+                {/* Photo — faixa reduzida. Categoria e destaque moram no corpo, não sobre a foto:
+                    a foto encolheu para ser um sinal rápido, cobri-la com pílulas desfaz o ganho. */}
+                <div className="h-[128px] sm:h-[136px] bg-[#EFEDE7] shrink-0">
                   {img ? (
-                    <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img
+                      src={img}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[#a8a29a]">
-                      <ImageIcon className="w-6 h-6" />
+                      <ImageIcon className="w-5 h-5" />
                     </div>
                   )}
-                  {proc.isFeatured && (
-                    <span className="absolute top-3 left-3 flex items-center gap-1 h-7 px-2.5 rounded-full bg-[rgba(26,26,26,.85)] text-[#E8CDAC] text-[12px] font-semibold">
-                      <Star className="w-3.5 h-3.5 fill-[#E8CDAC]" />
-                      Destaque
-                    </span>
-                  )}
-                  <span className="absolute top-3 right-3 h-7 px-2.5 rounded-full bg-white/95 text-[#4a4740] text-[11px] font-semibold flex items-center max-w-[70%] truncate">
-                    {proc.category}
-                  </span>
                 </div>
 
                 {/* Body */}
-                <div className="p-5 flex flex-col flex-1">
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <h3
-                      onClick={() => onViewDetails(proc)}
-                      className="font-serif-luxury text-[24px] font-semibold text-[#1A1A1A] leading-tight cursor-pointer hover:text-[#A67C52] transition-colors"
-                    >
-                      {proc.title}
-                    </h3>
+                <div className="p-4 flex flex-col flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A67C52] truncate">
+                        {proc.category}
+                      </p>
+                      <h3
+                        onClick={() => onViewDetails(proc)}
+                        className="font-serif-luxury text-[18px] font-semibold text-[#1A1A1A] leading-tight cursor-pointer hover:text-[#A67C52] transition-colors mt-0.5"
+                      >
+                        {proc.isFeatured && (
+                          <Star
+                            className="inline-block w-3.5 h-3.5 fill-[#E8CDAC] text-[#C49B74] mr-1 -mt-0.5"
+                            aria-label="Em destaque"
+                          />
+                        )}
+                        {proc.title}
+                      </h3>
+                    </div>
                     <button
                       onClick={(e) => openMenu(proc.id, e)}
-                      className="shrink-0 w-10 h-10 -mr-1.5 -mt-1 rounded-full flex items-center justify-center text-[#8a8578] hover:bg-[#F9F8F6] hover:text-[#1A1A1A] active:scale-95 transition-all"
+                      className="shrink-0 w-9 h-9 -mr-1.5 -mt-1 rounded-full flex items-center justify-center text-[#8a8578] hover:bg-[#F9F8F6] hover:text-[#1A1A1A] active:scale-95 transition-all"
                       title="Mais ações"
                     >
                       <MoreHorizontal className="w-5 h-5" />
                     </button>
                   </div>
 
-                  {proc.subtitle && (
-                    <p className="text-[14px] text-[#8a8578] leading-snug line-clamp-2 mb-3">
-                      {proc.subtitle}
-                    </p>
-                  )}
-
-                  <div className="flex items-center gap-3 text-[13px] text-[#4a4740] mb-3.5">
+                  <div className="flex items-center gap-2 flex-wrap text-[13px] text-[#4a4740] mt-2 mb-3.5">
                     {proc.duration && (
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#A67C52]" />
-                        {proc.duration}
-                      </span>
-                    )}
-                    {proc.sessionsRecommended && (
-                      <span className="flex items-center gap-1.5">
-                        <Repeat className="w-3.5 h-3.5 text-[#A67C52]" />
-                        {proc.sessionsRecommended}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="border-t border-[rgba(26,26,26,.07)] pt-3 mb-3.5 mt-auto">
-                    <span className="block text-[12px] text-[#8a8578] mb-0.5">Investimento</span>
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      {proc.isStartingPrice && (
-                        <span className="text-[12px] font-medium text-[#8a8578]">
-                          a partir de
+                      <>
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-[#A67C52]" />
+                          {proc.duration}
                         </span>
+                        <span className="text-[#d6d3cc]">·</span>
+                      </>
+                    )}
+                    <span className="flex items-baseline gap-1.5">
+                      {proc.isStartingPrice && (
+                        <span className="text-[12px] text-[#8a8578]">a partir de</span>
                       )}
                       {hasDiscount && (
-                        <span className="text-[13px] text-[#a8a29a] line-through">
+                        <span className="text-[12px] text-[#a8a29a] line-through">
                           {formatBRL(proc.price)}
                         </span>
                       )}
-                      <span className="text-[24px] font-bold text-[#8E653D]">
+                      <span className="font-semibold text-[#8E653D]">
                         {formatBRL(hasDiscount ? proc.promotionalPrice : proc.price)}
                       </span>
-                      {proc.priceNote && (
-                        <span className="text-[12px] text-[#8a8578]">{proc.priceNote}</span>
-                      )}
-                    </div>
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-2.5">
+                  <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-auto">
+                    <button
+                      onClick={() => onViewDetails(proc)}
+                      className="h-10 rounded-lg border border-[rgba(26,26,26,.15)] text-[#4a4740] text-[12px] sm:text-[13px] font-semibold hover:border-[#A67C52] hover:text-[#A67C52] active:scale-97 transition-all"
+                    >
+                      Detalhes
+                    </button>
                     <button
                       onClick={() => onEditProcedure(proc)}
-                      className="flex-1 h-11 rounded-xl border border-[#A67C52] text-[#A67C52] text-[14px] font-semibold hover:bg-[#A67C52]/5 active:scale-97 transition-all"
+                      className="h-10 rounded-lg border border-[rgba(26,26,26,.15)] text-[#4a4740] text-[12px] sm:text-[13px] font-semibold hover:border-[#A67C52] hover:text-[#A67C52] active:scale-97 transition-all"
                     >
                       Editar
                     </button>
                     <button
-                      onClick={() => onViewDetails(proc)}
-                      className="flex-1 h-11 rounded-xl bg-[#A67C52] text-white text-[14px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all"
+                      onClick={() => comFicha && onOpenAnamnesis(proc)}
+                      disabled={!comFicha}
+                      title={
+                        comFicha
+                          ? 'Preencher anamnese deste procedimento'
+                          : 'Este procedimento ainda não tem ficha de anamnese. Crie uma pelo menu de mais ações.'
+                      }
+                      className={`h-10 rounded-lg text-[12px] sm:text-[13px] font-semibold transition-all ${
+                        comFicha
+                          ? 'bg-[#A67C52] text-white hover:bg-[#8E653D] active:scale-97'
+                          : 'bg-[#EFEDE7] text-[#a8a29a] cursor-not-allowed'
+                      }`}
                     >
-                      Ver ficha
+                      Anamnese
                     </button>
                   </div>
                 </div>
@@ -272,6 +339,47 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
             );
           })}
         </div>
+      )}
+
+      {/* Filter bottom sheet: celular e tablet */}
+      {isFilterSheetOpen && (
+        <>
+          <div
+            className="lg:hidden fixed inset-0 z-40 bg-black/30"
+            onClick={() => setIsFilterSheetOpen(false)}
+          />
+          <div className="lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[22px] shadow-2xl pb-[max(16px,env(safe-area-inset-bottom))] animate-fadeIn max-h-[75vh] flex flex-col">
+            <div className="w-11 h-1 bg-[rgba(26,26,26,.15)] rounded-full mx-auto mt-3 mb-1 shrink-0" />
+            <p className="px-5 pt-2 pb-2 text-[15px] font-semibold text-[#1A1A1A] shrink-0">
+              Filtrar por categoria
+            </p>
+            <div className="overflow-y-auto py-1">
+              {categories.map((cat) => {
+                const ativa = selectedCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => {
+                      setSelectedCategory(cat);
+                      setIsFilterSheetOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 min-h-[52px] px-5 py-2 text-[15px] text-left transition-colors ${
+                      ativa
+                        ? 'text-[#A67C52] font-semibold bg-[#A67C52]/5'
+                        : 'text-[#1A1A1A] hover:bg-[#F9F8F6]'
+                    }`}
+                  >
+                    <span className="flex-1">{cat}</span>
+                    <span className="text-[13px] text-[#8a8578] shrink-0">
+                      {contagemPorCategoria(cat)}
+                    </span>
+                    {ativa && <Check className="w-[18px] h-[18px] shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
       )}
 
       {/* "…" menu: backdrop + bottom sheet (mobile) / popover (sm+) */}
@@ -296,7 +404,9 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                       closeMenu();
                     }}
                     className={`w-full flex items-center gap-3 h-[52px] px-5 text-[15px] font-medium transition-colors ${
-                      action.danger ? 'text-[#E11D48] hover:bg-[#E11D48]/5' : 'text-[#1A1A1A] hover:bg-[#F9F8F6]'
+                      action.danger
+                        ? 'text-[#E11D48] hover:bg-[#E11D48]/5'
+                        : 'text-[#1A1A1A] hover:bg-[#F9F8F6]'
                     }`}
                   >
                     <Icon className="w-[18px] h-[18px]" />
@@ -323,7 +433,9 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                       closeMenu();
                     }}
                     className={`w-full flex items-center gap-3 h-[46px] px-4 text-[14px] font-medium transition-colors ${
-                      action.danger ? 'text-[#E11D48] hover:bg-[#E11D48]/5' : 'text-[#1A1A1A] hover:bg-[#F9F8F6]'
+                      action.danger
+                        ? 'text-[#E11D48] hover:bg-[#E11D48]/5'
+                        : 'text-[#1A1A1A] hover:bg-[#F9F8F6]'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -336,24 +448,17 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
         </>
       )}
 
-      {/* Mobile sticky footer */}
-      <div className="sm:hidden fixed left-0 right-0 bottom-0 z-30 pt-8 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pointer-events-none" style={{ background: 'linear-gradient(to top, #F9F8F6 55%, transparent)' }}>
-        <div className="flex items-center gap-2.5 pointer-events-auto">
-          <button
-            onClick={onOpenNewProcedure}
-            className="flex-1 h-[52px] rounded-2xl bg-[#A67C52] text-white text-[16px] font-semibold shadow-lg active:scale-97 transition-all"
-          >
-            Novo procedimento
-          </button>
-          <button
-            onClick={onOpenExport}
-            className="w-[52px] h-[52px] rounded-2xl bg-white border border-[rgba(26,26,26,.1)] text-[#1A1A1A] flex items-center justify-center shadow-lg active:scale-97 transition-all shrink-0"
-            title="Exportar catálogo"
-          >
-            <FileDown className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
+      {/* Botão flutuante (celular): a barra fixa de largura total custava ~80px de altura em toda
+          tela. "Exportar catálogo" saiu daqui — já existe no menu de navegação. */}
+      <button
+        onClick={onOpenNewProcedure}
+        className={`sm:hidden fixed right-5 bottom-[max(20px,env(safe-area-inset-bottom))] z-30 w-14 h-14 rounded-full bg-[#A67C52] text-white flex items-center justify-center shadow-lg active:scale-95 transition-all duration-200 ${
+          fabVisivel ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5 pointer-events-none'
+        }`}
+        aria-label="Novo procedimento"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
     </div>
   );
 };
