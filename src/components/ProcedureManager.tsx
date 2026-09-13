@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search,
   Plus,
@@ -9,8 +9,6 @@ import {
   Share2,
   Trash2,
   ClipboardList,
-  SlidersHorizontal,
-  Check,
   Image as ImageIcon,
 } from 'lucide-react';
 import { Procedure, ClinicProfile, AnamnesisTemplate } from '../types';
@@ -56,9 +54,14 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
-  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Garante que "Todos" seja sempre a primeira opção, seguida das demais categorias
+  const listaCategorias = useMemo(() => {
+    const semTodos = categories.filter((c) => c !== 'Todos');
+    return ['Todos', ...semTodos];
+  }, [categories]);
 
   // No celular a grade tem uma coluna só, então o botão flutuante cai bem em cima do terceiro
   // botão de cada card ("Anamnese") — o choque é sistemático, não acidental. Ele some enquanto a
@@ -165,32 +168,22 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
         </p>
       </div>
 
-      {/* Search + filter + new-procedure bar */}
-      <div className="flex items-center gap-2.5 mb-4">
-        <div className="relative flex-1 lg:flex-none lg:w-[340px]">
-          <Search className="w-[18px] h-[18px] text-[#a8a29a] absolute left-4 top-1/2 -translate-y-1/2" />
+      {/* Search + action bar */}
+      <div className="flex items-center gap-2.5 mb-3.5">
+        <div className="relative flex-1 lg:flex-none lg:w-[360px]">
+          <Search className="w-[18px] h-[18px] text-[#a8a29a] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar procedimento"
+            placeholder="Buscar procedimento..."
             className="w-full h-11 pl-11 pr-4 rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-[15px] text-[#1A1A1A] placeholder-[#a8a29a] focus:outline-hidden focus:border-[#A67C52] transition-colors"
           />
         </div>
 
-        {/* Filtro em folha: celular e tablet — os chips só aparecem a partir de 1024px, onde as 9
-            categorias cabem sem virar um carrossel arrastado às cegas. */}
-        <button
-          onClick={() => setIsFilterSheetOpen(true)}
-          className="lg:hidden flex items-center gap-2 h-11 px-3.5 rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-[14px] font-medium text-[#1A1A1A] active:scale-97 transition-all shrink-0 max-w-[52%]"
-        >
-          <SlidersHorizontal className="w-[18px] h-[18px] text-[#A67C52] shrink-0" />
-          <span className="truncate">{selectedCategory}</span>
-        </button>
-
         <button
           onClick={onOpenNewProcedure}
-          className="hidden sm:flex items-center gap-2 h-11 px-5 rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all shrink-0"
+          className="hidden sm:flex items-center gap-2 h-11 px-5 rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all shrink-0 ml-auto"
         >
           <Plus className="w-[18px] h-[18px]" />
           <span className="hidden lg:inline">Novo procedimento</span>
@@ -198,28 +191,58 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
         </button>
       </div>
 
-      {/* Category chips — desktop only */}
-      <div className="hidden lg:flex items-center gap-2 flex-wrap mb-5">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            className={`h-9 px-4 rounded-full text-[14px] font-medium border transition-colors whitespace-nowrap ${
-              selectedCategory === cat
-                ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                : 'bg-white text-[#4a4740] border-[rgba(26,26,26,.1)] hover:border-[#A67C52]'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
+      {/* Botões de filtro de categoria: visíveis em todos os aparelhos (mobile, tablet e desktop)
+          - Começa com "Todos" e depois as demais categorias
+          - Sem rolagem lateral (flex-wrap dinâmico)
+          - Não é puramente vertical (agrupa horizontalmente com quebra de linha natural)
+          - Tamanho compacto e elegante, perfeitamente legível e fácil de clicar */}
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-5">
+        {listaCategorias.map((cat) => {
+          const isSelected = selectedCategory === cat;
+          const count = contagemPorCategoria(cat);
+
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setSelectedCategory(cat)}
+              className={`h-[32px] sm:h-[34px] px-3 sm:px-3.5 rounded-full text-[12.5px] sm:text-[13px] font-medium border inline-flex items-center gap-1.5 transition-all duration-150 active:scale-95 ${
+                isSelected
+                  ? 'bg-[#1A1A1A] text-[#F6EFE4] border-[#1A1A1A] shadow-xs'
+                  : 'bg-white text-[#4A4740] border-[rgba(26,26,26,.12)] hover:border-[#A67C52] hover:text-[#1A1A1A] hover:bg-[#FAF8F5]'
+              }`}
+            >
+              <span>{cat}</span>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10.5px] sm:text-[11px] font-semibold leading-none ${
+                  isSelected
+                    ? 'bg-white/20 text-[#F6EFE4]'
+                    : 'bg-black/5 text-[#736E65]'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Cards grid — 3 colunas só a partir de 1280px: em 1024px a coluna fica com ~218px e o
-          rótulo "Anamnese" trunca, e os três botões são texto puro, sem ícone para encolher. */}
+      {/* Cards grid */}
       {filteredProcedures.length === 0 ? (
         <div className="text-center py-16 text-[#8a8578] text-[15px] bg-white/50 rounded-2xl border border-white/70">
-          Nenhum procedimento encontrado com os filtros selecionados.
+          <p>Nenhum procedimento encontrado com os filtros selecionados.</p>
+          {(selectedCategory !== 'Todos' || searchTerm.trim() !== '') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCategory('Todos');
+                setSearchTerm('');
+              }}
+              className="mt-3.5 px-4 py-2 rounded-xl bg-[#A67C52] text-white text-[13px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all inline-flex items-center gap-1.5"
+            >
+              Limpar filtros
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4">
@@ -341,46 +364,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
         </div>
       )}
 
-      {/* Filter bottom sheet: celular e tablet */}
-      {isFilterSheetOpen && (
-        <>
-          <div
-            className="lg:hidden fixed inset-0 z-40 bg-black/30"
-            onClick={() => setIsFilterSheetOpen(false)}
-          />
-          <div className="lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[22px] shadow-2xl pb-[max(16px,env(safe-area-inset-bottom))] animate-fadeIn max-h-[75vh] flex flex-col">
-            <div className="w-11 h-1 bg-[rgba(26,26,26,.15)] rounded-full mx-auto mt-3 mb-1 shrink-0" />
-            <p className="px-5 pt-2 pb-2 text-[15px] font-semibold text-[#1A1A1A] shrink-0">
-              Filtrar por categoria
-            </p>
-            <div className="overflow-y-auto py-1">
-              {categories.map((cat) => {
-                const ativa = selectedCategory === cat;
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => {
-                      setSelectedCategory(cat);
-                      setIsFilterSheetOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 min-h-[52px] px-5 py-2 text-[15px] text-left transition-colors ${
-                      ativa
-                        ? 'text-[#A67C52] font-semibold bg-[#A67C52]/5'
-                        : 'text-[#1A1A1A] hover:bg-[#F9F8F6]'
-                    }`}
-                  >
-                    <span className="flex-1">{cat}</span>
-                    <span className="text-[13px] text-[#8a8578] shrink-0">
-                      {contagemPorCategoria(cat)}
-                    </span>
-                    {ativa && <Check className="w-[18px] h-[18px] shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </>
-      )}
+
 
       {/* "…" menu: backdrop + bottom sheet (mobile) / popover (sm+) */}
       {menuProcedure && (
