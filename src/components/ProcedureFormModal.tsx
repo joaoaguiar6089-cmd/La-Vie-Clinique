@@ -1,9 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope, FileText } from 'lucide-react';
+import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope, FileText, Crop } from 'lucide-react';
 import { Procedure, Professional, QuoteItemDetail } from '../types';
 import { PRESET_IMAGE_LIBRARY, INITIAL_CATEGORIES } from '../data/initialData';
 import { formatBRL } from '../utils/formatters';
-import { downscaleImage, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
+import { estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
+import { ImageCropperModal, AspectOption } from './ImageCropperModal';
+
+/**
+ * A mesma foto aparece em frames bem diferentes (card da lista e detalhe em paisagem, cartão
+ * compartilhado em 16:10, catálogo em PDF em retrato). Por isso o recorte oferece formatos em vez
+ * de um só: a usuária escolhe o frame onde aquela foto precisa ficar bonita e enquadra para ele.
+ */
+const PROCEDURE_PHOTO_ASPECTS: AspectOption[] = [
+  { id: 'paisagem', label: 'Paisagem 3:2', ratio: 3 / 2 },
+  { id: 'cartao', label: 'Cartão 16:10', ratio: 16 / 10 },
+  { id: 'catalogo', label: 'Catálogo (retrato)', ratio: 280 / 430 },
+  { id: 'quadrado', label: 'Quadrado', ratio: 1 },
+  { id: 'original', label: 'Original', ratio: null },
+];
 
 interface ProcedureFormModalProps {
   isOpen: boolean;
@@ -74,8 +88,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
   const [showPresetLibrary, setShowPresetLibrary] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  /** Fotos escolhidas no input que ainda passam pelo recorte, uma de cada vez. */
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
+  const [cropQueueTotal, setCropQueueTotal] = useState(0);
+  /** Foto já adicionada que a usuária pediu para reenquadrar (índice em `images`). */
+  const [adjustingImage, setAdjustingImage] = useState<{ index: number; src: string } | null>(null);
 
   useEffect(() => {
     if (procedureToEdit) {
@@ -130,6 +148,11 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setCustomDoctorNames([]);
     }
     setErrors({});
+    setUploadError('');
+    // Um recorte pendente pertence ao procedimento anterior — abrir outro cadastro o descarta.
+    setCropQueue([]);
+    setCropQueueTotal(0);
+    setAdjustingImage(null);
     // availableDoctors is intentionally excluded: it's a new array reference on every
     // clinic profile sync, and including it would reset all in-progress form edits
     // (including image removals) whenever that background sync fires while editing.
@@ -156,31 +179,50 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   // A foto vai para dentro do documento do procedimento no Firestore, que tem teto de 1MB — uma
   // foto de celular crua (3 a 8MB em base64) estoura esse teto sozinha. O upload sem redução era
   // exatamente o motivo de a troca de foto "funcionar" na tela e se desfazer depois: o cache local
-  // aceitava, o servidor recusava. Reduzir aqui é o que torna a gravação confiável.
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // aceitava, o servidor recusava. O recorte é quem reduz agora: só entra em `images` o JPEG já
+  // enquadrado e redimensionado.
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
-
     const selected: File[] = [];
-    for (let i = 0; i < files.length; i += 1) {
-      const file = files.item(i);
-      if (file && file.type.startsWith('image/')) selected.push(file);
+    if (files) {
+      for (let i = 0; i < files.length; i += 1) {
+        const file = files.item(i);
+        if (file && file.type.startsWith('image/')) selected.push(file);
+      }
     }
+    // Só depois de copiar os arquivos: limpar o value esvazia a FileList do input, e é o que
+    // permite reenviar o mesmo arquivo logo depois de remover ou de cancelar o recorte.
+    e.target.value = '';
     if (selected.length === 0) return;
 
-    setIsUploadingImage(true);
     setUploadError('');
-    try {
-      const processed = await Promise.all(selected.map((file) => downscaleImage(file, 1400, 0.82)));
-      setImages((prev) => [...prev, ...processed]);
-    } catch (err) {
-      console.error('Erro ao processar imagem do procedimento:', err);
-      setUploadError('Não foi possível processar uma das imagens. Tente outro arquivo.');
-    } finally {
-      setIsUploadingImage(false);
-      // Permite reenviar o mesmo arquivo logo depois de remover
-      e.target.value = '';
+    setAdjustingImage(null);
+    setCropQueue(selected);
+    setCropQueueTotal(selected.length);
+  };
+
+  /** Foto no recorte agora: a que está sendo reajustada tem prioridade sobre a fila de uploads. */
+  const cropSource: File | string | null = adjustingImage ? adjustingImage.src : cropQueue[0] ?? null;
+
+  const handleCropConfirm = (dataUrl: string) => {
+    if (adjustingImage) {
+      const { index } = adjustingImage;
+      setImages((prev) => prev.map((img, i) => (i === index ? dataUrl : img)));
+      setAdjustingImage(null);
+      return;
     }
+    setImages((prev) => [...prev, dataUrl]);
+    setCropQueue((prev) => prev.slice(1));
+  };
+
+  const handleCropCancel = () => {
+    if (adjustingImage) {
+      setAdjustingImage(null);
+      return;
+    }
+    // Cancelar no meio de uma seleção múltipla descarta as fotos que ainda faltavam.
+    setCropQueue([]);
+    setCropQueueTotal(0);
   };
 
   const handleAddImageUrl = () => {
@@ -911,22 +953,15 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             {/* Upload Box & URL input */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label
-                className={`flex flex-col items-center justify-center p-4 border border-dashed border-white/80 rounded-sm bg-white/60 backdrop-blur-xs transition-all group ${
-                  isUploadingImage ? 'opacity-60 cursor-wait' : 'hover:border-[#A67C52] cursor-pointer'
-                }`}
-              >
-                <Upload className={`w-6 h-6 text-gray-400 group-hover:text-[#A67C52] mb-1 ${isUploadingImage ? 'animate-pulse' : ''}`} />
-                <span className="text-xs font-medium text-[#1A1A1A]">
-                  {isUploadingImage ? 'Processando imagem...' : 'Fazer upload de foto'}
-                </span>
-                <span className="text-[10px] text-gray-500">PNG, JPG, WEBP — redimensionada automaticamente</span>
+              <label className="flex flex-col items-center justify-center p-4 border border-dashed border-white/80 rounded-sm bg-white/60 backdrop-blur-xs transition-all group hover:border-[#A67C52] cursor-pointer">
+                <Upload className="w-6 h-6 text-gray-400 group-hover:text-[#A67C52] mb-1" />
+                <span className="text-xs font-medium text-[#1A1A1A]">Fazer upload de foto</span>
+                <span className="text-[10px] text-gray-500">PNG, JPG, WEBP — você enquadra a foto antes de salvar</span>
                 <input
                   type="file"
                   multiple
                   accept="image/*"
                   onChange={handleFileUpload}
-                  disabled={isUploadingImage}
                   className="hidden"
                 />
               </label>
@@ -965,14 +1000,29 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                         Capa
                       </span>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(idx)}
-                      className="absolute top-1 right-1 p-1.5 bg-red-600/90 hover:bg-red-600 active:bg-red-700 text-white rounded-full shadow-sm transition-colors"
-                      title="Remover imagem"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="absolute top-1 right-1 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadError('');
+                          setCropQueue([]);
+                          setCropQueueTotal(0);
+                          setAdjustingImage({ index: idx, src: img });
+                        }}
+                        className="p-1.5 bg-[#1A1A1A]/85 hover:bg-[#1A1A1A] text-white rounded-full shadow-sm transition-colors"
+                        title="Ajustar enquadramento"
+                      >
+                        <Crop className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(idx)}
+                        className="p-1.5 bg-red-600/90 hover:bg-red-600 active:bg-red-700 text-white rounded-full shadow-sm transition-colors"
+                        title="Remover imagem"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1002,12 +1052,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isUploadingImage}
+              disabled={cropSource !== null}
               className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
               <Check className="w-4 h-4" />
-              {isUploadingImage
-                ? 'Processando imagem...'
+              {cropSource
+                ? 'Enquadrando foto...'
                 : procedureToEdit
                 ? 'Salvar Alterações'
                 : 'Cadastrar Procedimento'}
@@ -1015,6 +1065,25 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Fora do <form>: o recorte não pode disparar o submit do procedimento. */}
+      <ImageCropperModal
+        isOpen={cropSource !== null}
+        source={cropSource}
+        title={adjustingImage ? 'Reenquadrar foto do procedimento' : 'Enquadrar foto do procedimento'}
+        description="Arraste e dê zoom até a foto ficar como você quer que apareça no card, no catálogo e nos compartilhamentos."
+        aspectOptions={PROCEDURE_PHOTO_ASPECTS}
+        maxOutputDim={1400}
+        quality={0.82}
+        confirmLabel={adjustingImage ? 'Salvar recorte' : 'Adicionar foto'}
+        progressLabel={
+          !adjustingImage && cropQueueTotal > 1
+            ? `Foto ${cropQueueTotal - cropQueue.length + 1} de ${cropQueueTotal}`
+            : undefined
+        }
+        onCancel={handleCropCancel}
+        onConfirm={handleCropConfirm}
+      />
     </div>
   );
 };

@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
-import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2 } from 'lucide-react';
+import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop } from 'lucide-react';
 import { ClinicProfile, Professional } from '../types';
 import { createProfessionalLogin } from '../services/authService';
+import { ImageCropperModal, AspectOption } from './ImageCropperModal';
+
+/**
+ * A foto da profissional entra em dois lugares com recortes diferentes: o bloco 92×104 da capa do
+ * catálogo em PDF e o avatar redondo das listas. O frame do recorte é o do PDF (o mais exigente) e
+ * o círculo do avatar aparece como guia por cima — assim o rosto não fica cortado em nenhum dos dois.
+ */
+const PROFESSIONAL_PHOTO_ASPECTS: AspectOption[] = [
+  { id: 'ficha', label: 'Ficha', ratio: 92 / 104 },
+];
 
 interface ClinicSettingsModalProps {
   isOpen: boolean;
@@ -61,6 +71,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
       setEditingDocId(null);
       setShowDoctorForm(false);
       setDeletingDocId(null);
+      setPhotoCropSource(null);
     }
     wasOpenRef.current = isOpen;
   }, [isOpen, clinic]);
@@ -73,42 +84,22 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   const [docSpecialty, setDocSpecialty] = useState('');
   const [docPhotoUrl, setDocPhotoUrl] = useState('');
   const [docEmail, setDocEmail] = useState('');
+  /** Foto aguardando recorte: o arquivo recém-escolhido ou a foto atual que a usuária quer reajustar. */
+  const [photoCropSource, setPhotoCropSource] = useState<File | string | null>(null);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
   const [creatingLoginForId, setCreatingLoginForId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  /**
+   * O arquivo escolhido não vira foto direto: abre o recorte. É lá que a foto é enquadrada e
+   * reduzida para caber com folga no limite de 1 MiB por documento do Firestore.
+   */
   const handleDoctorPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Permite reabrir o mesmo arquivo caso o recorte seja cancelado.
+    e.target.value = '';
     if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = (loadEvt) => {
-      const rawBase64 = loadEvt.target?.result as string;
-      if (!rawBase64) return;
-
-      // Downscale & re-encode as JPEG so the photo stays well under Firestore's
-      // 1 MiB document limit (raw phone photos can be several MB as base64).
-      const img = new Image();
-      img.onload = () => {
-        const MAX_DIMENSION = 480;
-        const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
-        const targetW = Math.round(img.width * scale);
-        const targetH = Math.round(img.height * scale);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = targetW;
-        canvas.height = targetH;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          setDocPhotoUrl(rawBase64);
-          return;
-        }
-        ctx.drawImage(img, 0, 0, targetW, targetH);
-        setDocPhotoUrl(canvas.toDataURL('image/jpeg', 0.82));
-      };
-      img.onerror = () => setDocPhotoUrl(rawBase64);
-      img.src = rawBase64;
-    };
-    reader.readAsDataURL(file);
+    setPhotoCropSource(file);
   };
 
   const handleChange = (field: keyof ClinicProfile, value: any) => {
@@ -123,6 +114,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setDocSpecialty('');
     setDocPhotoUrl('');
     setDocEmail('');
+    setPhotoCropSource(null);
     setShowDoctorForm(true);
   };
 
@@ -134,6 +126,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setDocSpecialty(doc.specialty || doc.title || '');
     setDocPhotoUrl(doc.photoUrl || '');
     setDocEmail(doc.email || '');
+    setPhotoCropSource(null);
     setShowDoctorForm(true);
   };
 
@@ -176,6 +169,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setDocSpecialty('');
     setDocPhotoUrl('');
     setDocEmail('');
+    setPhotoCropSource(null);
     setShowDoctorForm(false);
   };
 
@@ -348,7 +342,10 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   </span>
                   <button
                     type="button"
-                    onClick={() => setShowDoctorForm(false)}
+                    onClick={() => {
+                      setShowDoctorForm(false);
+                      setPhotoCropSource(null);
+                    }}
                     className="text-xs text-gray-400 hover:text-gray-600"
                   >
                     Fechar
@@ -367,11 +364,21 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                     <label className="block text-[11px] font-medium text-gray-700 mb-1">
                       Foto da Médica (usada na capa do catálogo em PDF)
                     </label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] cursor-pointer transition-colors">
                         Escolher Arquivo
                         <input type="file" accept="image/*" onChange={handleDoctorPhotoUpload} className="hidden" />
                       </label>
+                      {docPhotoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setPhotoCropSource(docPhotoUrl)}
+                          className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] transition-colors flex items-center gap-1"
+                        >
+                          <Crop className="w-3 h-3" />
+                          Ajustar enquadramento
+                        </button>
+                      )}
                       {docPhotoUrl && (
                         <button
                           type="button"
@@ -708,6 +715,24 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Fora do <form>: o recorte não pode disparar o submit do cadastro da médica. */}
+      <ImageCropperModal
+        isOpen={photoCropSource !== null}
+        source={photoCropSource}
+        title="Enquadrar foto da profissional"
+        description="O frame é o mesmo usado na capa do catálogo em PDF. O círculo tracejado mostra o que aparece no avatar."
+        aspectOptions={PROFESSIONAL_PHOTO_ASPECTS}
+        circleGuide
+        maxOutputDim={600}
+        quality={0.85}
+        confirmLabel="Usar esta foto"
+        onCancel={() => setPhotoCropSource(null)}
+        onConfirm={(dataUrl) => {
+          setDocPhotoUrl(dataUrl);
+          setPhotoCropSource(null);
+        }}
+      />
     </div>
   );
 };
