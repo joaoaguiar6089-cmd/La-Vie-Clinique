@@ -12,6 +12,7 @@ import {
   PanelLeftClose,
 } from 'lucide-react';
 import { ClinicProfile, AppView } from '../types';
+import { ClinicLogo } from './ClinicLogo';
 
 interface NavbarProps {
   currentView: AppView;
@@ -114,9 +115,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
               className="flex items-center gap-2.5 min-w-0 text-left"
             >
-              <span className="w-8 h-8 rounded-lg bg-[#1A1A1A] flex items-center justify-center text-[#C49B74] font-serif-luxury text-sm font-semibold shrink-0">
-                LV
-              </span>
+              <ClinicLogo
+                clinic={clinic}
+                className="w-8 h-8 rounded-lg shrink-0"
+                monogramClassName="bg-[#1A1A1A] text-[#C49B74] font-serif-luxury text-sm font-semibold"
+              />
               <div className="min-w-0">
                 <span className="font-serif-luxury text-[17px] font-medium text-[#1A1A1A] leading-tight block truncate">
                   {clinic.name}
@@ -167,9 +170,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Cabeçalho do menu lateral */}
             <div className="flex items-center justify-between pb-5 border-b border-white/10">
               <div className="flex items-center gap-3 min-w-0">
-                <span className="w-10 h-10 rounded-xl border border-[rgba(232,205,172,.35)] bg-black/20 flex items-center justify-center text-[#C49B74] font-serif-luxury text-base font-semibold shrink-0">
-                  LV
-                </span>
+                <ClinicLogo
+                  clinic={clinic}
+                  className="w-10 h-10 rounded-xl shrink-0"
+                  monogramClassName="border border-[rgba(232,205,172,.35)] bg-black/20 text-[#C49B74] font-serif-luxury text-base font-semibold"
+                />
                 <div className="min-w-0">
                   <span className="font-serif-luxury text-lg font-medium text-[#F6EFE4] leading-tight block truncate">
                     {clinic.name}
@@ -261,9 +266,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center gap-3 min-w-0"
             title={clinic.name}
           >
-            <span className="w-[42px] h-[42px] rounded-xl border border-[rgba(232,205,172,.35)] bg-black/20 flex items-center justify-center text-[#C49B74] font-serif-luxury text-lg font-semibold shrink-0">
-              LV
-            </span>
+            <ClinicLogo
+              clinic={clinic}
+              className="w-[42px] h-[42px] rounded-xl shrink-0"
+              monogramClassName="border border-[rgba(232,205,172,.35)] bg-black/20 text-[#C49B74] font-serif-luxury text-lg font-semibold"
+            />
             <span
               className={`font-serif-luxury text-[21px] font-medium text-[#F6EFE4] leading-tight text-left truncate ${
                 isTabletExpanded ? 'block' : 'hidden lg:block'

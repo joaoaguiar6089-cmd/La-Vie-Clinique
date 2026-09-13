@@ -19,9 +19,11 @@ interface ImageCropperModalProps {
   aspectOptions?: AspectOption[];
   /** Desenha o círculo do avatar por cima do frame (a foto também aparece redonda em algum lugar). */
   circleGuide?: boolean;
-  /** Maior lado do JPEG gerado — segura o tamanho do documento no Firestore. */
+  /** Maior lado da imagem gerada — segura o tamanho do documento no Firestore. */
   maxOutputDim?: number;
   quality?: number;
+  /** `image/png` preserva fundo transparente (logos); o padrão JPEG pesa menos em fotos. */
+  outputMimeType?: 'image/jpeg' | 'image/png';
   confirmLabel?: string;
   /** Ex.: "Foto 2 de 5" quando o usuário selecionou várias de uma vez. */
   progressLabel?: string;
@@ -68,7 +70,7 @@ interface WorkSource {
   h: number;
 }
 
-function prepareWorkSource(img: HTMLImageElement): WorkSource {
+function prepareWorkSource(img: HTMLImageElement, previewMime: string): WorkSource {
   const width = img.naturalWidth || img.width;
   const height = img.naturalHeight || img.height;
   const biggest = Math.max(width, height);
@@ -85,7 +87,7 @@ function prepareWorkSource(img: HTMLImageElement): WorkSource {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return { el: canvas, url: canvas.toDataURL('image/jpeg', 0.92), w: canvas.width, h: canvas.height };
+  return { el: canvas, url: canvas.toDataURL(previewMime, 0.92), w: canvas.width, h: canvas.height };
 }
 
 export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
@@ -97,6 +99,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
   circleGuide = false,
   maxOutputDim = 1400,
   quality = 0.85,
+  outputMimeType = 'image/jpeg',
   confirmLabel = 'Aplicar recorte',
   progressLabel,
   onCancel,
@@ -164,7 +167,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
         setWork(
           tainted
             ? { el: img, url: img.src, w: img.naturalWidth || img.width, h: img.naturalHeight || img.height }
-            : prepareWorkSource(img)
+            : prepareWorkSource(img, outputMimeType)
         );
       } catch {
         if (!cancelled) setErrorMessage('Não foi possível abrir esta imagem. Tente outro arquivo.');
@@ -367,7 +370,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.rotate(Math.PI / 2);
     ctx.drawImage(work.el, -work.w / 2, -work.h / 2, work.w, work.h);
-    setWork({ el: canvas, url: canvas.toDataURL('image/jpeg', 0.92), w: canvas.width, h: canvas.height });
+    setWork({ el: canvas, url: canvas.toDataURL(outputMimeType, 0.92), w: canvas.width, h: canvas.height });
     setView({ zoom: 1, x: 0, y: 0 });
   };
 
@@ -403,7 +406,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
     ctx.drawImage(work.el, sx, sy, cropW, cropH, 0, 0, outW, outH);
 
     try {
-      onConfirm(canvas.toDataURL('image/jpeg', quality));
+      onConfirm(canvas.toDataURL(outputMimeType, quality));
     } catch {
       setErrorMessage('Esta imagem não pôde ser recortada. Baixe a foto e envie o arquivo.');
     }

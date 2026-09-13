@@ -14,6 +14,7 @@ import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { Procedure, ClinicProfile, AppView, AnamnesisTemplate } from './types';
 import { mapearTemplatesPorProcedimento } from './utils/templateMatching';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
+import { ClinicLogo } from './components/ClinicLogo';
 import { RefreshCw, Check, Loader2, AlertTriangle } from 'lucide-react';
 import {
   seedInitialDataIfEmpty,
@@ -507,9 +508,11 @@ function MainCatalogApp() {
               {/* Col 1: Brand */}
               <div className="md:col-span-2 space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-sm bg-[#A67C52] text-white font-serif-luxury text-sm font-bold flex items-center justify-center shadow-sm">
-                    LV
-                  </div>
+                  <ClinicLogo
+                    clinic={clinic}
+                    className="w-8 h-8 rounded-sm shrink-0"
+                    monogramClassName="bg-[#A67C52] text-white font-serif-luxury text-sm font-bold shadow-sm"
+                  />
                   <h3 className="font-serif-luxury text-xl font-medium tracking-tight text-white">
                     {clinic.name}
                   </h3>

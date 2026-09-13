@@ -20,7 +20,7 @@ export const DEFAULT_CLINIC_PROFILE: ClinicProfile = {
   instagram: "@lavie.estetica",
   address: "Indaiatuba - SP",
   cityState: "Indaiatuba - SP",
-  logoUrl: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?w=300&auto=format&fit=crop&q=80",
+  // Sem logoUrl: até a clínica enviar a arte nas configurações, a marca é o monograma "LV".
   coverBannerUrl: "https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=1600&auto=format&fit=crop&q=80",
   catalogWelcomeNote: "Bem-vindo ao catálogo oficial de procedimentos da La Vie - Clínica de Estética Facial e Corporal. Nossos protocolos são conduzidos pela Dra. Karoline Ferreira com tecnologias de padrão ouro para resultados seguros, elegantes e duradouros.",
   consultationNote: "Valores por sessão ou pacote conforme especificado. Avaliação clínica individualizada recomendada para definição de protocolos combinados.",

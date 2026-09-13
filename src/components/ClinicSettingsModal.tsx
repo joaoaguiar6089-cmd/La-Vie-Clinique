@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop } from 'lucide-react';
+import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon } from 'lucide-react';
 import { ClinicProfile, Professional } from '../types';
 import { createProfessionalLogin } from '../services/authService';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
+import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
 
 /**
  * A foto da profissional entra em dois lugares com recortes diferentes: o bloco 92×104 da capa do
@@ -11,6 +12,16 @@ import { ImageCropperModal, AspectOption } from './ImageCropperModal';
  */
 const PROFESSIONAL_PHOTO_ASPECTS: AspectOption[] = [
   { id: 'ficha', label: 'Ficha', ratio: 92 / 104 },
+];
+
+/**
+ * O logo é desenhado dentro de quadros quadrados (cabeçalho do painel, capa do catálogo em PDF)
+ * sempre por inteiro, sem corte — por isso "Original" é a primeira opção: marcas largas continuam
+ * legíveis. "Quadrado" existe para quem quiser recortar um símbolo fechado.
+ */
+const CLINIC_LOGO_ASPECTS: AspectOption[] = [
+  { id: 'original', label: 'Original', ratio: null },
+  { id: 'quadrado', label: 'Quadrado', ratio: 1 },
 ];
 
 interface ClinicSettingsModalProps {
@@ -72,6 +83,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
       setShowDoctorForm(false);
       setDeletingDocId(null);
       setPhotoCropSource(null);
+      setLogoCropSource(null);
     }
     wasOpenRef.current = isOpen;
   }, [isOpen, clinic]);
@@ -86,6 +98,8 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   const [docEmail, setDocEmail] = useState('');
   /** Foto aguardando recorte: o arquivo recém-escolhido ou a foto atual que a usuária quer reajustar. */
   const [photoCropSource, setPhotoCropSource] = useState<File | string | null>(null);
+  /** Mesma ideia do recorte da foto, para o logo da clínica. */
+  const [logoCropSource, setLogoCropSource] = useState<File | string | null>(null);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
   const [creatingLoginForId, setCreatingLoginForId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -100,6 +114,14 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     e.target.value = '';
     if (!file || !file.type.startsWith('image/')) return;
     setPhotoCropSource(file);
+  };
+
+  /** Como a foto da médica: o arquivo escolhido abre o recorte antes de virar o logo salvo. */
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    setLogoCropSource(file);
   };
 
   const handleChange = (field: keyof ClinicProfile, value: any) => {
@@ -310,6 +332,79 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   onChange={(e) => handleChange('tagline', e.target.value)}
                   className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                 />
+              </div>
+            </div>
+
+            {/* Logo — substitui o monograma "LV" no painel e na capa do catálogo em PDF */}
+            <div>
+              <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                Logo da Clínica
+              </label>
+              <div className="p-3 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 space-y-3">
+                <div className="flex items-center gap-3">
+                  {/* A marca aparece sobre fundo claro (página inicial, capa do PDF) e sobre fundo
+                      escuro (menu lateral, rodapé) — as duas prévias mostram os dois casos. */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-center">
+                      <div className="w-14 h-14 rounded-sm bg-white border border-gray-200 flex items-center justify-center p-1.5">
+                        <ClinicLogo
+                          clinic={formData}
+                          className="w-full h-full"
+                          monogramClassName="bg-[#1A1A1A] text-[#C49B74] font-serif-luxury text-base font-semibold rounded-xs"
+                        />
+                      </div>
+                      <span className="block text-[9px] uppercase tracking-wider text-gray-400 mt-1">
+                        Claro
+                      </span>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-14 h-14 rounded-sm bg-[#1A1A1A] border border-[#1A1A1A] flex items-center justify-center p-1.5">
+                        <ClinicLogo
+                          clinic={formData}
+                          className="w-full h-full"
+                          monogramClassName="text-[#C49B74] font-serif-luxury text-base font-semibold"
+                        />
+                      </div>
+                      <span className="block text-[9px] uppercase tracking-wider text-gray-400 mt-1">
+                        Escuro
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] cursor-pointer transition-colors flex items-center gap-1">
+                        <ImageIcon className="w-3 h-3" />
+                        {resolveClinicLogoUrl(formData.logoUrl) ? 'Trocar logo' : 'Enviar logo'}
+                        <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                      </label>
+                      {resolveClinicLogoUrl(formData.logoUrl) && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setLogoCropSource(formData.logoUrl || null)}
+                            className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] transition-colors flex items-center gap-1"
+                          >
+                            <Crop className="w-3 h-3" />
+                            Ajustar enquadramento
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleChange('logoUrl', '')}
+                            className="text-[11px] text-red-500 hover:text-red-700 font-medium"
+                          >
+                            Remover
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-gray-500 leading-relaxed mt-2">
+                      Usada na capa do catálogo em PDF e no topo da página inicial, no lugar do
+                      monograma <strong>{clinicMonogram(formData.name)}</strong>. Prefira PNG com
+                      fundo transparente — o arquivo é gravado junto do perfil, então mantenha-o leve.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -731,6 +826,25 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         onConfirm={(dataUrl) => {
           setDocPhotoUrl(dataUrl);
           setPhotoCropSource(null);
+        }}
+      />
+
+      {/* PNG, e não JPEG: um logo com fundo transparente precisa continuar transparente sobre o
+          preto do menu lateral e sobre o creme da capa do catálogo. */}
+      <ImageCropperModal
+        isOpen={logoCropSource !== null}
+        source={logoCropSource}
+        title="Enquadrar logo da clínica"
+        description="A marca aparece inteira dentro do quadro, sem corte. Deixe uma folga nas bordas."
+        aspectOptions={CLINIC_LOGO_ASPECTS}
+        maxOutputDim={512}
+        quality={0.92}
+        outputMimeType="image/png"
+        confirmLabel="Usar este logo"
+        onCancel={() => setLogoCropSource(null)}
+        onConfirm={(dataUrl) => {
+          handleChange('logoUrl', dataUrl);
+          setLogoCropSource(null);
         }}
       />
     </div>

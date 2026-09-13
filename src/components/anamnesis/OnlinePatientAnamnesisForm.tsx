@@ -9,6 +9,7 @@ import {
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
+import { ClinicLogo } from '../ClinicLogo';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import {
   Camera,
@@ -371,9 +372,11 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
           style={{ background: 'linear-gradient(135deg, #221A14 0%, #1A1410 50%, #120D0A 100%)' }}
         >
           <div className="px-6 sm:px-8 pt-10 pb-8 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-black/20 border border-[rgba(232,205,172,.35)] flex items-center justify-center text-[#C49B74] font-serif-luxury text-2xl font-semibold mx-auto mb-4">
-              LV
-            </div>
+            <ClinicLogo
+              clinic={clinicProfile}
+              className="w-14 h-14 rounded-2xl mx-auto mb-4"
+              monogramClassName="bg-black/20 border border-[rgba(232,205,172,.35)] text-[#C49B74] font-serif-luxury text-2xl font-semibold"
+            />
             <h1 className="font-serif-luxury text-[26px] font-medium text-[#F6EFE4]">
               {clinicProfile.name || 'La Vie Clinique'}
             </h1>

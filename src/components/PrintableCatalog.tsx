@@ -3,6 +3,7 @@ import { Procedure, ClinicProfile } from '../types';
 import { formatBRL } from '../utils/formatters';
 import { getProcedureDoctors, getClinicDoctors } from '../utils/doctorHelpers';
 import { Sparkles, Clock, Home, ChevronRight } from 'lucide-react';
+import { ClinicLogo } from './ClinicLogo';
 
 interface PrintableCatalogProps {
   procedures: Procedure[];
@@ -271,9 +272,11 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
               <div>
                 <div className="flex items-center justify-between border-b border-[#B88358]/40 pb-6 mb-7">
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-xs bg-[#1A1A1C] border-2 border-[#B88358] flex items-center justify-center text-[#D8A47F] font-serif-luxury text-3xl font-bold shadow-md shrink-0">
-                      LV
-                    </div>
+                    <ClinicLogo
+                      clinic={clinic}
+                      className="w-16 h-16 rounded-xs shadow-md shrink-0"
+                      monogramClassName="bg-[#1A1A1C] border-2 border-[#B88358] text-[#D8A47F] font-serif-luxury text-3xl font-bold"
+                    />
                     <div>
                       <div className="inline-block px-2.5 py-0.5 rounded-xs bg-[#1A1A1C] text-[#D8A47F] text-[10px] uppercase font-bold tracking-widest mb-1">
                         Catálogo Exclusivo

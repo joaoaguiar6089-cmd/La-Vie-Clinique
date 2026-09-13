@@ -3,6 +3,7 @@ import { Procedure, ClinicProfile } from '../types';
 import { formatBRL } from '../utils/formatters';
 import { getProcedureDoctors } from '../utils/doctorHelpers';
 import { Sparkles, Clock, Calendar, CheckCircle2, ShieldCheck, Stethoscope } from 'lucide-react';
+import { ClinicLogo } from './ClinicLogo';
 
 interface PrintableCardProps {
   procedure: Procedure;
@@ -37,9 +38,11 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({ procedure, clinic 
             </span>
           )}
         </div>
-        <div className="w-8 h-8 rounded bg-[#1A1A1C] text-[#D8A47F] font-serif-luxury text-sm font-bold flex items-center justify-center">
-          LV
-        </div>
+        <ClinicLogo
+          clinic={clinic}
+          className="w-8 h-8 rounded shrink-0"
+          monogramClassName="bg-[#1A1A1C] text-[#D8A47F] font-serif-luxury text-sm font-bold"
+        />
       </div>
 
       {/* Main Image */}
