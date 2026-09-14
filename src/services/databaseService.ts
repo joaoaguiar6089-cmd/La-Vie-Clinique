@@ -12,7 +12,8 @@ import {
   orderBy,
   where,
   writeBatch,
-  runTransaction
+  runTransaction,
+  QuerySnapshot,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import {
@@ -35,7 +36,9 @@ import {
   DEFAULT_PROCEDURE_TEMPLATES,
   SAMPLE_PATIENTS,
   SAMPLE_ANAMNESIS_RECORDS,
+  LASER_HEALTH_QUESTIONS,
 } from '../data/anamnesisInitialData';
+import { isLaserCategory } from '../utils/templateMatching';
 
 const PROCEDURES_COLLECTION = 'procedures';
 const CLINIC_SETTINGS_COLLECTION = 'clinic_settings';
@@ -326,7 +329,7 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       await batch.commit();
     }
 
-    // 2. Seed Procedure Templates if empty
+    // 2. Seed Procedure Templates if empty, or sync laser templates if missing
     const tplSnap = await getDocs(collection(db, ANAMNESIS_TEMPLATES_COLLECTION));
     if (tplSnap.empty) {
       console.log('Seeding initial procedure templates for anamnesis...');
@@ -339,6 +342,9 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
         }));
       });
       await batch.commit();
+    } else {
+      // Sincroniza fichas das categorias Depilação a Laser (Facial, Íntima e Corporal) e suas 13 perguntas
+      await syncLaserAnamnesisTemplates(tplSnap);
     }
 
     // 3. Seed Patients if empty
@@ -366,6 +372,82 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
     }
   } catch (err) {
     console.error('Error seeding initial anamnesis data:', err);
+  }
+}
+
+/**
+ * Garante que todas as fichas de Depilação a Laser (Facial, Íntima e Corporal)
+ * existam no Firestore e contenham as 13 perguntas de saúde obrigatórias.
+ */
+async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void> {
+  try {
+    const existingTemplates: AnamnesisTemplate[] = [];
+    tplSnap.forEach((docSnap) => {
+      existingTemplates.push({ ...(docSnap.data() as AnamnesisTemplate), id: docSnap.id });
+    });
+
+    const laserTemplatesToEnsure = DEFAULT_PROCEDURE_TEMPLATES.filter(
+      (tpl) =>
+        isLaserCategory(tpl.categoria) ||
+        tpl.id.startsWith('tpl-laser-') ||
+        tpl.id === 'tpl-epilacao-laser'
+    );
+
+    const batch = writeBatch(db);
+    let hasChanges = false;
+
+    for (const tplDefault of laserTemplatesToEnsure) {
+      const existing = existingTemplates.find(
+        (t) =>
+          t.id === tplDefault.id ||
+          (t.procedimentoId && t.procedimentoId === tplDefault.procedimentoId) ||
+          t.procedimentoNome.toLowerCase() === tplDefault.procedimentoNome.toLowerCase()
+      );
+
+      if (!existing) {
+        const ref = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, tplDefault.id);
+        batch.set(
+          ref,
+          cleanForFirestore({
+            ...tplDefault,
+            updatedAt: new Date().toISOString(),
+          })
+        );
+        hasChanges = true;
+      } else {
+        const currentQuestions = existing.perguntasEspecificas || [];
+        const requiredQuestions = tplDefault.perguntasEspecificas || [];
+        const missingQuestions = requiredQuestions.filter((reqQ) => {
+          const jaExiste = currentQuestions.some(
+            (cq) =>
+              cq.id === reqQ.id ||
+              cq.texto.trim().toLowerCase() === reqQ.texto.trim().toLowerCase()
+          );
+          return !jaExiste;
+        });
+
+        if (missingQuestions.length > 0) {
+          const updatedQuestions = [...currentQuestions, ...missingQuestions].map((q, idx) => ({
+            ...q,
+            ordem: idx + 1,
+          }));
+
+          const ref = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, existing.id);
+          batch.update(ref, {
+            perguntasEspecificas: cleanForFirestore(updatedQuestions),
+            updatedAt: new Date().toISOString(),
+          });
+          hasChanges = true;
+        }
+      }
+    }
+
+    if (hasChanges) {
+      console.log('Fichas e perguntas de Depilação a Laser sincronizadas com sucesso no Firestore.');
+      await batch.commit();
+    }
+  } catch (err) {
+    console.warn('Sincronização de fichas de laser no Firestore:', err);
   }
 }
 

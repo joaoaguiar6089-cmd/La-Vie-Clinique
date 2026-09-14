@@ -44,6 +44,25 @@ export const procedimentoDoTemplate = (
   return indice.porNome.get(chaveDeNome(tpl.procedimentoNome));
 };
 
+/**
+ * Detecta se uma categoria de procedimento corresponde à depilação/epilação a laser
+ * (Facial, Íntima ou Corporal).
+ */
+export const isLaserCategory = (category?: string): boolean => {
+  if (!category) return false;
+  const normalizada = category
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return (
+    normalizada.includes('depilacao a laser') ||
+    normalizada.includes('epilacao a laser') ||
+    normalizada === 'depilacao a laser - facial' ||
+    normalizada === 'depilacao a laser - intima' ||
+    normalizada === 'depilacao a laser - corporal'
+  );
+};
+
 /** Mapa procedimentoId -> ficha-modelo, para o catálogo saber quem já tem anamnese configurada. */
 export const mapearTemplatesPorProcedimento = (
   templates: AnamnesisTemplate[],
@@ -51,9 +70,34 @@ export const mapearTemplatesPorProcedimento = (
 ): Map<string, AnamnesisTemplate> => {
   const indice = criarIndiceDeProcedimentos(catalogProcedures);
   const mapa = new Map<string, AnamnesisTemplate>();
+
+  // 1. Vínculo direto por ID ou nome
   templates.forEach((tpl) => {
     const proc = procedimentoDoTemplate(tpl, indice);
     if (proc && !mapa.has(proc.id)) mapa.set(proc.id, tpl);
   });
+
+  // 2. Vínculo suplementar para procedimentos de Laser por categoria
+  catalogProcedures.forEach((proc) => {
+    if (!mapa.has(proc.id) && isLaserCategory(proc.category)) {
+      // Procura primeiro template com a mesma categoria de laser
+      const tplMesmaCat = templates.find((t) => t.categoria === proc.category);
+      if (tplMesmaCat) {
+        mapa.set(proc.id, tplMesmaCat);
+        return;
+      }
+      // Ou qualquer template geral de laser
+      const tplLaser = templates.find(
+        (t) =>
+          isLaserCategory(t.categoria) ||
+          t.id.includes('laser') ||
+          t.procedimentoNome.toLowerCase().includes('laser')
+      );
+      if (tplLaser) {
+        mapa.set(proc.id, tplLaser);
+      }
+    }
+  });
+
   return mapa;
 };

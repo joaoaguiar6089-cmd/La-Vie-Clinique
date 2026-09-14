@@ -15,6 +15,191 @@ export const DEFAULT_GENERAL_QUESTIONS: AnamnesisQuestion[] = [
 ];
 
 /**
+ * As 13 perguntas de saúde obrigatórias para procedimentos de Depilação a Laser
+ * (Facial, Íntima e Corporal), conforme protocolo clínico e triagem dermatológica.
+ */
+export const LASER_HEALTH_QUESTIONS: AnamnesisQuestion[] = [
+  {
+    id: 'laser-q1-doenca-saude',
+    texto: 'Possui alguma doença ou condição de saúde?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 1,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q2-diabetes',
+    texto: 'Possui diabetes?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 2,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q3-autoimunes',
+    texto: 'Possui doenças autoimunes?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 3,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q4-hormonais',
+    texto: 'Possui alterações hormonais ou endocrinológicas?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 4,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q5-sop',
+    texto: 'Possui síndrome dos ovários policísticos (SOP)?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 5,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q6-investigando-hormonais',
+    texto: 'Está investigando ou tratando alterações hormonais?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 6,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q7-queloide',
+    texto: 'Possui histórico de queloide ou cicatrização alterada?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 7,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q8-vitiligo',
+    texto: 'Possui vitiligo?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 8,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q9-herpes',
+    texto: 'Possui herpes recorrente na região a ser tratada?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 9,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q10-infeccao-area',
+    texto: 'Possui infecção, ferida, inflamação ou irritação na área?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 10,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q11-manchas-queimaduras',
+    texto: 'Possui histórico de manchas ou queimaduras após procedimentos?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 11,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q12-reacao-luz-sol',
+    texto: 'Já apresentou reação importante à luz ou ao sol?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 12,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q13-alergias',
+    texto: 'Possui alergias conhecidas?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 13,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q14-tatuagem',
+    texto: 'Possui tatuagem no local de aplicação?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 14,
+    publicoAlvo: 'paciente',
+  },
+];
+
+/**
+ * Perguntas técnicas complementares de segurança específica para procedimentos a laser.
+ */
+export const LASER_TECHNICAL_QUESTIONS: AnamnesisQuestion[] = [
+  {
+    id: 'laser-q15-fototipo',
+    texto: 'Fototipo de pele estimado de acordo com a escala de Fitzpatrick:',
+    tipo_campo: 'unica_escolha',
+    opcoes: [
+      'Fototipo I (Pele muito clara, sempre queima, nunca bronzeia)',
+      'Fototipo II (Pele clara, queima com facilidade, bronzeia pouco)',
+      'Fototipo III (Pele morena clara, queima moderadamente, bronzeia gradual)',
+      'Fototipo IV (Pele morena média, queima raramente, bronzeia facilmente)',
+      'Fototipo V (Pele morena escura, muito raramente queima)',
+      'Fototipo VI (Pele negra, nunca queima)',
+    ],
+    obrigatoria: true,
+    ordem: 15,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q16-sol',
+    texto: 'Exposição solar intensa, praia ou bronzeamento artificial nos últimos 20 dias?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 16,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q17-roacutan',
+    texto: 'Uso oral de isotretinoína (Roacutan) nos últimos 6 meses?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 17,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q18-metodo-anterior',
+    texto: 'Método utilizado recentemente para retirada dos pelos na área:',
+    tipo_campo: 'unica_escolha',
+    opcoes: [
+      'Lâmina de barbear (raspagem)',
+      'Cera quente ou fria (arrancamento)',
+      'Pinça',
+      'Creme depilatório',
+      'Laser anterior',
+    ],
+    obrigatoria: true,
+    ordem: 18,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-q19-acidos',
+    texto: 'Aplicação de ácidos tópicos (glicólico, retinóico, salicílico) na região a ser tratada?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: false,
+    ordem: 19,
+    publicoAlvo: 'paciente',
+  },
+];
+
+export const ALL_LASER_PROCEDURE_QUESTIONS: AnamnesisQuestion[] = [
+  ...LASER_HEALTH_QUESTIONS,
+  ...LASER_TECHNICAL_QUESTIONS,
+];
+
+/**
  * Fichas-modelo padrão para os procedimentos requisitados pela clínica La Vie
  */
 export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
@@ -527,75 +712,137 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     procedimentoNome: 'Epilação a Laser',
     categoria: 'Laser & Alta Tecnologia',
     tem_foto: false,
-    descricao: 'Remoção definitiva de pelos com laser de diodo/alexandrite. Verificação de fototipo e segurança térmica.',
-    perguntasEspecificas: [
-      {
-        id: 'epi-fototipo',
-        texto: 'Fototipo de pele estimado de acordo com a escala de Fitzpatrick:',
-        tipo_campo: 'unica_escolha',
-        opcoes: [
-          'Fototipo I (Pele muito clara, sempre queima, nunca bronzeia)',
-          'Fototipo II (Pele clara, queima com facilidade, bronzeia pouco)',
-          'Fototipo III (Pele morena clara, queima moderadamente, bronzeia gradual)',
-          'Fototipo IV (Pele morena média, queima raramente, bronzeia facilmente)',
-          'Fototipo V (Pele morena escura, muito raramente queima)',
-          'Fototipo VI (Pele negra, nunca queima)',
-        ],
-        obrigatoria: true,
-        ordem: 1,
-      },
-      {
-        id: 'epi-sol',
-        texto: 'Exposição solar intensa, praia ou bronzeamento artificial nos últimos 20 dias?',
-        tipo_campo: 'sim_nao',
-        obrigatoria: true,
-        ordem: 2,
-      },
-      {
-        id: 'epi-roacutan',
-        texto: 'Uso oral de isotretinoína (Roacutan) nos últimos 6 meses?',
-        tipo_campo: 'sim_nao',
-        obrigatoria: true,
-        ordem: 3,
-      },
-      {
-        id: 'epi-areas',
-        texto: 'Regiões que serão tratadas na sessão de hoje:',
-        tipo_campo: 'multipla_escolha',
-        opcoes: [
-          'Axilas',
-          'Virilha completa',
-          'Pernas inteiras',
-          'Meia perna',
-          'Buço / Rosto',
-          'Costas ou Peito',
-          'Braços',
-        ],
-        obrigatoria: true,
-        ordem: 4,
-      },
-      {
-        id: 'epi-metodo-anterior',
-        texto: 'Método utilizado recentemente para retirada dos pelos na área:',
-        tipo_campo: 'unica_escolha',
-        opcoes: [
-          'Lâmina de barbear (raspagem)',
-          'Cera quente ou fria (arrancamento)',
-          'Pinça',
-          'Creme depilatório',
-          'Laser anterior',
-        ],
-        obrigatoria: true,
-        ordem: 5,
-      },
-      {
-        id: 'epi-acidos',
-        texto: 'Aplicação de ácidos tópicos (glicólico, retinóico, salicílico) na região a ser tratada?',
-        tipo_campo: 'sim_nao',
-        obrigatoria: false,
-        ordem: 6,
-      },
-    ],
+    descricao: 'Remoção definitiva de pelos com laser de diodo/alexandrite. Verificação de fototipo, segurança térmica e histórico de saúde.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+
+  // ==========================================
+  // DEPILAÇÃO A LASER - FACIAL (4 procedimentos)
+  // ==========================================
+  {
+    id: 'tpl-laser-buco',
+    procedimentoId: 'proc-laser-buco',
+    procedimentoNome: 'Depilação a Laser - Buço',
+    categoria: 'Depilação a Laser - Facial',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese e triagem dermatológica para epilação a laser no buço e lábio superior.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+  {
+    id: 'tpl-laser-queixo',
+    procedimentoId: 'proc-laser-queixo',
+    procedimentoNome: 'Depilação a Laser - Queixo',
+    categoria: 'Depilação a Laser - Facial',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese e triagem dermatológica para epilação a laser no queixo e mento.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+  {
+    id: 'tpl-laser-face-lateral',
+    procedimentoId: 'proc-laser-face-lateral',
+    procedimentoNome: 'Depilação a Laser - Face Lateral',
+    categoria: 'Depilação a Laser - Facial',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese e avaliação fototípica para epilação a laser nas laterais da face e costeletas.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+  {
+    id: 'tpl-laser-maca-rosto',
+    procedimentoId: 'proc-laser-maca-rosto',
+    procedimentoNome: 'Depilação a Laser - Maçã do Rosto',
+    categoria: 'Depilação a Laser - Facial',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese e triagem dermatológica para epilação a laser na região malar e bochechas.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+
+  // ==========================================
+  // DEPILAÇÃO A LASER - ÍNTIMA (2 procedimentos)
+  // ==========================================
+  {
+    id: 'tpl-laser-virilha-completa',
+    procedimentoId: 'proc-laser-virilha-completa',
+    procedimentoNome: 'Depilação a Laser - Virilha Completa',
+    categoria: 'Depilação a Laser - Íntima',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese com triagem de fototipo, sensibilidade e histórico dérmico para epilação a laser na virilha completa.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+  {
+    id: 'tpl-laser-perianal',
+    procedimentoId: 'proc-laser-perianal',
+    procedimentoNome: 'Depilação a Laser - Perianal',
+    categoria: 'Depilação a Laser - Íntima',
+    tem_foto: false,
+    descricao: 'Triagem clínica para epilação a laser na região perianal com foco em integridade dérmica e segurança.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+
+  // ==========================================
+  // DEPILAÇÃO A LASER - CORPORAL (7 procedimentos)
+  // ==========================================
+  {
+    id: 'tpl-laser-linha-alba',
+    procedimentoId: 'proc-laser-linha-alba',
+    procedimentoNome: 'Depilação a Laser - Linha Alba',
+    categoria: 'Depilação a Laser - Corporal',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese e segurança para epilação a laser na linha alba abdominal.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+  {
+    id: 'tpl-laser-axilas',
+    procedimentoId: 'proc-laser-axilas',
+    procedimentoNome: 'Depilação a Laser - Axilas',
+    categoria: 'Depilação a Laser - Corporal',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese para epilação a laser nas axilas, avaliação de foliculite, atrito e sensibilidade.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+  {
+    id: 'tpl-laser-meia-perna',
+    procedimentoId: 'proc-laser-meia-perna',
+    procedimentoNome: 'Depilação a Laser - ½ Perna',
+    categoria: 'Depilação a Laser - Corporal',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese para epilação a laser na meia perna (dos joelhos aos tornozelos).',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+  {
+    id: 'tpl-laser-perna-completa',
+    procedimentoId: 'proc-laser-perna-completa',
+    procedimentoNome: 'Depilação a Laser - Perna Completa',
+    categoria: 'Depilação a Laser - Corporal',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese e triagem dermatológica para epilação a laser em pernas completas e coxas.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+  {
+    id: 'tpl-laser-peitoral',
+    procedimentoId: 'proc-laser-peitoral',
+    procedimentoNome: 'Depilação a Laser - Peitoral',
+    categoria: 'Depilação a Laser - Corporal',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese para epilação a laser na região peitoral.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+  {
+    id: 'tpl-laser-torax',
+    procedimentoId: 'proc-laser-torax',
+    procedimentoNome: 'Depilação a Laser - Tórax',
+    categoria: 'Depilação a Laser - Corporal',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese para epilação a laser no tórax e abdômen anterior.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
+  },
+  {
+    id: 'tpl-laser-costas',
+    procedimentoId: 'proc-laser-costas',
+    procedimentoNome: 'Depilação a Laser - Costas',
+    categoria: 'Depilação a Laser - Corporal',
+    tem_foto: false,
+    descricao: 'Ficha de anamnese para epilação a laser nas costas completas e ombros.',
+    perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
   },
 ];
 

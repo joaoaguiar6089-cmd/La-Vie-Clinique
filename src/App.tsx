@@ -18,6 +18,7 @@ import { ClinicLogo } from './components/ClinicLogo';
 import { RefreshCw, Check, Loader2, AlertTriangle } from 'lucide-react';
 import {
   seedInitialDataIfEmpty,
+  seedAnamnesisInitialDataIfEmpty,
   subscribeToProcedures,
   subscribeToClinicProfile,
   saveProcedureToDb,
@@ -27,6 +28,7 @@ import {
   replaceAllProceduresWithOfficialPdfCatalog,
   subscribeToAnamnesisTemplates,
 } from './services/databaseService';
+import { DEFAULT_PROCEDURE_TEMPLATES } from './data/anamnesisInitialData';
 import { onAuthChange, logout, type User } from './services/authService';
 
 const STORAGE_KEY_PROCEDURES = 'aura_bronze_procedures_v1';
@@ -105,8 +107,8 @@ function MainCatalogApp() {
   // As fichas-modelo de anamnese moravam só dentro do AnamnesisModule. O card do catálogo agora
   // precisa saber quais procedimentos já têm ficha para habilitar o botão "Anamnese", então a
   // assinatura subiu para cá — o módulo recebe a mesma lista por prop, sem duplicar a leitura.
-  const [anamnesisTemplates, setAnamnesisTemplates] = useState<AnamnesisTemplate[]>([]);
-  const [templatesCarregando, setTemplatesCarregando] = useState(true);
+  const [anamnesisTemplates, setAnamnesisTemplates] = useState<AnamnesisTemplate[]>(DEFAULT_PROCEDURE_TEMPLATES);
+  const [templatesCarregando, setTemplatesCarregando] = useState(false);
 
   /**
    * Pedido vindo do catálogo para o módulo de anamnese. O `nonce` existe porque tocar "Anamnese"
@@ -127,6 +129,7 @@ function MainCatalogApp() {
         setSyncStatus('syncing');
         // 1. Seed initial data to Firestore if the collections are empty
         await seedInitialDataIfEmpty();
+        await seedAnamnesisInitialDataIfEmpty();
 
         // 2. Subscribe to real-time procedures collection
         unsubscribeProcedures = subscribeToProcedures(

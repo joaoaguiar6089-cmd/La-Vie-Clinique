@@ -14,7 +14,9 @@ import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import {
   criarIndiceDeProcedimentos,
   procedimentoDoTemplate as procedimentoDoTemplateCompartilhado,
+  isLaserCategory,
 } from '../../utils/templateMatching';
+import { ALL_LASER_PROCEDURE_QUESTIONS } from '../../data/anamnesisInitialData';
 import {
   Plus,
   Trash2,
@@ -202,6 +204,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
 
   /** Abre o editor já vinculado a um procedimento do catálogo, herdando nome, categoria e descrição. */
   const handleOpenNewTemplateForProcedure = (proc: Procedure) => {
+    const isLaser = isLaserCategory(proc.category);
     setDraftTemplate({
       id: `tpl-${Date.now()}`,
       procedimentoId: proc.id,
@@ -209,7 +212,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
       categoria: proc.category || 'Geral',
       tem_foto: false,
       descricao: proc.subtitle || proc.description || '',
-      perguntasEspecificas: [],
+      perguntasEspecificas: isLaser ? [...ALL_LASER_PROCEDURE_QUESTIONS] : [],
     });
     setIsEditorOpen(true);
   };
@@ -1010,22 +1013,27 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
 
       {/* SUB-QUESTION MODAL */}
       {questionModalOpen && (
-        <div className="fixed inset-0 z-60 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-          <div className="relative w-full max-w-lg bg-[#FAF9F6] rounded-sm border border-white/80 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-[#1A1A1A] text-white flex items-center justify-between">
+        <div
+          className="fixed inset-0 z-60 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setQuestionModalOpen(false);
+          }}
+        >
+          <div className="relative w-full max-w-lg bg-[#FAF9F6] rounded-2xl border border-white/80 shadow-2xl overflow-hidden max-h-[92dvh] sm:max-h-[90vh] flex flex-col">
+            <div className="px-5 sm:px-6 py-3.5 sm:py-4 bg-[#1A1A1A] text-white flex items-center justify-between shrink-0">
               <h4 className="font-serif-luxury text-base font-medium">
                 {editingQuestionIndex !== null ? 'Editar Pergunta Específica' : 'Nova Pergunta Específica'}
               </h4>
               <button
                 type="button"
                 onClick={() => setQuestionModalOpen(false)}
-                className="p-1 rounded-xs text-gray-400 hover:text-white"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveSubQuestion} className="p-6 space-y-4">
+            <form onSubmit={handleSaveSubQuestion} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
               {qError && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-sm text-xs text-red-600 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />

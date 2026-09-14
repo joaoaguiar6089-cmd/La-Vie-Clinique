@@ -104,32 +104,38 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div className="relative w-full max-w-xl bg-white rounded-sm border border-white/80 shadow-2xl overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="px-6 py-4 bg-[#1A1A1A] text-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74]" />
-            <div>
-              <h3 className="font-serif-luxury text-lg font-medium tracking-tight">
+    <div
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="relative w-full max-w-xl bg-white rounded-2xl border border-white/80 shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh]">
+        {/* Header (fixo no topo) */}
+        <div className="px-5 sm:px-6 py-3.5 sm:py-4 bg-[#1A1A1A] text-white flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74] shrink-0" />
+            <div className="min-w-0">
+              <h3 className="font-serif-luxury text-base sm:text-lg font-medium tracking-tight truncate">
                 Compartilhar Ficha de Anamnese Online
               </h3>
-              <p className="text-[11px] text-gray-400">
-                Gere o link para o cliente preencher antes do atendimento e enviar a foto dele
+              <p className="text-[11px] text-gray-400 truncate">
+                Gere o link para o cliente preencher antes do atendimento
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-xs text-gray-400 hover:text-white transition-colors"
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-5 text-[#1A1A1A]">
+        {/* Scrollable Content (rola livremente no celular e PC) */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 sm:space-y-5 text-[#1A1A1A]">
           {/* Template Selector */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">
@@ -291,29 +297,29 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
               {whatsappMessage}
             </p>
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-            <button
-              type="button"
-              onClick={handlePreviewAsPatient}
-              disabled={!canShare}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm bg-white border border-gray-300 text-gray-800 hover:border-[#A67C52] text-xs font-semibold tracking-wide transition-all shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Eye className="w-4 h-4 text-[#A67C52]" />
-              Visualizar como Paciente
-            </button>
+        {/* Action Buttons Footer (fixo no rodapé) */}
+        <div className="p-3 sm:p-4 bg-[#FAF9F6] border-t border-gray-200/80 shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          <button
+            type="button"
+            onClick={handlePreviewAsPatient}
+            disabled={!canShare}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-300 text-gray-800 hover:border-[#A67C52] text-xs font-semibold tracking-wide transition-all shadow-2xs active:scale-97 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Eye className="w-4 h-4 text-[#A67C52]" />
+            Visualizar como Paciente
+          </button>
 
-            <button
-              type="button"
-              onClick={handleOpenWhatsApp}
-              disabled={!canShare}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-[#25D366] text-white hover:bg-[#20ba59] text-xs font-bold uppercase tracking-wider shadow-xs transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <MessageCircle className="w-4 h-4" />
-              Enviar pelo WhatsApp
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleOpenWhatsApp}
+            disabled={!canShare}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#25D366] text-white hover:bg-[#20ba59] text-xs font-bold uppercase tracking-wider shadow-xs transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Enviar pelo WhatsApp
+          </button>
         </div>
       </div>
     </div>
