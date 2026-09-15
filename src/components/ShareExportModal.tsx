@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { X, FileDown, Image as ImageIcon, MessageCircle, QrCode, Copy, Check, Sparkles, Share2, Layers, Download, Loader2 } from 'lucide-react';
+import { X, FileDown, Image as ImageIcon, MessageCircle, QrCode, Copy, Check, Sparkles, Share2, Layers, Download, Loader2, Percent, Tag } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
 import { Procedure, ClinicProfile } from '../types';
 import { exportElementAsPDF, exportElementAsImage, buildWhatsAppCatalogShareUrl } from '../utils/exportHelpers';
+import { normalizeDiscountPercent, formatDiscountPercent, MAX_CATALOG_DISCOUNT } from '../utils/catalogPricing';
 import { PrintableCatalog } from './PrintableCatalog';
 import { PrintableCard } from './PrintableCard';
 import { ProcedureMultiSelect } from './ProcedureMultiSelect';
@@ -31,6 +32,9 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [selectedProcedureIds, setSelectedProcedureIds] = useState<string[]>([]);
   const [showPrices, setShowPrices] = useState(true);
+  // Desconto promocional aplicado a todo o catálogo no momento da geração (dias especiais).
+  // Guardado como texto para o campo aceitar digitação livre; o valor efetivo é normalizado.
+  const [discountInput, setDiscountInput] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [selectedSingleProcedureId, setSelectedSingleProcedureId] = useState<string>(
@@ -41,6 +45,8 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   const singleCardPrintRef = useRef<HTMLDivElement>(null);
 
   const activeSingleProcedure = procedures.find(p => p.id === selectedSingleProcedureId) || procedures[0];
+
+  const discountPercent = normalizeDiscountPercent(discountInput);
 
   // Procedures actually included in the PDF/PNG catalog & WhatsApp text:
   // an explicit procedure selection always wins over the category filter.
@@ -115,7 +121,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
   const handleCopyWhatsAppText = () => {
     const text = decodeURIComponent(
-      buildWhatsAppCatalogShareUrl(exportProcedures, clinic).split('text=')[1] || ''
+      buildWhatsAppCatalogShareUrl(exportProcedures, clinic, discountPercent).split('text=')[1] || ''
     );
     navigator.clipboard.writeText(text);
     setCopiedText(true);
@@ -124,6 +130,68 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   };
 
   const shareCatalogUrl = window.location.href;
+
+  // Campo de desconto geral — reaproveitado nas abas de catálogo e de card individual.
+  const discountControl = (
+    <div>
+      <label className="block text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
+        Desconto Promocional
+      </label>
+      <div className="flex items-center gap-1.5">
+        <div className="relative">
+          <input
+            type="number"
+            min={0}
+            max={MAX_CATALOG_DISCOUNT}
+            step={1}
+            value={discountInput}
+            onChange={(e) => setDiscountInput(e.target.value)}
+            placeholder="0"
+            className="w-[70px] pl-2.5 pr-6 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-[#1A1A1A]"
+          />
+          <Percent className="w-3 h-3 text-[#A67C52] absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+        </div>
+
+        {[10, 15, 20, 30].map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            onClick={() => setDiscountInput(discountPercent === preset ? '' : String(preset))}
+            className={`px-2 py-1.5 rounded-sm text-[11px] font-semibold border transition-all ${
+              discountPercent === preset
+                ? 'bg-[#A67C52] text-white border-[#A67C52]'
+                : 'bg-white/70 text-gray-600 border-white/80 hover:border-[#A67C52]'
+            }`}
+          >
+            {preset}%
+          </button>
+        ))}
+
+        {discountPercent > 0 && (
+          <button
+            type="button"
+            onClick={() => setDiscountInput('')}
+            title="Remover desconto promocional"
+            className="p-1.5 rounded-sm bg-white/70 border border-white/80 text-gray-500 hover:text-[#1A1A1A] transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const discountHint = discountPercent > 0 && (
+    <p className="w-full flex items-center gap-2 text-[11px] text-[#8e6945] bg-[#A67C52]/10 border border-[#A67C52]/30 rounded-sm px-3 py-2">
+      <Tag className="w-3.5 h-3.5 shrink-0" />
+      <span>
+        <strong>{formatDiscountPercent(discountPercent)}% de desconto</strong> aplicado aos{' '}
+        {exportProcedures.length} procedimento{exportProcedures.length !== 1 ? 's' : ''} desta
+        exportação: o valor de tabela sai riscado e o novo valor aparece logo abaixo. O cadastro dos
+        procedimentos não é alterado.
+      </span>
+    </p>
+  );
 
   if (!isOpen) return null;
 
@@ -245,6 +313,8 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   onChange={setSelectedProcedureIds}
                 />
 
+                {discountControl}
+
                 <div className="flex items-center pb-2">
                   <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-600">
                     <input
@@ -298,6 +368,8 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   </button>
                 )}
               </div>
+
+              {discountHint}
             </div>
           )}
 
@@ -318,6 +390,8 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   ))}
                 </select>
               </div>
+
+              {discountControl}
 
               <button
                 onClick={handleExportSingleCard}
@@ -352,6 +426,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   clinic={clinic}
                   selectedCategory="Todos"
                   showPrices={showPrices}
+                  discountPercent={discountPercent}
                 />
               </div>
             </div>
@@ -364,7 +439,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 Card promocional formatado para envio direto ao cliente no WhatsApp ou postagem:
               </p>
               <div className="w-full flex justify-start sm:justify-center overflow-x-auto">
-                <PrintableCard procedure={activeSingleProcedure} clinic={clinic} />
+                <PrintableCard
+                  procedure={activeSingleProcedure}
+                  clinic={clinic}
+                  discountPercent={discountPercent}
+                />
               </div>
             </div>
           )}
@@ -393,9 +472,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   {selectedProcedureIds.length === 0 && selectedCategory !== 'Todos' ? ` (categoria "${selectedCategory}")` : ''}.
                 </p>
 
+                {discountHint}
+
                 <div className="flex items-center gap-3">
                   <a
-                    href={buildWhatsAppCatalogShareUrl(exportProcedures, clinic)}
+                    href={buildWhatsAppCatalogShareUrl(exportProcedures, clinic, discountPercent)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 py-2.5 px-4 rounded-sm bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-semibold uppercase tracking-wider text-center shadow-xs transition-all flex items-center justify-center gap-2"

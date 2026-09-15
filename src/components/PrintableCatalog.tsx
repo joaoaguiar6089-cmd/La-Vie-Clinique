@@ -1,6 +1,7 @@
 import React from 'react';
 import { Procedure, ClinicProfile } from '../types';
 import { formatBRL } from '../utils/formatters';
+import { getCatalogPrice, formatDiscountPercent } from '../utils/catalogPricing';
 import { getProcedureDoctors, getClinicDoctors } from '../utils/doctorHelpers';
 import { Sparkles, Clock, Home, ChevronRight } from 'lucide-react';
 import { ClinicLogo } from './ClinicLogo';
@@ -10,6 +11,8 @@ interface PrintableCatalogProps {
   clinic: ClinicProfile;
   selectedCategory?: string;
   showPrices?: boolean;
+  /** Desconto promocional aplicado a todos os procedimentos, em % (dias especiais). */
+  discountPercent?: number;
 }
 
 interface PageGroup {
@@ -24,6 +27,7 @@ interface ProcedureCardProps {
   isImageLeft: boolean;
   clinic: ClinicProfile;
   showPrices: boolean;
+  discountPercent: number;
 }
 
 const HorizontalProcedureCard: React.FC<ProcedureCardProps> = ({
@@ -31,12 +35,14 @@ const HorizontalProcedureCard: React.FC<ProcedureCardProps> = ({
   isImageLeft,
   clinic,
   showPrices,
+  discountPercent,
 }) => {
   const imgUrl =
     proc.images && proc.images.length > 0
       ? proc.images[0]
       : 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80';
-  const hasDiscount = proc.promotionalPrice && proc.promotionalPrice < proc.price;
+  const { strikePrice, finalPrice, hasDiscount } = getCatalogPrice(proc, discountPercent);
+  const isPromoDay = discountPercent > 0;
 
   const imageElement = (
     <div className="relative w-[280px] h-[430px] bg-[#F0EFEA] overflow-hidden shrink-0">
@@ -52,7 +58,7 @@ const HorizontalProcedureCard: React.FC<ProcedureCardProps> = ({
       </div>
       {hasDiscount && (
         <div className="absolute top-3.5 right-3.5 px-2.5 py-1 rounded-sm bg-[#B88358] text-white text-[10px] font-bold uppercase tracking-wider shadow-sm">
-          Especial
+          {isPromoDay ? `-${formatDiscountPercent(discountPercent)}% OFF` : 'Especial'}
         </div>
       )}
     </div>
@@ -141,22 +147,31 @@ const HorizontalProcedureCard: React.FC<ProcedureCardProps> = ({
         {/* Price Tag with Safe Margins */}
         {showPrices && (
           <div className="text-right shrink-0 pr-1">
-            <div className="flex items-baseline justify-end gap-1.5 flex-wrap">
-              {proc.isStartingPrice && (
-                <span className="text-[10px] text-[#8A8985] font-medium uppercase tracking-wider">
-                  a partir de
+            {proc.isStartingPrice && (
+              <span className="block text-[10px] text-[#8A8985] font-medium uppercase tracking-wider">
+                a partir de
+              </span>
+            )}
+            {strikePrice !== null && (
+              <div className="flex items-center justify-end gap-1.5 leading-none mb-0.5">
+                <span className="text-sm text-[#A0A0A5] line-through">
+                  {formatBRL(strikePrice)}
                 </span>
-              )}
-              {hasDiscount && (
-                <span className="text-xs text-[#A0A0A5] line-through">
-                  {formatBRL(proc.price)}
-                </span>
-              )}
+                {isPromoDay && (
+                  <span className="px-1.5 py-0.5 rounded-xs bg-[#B88358] text-white text-[9px] font-bold tracking-wider">
+                    -{formatDiscountPercent(discountPercent)}%
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="flex items-baseline justify-end">
               <span
-                className="font-serif-luxury text-2xl font-bold text-[#1A1A1C] tracking-tight whitespace-nowrap"
+                className={`font-serif-luxury text-2xl font-bold tracking-tight whitespace-nowrap ${
+                  hasDiscount ? 'text-[#9C663D]' : 'text-[#1A1A1C]'
+                }`}
                 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}
               >
-                {formatBRL(hasDiscount ? proc.promotionalPrice : proc.price)}
+                {formatBRL(finalPrice)}
               </span>
             </div>
             {proc.priceNote ? (
@@ -196,6 +211,7 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
   clinic,
   selectedCategory = 'Todos',
   showPrices = true,
+  discountPercent = 0,
 }) => {
   const filteredProcedures = selectedCategory === 'Todos'
     ? procedures
@@ -329,6 +345,36 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
                     "{clinic.catalogWelcomeNote || 'Nossos protocolos são cuidadosamente desenhados para proporcionar resultados estéticos refinados com máximo conforto, segurança e respaldo técnico de padrão ouro.'}"
                   </p>
                 </div>
+
+                {/* PROMO BANNER — só aparece quando há desconto geral no catálogo */}
+                {discountPercent > 0 && (
+                  <div className="mb-7 rounded-lg border-2 border-[#B88358] bg-[#1A1A1C] px-5 py-4 flex items-center justify-between gap-4 shadow-sm">
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#D8A47F] block">
+                        Condição Especial por Tempo Limitado
+                      </span>
+                      <p
+                        className="font-serif-luxury text-xl font-bold text-white leading-tight mt-0.5"
+                        style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}
+                      >
+                        {formatDiscountPercent(discountPercent)}% de desconto em todos os procedimentos
+                      </p>
+                      <p className="text-[10px] text-[#A0A0A5] mt-1 leading-snug">
+                        Os valores deste catálogo já estão com o desconto aplicado — o preço de tabela
+                        aparece riscado acima de cada valor promocional.
+                      </p>
+                    </div>
+                    <div className="shrink-0 w-[92px] h-[92px] rounded-full bg-[#B88358] flex flex-col items-center justify-center text-white shadow-md">
+                      <span
+                        className="font-serif-luxury text-3xl font-bold leading-none"
+                        style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}
+                      >
+                        -{formatDiscountPercent(discountPercent)}%
+                      </span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest mt-1">OFF</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* CLINICAL TEAM - horizontal cards in the same format as procedure cards (photo + name/subtitle) */}
                 {clinicDoctors.length > 0 && (
@@ -539,6 +585,7 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
                     isImageLeft={index % 2 === 0}
                     clinic={clinic}
                     showPrices={showPrices}
+                    discountPercent={discountPercent}
                   />
                 ))}
               </div>

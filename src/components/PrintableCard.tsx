@@ -1,6 +1,7 @@
 import React from 'react';
 import { Procedure, ClinicProfile } from '../types';
 import { formatBRL } from '../utils/formatters';
+import { getCatalogPrice, formatDiscountPercent } from '../utils/catalogPricing';
 import { getProcedureDoctors } from '../utils/doctorHelpers';
 import { Sparkles, Clock, Calendar, CheckCircle2, ShieldCheck, Stethoscope } from 'lucide-react';
 import { ClinicLogo } from './ClinicLogo';
@@ -8,13 +9,20 @@ import { ClinicLogo } from './ClinicLogo';
 interface PrintableCardProps {
   procedure: Procedure;
   clinic: ClinicProfile;
+  /** Desconto promocional aplicado a todo o catálogo, em % (dias especiais). */
+  discountPercent?: number;
 }
 
-export const PrintableCard: React.FC<PrintableCardProps> = ({ procedure, clinic }) => {
+export const PrintableCard: React.FC<PrintableCardProps> = ({
+  procedure,
+  clinic,
+  discountPercent = 0,
+}) => {
   const images = procedure.images && procedure.images.length > 0
     ? procedure.images
     : ['https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80'];
-  const hasDiscount = procedure.promotionalPrice && procedure.promotionalPrice < procedure.price;
+  const { strikePrice, finalPrice, hasDiscount } = getCatalogPrice(procedure, discountPercent);
+  const isPromoDay = discountPercent > 0;
   const doctors = getProcedureDoctors(procedure, clinic);
 
   return (
@@ -56,9 +64,9 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({ procedure, clinic 
         <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded bg-[#1A1A1A]/85 text-[#FAF9F5] text-[10px] font-bold uppercase tracking-wider">
           {procedure.category}
         </div>
-        {procedure.isFeatured && (
+        {(isPromoDay || procedure.isFeatured) && (
           <div className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded bg-[#B88358] text-white text-[10px] font-bold uppercase tracking-wider">
-            Destaque
+            {isPromoDay ? `-${formatDiscountPercent(discountPercent)}% OFF` : 'Destaque'}
           </div>
         )}
       </div>
@@ -115,19 +123,24 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({ procedure, clinic 
           <span className="text-[9px] uppercase tracking-wider text-[#D8A47F] font-semibold block">
             Investimento
           </span>
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            {procedure.isStartingPrice && (
-              <span className="text-xs text-[#D8A47F] font-medium">a partir de</span>
-            )}
-            {hasDiscount && (
-              <span className="text-xs text-[#A0A0A5] line-through">
-                {formatBRL(procedure.price)}
+          {procedure.isStartingPrice && (
+            <span className="block text-xs text-[#D8A47F] font-medium">a partir de</span>
+          )}
+          {strikePrice !== null && (
+            <div className="flex items-center gap-1.5 leading-none mb-0.5">
+              <span className="text-sm text-[#A0A0A5] line-through">
+                {formatBRL(strikePrice)}
               </span>
-            )}
-            <span className="font-serif-luxury text-2xl font-bold text-white">
-              {formatBRL(hasDiscount ? procedure.promotionalPrice : procedure.price)}
-            </span>
-          </div>
+              {isPromoDay && (
+                <span className="px-1.5 py-0.5 rounded-xs bg-[#B88358] text-white text-[9px] font-bold tracking-wider">
+                  -{formatDiscountPercent(discountPercent)}%
+                </span>
+              )}
+            </div>
+          )}
+          <span className="font-serif-luxury text-2xl font-bold text-white block leading-tight">
+            {formatBRL(finalPrice)}
+          </span>
         </div>
         {procedure.priceNote && (
           <span className="text-xs text-[#C89973] font-medium">

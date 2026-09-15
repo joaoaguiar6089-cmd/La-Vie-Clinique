@@ -2,6 +2,7 @@ import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
 import { Procedure, ClinicProfile } from '../types';
 import { formatBRL } from './formatters';
+import { getCatalogPrice, formatDiscountPercent } from './catalogPricing';
 
 /**
  * Safely converts an image URL into a base64 Data URL with timeout protection.
@@ -343,18 +344,26 @@ export async function exportElementAsPDF(
 
 export function buildWhatsAppCatalogShareUrl(
   procedures: Procedure[],
-  clinic: ClinicProfile
+  clinic: ClinicProfile,
+  /** Desconto promocional aplicado a todos os procedimentos, em % (dias especiais). */
+  discountPercent: number = 0
 ): string {
   let message = `✨ *${clinic.name.toUpperCase()}* ✨\n`;
   message += `_${clinic.tagline}_\n`;
   message += `👤 *${clinic.professionalName}* (${clinic.professionalTitle})\n\n`;
+  if (discountPercent > 0) {
+    message += `🎁 *PROMOÇÃO ESPECIAL: ${formatDiscountPercent(discountPercent)}% DE DESCONTO EM TODOS OS PROCEDIMENTOS!*\n`;
+    message += `_Os valores abaixo já estão com o desconto aplicado._\n\n`;
+  }
+
   message += `📋 *CATÁLOGO DE PROCEDIMENTOS EXCLUSIVOS:*\n\n`;
 
   procedures.forEach((p, idx) => {
     const prefix = p.isStartingPrice ? 'a partir de ' : '';
-    const priceText = p.promotionalPrice 
-      ? `${prefix}~${formatBRL(p.price)}~ por *${formatBRL(p.promotionalPrice)}*`
-      : `${prefix}*${formatBRL(p.price)}*`;
+    const { strikePrice, finalPrice } = getCatalogPrice(p, discountPercent);
+    const priceText = strikePrice !== null
+      ? `${prefix}~${formatBRL(strikePrice)}~ por *${formatBRL(finalPrice)}*`
+      : `${prefix}*${formatBRL(finalPrice)}*`;
     
     message += `${idx + 1}. *${p.title.toUpperCase()}*\n`;
     if (p.subtitle) message += `   _${p.subtitle}_\n`;
@@ -382,12 +391,15 @@ export function buildWhatsAppCatalogShareUrl(
 
 export function buildSingleProcedureWhatsAppUrl(
   procedure: Procedure,
-  clinic: ClinicProfile
+  clinic: ClinicProfile,
+  /** Desconto promocional aplicado a todos os procedimentos, em % (dias especiais). */
+  discountPercent: number = 0
 ): string {
   const prefix = procedure.isStartingPrice ? 'a partir de ' : '';
-  const priceText = procedure.promotionalPrice 
-    ? `${prefix}~${formatBRL(procedure.price)}~ por *${formatBRL(procedure.promotionalPrice)}*`
-    : `${prefix}*${formatBRL(procedure.price)}*`;
+  const { strikePrice, finalPrice } = getCatalogPrice(procedure, discountPercent);
+  const priceText = strikePrice !== null
+    ? `${prefix}~${formatBRL(strikePrice)}~ por *${formatBRL(finalPrice)}*`
+    : `${prefix}*${formatBRL(finalPrice)}*`;
 
   let message = `Olá! Gostaria de agendar ou tirar dúvidas sobre o procedimento:\n\n`;
   message += `✨ *${procedure.title.toUpperCase()}*\n`;
