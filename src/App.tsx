@@ -29,11 +29,14 @@ import {
   replaceAllProceduresWithOfficialPdfCatalog,
   subscribeToAnamnesisTemplates,
   isQuotaOrOfflineError,
+  mergeWithDefaultProcedures,
+  ensureAllDefaultProceduresInFirestore,
 } from './services/databaseService';
 import { DEFAULT_PROCEDURE_TEMPLATES } from './data/anamnesisInitialData';
 import { onAuthChange, logout, type User } from './services/authService';
 
 const STORAGE_KEY_PROCEDURES = 'aura_bronze_procedures_v1';
+const STORAGE_KEY_DELETED_PROCEDURES = 'aura_bronze_deleted_procedures_v1';
 const STORAGE_KEY_CLINIC = 'aura_bronze_clinic_v1';
 
 // A ficha de anamnese pública (link enviado ao cliente) é servida por um shell totalmente
@@ -44,13 +47,30 @@ const isPublicAnamnesisRoute = !!(publicSearchParams?.get('anamnese') || publicS
 const isPublicQuoteRoute = !!publicSearchParams?.get('orcamento');
 
 function MainCatalogApp() {
-  // Load procedures from localStorage or default samples initial fallback
+  // Lista de IDs excluídos manualmente pelo usuário
+  const [deletedProcedureIds, setDeletedProcedureIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_DELETED_PROCEDURES);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Load procedures from localStorage or default samples initial fallback.
+  // Utiliza mergeWithDefaultProcedures para que edições feitas em procedimentos individuais
+  // (como trocar foto ou preço) nunca façam os demais procedimentos do catálogo desaparecerem.
   const [procedures, setProcedures] = useState<Procedure[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_PROCEDURES);
+      const savedDeleted = localStorage.getItem(STORAGE_KEY_DELETED_PROCEDURES);
+      const deletedList: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
+
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return mergeWithDefaultProcedures(parsed, deletedList);
+        }
       }
     } catch (e) {
       console.error('Error loading saved procedures:', e);
@@ -142,8 +162,20 @@ function MainCatalogApp() {
         unsubscribeProcedures = subscribeToProcedures(
           (firebaseProcedures) => {
             if (firebaseProcedures && firebaseProcedures.length > 0) {
-              setProcedures(firebaseProcedures);
-              localStorage.setItem(STORAGE_KEY_PROCEDURES, JSON.stringify(firebaseProcedures));
+              let currentDeleted: string[] = [];
+              try {
+                const savedDeleted = localStorage.getItem(STORAGE_KEY_DELETED_PROCEDURES);
+                if (savedDeleted) currentDeleted = JSON.parse(savedDeleted);
+              } catch {
+                currentDeleted = [];
+              }
+
+              const merged = mergeWithDefaultProcedures(firebaseProcedures, currentDeleted);
+              setProcedures(merged);
+              localStorage.setItem(STORAGE_KEY_PROCEDURES, JSON.stringify(merged));
+
+              // Sincroniza em segundo plano no Firestore quaisquer procedimentos base ausentes
+              ensureAllDefaultProceduresInFirestore(firebaseProcedures, currentDeleted).catch(() => {});
             }
             setSyncStatus('synced');
           },
@@ -259,6 +291,12 @@ function MainCatalogApp() {
       ...INITIAL_CATEGORIES.filter((c) => c !== 'Todos'),
       ...procedures.map((p) => p.category).filter(Boolean),
     ])
+  ).filter(
+    (c) =>
+      c !== 'Depilação a Laser - Facial' &&
+      c !== 'Depilação a Laser - Íntima' &&
+      c !== 'Depilação a Laser - Corporal' &&
+      c !== 'Depilação a Laser - Intima'
   );
 
   /**
@@ -337,6 +375,14 @@ function MainCatalogApp() {
       onConfirmar: async () => {
         try {
           setSyncStatus('syncing');
+          const updatedDeleted = Array.from(new Set([...deletedProcedureIds, id]));
+          setDeletedProcedureIds(updatedDeleted);
+          try {
+            localStorage.setItem(STORAGE_KEY_DELETED_PROCEDURES, JSON.stringify(updatedDeleted));
+          } catch {
+            // ignore
+          }
+
           setProcedures((prev) => prev.filter((p) => p.id !== id));
           if (selectedProcedureForDetails?.id === id) {
             setSelectedProcedureForDetails(null);
@@ -418,6 +464,12 @@ function MainCatalogApp() {
       onConfirmar: async () => {
         try {
           setSyncStatus('syncing');
+          setDeletedProcedureIds([]);
+          try {
+            localStorage.removeItem(STORAGE_KEY_DELETED_PROCEDURES);
+          } catch {
+            // ignore
+          }
           setProcedures(SAMPLE_PROCEDURES);
           setClinic(DEFAULT_CLINIC_PROFILE);
           await replaceAllProceduresWithOfficialPdfCatalog();

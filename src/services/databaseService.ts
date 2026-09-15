@@ -242,6 +242,101 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
 }
 
 /**
+ * Normaliza qualquer variação antiga das categorias de depilação a laser
+ * (Facial, Íntima e Corporal) para a categoria única e unificada: "Depilação a Laser".
+ */
+export function normalizeLaserCategory(category?: string): string {
+  if (!category) return '';
+  const trimmed = category.trim();
+  if (
+    trimmed === 'Depilação a Laser - Facial' ||
+    trimmed === 'Depilação a Laser - Íntima' ||
+    trimmed === 'Depilação a Laser - Corporal' ||
+    trimmed === 'Depilação a Laser - Intima'
+  ) {
+    return 'Depilação a Laser';
+  }
+  return trimmed;
+}
+
+/**
+ * Mescla a lista de procedimentos atuais (vindos do Firestore ou localStorage)
+ * com o catálogo oficial completo (SAMPLE_PROCEDURES).
+ *
+ * Garante que personalizações feitas pelo usuário (ex: troca de fotos, novos preços)
+ * sejam SEMPRE preservadas com prioridade máxima, ao mesmo tempo em que impede
+ * que os outros procedimentos da clínica desapareçam se o Firestore ainda não tiver
+ * sincronizado todos os itens ou se apenas um foi salvo individualmente.
+ */
+export function mergeWithDefaultProcedures(
+  currentProcedures: Procedure[],
+  deletedIds: string[] = []
+): Procedure[] {
+  const deletedSet = new Set(deletedIds);
+  const currentMap = new Map<string, Procedure>();
+
+  // 1. Adiciona os procedimentos existentes/editados (prioridade absoluta do usuário)
+  for (const proc of currentProcedures) {
+    if (!deletedSet.has(proc.id)) {
+      currentMap.set(proc.id, {
+        ...proc,
+        category: normalizeLaserCategory(proc.category),
+      });
+    }
+  }
+
+  // 2. Preenche os procedimentos base do catálogo oficial que ainda não constam na lista
+  for (const defaultProc of SAMPLE_PROCEDURES) {
+    if (!deletedSet.has(defaultProc.id) && !currentMap.has(defaultProc.id)) {
+      currentMap.set(defaultProc.id, {
+        ...defaultProc,
+        category: normalizeLaserCategory(defaultProc.category),
+      });
+    }
+  }
+
+  const merged = Array.from(currentMap.values());
+  return merged.sort((a, b) => (a.order || 99) - (b.order || 99));
+}
+
+/**
+ * Sincroniza em segundo plano quaisquer procedimentos padrão do catálogo oficial
+ * que ainda não existam no Firestore, sem jamais sobrescrever os já customizados pelo usuário.
+ */
+export async function ensureAllDefaultProceduresInFirestore(
+  existingProcedures: Procedure[],
+  deletedIds: string[] = []
+): Promise<void> {
+  if (quotaExhaustedSession) return;
+  try {
+    const existingIds = new Set(existingProcedures.map((p) => p.id));
+    const deletedSet = new Set(deletedIds);
+    const missing = SAMPLE_PROCEDURES.filter((p) => !existingIds.has(p.id) && !deletedSet.has(p.id));
+
+    if (missing.length > 0) {
+      console.log(`Sincronizando ${missing.length} procedimentos base ausentes no Firestore...`);
+      const batch = writeBatch(db);
+      for (const proc of missing) {
+        const ref = doc(db, PROCEDURES_COLLECTION, proc.id);
+        batch.set(ref, cleanForFirestore({
+          ...proc,
+          category: normalizeLaserCategory(proc.category),
+          updatedAt: new Date().toISOString(),
+        }));
+      }
+      await batch.commit();
+      console.log('Procedimentos base sincronizados no Firestore com sucesso.');
+    }
+  } catch (err) {
+    if (isQuotaOrOfflineError(err)) {
+      console.warn('Cota de leitura/escrita diária atingida ao sincronizar procedimentos base.');
+    } else {
+      console.error('Erro ao sincronizar procedimentos base ausentes:', err);
+    }
+  }
+}
+
+/**
  * Subscribe to real-time procedures updates.
  */
 export function subscribeToProcedures(
@@ -255,7 +350,13 @@ export function subscribeToProcedures(
     (snapshot) => {
       const items: Procedure[] = [];
       snapshot.forEach((docSnap) => {
-        items.push({ ...(docSnap.data() as Procedure), id: docSnap.id });
+        const proc = { ...(docSnap.data() as Procedure), id: docSnap.id };
+        const catNormalizada = normalizeLaserCategory(proc.category);
+        if (catNormalizada !== proc.category) {
+          proc.category = catNormalizada;
+          updateDoc(doc(db, PROCEDURES_COLLECTION, proc.id), { category: catNormalizada }).catch(() => {});
+        }
+        items.push(proc);
       });
       onUpdate(items);
     },
@@ -553,6 +654,11 @@ async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void
         );
         hasChanges = true;
       } else {
+        const updates: Partial<AnamnesisTemplate> = {};
+        if (existing.categoria !== tplDefault.categoria) {
+          updates.categoria = tplDefault.categoria;
+        }
+
         const currentQuestions = existing.perguntasEspecificas || [];
         const requiredQuestions = tplDefault.perguntasEspecificas || [];
         const missingQuestions = requiredQuestions.filter((reqQ) => {
@@ -569,10 +675,13 @@ async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void
             ...q,
             ordem: idx + 1,
           }));
+          updates.perguntasEspecificas = updatedQuestions;
+        }
 
+        if (Object.keys(updates).length > 0) {
           const ref = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, existing.id);
           batch.update(ref, {
-            perguntasEspecificas: cleanForFirestore(updatedQuestions),
+            ...cleanForFirestore(updates),
             updatedAt: new Date().toISOString(),
           });
           hasChanges = true;
@@ -669,7 +778,13 @@ export function subscribeToAnamnesisTemplates(
     (snapshot) => {
       const items: AnamnesisTemplate[] = [];
       snapshot.forEach((docSnap) => {
-        items.push({ ...(docSnap.data() as AnamnesisTemplate), id: docSnap.id });
+        const tpl = { ...(docSnap.data() as AnamnesisTemplate), id: docSnap.id };
+        const catNormalizada = normalizeLaserCategory(tpl.categoria);
+        if (catNormalizada !== tpl.categoria) {
+          tpl.categoria = catNormalizada;
+          updateDoc(doc(db, ANAMNESIS_TEMPLATES_COLLECTION, tpl.id), { categoria: catNormalizada }).catch(() => {});
+        }
+        items.push(tpl);
       });
       // Sort alphabetically by procedure name
       items.sort((a, b) => a.procedimentoNome.localeCompare(b.procedimentoNome));
