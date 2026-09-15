@@ -74,8 +74,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     if (!el) return;
     setIsExporting(true);
     try {
-      const sanitizedName = clinic.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-      await exportElementAsPDF(el, `catalogo-estetica-${sanitizedName}.pdf`);
+      await exportElementAsPDF(el, 'Catalogo La Vie.pdf');
       triggerConfetti();
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -90,8 +89,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     if (!el) return;
     setIsExporting(true);
     try {
-      const sanitizedName = clinic.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-      await exportElementAsImage(el, `catalogo-estetica-${sanitizedName}.png`);
+      await exportElementAsImage(el, 'Catalogo La Vie.png');
       triggerConfetti();
     } catch (err) {
       console.error('Error generating image:', err);

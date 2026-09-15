@@ -158,7 +158,7 @@ async function captureElementFullHeight(element: HTMLElement): Promise<FullHeigh
  */
 export async function exportElementAsImage(
   element: HTMLElement,
-  filename: string = 'catalogo-estetica.png'
+  filename: string = 'Catalogo La Vie.png'
 ): Promise<string> {
   try {
     if (document.fonts) {
@@ -206,7 +206,7 @@ export async function exportElementAsImage(
  */
 export async function exportElementAsPDF(
   element: HTMLElement,
-  filename: string = 'catalogo-estetica.pdf'
+  filename: string = 'Catalogo La Vie.pdf'
 ): Promise<void> {
   try {
     // 1. Ensure fonts are fully ready
@@ -273,6 +273,27 @@ export async function exportElementAsPDF(
               pdf.link(relX, relY, relW, relH, { pageNumber: targetPageNum });
             } catch (linkErr) {
               console.warn('Could not register pdf link annotation:', linkErr);
+            }
+          }
+        });
+
+        // Add Interactive External URL Clickable Links (WhatsApp, Web, etc.)
+        const urlNodes = Array.from(pageEl.querySelectorAll<HTMLElement>('[data-link-url]'));
+
+        urlNodes.forEach((urlNode) => {
+          const linkRect = urlNode.getBoundingClientRect();
+          const targetUrl = urlNode.getAttribute('data-link-url');
+
+          if (targetUrl && pageRect.width > 0 && pageRect.height > 0) {
+            const relX = ((linkRect.left - pageRect.left) / pageRect.width) * pdfWidth;
+            const relY = ((linkRect.top - pageRect.top) / pageRect.height) * pdfHeight;
+            const relW = (linkRect.width / pageRect.width) * pdfWidth;
+            const relH = (linkRect.height / pageRect.height) * pdfHeight;
+
+            try {
+              pdf.link(relX, relY, relW, relH, { url: targetUrl });
+            } catch (linkErr) {
+              console.warn('Could not register pdf url link annotation:', linkErr);
             }
           }
         });

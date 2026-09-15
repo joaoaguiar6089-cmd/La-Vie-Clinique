@@ -12,7 +12,7 @@ import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
-import { Procedure, ClinicProfile, AppView, AnamnesisTemplate } from './types';
+import { Procedure, ClinicProfile, Professional, AppView, AnamnesisTemplate } from './types';
 import { mapearTemplatesPorProcedimento } from './utils/templateMatching';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { ClinicLogo } from './components/ClinicLogo';
@@ -83,7 +83,24 @@ function MainCatalogApp() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_CLINIC);
       if (saved) {
-        return { ...DEFAULT_CLINIC_PROFILE, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        const mergedProfessionals = (parsed.professionals && parsed.professionals.length > 0)
+          ? parsed.professionals.map((p: Professional) => {
+              if (
+                (!p.photoUrl || p.photoUrl.trim() === '') &&
+                (p.id === 'doc-karoline' || p.name.toLowerCase().includes('karoline'))
+              ) {
+                return { ...p, photoUrl: '/dra-karoline.jpg' };
+              }
+              return p;
+            })
+          : DEFAULT_CLINIC_PROFILE.professionals;
+
+        return {
+          ...DEFAULT_CLINIC_PROFILE,
+          ...parsed,
+          professionals: mergedProfessionals,
+        };
       }
     } catch (e) {
       console.error('Error loading saved clinic profile:', e);
@@ -107,6 +124,7 @@ function MainCatalogApp() {
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced');
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const publicProfilePublishedRef = useRef(false);
+  const firebaseClinicSyncedPhotoRef = useRef(false);
 
   useEffect(() => {
     if (syncStatus === 'error') {
@@ -192,15 +210,44 @@ function MainCatalogApp() {
         unsubscribeClinic = subscribeToClinicProfile(
           (firebaseClinic) => {
             if (firebaseClinic) {
-              setClinic(firebaseClinic);
-              localStorage.setItem(STORAGE_KEY_CLINIC, JSON.stringify(firebaseClinic));
+              const updatedProfessionals = (firebaseClinic.professionals && firebaseClinic.professionals.length > 0)
+                ? firebaseClinic.professionals.map((p) => {
+                    if (
+                      (!p.photoUrl || p.photoUrl.trim() === '') &&
+                      (p.id === 'doc-karoline' || p.name.toLowerCase().includes('karoline'))
+                    ) {
+                      return { ...p, photoUrl: '/dra-karoline.jpg' };
+                    }
+                    return p;
+                  })
+                : DEFAULT_CLINIC_PROFILE.professionals;
+
+              const enrichedClinic: ClinicProfile = {
+                ...firebaseClinic,
+                professionals: updatedProfessionals,
+              };
+
+              setClinic(enrichedClinic);
+              localStorage.setItem(STORAGE_KEY_CLINIC, JSON.stringify(enrichedClinic));
+
+              // If Firestore was missing Dra. Karoline's photo, persist it to Firestore so it stays permanently synced
+              const hadMissingPhoto = (firebaseClinic.professionals || []).some(
+                (p) => (!p.photoUrl || p.photoUrl.trim() === '') && (p.id === 'doc-karoline' || p.name.toLowerCase().includes('karoline'))
+              ) || !firebaseClinic.professionals || firebaseClinic.professionals.length === 0;
+
+              if (hadMissingPhoto && !firebaseClinicSyncedPhotoRef.current) {
+                firebaseClinicSyncedPhotoRef.current = true;
+                saveClinicProfileToDb(enrichedClinic).catch((err) =>
+                  console.warn('Auto-sync doctor photo to Firestore warning:', err)
+                );
+              }
 
               // Garante que o espelho público exista mesmo em clínicas que nunca reabriram as
               // configurações desde que ele passou a ser usado — é dele que a página da paciente
               // tira nome, telefone e equipe. Uma vez por sessão, e nunca bloqueante.
               if (!publicProfilePublishedRef.current) {
                 publicProfilePublishedRef.current = true;
-                publishPublicClinicProfile(firebaseClinic).catch((err) =>
+                publishPublicClinicProfile(enrichedClinic).catch((err) =>
                   console.warn('Não foi possível publicar o espelho público da clínica:', err)
                 );
               }

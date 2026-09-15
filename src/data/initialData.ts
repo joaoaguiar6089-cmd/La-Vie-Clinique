@@ -12,7 +12,8 @@ export const DEFAULT_CLINIC_PROFILE: ClinicProfile = {
       name: "Dra. Karoline Ferreira",
       registryNumber: "Responsável Técnica",
       title: "Especialista em Estética Avançada & Tecnologias",
-      specialty: "Especialista em Estética Avançada & Tecnologias"
+      specialty: "Especialista em Estética Avançada & Tecnologias",
+      photoUrl: "/dra-karoline.jpg"
     }
   ],
   phone: "(19) 99876-5432",

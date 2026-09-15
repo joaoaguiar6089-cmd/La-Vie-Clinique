@@ -162,7 +162,15 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         ...prev,
         professionals: prev.professionals.map((d) =>
           d.id === editingDocId
-            ? { ...d, name: docName.trim(), registryNumber: docRegistry.trim(), title: docTitle.trim(), specialty: docTitle.trim(), photoUrl: docPhotoUrl.trim() || undefined, email: docEmail.trim() || undefined }
+            ? {
+                ...d,
+                name: docName.trim(),
+                registryNumber: docRegistry.trim(),
+                title: docTitle.trim(),
+                specialty: docTitle.trim(),
+                photoUrl: docPhotoUrl.trim() || d.photoUrl || undefined,
+                email: docEmail.trim() || undefined,
+              }
             : d
         ),
       }));
@@ -261,10 +269,48 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    let updatedProfessionals = [...formData.professionals];
+
+    // Se o formulário de médica estiver aberto, incorpora as alterações automaticamente
+    if (showDoctorForm && docName.trim()) {
+      if (editingDocId) {
+        updatedProfessionals = updatedProfessionals.map((d) =>
+          d.id === editingDocId
+            ? {
+                ...d,
+                name: docName.trim(),
+                registryNumber: docRegistry.trim(),
+                title: docTitle.trim(),
+                specialty: docTitle.trim(),
+                photoUrl: docPhotoUrl.trim() || d.photoUrl || undefined,
+                email: docEmail.trim() || undefined,
+              }
+            : d
+        );
+      } else {
+        const newDoc: Professional = {
+          id: `doc-${Date.now()}`,
+          name: docName.trim(),
+          registryNumber: docRegistry.trim(),
+          title: docTitle.trim(),
+          specialty: docTitle.trim(),
+          photoUrl: docPhotoUrl.trim() || undefined,
+          email: docEmail.trim() || undefined,
+        };
+        updatedProfessionals.push(newDoc);
+      }
+    } else if (editingDocId && docPhotoUrl.trim()) {
+      updatedProfessionals = updatedProfessionals.map((d) =>
+        d.id === editingDocId ? { ...d, photoUrl: docPhotoUrl.trim() } : d
+      );
+    }
+
     // Update legacy fields if needed from first doctor
-    const primaryDoc = formData.professionals[0];
+    const primaryDoc = updatedProfessionals[0];
     const finalData: ClinicProfile = {
       ...formData,
+      professionals: updatedProfessionals,
       professionalName: primaryDoc?.name || formData.professionalName,
       professionalTitle: primaryDoc?.title || formData.professionalTitle,
       registryNumber: primaryDoc?.registryNumber || formData.registryNumber,
@@ -583,13 +629,21 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   className="flex items-center justify-between p-3 rounded-xs bg-white/60 backdrop-blur-xs border border-white/80 hover:border-[#A67C52]/30 transition-all"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-[#1A1A1A] text-[#C49B74] flex items-center justify-center text-xs font-bold font-serif-luxury shadow-xs overflow-hidden shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditDoctor(doc)}
+                      className="relative group w-9 h-9 rounded-full bg-[#1A1A1A] text-[#C49B74] flex items-center justify-center text-xs font-bold font-serif-luxury shadow-xs overflow-hidden shrink-0 border border-[#A67C52]/30 hover:border-[#A67C52] transition-colors"
+                      title="Clique para editar ou trocar foto"
+                    >
                       {doc.photoUrl ? (
                         <img src={doc.photoUrl} alt={doc.name} className="w-full h-full object-cover" />
                       ) : (
                         doc.name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'DR'
                       )}
-                    </div>
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Camera className="w-3.5 h-3.5 text-white" />
+                      </div>
+                    </button>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-xs font-semibold text-[#1A1A1A]">{doc.name}</p>
@@ -825,6 +879,21 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         onCancel={() => setPhotoCropSource(null)}
         onConfirm={(dataUrl) => {
           setDocPhotoUrl(dataUrl);
+          if (editingDocId) {
+            setFormData((prev) => ({
+              ...prev,
+              professionals: prev.professionals.map((d) =>
+                d.id === editingDocId ? { ...d, photoUrl: dataUrl } : d
+              ),
+            }));
+          } else if (formData.professionals.length > 0) {
+            setFormData((prev) => ({
+              ...prev,
+              professionals: prev.professionals.map((d, i) =>
+                i === 0 ? { ...d, photoUrl: dataUrl } : d
+              ),
+            }));
+          }
           setPhotoCropSource(null);
         }}
       />

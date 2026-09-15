@@ -222,7 +222,7 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
       console.log('Seeding official PDF catalog to Firebase Firestore...');
       await replaceAllProceduresWithOfficialPdfCatalog();
     } else {
-      // Ensure clinic profile exists
+      // Ensure clinic profile exists and has official doctor photo
       const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
       const clinicSnap = await getDoc(clinicRef);
       if (!clinicSnap.exists()) {
@@ -230,6 +230,31 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
           ...DEFAULT_CLINIC_PROFILE,
           updatedAt: new Date().toISOString(),
         }));
+      } else {
+        const existingData = clinicSnap.data() as ClinicProfile;
+        const needsPhoto = (existingData.professionals || []).some(
+          (p) => (!p.photoUrl || p.photoUrl.trim() === '') && (p.id === 'doc-karoline' || p.name.toLowerCase().includes('karoline'))
+        ) || !existingData.professionals || existingData.professionals.length === 0;
+
+        if (needsPhoto) {
+          const updatedProfessionals = (existingData.professionals && existingData.professionals.length > 0)
+            ? existingData.professionals.map((p) => {
+                if (
+                  (!p.photoUrl || p.photoUrl.trim() === '') &&
+                  (p.id === 'doc-karoline' || p.name.toLowerCase().includes('karoline'))
+                ) {
+                  return { ...p, photoUrl: '/dra-karoline.jpg' };
+                }
+                return p;
+              })
+            : DEFAULT_CLINIC_PROFILE.professionals;
+
+          await setDoc(clinicRef, cleanForFirestore({
+            ...existingData,
+            professionals: updatedProfessionals,
+            updatedAt: new Date().toISOString(),
+          }), { merge: true });
+        }
       }
     }
   } catch (err) {

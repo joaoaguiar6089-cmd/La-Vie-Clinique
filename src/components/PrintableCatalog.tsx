@@ -3,8 +3,9 @@ import { Procedure, ClinicProfile } from '../types';
 import { formatBRL } from '../utils/formatters';
 import { getCatalogPrice, formatDiscountPercent } from '../utils/catalogPricing';
 import { getProcedureDoctors, getClinicDoctors } from '../utils/doctorHelpers';
-import { Sparkles, Clock, Home, ChevronRight } from 'lucide-react';
+import { Sparkles, Clock, Home, ChevronRight, MessageCircle } from 'lucide-react';
 import { ClinicLogo } from './ClinicLogo';
+import { buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface PrintableCatalogProps {
   procedures: Procedure[];
@@ -257,6 +258,14 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
 
   // Retrieve clinic doctors (names & specialties without professional registry)
   const clinicDoctors = getClinicDoctors(clinic);
+
+  const whatsAppUrl =
+    buildWhatsAppUrl(clinic.phone, 'Olá! Acessei o catálogo de procedimentos e gostaria de tirar dúvidas e agendar um horário.') ||
+    (clinic.phone ? `https://wa.me/55${clinic.phone.replace(/\D/g, '')}` : 'https://wa.me/');
+
+  const instagramUrl = clinic.instagram
+    ? `https://instagram.com/${clinic.instagram.trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '')}`
+    : 'https://instagram.com';
 
   return (
     <div id="printable-catalog-root" className="w-full flex flex-col gap-10 items-start sm:items-center justify-center font-sans bg-[#E5E3DD] p-4 sm:p-8">
@@ -513,9 +522,36 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
               <div className="pt-5 border-t border-[#E8E6DE] flex items-center justify-between gap-3 text-xs text-[#71717A]">
                 <div>
                   <p className="font-semibold text-[#1A1A1C]">📍 {clinic.address} • {clinic.cityState}</p>
-                  <p className="text-[11px] text-[#8A8985] mt-0.5">
-                    📱 Agendamentos: <strong className="text-[#1A1A1C]">{clinic.phone}</strong> | Instagram: <strong className="text-[#1A1A1C]">{clinic.instagram}</strong>
-                  </p>
+                  <div className="text-[11px] text-[#8A8985] mt-1 flex items-center flex-wrap gap-x-2">
+                    <span>📱 Agendamentos: <strong className="text-[#1A1A1C]">{clinic.phone}</strong></span>
+                    <a
+                      href={whatsAppUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-link-url={whatsAppUrl}
+                      className="inline-flex items-center gap-1 font-semibold text-[#1A1A1C] hover:text-[#25D366] transition-colors"
+                      title="Falar no WhatsApp"
+                    >
+                      <span className="underline underline-offset-2">entre em contato</span>
+                      <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#25D366] text-white shadow-2xs shrink-0">
+                        <MessageCircle className="w-2.5 h-2.5 fill-current" />
+                      </span>
+                    </a>
+                    <span className="text-[#D0CECB]">|</span>
+                    <span>
+                      Instagram:{' '}
+                      <a
+                        href={instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-link-url={instagramUrl}
+                        className="font-bold text-[#1A1A1C] underline decoration-[#1A1A1C]/50 hover:text-[#B88358] transition-colors cursor-pointer"
+                        title="Abrir Instagram da clínica"
+                      >
+                        {clinic.instagram}
+                      </a>
+                    </span>
+                  </div>
                 </div>
                 <div className="text-right shrink-0">
                   <span className="inline-block px-3 py-1 bg-[#1A1A1C] text-[#D8A47F] text-[10px] font-bold uppercase tracking-widest rounded-xs">
@@ -593,9 +629,33 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
 
             {/* Interior Page Footer */}
             <div className="pt-3 border-t border-[#E8E6DE] flex items-center justify-between gap-2 text-[11px] text-[#71717A]">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <span>📱 {clinic.phone}</span>
-                <span>📸 {clinic.instagram}</span>
+                <a
+                  href={whatsAppUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-link-url={whatsAppUrl}
+                  className="inline-flex items-center gap-1 font-semibold text-[#1A1A1C] hover:text-[#25D366] transition-colors"
+                  title="Falar no WhatsApp"
+                >
+                  <span className="underline underline-offset-2">entre em contato</span>
+                  <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#25D366] text-white shadow-2xs shrink-0">
+                    <MessageCircle className="w-2.5 h-2.5 fill-current" />
+                  </span>
+                </a>
+                <span className="text-[#D0CECB]">|</span>
+                <a
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-link-url={instagramUrl}
+                  className="inline-flex items-center gap-1 font-semibold text-[#1A1A1C] hover:text-[#B88358] transition-colors cursor-pointer"
+                  title="Abrir Instagram da clínica"
+                >
+                  <span>📸</span>
+                  <span className="underline decoration-[#1A1A1C]/50">{clinic.instagram}</span>
+                </a>
               </div>
               <div className="flex items-center gap-3">
                 <a
