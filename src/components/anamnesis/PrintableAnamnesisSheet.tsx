@@ -1,8 +1,13 @@
 import React, { useRef, useState } from 'react';
-import { AnamnesisRecord, AnamnesisQuestion, ClinicProfile } from '../../types';
+import { AnamnesisRecord, AnamnesisQuestion, ClinicProfile, OrientationImage } from '../../types';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
+import {
+  isDuplicateIdentQuestion,
+  isMedicoQuestion,
+  isPatientQuestion,
+} from '../../utils/anamnesisQuestions';
 import {
   Printer,
   Download,
@@ -23,10 +28,14 @@ interface PrintableAnamnesisSheetProps {
   viewerRole?: 'staff' | 'paciente';
   /** Required when viewerRole is 'staff' — persists the professional's complementary answers. */
   onSaveRecord?: (record: AnamnesisRecord) => Promise<void>;
+  /**
+   * Imagem orientativa da ficha-modelo que originou este registro, já resolvida pelo chamador
+   * (ver `resolveOrientationImage`). Vive no template e não no registro, então quem monta a tela
+   * é quem a busca — a ficha só a desenha.
+   */
+  orientationImage?: OrientationImage | null;
 }
 
-const isMedico = (q: AnamnesisQuestion) => (q.publicoAlvo || 'paciente') === 'medico';
-const isPaciente = (q: AnamnesisQuestion) => !isMedico(q);
 
 function displayValue(q: AnamnesisQuestion, val: any): string {
   if (val === undefined || val === null || val === '') return 'Não informado';
@@ -42,6 +51,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   onClose,
   viewerRole = 'staff',
   onSaveRecord,
+  orientationImage,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -131,29 +141,15 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
 
   const patientAge = calculateAge(record.pacienteDataNascimento);
 
-  const nonDuplicateGeneral = (record.perguntasSnapshot?.gerais || []).filter((q) => {
-    const idLower = q.id.toLowerCase();
-    const textLower = q.texto.toLowerCase();
-    return !(
-      idLower === 'gen-nome' ||
-      idLower === 'gen-nascimento' ||
-      idLower === 'gen-whatsapp' ||
-      idLower === 'gen-contato' ||
-      idLower === 'gen-telefone' ||
-      idLower === 'gen-musica' ||
-      textLower.includes('nome completo') ||
-      textLower.includes('qual seu nome') ||
-      textLower === 'data de nascimento' ||
-      textLower.includes('música') ||
-      textLower.includes('musica')
-    );
-  });
+  const nonDuplicateGeneral = (record.perguntasSnapshot?.gerais || []).filter(
+    (q) => !isDuplicateIdentQuestion(q)
+  );
 
-  const patientGeneralQuestions = nonDuplicateGeneral.filter(isPaciente);
-  const patientSpecificQuestions = (record.perguntasSnapshot?.especificas || []).filter(isPaciente);
+  const patientGeneralQuestions = nonDuplicateGeneral.filter(isPatientQuestion);
+  const patientSpecificQuestions = (record.perguntasSnapshot?.especificas || []).filter(isPatientQuestion);
   const medicoQuestions = [
-    ...nonDuplicateGeneral.filter(isMedico),
-    ...(record.perguntasSnapshot?.especificas || []).filter(isMedico),
+    ...nonDuplicateGeneral.filter(isMedicoQuestion),
+    ...(record.perguntasSnapshot?.especificas || []).filter(isMedicoQuestion),
   ];
 
   const isStaff = viewerRole === 'staff';
@@ -467,6 +463,33 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Imagem orientativa do procedimento — o mesmo material que o paciente viu ao preencher */}
+          {orientationImage && (
+            <div className="mb-6 page-break-inside-avoid">
+              <div className="flex items-center gap-2 border-b border-[#A67C52]/40 pb-1.5 mb-3">
+                <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
+                <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-[#1A1A1A]">
+                  {orientationImage.titulo || 'Imagem Orientativa'}
+                </h4>
+              </div>
+
+              {orientationImage.descricao && (
+                <p className="text-[11px] text-gray-600 leading-relaxed mb-2.5">{orientationImage.descricao}</p>
+              )}
+
+              <div className="border border-gray-200 rounded-sm bg-[#FAF9F6] p-3 flex justify-center">
+                {/* Sem caixa de altura fixa: a imagem sai na proporção exata do arquivo enviado, só
+                    limitada em altura para não estourar uma página A4 no PDF. */}
+                <img
+                  src={orientationImage.url}
+                  alt={orientationImage.titulo || 'Imagem orientativa do procedimento'}
+                  className="block w-full h-auto object-contain rounded-xs"
+                  style={{ maxHeight: '1040px' }}
+                />
+              </div>
             </div>
           )}
 

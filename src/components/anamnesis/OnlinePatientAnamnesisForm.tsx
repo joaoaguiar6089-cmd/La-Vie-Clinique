@@ -9,8 +9,11 @@ import {
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
+import { resolveOrientationImage } from '../../utils/orientationImage';
+import { isDuplicateIdentQuestion, isPatientQuestion } from '../../utils/anamnesisQuestions';
 import { ClinicLogo } from '../ClinicLogo';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
+import { OrientationImageCard } from './OrientationImageCard';
 import {
   Camera,
   CheckCircle2,
@@ -53,27 +56,6 @@ interface OnlinePatientAnamnesisFormProps {
   onSaved: (record: AnamnesisRecord) => void;
 }
 
-// Helper to identify identification questions already covered by the dedicated fields below
-const isDuplicateIdentQuestion = (q: AnamnesisQuestion): boolean => {
-  const idLower = q.id.toLowerCase();
-  const textLower = q.texto.toLowerCase();
-  return (
-    idLower === 'gen-nome' ||
-    idLower === 'gen-nascimento' ||
-    idLower === 'gen-whatsapp' ||
-    idLower === 'gen-contato' ||
-    idLower === 'gen-telefone' ||
-    idLower === 'gen-musica' ||
-    textLower.includes('nome completo') ||
-    textLower.includes('qual seu nome') ||
-    textLower === 'data de nascimento' ||
-    textLower.includes('música') ||
-    textLower.includes('musica')
-  );
-};
-
-const isPatientQuestion = (q: AnamnesisQuestion): boolean => (q.publicoAlvo || 'paciente') !== 'medico';
-
 const isAnswerEmpty = (v: any): boolean =>
   v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
 
@@ -96,6 +78,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
   // Only the subset the CLIENT should see/answer (médico-only questions never reach this form)
   const patientGeneralQuestions = nonIdentGeneralQuestions.filter(isPatientQuestion);
   const patientSpecificQuestions = (template.perguntasEspecificas || []).filter(isPatientQuestion);
+  const orientationImage = resolveOrientationImage(template);
 
   const isEditing = !!existingRecord;
 
@@ -635,6 +618,8 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
               </h2>
               {template.descricao && <p className="text-[14px] text-[#8a8578] mt-1">{template.descricao}</p>}
             </div>
+
+            {orientationImage && <OrientationImageCard image={orientationImage} />}
 
             {patientSpecificQuestions.length > 0 && (
               <div className="bg-white rounded-2xl p-5 divide-y divide-[rgba(26,26,26,.07)] shadow-[0_3px_14px_rgba(0,0,0,.04)]">

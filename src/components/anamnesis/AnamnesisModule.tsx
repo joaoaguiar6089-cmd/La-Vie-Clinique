@@ -27,6 +27,7 @@ import { ProcedureTemplatesManager } from './ProcedureTemplatesManager';
 import { PatientHistoryView } from './PatientHistoryView';
 import { AnamnesisFormFillModal } from './AnamnesisFormFillModal';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
+import { resolveOrientationImage } from '../../utils/orientationImage';
 import {
   FileSpreadsheet,
   Layers,
@@ -267,6 +268,9 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
           onClose={() => setDetailRecord(null)}
           viewerRole="staff"
           onSaveRecord={saveAnamnesisRecord}
+          orientationImage={resolveOrientationImage(
+            templates.find((t) => t.id === (detailRecord.templateId || detailRecord.procedimentoId))
+          )}
         />
       )}
     </div>

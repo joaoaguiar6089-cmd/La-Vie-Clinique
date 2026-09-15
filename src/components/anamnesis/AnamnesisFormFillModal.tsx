@@ -9,7 +9,10 @@ import {
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
+import { resolveOrientationImage } from '../../utils/orientationImage';
+import { isDuplicateIdentQuestion } from '../../utils/anamnesisQuestions';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
+import { OrientationImageCard } from './OrientationImageCard';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import {
@@ -122,25 +125,6 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   const [tipoMusica, setTipoMusica] = useState('');
   const [selectedPatientGender, setSelectedPatientGender] = useState<PatientGender | ''>('');
 
-  // Helper to identify questions that shouldn't be duplicated
-  const isDuplicateIdentQuestion = (q: AnamnesisQuestion): boolean => {
-    const idLower = q.id.toLowerCase();
-    const textLower = q.texto.toLowerCase();
-    return (
-      idLower === 'gen-nome' ||
-      idLower === 'gen-nascimento' ||
-      idLower === 'gen-whatsapp' ||
-      idLower === 'gen-contato' ||
-      idLower === 'gen-telefone' ||
-      idLower === 'gen-musica' ||
-      textLower.includes('nome completo') ||
-      textLower.includes('qual seu nome') ||
-      textLower === 'data de nascimento' ||
-      textLower.includes('música') ||
-      textLower.includes('musica')
-    );
-  };
-
   const extraGeneralQuestions = generalQuestions.filter((q) => !isDuplicateIdentQuestion(q));
 
   // Procedure Template selection
@@ -204,6 +188,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
   const currentGenero = patientMode === 'new' ? newPatientGender : selectedPatientGender;
   const previewFotoModelo = currentTemplate ? resolveTemplatePhoto(currentTemplate, currentGenero || undefined) : undefined;
+  const orientationImage = resolveOrientationImage(currentTemplate);
 
   if (!isOpen) return null;
 
@@ -733,6 +718,8 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                   {currentTemplate.perguntasEspecificas.length} questões
                 </span>
               </div>
+
+              {orientationImage && <OrientationImageCard image={orientationImage} variant="clinica" />}
 
               {currentTemplate.perguntasEspecificas.length === 0 ? (
                 <p className="text-[14px] text-[#8a8578] py-3 italic">

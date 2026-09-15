@@ -12,6 +12,7 @@ import {
 } from '../../services/databaseService';
 import { OnlinePatientAnamnesisForm } from './OnlinePatientAnamnesisForm';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
+import { resolveOrientationImage } from '../../utils/orientationImage';
 import {
   Loader2,
   AlertTriangle,
@@ -194,7 +195,16 @@ export const PublicAnamnesisEntry: React.FC = () => {
             setScreen('error');
             return;
           }
-          const [patient, gq] = await Promise.all([getPatientById(record.pacienteId), getGeneralQuestionsOnce()]);
+          // A imagem orientativa mora na ficha-modelo, não no registro — por isso ela é buscada
+          // aqui junto do resto. A leitura é best-effort: uma ficha-modelo apagada (ou um registro
+          // antigo sem `templateId`) apenas deixa a ficha sem a imagem, nunca quebra a abertura.
+          const [patient, gq, tplDoRegistro] = await Promise.all([
+            getPatientById(record.pacienteId),
+            getGeneralQuestionsOnce(),
+            record.templateId
+              ? getAnamnesisTemplateById(record.templateId).catch(() => null)
+              : Promise.resolve(null),
+          ]);
           if (cancelled) return;
           setGeneralQuestions(gq);
           setInitialPatient(patient);
@@ -204,6 +214,9 @@ export const PublicAnamnesisEntry: React.FC = () => {
             procedimentoNome: record.procedimentoNome,
             tem_foto: true,
             fotoModeloUrl: record.fotoModeloUrl,
+            imagemOrientativaUrl: tplDoRegistro?.imagemOrientativaUrl,
+            imagemOrientativaTitulo: tplDoRegistro?.imagemOrientativaTitulo,
+            imagemOrientativaDescricao: tplDoRegistro?.imagemOrientativaDescricao,
             perguntasEspecificas: record.perguntasSnapshot?.especificas || [],
           });
           setScreen('form');
@@ -241,6 +254,9 @@ export const PublicAnamnesisEntry: React.FC = () => {
                 procedimentoNome: sameTemplateRecord.procedimentoNome,
                 tem_foto: true,
                 fotoModeloUrl: sameTemplateRecord.fotoModeloUrl,
+                imagemOrientativaUrl: tpl.imagemOrientativaUrl,
+                imagemOrientativaTitulo: tpl.imagemOrientativaTitulo,
+                imagemOrientativaDescricao: tpl.imagemOrientativaDescricao,
                 perguntasEspecificas: sameTemplateRecord.perguntasSnapshot?.especificas || tpl.perguntasEspecificas,
               });
             } else if (priorRecords.length > 0) {
@@ -463,6 +479,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
             clinicProfile={clinicProfile}
             onClose={() => setShowPdfModal(false)}
             viewerRole="paciente"
+            orientationImage={resolveOrientationImage(template)}
           />
         )}
       </div>
@@ -503,6 +520,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
           clinicProfile={clinicProfile}
           onClose={() => {}}
           viewerRole="paciente"
+          orientationImage={resolveOrientationImage(template)}
         />
       </div>
     );

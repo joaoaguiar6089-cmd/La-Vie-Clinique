@@ -11,12 +11,14 @@ import {
 import { downscaleImage } from '../../utils/imageCompressor';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
+import { BlankAnamnesisSheet } from './BlankAnamnesisSheet';
 import {
   criarIndiceDeProcedimentos,
   procedimentoDoTemplate as procedimentoDoTemplateCompartilhado,
   isLaserCategory,
 } from '../../utils/templateMatching';
 import { ALL_LASER_PROCEDURE_QUESTIONS } from '../../data/anamnesisInitialData';
+import { DEFAULT_CLINIC_PROFILE } from '../../data/initialData';
 import {
   Plus,
   Trash2,
@@ -37,6 +39,7 @@ import {
   Share2,
   Upload,
   Image as ImageIcon,
+  Printer,
 } from 'lucide-react';
 
 interface GenderPhotoSlotProps {
@@ -141,6 +144,9 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareTemplateId, setShareTemplateId] = useState<string | undefined>(undefined);
   const [isUploadingFotoModelo, setIsUploadingFotoModelo] = useState<'feminino' | 'masculino' | null>(null);
+  const [isUploadingImagemOrientativa, setIsUploadingImagemOrientativa] = useState(false);
+  /** Ficha-modelo cuja versão em branco (para imprimir e responder à caneta) está aberta. */
+  const [blankSheetTemplate, setBlankSheetTemplate] = useState<AnamnesisTemplate | null>(null);
 
   // Question editing sub-modal inside template editor
   const [questionModalOpen, setQuestionModalOpen] = useState(false);
@@ -387,6 +393,25 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
     }
   };
 
+  const handleImagemOrientativaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !draftTemplate) return;
+    setIsUploadingImagemOrientativa(true);
+    try {
+      // 1800px e qualidade alta: esta imagem costuma trazer texto (nomes de músculos, medidas,
+      // legendas) que o paciente precisa conseguir ler ao ampliar — compressão agressiva demais
+      // borra justamente isso.
+      const compressed = await downscaleImage(file, 1800, 0.92);
+      setDraftTemplate({ ...draftTemplate, imagemOrientativaUrl: compressed });
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao carregar a imagem orientativa. Tente outro arquivo.');
+    } finally {
+      setIsUploadingImagemOrientativa(false);
+      e.target.value = '';
+    }
+  };
+
   const handleSaveDraftTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draftTemplate) return;
@@ -408,7 +433,10 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
       setDraftTemplate(null);
     } catch (err) {
       console.error(err);
-      alert('Erro ao salvar modelo de ficha.');
+      // O banco recusa a ficha quando as imagens estouram o limite de 1MB por documento, e essa
+      // mensagem diz exatamente o que fazer — engolir tudo num "Erro ao salvar" deixaria o usuário
+      // tentando de novo sem saber que o problema é o tamanho das imagens.
+      alert(err instanceof Error && err.message ? err.message : 'Erro ao salvar modelo de ficha.');
     } finally {
       setIsSaving(false);
     }
@@ -591,7 +619,16 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-end gap-1.5">
+            <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => setBlankSheetTemplate(tpl)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:text-[#1A1A1A] hover:border-[#A67C52] transition-colors"
+                title="Ver e salvar o PDF desta ficha em branco, para imprimir e responder à caneta"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Ficha em Branco
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -794,6 +831,122 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                       onUrlChange={(url) => setDraftTemplate({ ...draftTemplate, fotoModeloMasculinoUrl: url })}
                       onRemove={() => setDraftTemplate({ ...draftTemplate, fotoModeloMasculinoUrl: undefined })}
                     />
+                  </div>
+                </div>
+
+                {/* IMAGEM ORIENTATIVA — MATERIAL DIDÁTICO MOSTRADO AO PACIENTE */}
+                <div className="pt-3 border-t border-gray-100 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
+                    <label className="text-xs font-bold text-[#1A1A1A]">Imagem Orientativa para o Paciente</label>
+                  </div>
+
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    Imagem que a clínica produz para <strong>explicar ao paciente</strong> a anatomia da região
+                    tratada, os pontos de aplicação ou os cuidados do procedimento. Ela aparece para o paciente
+                    <strong> enquanto ele preenche a ficha</strong> (com opção de ampliar) e é reproduzida no
+                    <strong> PDF da ficha</strong>, sempre na proporção original do arquivo. Se a imagem tiver texto,
+                    envie em boa resolução para que fique legível.
+                  </p>
+
+                  {draftTemplate.imagemOrientativaUrl ? (
+                    <div className="p-3 bg-[#FAF9F6] rounded-sm border border-gray-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-[#1A1A1A] uppercase tracking-wider">
+                          Pré-visualização
+                        </span>
+                        <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-xs font-semibold border border-emerald-200">
+                          Anexada
+                        </span>
+                      </div>
+
+                      <div className="w-full max-h-80 overflow-auto rounded-sm border border-gray-300 bg-white">
+                        <img
+                          src={draftTemplate.imagemOrientativaUrl}
+                          alt="Imagem orientativa do procedimento"
+                          className="block w-full h-auto"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer flex-1 text-center px-2 py-1.5 rounded-xs bg-white border border-gray-200 hover:border-[#A67C52] text-gray-700 text-[11px] font-medium transition-colors shadow-2xs">
+                          {isUploadingImagemOrientativa ? 'Processando...' : 'Substituir imagem'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImagemOrientativaUpload}
+                            disabled={isUploadingImagemOrientativa}
+                            className="hidden"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraftTemplate({ ...draftTemplate, imagemOrientativaUrl: undefined })
+                          }
+                          className="px-2 py-1.5 rounded-xs text-red-600 hover:bg-red-50 text-[11px] font-medium transition-colors"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="cursor-pointer flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 hover:border-[#A67C52] rounded-sm bg-white transition-all text-center group h-32">
+                        <ImageIcon className="w-5 h-5 text-[#A67C52] group-hover:scale-105 transition-transform mb-1.5" />
+                        <span className="text-[11px] font-bold text-[#1A1A1A] group-hover:text-[#A67C52] transition-colors">
+                          {isUploadingImagemOrientativa ? 'Processando...' : 'Upload da imagem orientativa'}
+                        </span>
+                        <span className="text-[10px] text-gray-400 mt-0.5">JPG, PNG ou WebP</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImagemOrientativaUpload}
+                          disabled={isUploadingImagemOrientativa}
+                          className="hidden"
+                        />
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="Ou cole o link direto de uma imagem..."
+                        value={draftTemplate.imagemOrientativaUrl || ''}
+                        onChange={(e) =>
+                          setDraftTemplate({ ...draftTemplate, imagemOrientativaUrl: e.target.value })
+                        }
+                        className="w-full px-2.5 py-1.5 text-[11px] rounded-sm bg-white border border-gray-200 text-gray-700 focus:outline-hidden focus:border-[#A67C52]"
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-800 mb-1">
+                        Título exibido acima da imagem
+                      </label>
+                      <input
+                        type="text"
+                        value={draftTemplate.imagemOrientativaTitulo || ''}
+                        onChange={(e) =>
+                          setDraftTemplate({ ...draftTemplate, imagemOrientativaTitulo: e.target.value })
+                        }
+                        placeholder="Ex: Áreas de aplicação do Botox"
+                        className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-800 mb-1">
+                        Legenda / orientação (opcional)
+                      </label>
+                      <input
+                        type="text"
+                        value={draftTemplate.imagemOrientativaDescricao || ''}
+                        onChange={(e) =>
+                          setDraftTemplate({ ...draftTemplate, imagemOrientativaDescricao: e.target.value })
+                        }
+                        placeholder="Ex: Observe os pontos marcados antes de responder..."
+                        className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1192,6 +1345,16 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
             </form>
           </div>
         </div>
+      )}
+
+      {/* FICHA EM BRANCO — versão imprimível, sem registro por trás */}
+      {blankSheetTemplate && (
+        <BlankAnamnesisSheet
+          template={blankSheetTemplate}
+          generalQuestions={generalQuestions}
+          clinicProfile={clinicProfile || DEFAULT_CLINIC_PROFILE}
+          onClose={() => setBlankSheetTemplate(null)}
+        />
       )}
 
       {/* SHARE ANAMNESIS LINK MODAL */}

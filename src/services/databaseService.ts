@@ -531,6 +531,12 @@ export function subscribeToAnamnesisTemplates(
 
 /**
  * Save or update a Procedure Template
+ *
+ * Uma ficha-modelo pode carregar três imagens em base64 dentro do próprio documento (referência
+ * feminina, referência masculina e a imagem orientativa do paciente). Juntas elas chegam perto do
+ * teto de 1MB do Firestore, e um `setDoc` que estoura esse limite falha *depois* de o cache local
+ * já ter aplicado a alteração — a tela mostra a imagem nova e ela some quando o listener
+ * ressincroniza. Barrar aqui troca esse "salvou e desfez sozinho" por um erro imediato.
  */
 export async function saveAnamnesisTemplate(template: AnamnesisTemplate): Promise<void> {
   const docRef = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, template.id);
@@ -538,6 +544,16 @@ export async function saveAnamnesisTemplate(template: AnamnesisTemplate): Promis
     ...template,
     updatedAt: new Date().toISOString(),
   });
+
+  const bytes = estimateFirestoreDocBytes(dataToSave);
+  if (bytes > FIRESTORE_DOC_SAFE_BYTES) {
+    throw new Error(
+      `As imagens desta ficha-modelo somam ${(bytes / 1024 / 1024).toFixed(2)} MB e ultrapassam o ` +
+        `limite de 1 MB por ficha. Remova uma das imagens (ou use um link de imagem em vez do ` +
+        `upload) e salve novamente.`
+    );
+  }
+
   await setDoc(docRef, dataToSave, { merge: true });
 }
 

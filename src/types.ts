@@ -106,6 +106,18 @@ export interface AnamnesisQuestion {
 
 export type PatientGender = 'feminino' | 'masculino';
 
+/**
+ * Imagem orientativa do procedimento — um mapa anatômico, esquema ou infográfico produzido pela
+ * clínica para explicar ao paciente a região tratada. Diferente de `fotoModelo*`, que é a tela de
+ * anotação do profissional: esta é material didático, exibido ao paciente enquanto ele preenche a
+ * ficha e reproduzido no PDF exatamente na mesma proporção do arquivo original.
+ */
+export interface OrientationImage {
+  url: string;
+  titulo?: string;
+  descricao?: string;
+}
+
 export interface AnamnesisTemplate {
   id: string; // Ex: 'tpl-botox'
   procedimentoId?: string; // ID do procedimento do catálogo (se vinculado)
@@ -115,6 +127,15 @@ export interface AnamnesisTemplate {
   fotoModeloUrl?: string; // Legado/fallback — usado quando não há foto específica por gênero
   fotoModeloFemininoUrl?: string; // Foto/mapa anatômico de referência — versão feminina
   fotoModeloMasculinoUrl?: string; // Foto/mapa anatômico de referência — versão masculina
+  /**
+   * Imagem orientativa mostrada ao paciente. Fica só aqui (não é copiada para cada
+   * `AnamnesisRecord`): a ficha impressa a resolve pelo `templateId` no momento de renderizar, o
+   * que evita somar mais um base64 ao documento do registro — que já carrega foto de referência,
+   * foto do paciente e as versões anotadas, e tem o teto de 1MB do Firestore para respeitar.
+   */
+  imagemOrientativaUrl?: string;
+  imagemOrientativaTitulo?: string;
+  imagemOrientativaDescricao?: string;
   perguntasEspecificas: AnamnesisQuestion[];
   descricao?: string;
   updatedAt?: string;
