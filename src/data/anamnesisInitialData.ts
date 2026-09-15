@@ -717,13 +717,13 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
   },
 
   // ==========================================
-  // DEPILAÇÃO A LASER - FACIAL (4 procedimentos)
+  // DEPILAÇÃO A LASER (13 procedimentos)
   // ==========================================
   {
     id: 'tpl-laser-buco',
     procedimentoId: 'proc-laser-buco',
     procedimentoNome: 'Depilação a Laser - Buço',
-    categoria: 'Depilação a Laser - Facial',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese e triagem dermatológica para epilação a laser no buço e lábio superior.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
@@ -732,7 +732,7 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     id: 'tpl-laser-queixo',
     procedimentoId: 'proc-laser-queixo',
     procedimentoNome: 'Depilação a Laser - Queixo',
-    categoria: 'Depilação a Laser - Facial',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese e triagem dermatológica para epilação a laser no queixo e mento.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
@@ -741,7 +741,7 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     id: 'tpl-laser-face-lateral',
     procedimentoId: 'proc-laser-face-lateral',
     procedimentoNome: 'Depilação a Laser - Face Lateral',
-    categoria: 'Depilação a Laser - Facial',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese e avaliação fototípica para epilação a laser nas laterais da face e costeletas.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
@@ -750,20 +750,16 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     id: 'tpl-laser-maca-rosto',
     procedimentoId: 'proc-laser-maca-rosto',
     procedimentoNome: 'Depilação a Laser - Maçã do Rosto',
-    categoria: 'Depilação a Laser - Facial',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese e triagem dermatológica para epilação a laser na região malar e bochechas.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
   },
-
-  // ==========================================
-  // DEPILAÇÃO A LASER - ÍNTIMA (2 procedimentos)
-  // ==========================================
   {
     id: 'tpl-laser-virilha-completa',
     procedimentoId: 'proc-laser-virilha-completa',
     procedimentoNome: 'Depilação a Laser - Virilha Completa',
-    categoria: 'Depilação a Laser - Íntima',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese com triagem de fototipo, sensibilidade e histórico dérmico para epilação a laser na virilha completa.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
@@ -772,20 +768,16 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     id: 'tpl-laser-perianal',
     procedimentoId: 'proc-laser-perianal',
     procedimentoNome: 'Depilação a Laser - Perianal',
-    categoria: 'Depilação a Laser - Íntima',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Triagem clínica para epilação a laser na região perianal com foco em integridade dérmica e segurança.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
   },
-
-  // ==========================================
-  // DEPILAÇÃO A LASER - CORPORAL (7 procedimentos)
-  // ==========================================
   {
     id: 'tpl-laser-linha-alba',
     procedimentoId: 'proc-laser-linha-alba',
     procedimentoNome: 'Depilação a Laser - Linha Alba',
-    categoria: 'Depilação a Laser - Corporal',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese e segurança para epilação a laser na linha alba abdominal.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
@@ -794,7 +786,7 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     id: 'tpl-laser-axilas',
     procedimentoId: 'proc-laser-axilas',
     procedimentoNome: 'Depilação a Laser - Axilas',
-    categoria: 'Depilação a Laser - Corporal',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese para epilação a laser nas axilas, avaliação de foliculite, atrito e sensibilidade.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
@@ -803,7 +795,7 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     id: 'tpl-laser-meia-perna',
     procedimentoId: 'proc-laser-meia-perna',
     procedimentoNome: 'Depilação a Laser - ½ Perna',
-    categoria: 'Depilação a Laser - Corporal',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese para epilação a laser na meia perna (dos joelhos aos tornozelos).',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
@@ -812,7 +804,7 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     id: 'tpl-laser-perna-completa',
     procedimentoId: 'proc-laser-perna-completa',
     procedimentoNome: 'Depilação a Laser - Perna Completa',
-    categoria: 'Depilação a Laser - Corporal',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese e triagem dermatológica para epilação a laser em pernas completas e coxas.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
@@ -821,7 +813,7 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     id: 'tpl-laser-peitoral',
     procedimentoId: 'proc-laser-peitoral',
     procedimentoNome: 'Depilação a Laser - Peitoral',
-    categoria: 'Depilação a Laser - Corporal',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese para epilação a laser na região peitoral.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
@@ -830,7 +822,7 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     id: 'tpl-laser-torax',
     procedimentoId: 'proc-laser-torax',
     procedimentoNome: 'Depilação a Laser - Tórax',
-    categoria: 'Depilação a Laser - Corporal',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese para epilação a laser no tórax e abdômen anterior.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,
@@ -839,7 +831,7 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
     id: 'tpl-laser-costas',
     procedimentoId: 'proc-laser-costas',
     procedimentoNome: 'Depilação a Laser - Costas',
-    categoria: 'Depilação a Laser - Corporal',
+    categoria: 'Depilação a Laser',
     tem_foto: false,
     descricao: 'Ficha de anamnese para epilação a laser nas costas completas e ombros.',
     perguntasEspecificas: ALL_LASER_PROCEDURE_QUESTIONS,

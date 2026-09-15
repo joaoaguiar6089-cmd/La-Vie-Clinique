@@ -33,9 +33,7 @@ export const INITIAL_CATEGORIES = [
   "Capilar",
   "Ultrassom Microfocado - Facial",
   "Ultrassom Microfocado - Corporal",
-  "Depilação a Laser - Facial",
-  "Depilação a Laser - Íntima",
-  "Depilação a Laser - Corporal"
+  "Depilação a Laser"
 ];
 
 export const PRESET_IMAGE_LIBRARY = [
@@ -730,13 +728,13 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
   },
 
   // ==========================================
-  // 6. DEPILAÇÃO A LASER - FACIAL (Página 2 do PDF - 10 Sessões)
+  // 6. DEPILAÇÃO A LASER (Página 2 do PDF - 10 Sessões)
   // ==========================================
   {
     id: "proc-laser-buco",
     title: "Depilação a Laser - Buço",
     subtitle: "Pacote completo de 10 sessões para eliminação definitiva dos pelos do buço",
-    category: "Depilação a Laser - Facial",
+    category: "Depilação a Laser",
     description: "Tecnologia a laser de alta eficácia com ponteira ultrarresfriada para proteção da pele e máximo conforto. Elimina os folículos pilosos progressivamente, clareia sombras e acaba de vez com o uso de ceras e lâminas no rosto.",
     price: 550,
     priceNote: "pacote com 10 sessões",
@@ -765,7 +763,7 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     id: "proc-laser-queixo",
     title: "Depilação a Laser - Queixo",
     subtitle: "Pacote de 10 sessões para remoção definitiva de pelos no queixo e mento",
-    category: "Depilação a Laser - Facial",
+    category: "Depilação a Laser",
     description: "Tratamento a laser indicado para fios grossos ou finos na região do queixo. Destrói a raiz do pelo com precisão e segurança para todos os fototipos de pele.",
     price: 550,
     priceNote: "pacote com 10 sessões",
@@ -794,7 +792,7 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     id: "proc-laser-face-lateral",
     title: "Depilação a Laser - Face Lateral",
     subtitle: "Pacote de 10 sessões para as laterais da face e costeletas femininas",
-    category: "Depilação a Laser - Facial",
+    category: "Depilação a Laser",
     description: "Elimina a penugem e os pelos das laterais do rosto e contorno das orelhas, deixando a pele com acabamento aveludado e visual limpo e uniforme.",
     price: 700,
     priceNote: "pacote com 10 sessões",
@@ -823,7 +821,7 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     id: "proc-laser-maca-rosto",
     title: "Depilação a Laser - Maçã do Rosto",
     subtitle: "Pacote de 10 sessões para a região malar e bochechas",
-    category: "Depilação a Laser - Facial",
+    category: "Depilação a Laser",
     description: "Remoção a laser dos pelos finos ou escuros sobre as maçãs do rosto, promovendo uniformidade e luminosidade à pele facial.",
     price: 650,
     priceNote: "pacote com 10 sessões",
@@ -848,15 +846,11 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     order: 25,
     createdAt: "2026-08-01T10:24:00.000Z"
   },
-
-  // ==========================================
-  // 7. DEPILAÇÃO A LASER - ÍNTIMA (Página 2 do PDF - 10 Sessões)
-  // ==========================================
   {
     id: "proc-laser-virilha-completa",
     title: "Depilação a Laser - Virilha Completa",
     subtitle: "Pacote de 10 sessões para a área íntima completa com total discrição e conforto",
-    category: "Depilação a Laser - Íntima",
+    category: "Depilação a Laser",
     description: "O protocolo mais amado para liberdade absoluta na praia, academia e dia a dia. Destrói os pelos da virilha total e grandes lábios com ponteira resfriada, eliminando para sempre a foliculite, pelos encravados e o escurecimento causado pela lâmina.",
     price: 2300,
     priceNote: "pacote com 10 sessões",
@@ -886,7 +880,7 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     id: "proc-laser-perianal",
     title: "Depilação a Laser - Perianal",
     subtitle: "Pacote de 10 sessões para a região perianal com máxima higiene e suavidade",
-    category: "Depilação a Laser - Íntima",
+    category: "Depilação a Laser",
     description: "Tratamento rápido, discreto e essencial para a higiene e bem-estar. Remove os pelos da região perianal de forma definitiva e confortável.",
     price: 750,
     priceNote: "pacote com 10 sessões",
@@ -911,15 +905,11 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     order: 27,
     createdAt: "2026-08-01T10:26:00.000Z"
   },
-
-  // ==========================================
-  // 8. DEPILAÇÃO A LASER - CORPORAL (Página 2 do PDF - 10 Sessões)
-  // ==========================================
   {
     id: "proc-laser-linha-alba",
     title: "Depilação a Laser - Linha Alba",
     subtitle: "Pacote de 10 sessões para a linha média do abdômen",
-    category: "Depilação a Laser - Corporal",
+    category: "Depilação a Laser",
     description: "Elimina a faixa de pelos que se estende do umbigo ao púbis (linha alba/linha do biquíni), deixando o abdômen liso e visualmente perfeito.",
     price: 500,
     priceNote: "pacote com 10 sessões",
@@ -948,7 +938,7 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     id: "proc-laser-axilas",
     title: "Depilação a Laser - Axilas",
     subtitle: "Pacote de 10 sessões para axilas lisinhas, claras e sem manchas",
-    category: "Depilação a Laser - Corporal",
+    category: "Depilação a Laser",
     description: "Um dos tratamentos mais procurados e transformadores. O laser destrói a raiz dos pelos das axilas, clareia o sombreamento escuro e acaba com o atrito diário de lâminas e desodorantes irritantes.",
     price: 850,
     priceNote: "pacote com 10 sessões",
@@ -978,7 +968,7 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     id: "proc-laser-meia-perna",
     title: "Depilação a Laser - ½ Perna",
     subtitle: "Pacote de 10 sessões para a região dos joelhos até os tornozelos",
-    category: "Depilação a Laser - Corporal",
+    category: "Depilação a Laser",
     description: "Remoção a laser com cobertura total da canela, panturrilha e joelhos. Elimina os pelos grossos e a foliculite que tanto incomoda nas pernas, deixando o toque aveludado.",
     price: 2900,
     priceNote: "pacote com 10 sessões",
@@ -1007,7 +997,7 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     id: "proc-laser-perna-completa",
     title: "Depilação a Laser - Perna Completa",
     subtitle: "Pacote de 10 sessões para coxas, joelhos e pernas inteiras",
-    category: "Depilação a Laser - Corporal",
+    category: "Depilação a Laser",
     description: "Tratamento completo da raiz das coxas aos pés. Proporciona a experiência máxima de pernas sedosas, uniformes e com zero preocupação com pelos em qualquer estação do ano.",
     price: 5000,
     priceNote: "pacote com 10 sessões",
@@ -1037,7 +1027,7 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     id: "proc-laser-peitoral",
     title: "Depilação a Laser - Peitoral",
     subtitle: "Pacote de 10 sessões para a região peitoral masculina ou feminina",
-    category: "Depilação a Laser - Corporal",
+    category: "Depilação a Laser",
     description: "Ideal para atletas, praticantes de musculação ou quem deseja reduzir ou eliminar totalmente os pelos do peito com precisão, higiene e conforto.",
     price: 2200,
     priceNote: "pacote com 10 sessões",
@@ -1066,7 +1056,7 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     id: "proc-laser-torax",
     title: "Depilação a Laser - Tórax",
     subtitle: "Pacote de 10 sessões com cobertura ampla do tórax e abdômen superior",
-    category: "Depilação a Laser - Corporal",
+    category: "Depilação a Laser",
     description: "Tratamento a laser com ampla área de disparo para remoção de pelos densos no tórax anterior, garantindo pele lisa e sem irritações.",
     price: 2200,
     priceNote: "pacote com 10 sessões",
@@ -1095,7 +1085,7 @@ export const SAMPLE_PROCEDURES: Procedure[] = [
     id: "proc-laser-costas",
     title: "Depilação a Laser - Costas",
     subtitle: "Pacote de 10 sessões para as costas completas e ombros",
-    category: "Depilação a Laser - Corporal",
+    category: "Depilação a Laser",
     description: "Elimina a dificuldade de depilar as costas sozinho. O laser alcança toda a extensão dorsal dos ombros à lombar, acabando com pelos incômodos, acne mecânica e irritações por suor.",
     price: 3200,
     priceNote: "pacote com 10 sessões",
