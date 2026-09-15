@@ -64,6 +64,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [erro, setErro] = useState<string | null>(null);
+  const [quotaAtingida, setQuotaAtingida] = useState(false);
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | QuoteStatus>('todos');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -75,8 +76,21 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
 
   useEffect(() => {
-    const unsubQuotes = subscribeToQuotes(setQuotes, (e) =>
-      setErro(`Não foi possível carregar os orçamentos: ${e.message}`)
+    const unsubQuotes = subscribeToQuotes(
+      (data) => {
+        setQuotes(data);
+        setQuotaAtingida(false);
+        setErro(null);
+      },
+      (e) => {
+        const msg = e.message || '';
+        const isQuota = msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted');
+        if (isQuota) {
+          setQuotaAtingida(true);
+        } else {
+          setErro(`Não foi possível carregar os orçamentos: ${msg}`);
+        }
+      }
     );
     const unsubPatients = subscribeToPatients(setPatients);
     return () => {
@@ -189,6 +203,22 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
         <div className="mb-4 px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {erro}
+        </div>
+      )}
+
+      {quotaAtingida && (
+        <div className="mb-4 px-4 py-3 rounded-sm bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+          <div>
+            <p className="font-semibold text-amber-900">
+              Limite diário de leitura gratuita do Firebase atingido (50.000 leituras/dia)
+            </p>
+            <p className="mt-0.5 text-amber-700">
+              {quotes.length > 0
+                ? 'Exibindo orçamentos salvos no cache deste navegador. A sincronização em nuvem será retomada automaticamente assim que a cota diária for renovada pelo Google (à meia-noite PST / 04:00 BRT).'
+                : 'A cota diária do plano gratuito do Firestore foi esgotada para hoje. O Google reinicia esse limite diariamente às 04:00 BRT (meia-noite PST).'}
+            </p>
+          </div>
         </div>
       )}
 
