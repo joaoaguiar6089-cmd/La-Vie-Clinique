@@ -6,6 +6,7 @@ import { ProcedureFormModal } from './components/ProcedureFormModal';
 import { ShareExportModal } from './components/ShareExportModal';
 import { ClinicSettingsModal } from './components/ClinicSettingsModal';
 import { AnamnesisModule, AnamnesisOpenRequest } from './components/anamnesis/AnamnesisModule';
+import { PatientsModule } from './components/patients/PatientsModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
 import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
@@ -528,6 +529,12 @@ function MainCatalogApp() {
               onToggleFeatured={handleToggleFeatured}
               onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
               onShareSingle={handleShareSingle}
+            />
+          ) : currentView === 'patients' ? (
+            <PatientsModule
+              clinic={clinic}
+              catalogProcedures={procedures}
+              templates={anamnesisTemplates}
             />
           ) : currentView === 'anamnesis' ? (
             <AnamnesisModule

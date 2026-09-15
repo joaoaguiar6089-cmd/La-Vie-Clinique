@@ -43,6 +43,11 @@ interface QuoteFormModalProps {
   quoteToEdit?: Quote | null;
   /** Itens iniciais ao duplicar ou substituir um orçamento — o número é novo, o conteúdo vem pronto. */
   seedFrom?: Quote | null;
+  /**
+   * Paciente já escolhido ao abrir um orçamento em branco — é assim que a página do paciente
+   * chama o formulário. Ignorado quando há `quoteToEdit` ou `seedFrom`, que trazem o próprio.
+   */
+  initialPatient?: Patient | null;
   procedures: Procedure[];
   patients: Patient[];
   clinic: ClinicProfile;
@@ -81,6 +86,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   onSave,
   quoteToEdit,
   seedFrom,
+  initialPatient,
   procedures,
   patients,
   clinic,
@@ -132,9 +138,9 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       const emissao = new Date().toISOString();
       setDataEmissao(emissao);
       setDataValidade(calcularDataValidade(emissao, clinic));
-      setPacienteId(undefined);
-      setPacienteNome('');
-      setPacienteContato('');
+      setPacienteId(initialPatient?.id);
+      setPacienteNome(initialPatient?.nome || '');
+      setPacienteContato(initialPatient?.contato || '');
       setJaTeveAvaliacao(false);
       setDataAvaliacao('');
       setTextoApresentacao('');
@@ -151,7 +157,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     // `clinic` e `professionals` mudam de referência a cada sync do perfil e
     // reabririam o formulário zerado no meio da edição — por isso ficam de fora
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, quoteToEdit?.id, seedFrom?.id]);
+  }, [isOpen, quoteToEdit?.id, seedFrom?.id, initialPatient?.id]);
 
   // A mensagem acompanha o nome enquanto ninguém a editar à mão
   useEffect(() => {

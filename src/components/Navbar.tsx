@@ -6,6 +6,7 @@ import {
   Share2,
   LogOut,
   Receipt,
+  Users,
   Menu,
   X,
   PanelLeftOpen,
@@ -13,6 +14,14 @@ import {
 } from 'lucide-react';
 import { ClinicProfile, AppView } from '../types';
 import { ClinicLogo } from './ClinicLogo';
+
+/** Nome da tela atual, exibido sob o nome da clínica no cabeçalho mobile. */
+const VIEW_LABEL: Record<AppView, string> = {
+  procedures: 'Procedimentos',
+  patients: 'Pacientes',
+  anamnesis: 'Anamneses',
+  quotes: 'Orçamentos',
+};
 
 interface NavbarProps {
   currentView: AppView;
@@ -72,6 +81,17 @@ export const Navbar: React.FC<NavbarProps> = ({
       count: proceduresCount,
       onClick: () => {
         onSelectView('procedures');
+        scrollToTop();
+      },
+    },
+    {
+      id: 'patients' as const,
+      label: 'Pacientes',
+      icon: Users,
+      active: currentView === 'patients',
+      count: undefined,
+      onClick: () => {
+        onSelectView('patients');
         scrollToTop();
       },
     },
@@ -148,11 +168,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {clinic.name}
                 </span>
                 <span className="text-[11px] text-[#A67C52] font-semibold leading-none block truncate">
-                  {currentView === 'procedures'
-                    ? 'Procedimentos'
-                    : currentView === 'anamnesis'
-                    ? 'Anamneses'
-                    : 'Orçamentos'}
+                  {VIEW_LABEL[currentView]}
                 </span>
               </div>
             </button>

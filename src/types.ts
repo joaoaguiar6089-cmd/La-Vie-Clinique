@@ -65,7 +65,7 @@ export interface ClinicProfile {
 }
 
 /** Telas do painel autenticado — a navegação é por estado, o app não tem rotas. */
-export type AppView = 'procedures' | 'anamnesis' | 'quotes';
+export type AppView = 'procedures' | 'patients' | 'anamnesis' | 'quotes';
 
 export interface FilterState {
   search: string;

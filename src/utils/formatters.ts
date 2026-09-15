@@ -19,3 +19,20 @@ export const formatDate = (isoString: string): string => {
     return "";
   }
 };
+
+/** "12345678901" -> "123.456.789-01". Aceita entrada já pontuada e limita a 11 dígitos. */
+export const formatCpf = (raw: string): string => {
+  const digits = (raw || "").replace(/\D/g, "").slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+};
+
+/** "1998-04-27" -> "27/04/1998". O meio-dia UTC evita o fuso puxar a data um dia para trás. */
+export const formatDateOnly = (yyyyMmDd?: string): string => {
+  if (!yyyyMmDd) return "";
+  const d = new Date(`${yyyyMmDd}T12:00:00Z`);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR");
+};

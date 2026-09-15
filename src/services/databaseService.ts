@@ -949,7 +949,7 @@ export async function getClinicProfileOnce(): Promise<ClinicProfile | null> {
 /**
  * Subscribe to Quotes collection (mais recentes primeiro).
  */
-export function subscribeToQuotes(
+function subscribeToQuotesDireto(
   onUpdate: (quotes: Quote[]) => void,
   onError?: (err: Error) => void
 ) {
@@ -973,6 +973,19 @@ export function subscribeToQuotes(
       if (onError) onError(error);
     }
   );
+}
+
+/**
+ * Assinatura compartilhada de `quotes`: uma única por sessão, viva entre idas e vindas de aba.
+ * Ver `sharedSubscription.ts` — a lista de orçamentos é lida tanto pelo painel de Orçamentos
+ * quanto pela página do paciente, e sem isto alternar entre as duas pagava um snapshot inteiro
+ * da coleção a cada troca.
+ */
+export function subscribeToQuotes(
+  onUpdate: (data: Quote[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<Quote[]>('quotes', subscribeToQuotesDireto, onUpdate, onError);
 }
 
 /**
