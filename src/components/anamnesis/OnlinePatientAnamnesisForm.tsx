@@ -8,12 +8,15 @@ import {
   AnamnesisRecord,
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
+import { subirImagemOuManter } from '../../services/imageStorage';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
 import { resolveOrientationImage } from '../../utils/orientationImage';
+import { resolveConsentTerm } from '../../utils/consentTerm';
 import { isDuplicateIdentQuestion, isPatientQuestion } from '../../utils/anamnesisQuestions';
 import { ClinicLogo } from '../ClinicLogo';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import { OrientationImageCard } from './OrientationImageCard';
+import { ConsentTermView } from './ConsentTermView';
 import {
   Camera,
   CheckCircle2,
@@ -79,6 +82,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
   const patientGeneralQuestions = nonIdentGeneralQuestions.filter(isPatientQuestion);
   const patientSpecificQuestions = (template.perguntasEspecificas || []).filter(isPatientQuestion);
   const orientationImage = resolveOrientationImage(template);
+  const consentSections = resolveConsentTerm(template);
 
   const isEditing = !!existingRecord;
 
@@ -162,7 +166,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
     setIsProcessingPhoto(true);
     try {
       const compressed = await downscaleImage(file, 1200, 0.82);
-      setFotoPacienteUrl(compressed);
+      setFotoPacienteUrl(await subirImagemOuManter(compressed, 'anamnese/fotos-pacientes'));
     } catch (err) {
       console.error(err);
       alert('Não foi possível processar a imagem selecionada. Tente outra foto.');
@@ -605,6 +609,8 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                 </div>
               )}
             </div>
+
+            {consentSections && <ConsentTermView sections={consentSections} />}
           </div>
         )}
 
@@ -754,7 +760,9 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                   className="sr-only"
                 />
                 <span className="text-[14px] font-medium text-[#1A1A1A] leading-snug">
-                  Li e concordo com a declaração acima.
+                  {consentSections
+                    ? 'Li e concordo com o termo de consentimento do procedimento e com a declaração acima.'
+                    : 'Li e concordo com a declaração acima.'}
                 </span>
               </label>
               {errors['termo'] && <p className="text-[13px] text-[#E11D48] font-medium">{errors['termo']}</p>}

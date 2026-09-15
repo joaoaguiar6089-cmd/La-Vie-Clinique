@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Regras do Firebase Storage — onde as fotos da anamnese passaram a morar.
+//
+// Antes, cada foto era uma string base64 dentro do próprio documento do Firestore: três imagens
+// já estouravam o teto de 1 MB por documento, e toda leitura de uma ficha (ou da coleção inteira,
+// no início da sessão) baixava as fotos junto. Aqui a imagem vira um arquivo com URL própria.
+//
+// Leitura é aberta em todos os caminhos pelo mesmo motivo das fichas no Firestore: a paciente
+// abre a própria ficha por um link, sem login. O segredo é a URL — o Firebase gera um token
+// aleatório por arquivo, e sem ele o caminho não abre.
+//
+// Para publicar:  firebase deploy --only storage
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function ehImagem() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function cabeNoLimite() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Fotos de referência (mapa anatômico, por gênero) e imagem orientativa das fichas-modelo.
+    // Só a equipe logada envia; qualquer paciente com o link da ficha precisa conseguir ver.
+    match /anamnese/fichas-modelo/{templateId}/{arquivo} {
+      allow read: if true;
+      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+    }
+
+    // Fotos enviadas pela própria paciente no formulário online. Ela não tem login — é o mesmo
+    // motivo pelo qual `anamnesis_records` aceita escrita sem autenticação no Firestore.
+    match /anamnese/fotos-pacientes/{arquivo} {
+      allow read: if true;
+      allow write: if ehImagem() && cabeNoLimite();
+    }
+
+    // Versões com as anotações do profissional (doses, vetores, unidades). Só a equipe grava.
+    match /anamnese/fotos-anotadas/{arquivo} {
+      allow read: if true;
+      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+    }
+
+    // Qualquer outro caminho fica fechado.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

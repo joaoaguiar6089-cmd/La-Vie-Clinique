@@ -118,6 +118,18 @@ export interface OrientationImage {
   descricao?: string;
 }
 
+/**
+ * Um bloco do Termo de Consentimento e Responsabilidade — título ("Contra indicação") seguido do
+ * texto corrido que a clínica escreve. Título e texto são livres, e a lista é aberta: a equipe
+ * renomeia, exclui e acrescenta blocos conforme o protocolo do ativo usado.
+ */
+export interface ConsentTermSection {
+  id: string;
+  titulo: string;
+  /** Texto livre; quebras de linha são preservadas na exibição e na impressão. */
+  texto: string;
+}
+
 export interface AnamnesisTemplate {
   id: string; // Ex: 'tpl-botox'
   procedimentoId?: string; // ID do procedimento do catálogo (se vinculado)
@@ -136,6 +148,10 @@ export interface AnamnesisTemplate {
   imagemOrientativaUrl?: string;
   imagemOrientativaTitulo?: string;
   imagemOrientativaDescricao?: string;
+  /** Liga o Termo de Consentimento e Responsabilidade nesta ficha. */
+  termoConsentimentoAtivo?: boolean;
+  /** Blocos do termo, na ordem em que saem na ficha. Vive só na ficha-modelo, como a imagem orientativa. */
+  termoConsentimentoSecoes?: ConsentTermSection[];
   perguntasEspecificas: AnamnesisQuestion[];
   descricao?: string;
   updatedAt?: string;

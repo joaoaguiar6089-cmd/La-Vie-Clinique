@@ -1,8 +1,16 @@
 import React, { useRef, useState } from 'react';
-import { AnamnesisRecord, AnamnesisQuestion, ClinicProfile, OrientationImage } from '../../types';
+import {
+  AnamnesisRecord,
+  AnamnesisQuestion,
+  ClinicProfile,
+  ConsentTermSection,
+  OrientationImage,
+} from '../../types';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
+import { ConsentTermView } from './ConsentTermView';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
+import { subirImagemOuManter } from '../../services/imageStorage';
 import {
   isDuplicateIdentQuestion,
   isMedicoQuestion,
@@ -34,6 +42,8 @@ interface PrintableAnamnesisSheetProps {
    * é quem a busca — a ficha só a desenha.
    */
   orientationImage?: OrientationImage | null;
+  /** Blocos do Termo de Consentimento configurados na ficha-modelo (ver `resolveConsentTerm`). */
+  consentSections?: ConsentTermSection[] | null;
 }
 
 
@@ -52,6 +62,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   viewerRole = 'staff',
   onSaveRecord,
   orientationImage,
+  consentSections,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -72,10 +83,11 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   const handleSaveAnnotation = async (dataUrl: string, annotationsJson: string) => {
     if (!onSaveRecord || !annotatingTarget) return;
     try {
+      const url = await subirImagemOuManter(dataUrl, 'anamnese/fotos-anotadas');
       const updated: AnamnesisRecord =
         annotatingTarget === 'modelo'
-          ? { ...record, fotoModeloAnotadaUrl: dataUrl, fotoModeloAnotacoesJson: annotationsJson }
-          : { ...record, fotoPacienteAnotadaUrl: dataUrl, fotoPacienteAnotacoesJson: annotationsJson };
+          ? { ...record, fotoModeloAnotadaUrl: url, fotoModeloAnotacoesJson: annotationsJson }
+          : { ...record, fotoPacienteAnotadaUrl: url, fotoPacienteAnotacoesJson: annotationsJson };
       await onSaveRecord(updated);
       setAnnotatingTarget(null);
     } catch (err) {
@@ -314,6 +326,12 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Termo de Consentimento e Responsabilidade — mesma posição da ficha em branco e do
+              formulário online: logo abaixo dos dados do paciente e das perguntas gerais. */}
+          {consentSections && consentSections.length > 0 && (
+            <ConsentTermView sections={consentSections} variant="documento" className="mb-6" />
           )}
 
           {/* Respostas do Paciente — Avaliação Específica */}

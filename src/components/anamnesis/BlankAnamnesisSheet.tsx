@@ -2,11 +2,13 @@ import React, { useRef, useState } from 'react';
 import { AnamnesisQuestion, AnamnesisTemplate, ClinicProfile } from '../../types';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
 import { resolveOrientationImage } from '../../utils/orientationImage';
+import { resolveConsentTerm } from '../../utils/consentTerm';
 import {
   isDuplicateIdentQuestion,
   isMedicoQuestion,
   isPatientQuestion,
 } from '../../utils/anamnesisQuestions';
+import { ConsentTermView } from './ConsentTermView';
 import { Printer, Download, X, Loader2, Stethoscope } from 'lucide-react';
 
 interface BlankAnamnesisSheetProps {
@@ -165,9 +167,11 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const orientationImage = resolveOrientationImage(template);
+  const consentSections = resolveConsentTerm(template);
 
   const [incluirPerguntasProfissional, setIncluirPerguntasProfissional] = useState(true);
   const [incluirImagemOrientativa, setIncluirImagemOrientativa] = useState(true);
+  const [incluirTermoConsentimento, setIncluirTermoConsentimento] = useState(true);
 
   const nonDuplicateGeneral = generalQuestions.filter((q) => !isDuplicateIdentQuestion(q));
   const especificas = template.perguntasEspecificas || [];
@@ -265,6 +269,18 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
                 className="accent-[#A67C52] w-4 h-4 rounded-xs"
               />
               Imagem orientativa
+            </label>
+          )}
+
+          {consentSections && (
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
+              <input
+                type="checkbox"
+                checked={incluirTermoConsentimento}
+                onChange={(e) => setIncluirTermoConsentimento(e.target.checked)}
+                className="accent-[#A67C52] w-4 h-4 rounded-xs"
+              />
+              Termo de consentimento
             </label>
           )}
         </div>
@@ -367,6 +383,11 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
                 <QuestionBlock key={q.id} question={q} index={idx + 1} />
               ))}
             </div>
+          )}
+
+          {/* Termo de Consentimento e Responsabilidade — logo abaixo das perguntas gerais */}
+          {consentSections && incluirTermoConsentimento && (
+            <ConsentTermView sections={consentSections} variant="documento" className="mb-6" />
           )}
 
           {/* Perguntas específicas do procedimento */}

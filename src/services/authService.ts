@@ -9,6 +9,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth, firebaseConfig } from '../lib/firebase';
+import { resetSharedSubscriptions } from './sharedSubscription';
 
 export function onAuthChange(callback: (user: User | null) => void): () => void {
   return onAuthStateChanged(auth, callback);
@@ -19,6 +20,10 @@ export async function login(email: string, password: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
+  // As assinaturas compartilhadas guardam o último valor lido para entregá-lo de imediato a quem
+  // assinar depois. Sem limpá-las aqui, a próxima pessoa a entrar nesta mesma aba veria por um
+  // instante os pacientes e fichas da sessão anterior.
+  resetSharedSubscriptions();
   await signOut(auth);
 }
 

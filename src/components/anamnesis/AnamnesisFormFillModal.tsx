@@ -8,11 +8,14 @@ import {
   ClinicProfile,
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
+import { subirImagemOuManter } from '../../services/imageStorage';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
 import { resolveOrientationImage } from '../../utils/orientationImage';
+import { resolveConsentTerm } from '../../utils/consentTerm';
 import { isDuplicateIdentQuestion } from '../../utils/anamnesisQuestions';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import { OrientationImageCard } from './OrientationImageCard';
+import { ConsentTermView } from './ConsentTermView';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import {
@@ -189,6 +192,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   const currentGenero = patientMode === 'new' ? newPatientGender : selectedPatientGender;
   const previewFotoModelo = currentTemplate ? resolveTemplatePhoto(currentTemplate, currentGenero || undefined) : undefined;
   const orientationImage = resolveOrientationImage(currentTemplate);
+  const consentSections = resolveConsentTerm(currentTemplate);
 
   if (!isOpen) return null;
 
@@ -198,7 +202,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
     try {
       const compressed = await downscaleImage(file);
-      setFotoUrl(compressed);
+      setFotoUrl(await subirImagemOuManter(compressed, 'anamnese/fotos-pacientes'));
       setFotoAnotadaUrl('');
       setFotoAnotacoesJson(undefined);
     } catch (err) {
@@ -208,7 +212,9 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   };
 
   const handleSaveAnnotation = async (dataUrl: string, annotationsJson: string) => {
-    setFotoAnotadaUrl(dataUrl);
+    // A imagem "achatada" com as anotações é uma segunda foto do mesmo tamanho da original — é ela
+    // que fazia uma ficha anotada dobrar de peso dentro do documento.
+    setFotoAnotadaUrl(await subirImagemOuManter(dataUrl, 'anamnese/fotos-anotadas'));
     setFotoAnotacoesJson(annotationsJson);
     setIsAnnotatingPhoto(false);
   };
@@ -700,6 +706,9 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* TERMO DE CONSENTIMENTO — logo abaixo das perguntas gerais, como no formulário online */}
+          {consentSections && <ConsentTermView sections={consentSections} />}
 
           {/* SECTION 2: PERGUNTAS ESPECÍFICAS DO PROCEDIMENTO */}
           {currentTemplate && (

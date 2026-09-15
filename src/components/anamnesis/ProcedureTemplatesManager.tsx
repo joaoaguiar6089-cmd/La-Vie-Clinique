@@ -9,9 +9,12 @@ import {
   Patient,
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
+import { subirImagemOuManter } from '../../services/imageStorage';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import { BlankAnamnesisSheet } from './BlankAnamnesisSheet';
+import { CONSENT_TERM_HEADING } from './ConsentTermView';
+import { criarSecaoDoTermo, criarSecoesPadraoDoTermo } from '../../utils/consentTerm';
 import {
   criarIndiceDeProcedimentos,
   procedimentoDoTemplate as procedimentoDoTemplateCompartilhado,
@@ -40,6 +43,7 @@ import {
   Upload,
   Image as ImageIcon,
   Printer,
+  ScrollText,
 } from 'lucide-react';
 
 interface GenderPhotoSlotProps {
@@ -378,10 +382,11 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
     try {
       // Resolução alta (2000px) — a imagem serve de tela para o profissional anotar depois e sai no PDF.
       const compressed = await downscaleImage(file, 2000, 0.85);
+      const url = await subirImagemOuManter(compressed, `anamnese/fichas-modelo/${draftTemplate.id}`);
       const field = genero === 'feminino' ? 'fotoModeloFemininoUrl' : 'fotoModeloMasculinoUrl';
       setDraftTemplate({
         ...draftTemplate,
-        [field]: compressed,
+        [field]: url,
         tem_foto: true, // Also activates photo section so patient can also upload their photo
       });
     } catch (err) {
@@ -402,7 +407,8 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
       // legendas) que o paciente precisa conseguir ler ao ampliar — compressão agressiva demais
       // borra justamente isso.
       const compressed = await downscaleImage(file, 1800, 0.92);
-      setDraftTemplate({ ...draftTemplate, imagemOrientativaUrl: compressed });
+      const url = await subirImagemOuManter(compressed, `anamnese/fichas-modelo/${draftTemplate.id}`);
+      setDraftTemplate({ ...draftTemplate, imagemOrientativaUrl: url });
     } catch (err) {
       console.error(err);
       alert('Erro ao carregar a imagem orientativa. Tente outro arquivo.');
@@ -410,6 +416,48 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
       setIsUploadingImagemOrientativa(false);
       e.target.value = '';
     }
+  };
+
+  /**
+   * Ligar o termo já entrega os quatro blocos padrão preenchíveis — desligar apenas esconde a
+   * seção, preservando o que a equipe escreveu para o caso de religar depois.
+   */
+  const handleToggleTermoConsentimento = (ativo: boolean) => {
+    if (!draftTemplate) return;
+    setDraftTemplate({
+      ...draftTemplate,
+      termoConsentimentoAtivo: ativo,
+      termoConsentimentoSecoes:
+        ativo && (draftTemplate.termoConsentimentoSecoes || []).length === 0
+          ? criarSecoesPadraoDoTermo()
+          : draftTemplate.termoConsentimentoSecoes,
+    });
+  };
+
+  const handleUpdateSecaoTermo = (id: string, campo: 'titulo' | 'texto', valor: string) => {
+    if (!draftTemplate) return;
+    setDraftTemplate({
+      ...draftTemplate,
+      termoConsentimentoSecoes: (draftTemplate.termoConsentimentoSecoes || []).map((s) =>
+        s.id === id ? { ...s, [campo]: valor } : s
+      ),
+    });
+  };
+
+  const handleRemoverSecaoTermo = (id: string) => {
+    if (!draftTemplate) return;
+    setDraftTemplate({
+      ...draftTemplate,
+      termoConsentimentoSecoes: (draftTemplate.termoConsentimentoSecoes || []).filter((s) => s.id !== id),
+    });
+  };
+
+  const handleAdicionarSecaoTermo = () => {
+    if (!draftTemplate) return;
+    setDraftTemplate({
+      ...draftTemplate,
+      termoConsentimentoSecoes: [...(draftTemplate.termoConsentimentoSecoes || []), criarSecaoDoTermo()],
+    });
   };
 
   const handleSaveDraftTemplate = async (e: React.FormEvent) => {
@@ -703,8 +751,12 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
               </button>
             </div>
 
-            {/* Scrollable Form Body */}
-            <form onSubmit={handleSaveDraftTemplate} className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Corpo rolável + rodapé fixo. O editor é longo (dados, fotos, imagem orientativa,
+                termo, perguntas gerais e específicas) e o botão de salvar ficava no fim da rolagem:
+                quem terminava de escrever no meio do formulário fechava o modal sem salvar, e o
+                trabalho sumia sem nenhum aviso. Agora "Salvar" está sempre à vista. */}
+            <form onSubmit={handleSaveDraftTemplate} className="flex-1 min-h-0 flex flex-col">
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Basic Info */}
               <div className="bg-white p-4 sm:p-5 rounded-sm border border-gray-200/80 shadow-2xs space-y-4">
                 <h4 className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-1.5">
@@ -976,6 +1028,84 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                     </div>
                   </label>
                 </div>
+
+                {/* TERMO DE CONSENTIMENTO E RESPONSABILIDADE */}
+                <div className="pt-3 border-t border-gray-100 space-y-3">
+                  <label className="flex items-start gap-3 p-3 rounded-sm bg-[#A67C52]/5 border border-[#A67C52]/20 cursor-pointer hover:bg-[#A67C52]/10 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={!!draftTemplate.termoConsentimentoAtivo}
+                      onChange={(e) => handleToggleTermoConsentimento(e.target.checked)}
+                      className="accent-[#A67C52] w-4 h-4 mt-0.5 rounded-xs"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <ScrollText className="w-4 h-4 text-[#A67C52]" />
+                        <span className="text-xs font-bold text-[#1A1A1A]">
+                          Incluir {CONSENT_TERM_HEADING}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                        O termo aparece para o paciente <strong>antes de ele enviar a ficha online</strong> e sai no
+                        <strong> PDF da ficha</strong> e na <strong>ficha em branco</strong> para impressão. Ao ativar,
+                        os quatro blocos padrão já vêm prontos para você escrever o conteúdo.
+                      </p>
+                    </div>
+                  </label>
+
+                  {draftTemplate.termoConsentimentoAtivo && (
+                    <div className="space-y-3">
+                      {(draftTemplate.termoConsentimentoSecoes || []).map((secao, idx) => (
+                        <div
+                          key={secao.id}
+                          className="p-3 bg-[#FAF9F6] rounded-sm border border-gray-200 space-y-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-[#A67C52] shrink-0">{idx + 1}.</span>
+                            <input
+                              type="text"
+                              value={secao.titulo}
+                              onChange={(e) => handleUpdateSecaoTermo(secao.id, 'titulo', e.target.value)}
+                              placeholder="Título do bloco (ex: Contra indicação)"
+                              className="flex-1 px-3 py-2 text-xs font-semibold rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoverSecaoTermo(secao.id)}
+                              className="p-1.5 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+                              title="Excluir este bloco do termo"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <textarea
+                            rows={4}
+                            value={secao.texto}
+                            onChange={(e) => handleUpdateSecaoTermo(secao.id, 'texto', e.target.value)}
+                            placeholder="Escreva o conteúdo deste bloco. Cada linha que você digitar aqui sai como uma linha na ficha."
+                            className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] leading-relaxed resize-y"
+                          />
+                        </div>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={handleAdicionarSecaoTermo}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xs bg-white border border-dashed border-gray-300 hover:border-[#A67C52] text-[11px] font-semibold text-gray-700 hover:text-[#A67C52] transition-colors w-full justify-center"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Acrescentar bloco ao termo
+                      </button>
+
+                      {(draftTemplate.termoConsentimentoSecoes || []).length === 0 && (
+                        <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xs px-2.5 py-1.5">
+                          Sem nenhum bloco, o termo não aparece na ficha. Acrescente ao menos um.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* INHERITED GENERAL QUESTIONS (Read-Only Preview) */}
@@ -1142,8 +1272,10 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                 )}
               </div>
 
-              {/* Bottom Actions */}
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200">
+              </div>
+
+              {/* Bottom Actions — fora da área rolável, sempre visíveis */}
+              <div className="shrink-0 flex items-center justify-end gap-2 px-6 py-3.5 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,.04)]">
                 <button
                   type="button"
                   onClick={() => setIsEditorOpen(false)}

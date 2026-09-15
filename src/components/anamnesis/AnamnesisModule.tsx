@@ -20,7 +20,6 @@ import {
   subscribeToAnamnesisRecords,
   saveAnamnesisRecord,
   deleteAnamnesisRecord,
-  seedAnamnesisInitialDataIfEmpty,
 } from '../../services/databaseService';
 import { GeneralQuestionsManager } from './GeneralQuestionsManager';
 import { ProcedureTemplatesManager } from './ProcedureTemplatesManager';
@@ -28,6 +27,7 @@ import { PatientHistoryView } from './PatientHistoryView';
 import { AnamnesisFormFillModal } from './AnamnesisFormFillModal';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
 import { resolveOrientationImage } from '../../utils/orientationImage';
+import { resolveConsentTerm } from '../../utils/consentTerm';
 import {
   FileSpreadsheet,
   Layers,
@@ -85,10 +85,9 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
   /** Procedimento que o catálogo pediu para ganhar uma ficha-modelo nova. */
   const [criarFichaPara, setCriarFichaPara] = useState<Procedure | null>(null);
 
-  // Subscribe to all 4 collections on mount and seed if empty
+  // O seeding já roda uma vez no boot do app (App.tsx). Repeti-lo aqui fazia o mesmo conjunto de
+  // leituras de novo a cada vez que a aba de anamnese era aberta.
   useEffect(() => {
-    seedAnamnesisInitialDataIfEmpty();
-
     const unsubGenQ = subscribeToGeneralQuestions((data) => setGeneralQuestions(data));
     const unsubPat = subscribeToPatients((data) => setPatients(data));
     const unsubRec = subscribeToAnamnesisRecords((data) => {
@@ -261,18 +260,23 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
       />
 
       {/* PRINTABLE / DETAIL MODAL */}
-      {detailRecord && (
+      {detailRecord && (() => {
+        // A imagem orientativa e o termo vivem na ficha-modelo, não no registro — daí a busca aqui.
+        const templateDoRegistroAberto = templates.find(
+          (t) => t.id === (detailRecord.templateId || detailRecord.procedimentoId)
+        );
+        return (
         <PrintableAnamnesisSheet
           record={records.find((r) => r.id === detailRecord.id) || detailRecord}
           clinicProfile={clinicProfile}
           onClose={() => setDetailRecord(null)}
           viewerRole="staff"
           onSaveRecord={saveAnamnesisRecord}
-          orientationImage={resolveOrientationImage(
-            templates.find((t) => t.id === (detailRecord.templateId || detailRecord.procedimentoId))
-          )}
+          orientationImage={resolveOrientationImage(templateDoRegistroAberto)}
+          consentSections={resolveConsentTerm(templateDoRegistroAberto)}
         />
-      )}
+        );
+      })()}
     </div>
   );
 };

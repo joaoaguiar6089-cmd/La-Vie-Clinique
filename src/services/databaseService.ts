@@ -10,12 +10,14 @@ import {
   onSnapshot,
   query,
   orderBy,
+  limit,
   where,
   writeBatch,
   runTransaction,
   QuerySnapshot,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { subscribeShared } from './sharedSubscription';
 import {
   Procedure,
   ClinicProfile,
@@ -81,6 +83,56 @@ function cleanForFirestore<T extends Record<string, any>>(obj: T): T {
 }
 
 /**
+ * Tempo máximo que esperamos o servidor confirmar uma gravação antes de admitir que ela não foi
+ * gravada.
+ */
+const SERVER_ACK_TIMEOUT_MS = 20000;
+
+/**
+ * Espera a confirmação do SERVIDOR para uma gravação, com prazo.
+ *
+ * O SDK do Firestore aplica toda escrita no cache local antes de falar com o servidor. Quando o
+ * servidor recusa — cota diária do projeto esgotada é o caso mais comum aqui — o SDK trata o erro
+ * como temporário e deixa a escrita na fila: a promise do `setDoc` simplesmente nunca resolve.
+ * Para quem está na tela isso é indistinguível de ter salvo, porque o valor novo aparece na hora e
+ * só some quando o listener ressincroniza (ou no próximo F5). Este prazo transforma esse silêncio
+ * numa mensagem que diz o que aconteceu e o que fazer.
+ */
+async function comConfirmacaoDoServidor<T>(gravacao: Promise<T>, oQue: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const prazo = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `O servidor não confirmou o salvamento ${oQue} em ${SERVER_ACK_TIMEOUT_MS / 1000} ` +
+              `segundos, então a alteração pode não ter sido gravada — recarregue a página para ` +
+              `conferir. Verifique a conexão; se a internet estiver boa, é quase certo que a cota ` +
+              `diária gratuita do banco de dados (Firebase) se esgotou, e ela se renova sozinha no ` +
+              `começo do dia.`
+          )
+        ),
+      SERVER_ACK_TIMEOUT_MS
+    );
+  });
+
+  try {
+    return await Promise.race([gravacao, prazo]);
+  } catch (err) {
+    // Quando o servidor responde a recusa em vez de engolir a escrita, o motivo vem no código.
+    if ((err as { code?: string })?.code === 'resource-exhausted') {
+      throw new Error(
+        `A cota diária gratuita do banco de dados (Firebase) se esgotou, então o salvamento ` +
+          `${oQue} foi recusado. A cota se renova sozinha no começo do dia.`
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Replace all procedures in Firestore with the current official catalog from PDF.
  */
 export async function replaceAllProceduresWithOfficialPdfCatalog(): Promise<void> {
@@ -124,11 +176,22 @@ export async function replaceAllProceduresWithOfficialPdfCatalog(): Promise<void
  */
 export async function seedInitialDataIfEmpty(): Promise<void> {
   try {
-    const procSnapshot = await getDocs(collection(db, PROCEDURES_COLLECTION));
-    // If empty OR contains old template procedures (e.g. proc-1 or old length), sync with PDF catalog
-    const hasOldTemplate = !procSnapshot.empty && procSnapshot.docs.some(d => d.id === 'proc-1' || d.id === 'proc-2');
-    
-    if (procSnapshot.empty || hasOldTemplate) {
+    // Ler a coleção inteira só para perguntar "está vazia?" custava uma leitura por procedimento,
+    // toda vez que o app abria — e logo depois a assinatura em tempo real lia tudo de novo. Um
+    // `limit(1)` responde a mesma pergunta por 1 leitura, e os dois procedimentos legados são
+    // consultados pelo ID em vez de varridos.
+    const primeiroProc = await getDocs(query(collection(db, PROCEDURES_COLLECTION), limit(1)));
+    const colecaoVazia = primeiroProc.empty;
+
+    const [proc1, proc2] = colecaoVazia
+      ? [null, null]
+      : await Promise.all([
+          getDoc(doc(db, PROCEDURES_COLLECTION, 'proc-1')),
+          getDoc(doc(db, PROCEDURES_COLLECTION, 'proc-2')),
+        ]);
+    const hasOldTemplate = !!proc1?.exists() || !!proc2?.exists();
+
+    if (colecaoVazia || hasOldTemplate) {
       console.log('Seeding official PDF catalog to Firebase Firestore...');
       await replaceAllProceduresWithOfficialPdfCatalog();
     } else {
@@ -315,10 +378,38 @@ export async function reorderProceduresInDb(procedures: Procedure[]): Promise<vo
 /**
  * Seed initial anamnesis data (general questions, templates, sample patients and records) if empty.
  */
+/**
+ * Marca, no navegador, que a sincronização única das fichas de laser já rodou. Ela precisa ler a
+ * coleção inteira de fichas-modelo para comparar com o padrão, e reler tudo isso a cada abertura
+ * do app era o maior desperdício de leituras do sistema. A marca é por navegador: no pior caso a
+ * sincronização roda uma vez em cada máquina, em vez de sempre.
+ */
+const LASER_SYNC_DONE_KEY = 'lavie:laser-templates-sync:v1';
+
+function laserSyncJaRodou(): boolean {
+  try {
+    return localStorage.getItem(LASER_SYNC_DONE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function marcarLaserSyncComoFeito(): void {
+  try {
+    localStorage.setItem(LASER_SYNC_DONE_KEY, '1');
+  } catch {
+    // Navegador sem localStorage (aba anônima com storage bloqueado): a sincronização volta a
+    // rodar, que é o comportamento antigo — correto, só mais caro.
+  }
+}
+
 export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
   try {
-    // 1. Seed General Questions if empty
-    const genQSnap = await getDocs(collection(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION));
+    // 1. Seed General Questions if empty — `limit(1)` responde "está vazia?" por 1 leitura,
+    //    em vez de uma por pergunta cadastrada.
+    const genQSnap = await getDocs(
+      query(collection(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION), limit(1))
+    );
     if (genQSnap.empty) {
       console.log('Seeding initial general questions for anamnesis...');
       const batch = writeBatch(db);
@@ -330,8 +421,8 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
     }
 
     // 2. Seed Procedure Templates if empty, or sync laser templates if missing
-    const tplSnap = await getDocs(collection(db, ANAMNESIS_TEMPLATES_COLLECTION));
-    if (tplSnap.empty) {
+    const primeiroTpl = await getDocs(query(collection(db, ANAMNESIS_TEMPLATES_COLLECTION), limit(1)));
+    if (primeiroTpl.empty) {
       console.log('Seeding initial procedure templates for anamnesis...');
       const batch = writeBatch(db);
       DEFAULT_PROCEDURE_TEMPLATES.forEach((tpl) => {
@@ -342,9 +433,12 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
         }));
       });
       await batch.commit();
-    } else {
-      // Sincroniza fichas das categorias Depilação a Laser (Facial, Íntima e Corporal) e suas 13 perguntas
+    } else if (!laserSyncJaRodou()) {
+      // Sincroniza fichas das categorias Depilação a Laser (Facial, Íntima e Corporal) e suas 13
+      // perguntas. Só aqui a coleção inteira é lida — e só na primeira vez em cada navegador.
+      const tplSnap = await getDocs(collection(db, ANAMNESIS_TEMPLATES_COLLECTION));
       await syncLaserAnamnesisTemplates(tplSnap);
+      marcarLaserSyncComoFeito();
     }
 
     // 3. Seed Patients if empty
@@ -454,7 +548,7 @@ async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void
 /**
  * Subscribe to General Questions
  */
-export function subscribeToGeneralQuestions(
+function subscribeToGeneralQuestionsDireto(
   onUpdate: (questions: AnamnesisQuestion[]) => void,
   onError?: (err: Error) => void
 ) {
@@ -473,6 +567,17 @@ export function subscribeToGeneralQuestions(
       if (onError) onError(error);
     }
   );
+}
+
+/**
+ * Assinatura compartilhada de `anamnesis_general_questions`: uma única por sessão, viva entre idas e vindas de aba.
+ * Ver `sharedSubscription.ts` — antes, cada montagem do módulo pagava um snapshot inteiro.
+ */
+export function subscribeToGeneralQuestions(
+  onUpdate: (data: AnamnesisQuestion[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<AnamnesisQuestion[]>('anamnesis_general_questions', subscribeToGeneralQuestionsDireto, onUpdate, onError);
 }
 
 /**
@@ -554,7 +659,7 @@ export async function saveAnamnesisTemplate(template: AnamnesisTemplate): Promis
     );
   }
 
-  await setDoc(docRef, dataToSave, { merge: true });
+  await comConfirmacaoDoServidor(setDoc(docRef, dataToSave, { merge: true }), 'da ficha-modelo');
 }
 
 /**
@@ -568,7 +673,7 @@ export async function deleteAnamnesisTemplate(templateId: string): Promise<void>
 /**
  * Subscribe to Patients collection
  */
-export function subscribeToPatients(
+function subscribeToPatientsDireto(
   onUpdate: (patients: Patient[]) => void,
   onError?: (err: Error) => void
 ) {
@@ -588,6 +693,17 @@ export function subscribeToPatients(
       if (onError) onError(error);
     }
   );
+}
+
+/**
+ * Assinatura compartilhada de `patients`: uma única por sessão, viva entre idas e vindas de aba.
+ * Ver `sharedSubscription.ts` — antes, cada montagem do módulo pagava um snapshot inteiro.
+ */
+export function subscribeToPatients(
+  onUpdate: (data: Patient[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<Patient[]>('patients', subscribeToPatientsDireto, onUpdate, onError);
 }
 
 /**
@@ -613,7 +729,7 @@ export async function deletePatient(patientId: string): Promise<void> {
 /**
  * Subscribe to Anamnesis Records (Consultations)
  */
-export function subscribeToAnamnesisRecords(
+function subscribeToAnamnesisRecordsDireto(
   onUpdate: (records: AnamnesisRecord[]) => void,
   onError?: (err: Error) => void
 ) {
@@ -637,6 +753,17 @@ export function subscribeToAnamnesisRecords(
 }
 
 /**
+ * Assinatura compartilhada de `anamnesis_records`: uma única por sessão, viva entre idas e vindas de aba.
+ * Ver `sharedSubscription.ts` — antes, cada montagem do módulo pagava um snapshot inteiro.
+ */
+export function subscribeToAnamnesisRecords(
+  onUpdate: (data: AnamnesisRecord[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<AnamnesisRecord[]>('anamnesis_records', subscribeToAnamnesisRecordsDireto, onUpdate, onError);
+}
+
+/**
  * Save or update an Anamnesis Record
  */
 export async function saveAnamnesisRecord(record: AnamnesisRecord): Promise<void> {
@@ -654,7 +781,7 @@ export async function saveAnamnesisRecord(record: AnamnesisRecord): Promise<void
   if (record.fotoPacienteUrl) {
     dataToSave.fotoUrl = deleteField();
   }
-  await setDoc(docRef, dataToSave, { merge: true });
+  await comConfirmacaoDoServidor(setDoc(docRef, dataToSave, { merge: true }), 'da ficha');
 }
 
 /**

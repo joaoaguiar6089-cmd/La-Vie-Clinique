@@ -13,6 +13,7 @@ import {
 import { OnlinePatientAnamnesisForm } from './OnlinePatientAnamnesisForm';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
 import { resolveOrientationImage } from '../../utils/orientationImage';
+import { resolveConsentTerm } from '../../utils/consentTerm';
 import {
   Loader2,
   AlertTriangle,
@@ -217,6 +218,8 @@ export const PublicAnamnesisEntry: React.FC = () => {
             imagemOrientativaUrl: tplDoRegistro?.imagemOrientativaUrl,
             imagemOrientativaTitulo: tplDoRegistro?.imagemOrientativaTitulo,
             imagemOrientativaDescricao: tplDoRegistro?.imagemOrientativaDescricao,
+            termoConsentimentoAtivo: tplDoRegistro?.termoConsentimentoAtivo,
+            termoConsentimentoSecoes: tplDoRegistro?.termoConsentimentoSecoes,
             perguntasEspecificas: record.perguntasSnapshot?.especificas || [],
           });
           setScreen('form');
@@ -257,6 +260,8 @@ export const PublicAnamnesisEntry: React.FC = () => {
                 imagemOrientativaUrl: tpl.imagemOrientativaUrl,
                 imagemOrientativaTitulo: tpl.imagemOrientativaTitulo,
                 imagemOrientativaDescricao: tpl.imagemOrientativaDescricao,
+                termoConsentimentoAtivo: tpl.termoConsentimentoAtivo,
+                termoConsentimentoSecoes: tpl.termoConsentimentoSecoes,
                 perguntasEspecificas: sameTemplateRecord.perguntasSnapshot?.especificas || tpl.perguntasEspecificas,
               });
             } else if (priorRecords.length > 0) {
@@ -480,6 +485,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
             onClose={() => setShowPdfModal(false)}
             viewerRole="paciente"
             orientationImage={resolveOrientationImage(template)}
+            consentSections={resolveConsentTerm(template)}
           />
         )}
       </div>
@@ -521,6 +527,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
           onClose={() => {}}
           viewerRole="paciente"
           orientationImage={resolveOrientationImage(template)}
+          consentSections={resolveConsentTerm(template)}
         />
       </div>
     );
