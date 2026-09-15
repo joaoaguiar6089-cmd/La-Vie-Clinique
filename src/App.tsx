@@ -15,7 +15,7 @@ import { Procedure, ClinicProfile, AppView, AnamnesisTemplate } from './types';
 import { mapearTemplatesPorProcedimento } from './utils/templateMatching';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { ClinicLogo } from './components/ClinicLogo';
-import { RefreshCw, Check, Loader2, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Check, Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
 import {
   seedInitialDataIfEmpty,
   seedAnamnesisInitialDataIfEmpty,
@@ -27,6 +27,7 @@ import {
   publishPublicClinicProfile,
   replaceAllProceduresWithOfficialPdfCatalog,
   subscribeToAnamnesisTemplates,
+  isQuotaOrOfflineError,
 } from './services/databaseService';
 import { DEFAULT_PROCEDURE_TEMPLATES } from './data/anamnesisInitialData';
 import { onAuthChange, logout, type User } from './services/authService';
@@ -83,14 +84,19 @@ function MainCatalogApp() {
 
   // Firebase Real-time Synchronization Status
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced');
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const publicProfilePublishedRef = useRef(false);
 
   useEffect(() => {
     if (syncStatus === 'error') {
-      showToast('Modo local: suas alterações serão sincronizadas quando a conexão voltar.');
+      if (isQuotaExceeded) {
+        showToast('Modo local: Cota diária gratuita do Firebase atingida. Seus dados continuam disponíveis.');
+      } else {
+        showToast('Modo local: suas alterações serão sincronizadas quando a conexão voltar.');
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncStatus]);
+  }, [syncStatus, isQuotaExceeded]);
 
   // Navigation and Modals State
   const [currentView, setCurrentView] = useState<AppView>('procedures');
@@ -141,6 +147,9 @@ function MainCatalogApp() {
             setSyncStatus('synced');
           },
           (err) => {
+            if (isQuotaOrOfflineError(err)) {
+              setIsQuotaExceeded(true);
+            }
             console.warn('Firestore procedures subscription offline/error:', err);
             setSyncStatus('error');
           }
@@ -166,12 +175,20 @@ function MainCatalogApp() {
             setSyncStatus('synced');
           },
           (err) => {
+            if (isQuotaOrOfflineError(err)) {
+              setIsQuotaExceeded(true);
+            }
             console.warn('Firestore clinic subscription offline/error:', err);
             setSyncStatus('error');
           }
         );
       } catch (err) {
-        console.error('Firebase initialization error:', err);
+        if (isQuotaOrOfflineError(err)) {
+          setIsQuotaExceeded(true);
+          console.warn('Firebase initialization offline/cota diária atingida.');
+        } else {
+          console.error('Firebase initialization error:', err);
+        }
         setSyncStatus('error');
       }
     }
@@ -193,6 +210,9 @@ function MainCatalogApp() {
         setTemplatesCarregando(false);
       },
       (err) => {
+        if (isQuotaOrOfflineError(err)) {
+          setIsQuotaExceeded(true);
+        }
         console.warn('Firestore anamnesis templates subscription offline/error:', err);
         // Desistir do estado de carregamento é deliberado: sem isso, uma falha de rede deixaria
         // todo botão "Anamnese" permanentemente habilitado por engano.
@@ -467,6 +487,24 @@ function MainCatalogApp() {
 
       {/* Content Column */}
       <div className="flex-1 min-w-0 flex flex-col">
+        {isQuotaExceeded && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+              <span>
+                <strong>Modo Offline (Cota diária do Firebase atingida):</strong> O limite gratuito diário de 50.000 leituras do Firestore foi atingido hoje. O aplicativo segue funcionando normalmente com os dados locais salvos. A cota é renovada automaticamente pelo Google às 04:00 BRT.
+              </span>
+            </div>
+            <a
+              href="https://console.firebase.google.com/project/database-dra-karoline/firestore/databases/ai-studio-aurabronzecatlog-2ed33bb0-bfc5-4dcb-8c57-c6bd40087442/data?openUpgradeDialog=true"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-semibold text-amber-900 hover:text-amber-950 underline underline-offset-2 shrink-0 self-start sm:self-auto"
+            >
+              Ativar plano Blaze no Firebase &rarr;
+            </a>
+          </div>
+        )}
         <main className="flex-1 w-full">
           {currentView === 'procedures' ? (
             <ProcedureManager

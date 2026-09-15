@@ -132,6 +132,28 @@ async function comConfirmacaoDoServidor<T>(gravacao: Promise<T>, oQue: string): 
   }
 }
 
+let quotaExhaustedSession = false;
+
+/**
+ * Detecta se o erro decorre do esgotamento da cota diária gratuita do Firestore
+ * (ex: 'Free daily read units per project (free tier database)') ou cliente offline.
+ */
+export function isQuotaOrOfflineError(error: unknown): boolean {
+  if (!error) return false;
+  const msg = (error as { message?: string }).message || String(error);
+  const code = (error as { code?: string }).code;
+  const isQuota = (
+    code === 'resource-exhausted' ||
+    msg.toLowerCase().includes('quota') ||
+    msg.toLowerCase().includes('resource_exhausted') ||
+    msg.toLowerCase().includes('offline')
+  );
+  if (isQuota) {
+    quotaExhaustedSession = true;
+  }
+  return isQuota;
+}
+
 /**
  * Replace all procedures in Firestore with the current official catalog from PDF.
  */
@@ -166,7 +188,11 @@ export async function replaceAllProceduresWithOfficialPdfCatalog(): Promise<void
 
     console.log('Firestore replaced with official PDF procedures successfully.');
   } catch (err) {
-    console.error('Error replacing procedures in Firestore:', err);
+    if (isQuotaOrOfflineError(err)) {
+      console.warn('Error replacing procedures in Firestore (quota/offline):', err);
+    } else {
+      console.error('Error replacing procedures in Firestore:', err);
+    }
     throw err;
   }
 }
@@ -175,6 +201,7 @@ export async function replaceAllProceduresWithOfficialPdfCatalog(): Promise<void
  * Initialize Firestore with default clinic profile and procedures if empty or outdated.
  */
 export async function seedInitialDataIfEmpty(): Promise<void> {
+  if (quotaExhaustedSession) return;
   try {
     // Ler a coleção inteira só para perguntar "está vazia?" custava uma leitura por procedimento,
     // toda vez que o app abria — e logo depois a assinatura em tempo real lia tudo de novo. Um
@@ -206,7 +233,11 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
       }
     }
   } catch (err) {
-    console.error('Error seeding initial Firestore data:', err);
+    if (isQuotaOrOfflineError(err)) {
+      console.warn('Firestore offline/cota diária atingida durante checagem de procedimentos iniciais.');
+    } else {
+      console.error('Error seeding initial Firestore data:', err);
+    }
   }
 }
 
@@ -229,7 +260,11 @@ export function subscribeToProcedures(
       onUpdate(items);
     },
     (error) => {
-      console.error('Firestore procedures subscription error:', error);
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Firestore procedures subscription offline/cota diária atingida.');
+      } else {
+        console.error('Firestore procedures subscription error:', error);
+      }
       if (onError) onError(error);
     }
   );
@@ -253,7 +288,11 @@ export function subscribeToClinicProfile(
       }
     },
     (error) => {
-      console.error('Firestore clinic profile subscription error:', error);
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Firestore clinic profile subscription offline/cota diária atingida.');
+      } else {
+        console.error('Firestore clinic profile subscription error:', error);
+      }
       if (onError) onError(error);
     }
   );
@@ -404,6 +443,7 @@ function marcarLaserSyncComoFeito(): void {
 }
 
 export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
+  if (quotaExhaustedSession) return;
   try {
     // 1. Seed General Questions if empty — `limit(1)` responde "está vazia?" por 1 leitura,
     //    em vez de uma por pergunta cadastrada.
@@ -465,7 +505,11 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       await batch.commit();
     }
   } catch (err) {
-    console.error('Error seeding initial anamnesis data:', err);
+    if (isQuotaOrOfflineError(err)) {
+      console.warn('Firestore offline/cota diária atingida durante checagem de anamnese inicial.');
+    } else {
+      console.error('Error seeding initial anamnesis data:', err);
+    }
   }
 }
 
@@ -563,7 +607,11 @@ function subscribeToGeneralQuestionsDireto(
       onUpdate(items);
     },
     (error) => {
-      console.error('General questions subscription error:', error);
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('General questions subscription offline/cota diária atingida.');
+      } else {
+        console.error('General questions subscription error:', error);
+      }
       if (onError) onError(error);
     }
   );
@@ -628,7 +676,11 @@ export function subscribeToAnamnesisTemplates(
       onUpdate(items);
     },
     (error) => {
-      console.error('Anamnesis templates subscription error:', error);
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Anamnesis templates subscription offline/cota diária atingida.');
+      } else {
+        console.error('Anamnesis templates subscription error:', error);
+      }
       if (onError) onError(error);
     }
   );
@@ -689,7 +741,11 @@ function subscribeToPatientsDireto(
       onUpdate(items);
     },
     (error) => {
-      console.error('Patients subscription error:', error);
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Patients subscription offline/cota diária atingida.');
+      } else {
+        console.error('Patients subscription error:', error);
+      }
       if (onError) onError(error);
     }
   );
@@ -746,7 +802,11 @@ function subscribeToAnamnesisRecordsDireto(
       onUpdate(items);
     },
     (error) => {
-      console.error('Anamnesis records subscription error:', error);
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Anamnesis records subscription offline/cota diária atingida.');
+      } else {
+        console.error('Anamnesis records subscription error:', error);
+      }
       if (onError) onError(error);
     }
   );
@@ -905,7 +965,11 @@ export function subscribeToQuotes(
       onUpdate(items);
     },
     (error) => {
-      console.error('Quotes subscription error:', error);
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Quotes subscription offline/cota diária atingida.');
+      } else {
+        console.error('Quotes subscription error:', error);
+      }
       if (onError) onError(error);
     }
   );

@@ -90,10 +90,15 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
   useEffect(() => {
     const unsubGenQ = subscribeToGeneralQuestions((data) => setGeneralQuestions(data));
     const unsubPat = subscribeToPatients((data) => setPatients(data));
-    const unsubRec = subscribeToAnamnesisRecords((data) => {
-      setRecords(data);
-      setIsLoading(false);
-    });
+    const unsubRec = subscribeToAnamnesisRecords(
+      (data) => {
+        setRecords(data);
+        setIsLoading(false);
+      },
+      () => {
+        setIsLoading(false);
+      }
+    );
 
     return () => {
       unsubGenQ();
