@@ -74,10 +74,6 @@ export interface LaserCategoryDefaults {
   recoveryTime?: string;
   contraindications?: string;
   idealCandidate?: string;
-  benefits?: string[];
-  images?: string[];
-  quoteDetails?: QuoteItemDetail[];
-  assignedDoctorIds?: string[];
 }
 
 /**
@@ -450,6 +446,13 @@ export interface Quote {
   descontoCombinadoPercentual?: number; // Digitado; sugestão = 2% × nº de itens, limitada ao teto
   pagamento: QuotePayment;
   observacoes?: string;
+  /**
+   * Liga a página do manequim com as áreas contratadas no PDF.
+   *
+   * Só o interruptor mora aqui — um booleano. O mapa em si vem de fora na hora de imprimir, para
+   * não copiar ~10 KB de polígonos para dentro de cada orçamento emitido. Ausente = ligado.
+   */
+  mostrarMapaCorporal?: boolean;
   clinica?: QuoteClinicSnapshot; // Ausente só em orçamentos criados antes deste campo existir
   total: number; // Snapshot denormalizado apenas para a listagem — a verdade é calcularOrcamento()
   enviadoEm?: string; // ISO do 1º compartilhamento do link; presença trava a edição

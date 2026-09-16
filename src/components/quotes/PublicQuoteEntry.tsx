@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, AlertCircle, MessageCircle, Download, Clock, RefreshCw, Ban } from 'lucide-react';
-import { Quote } from '../../types';
-import { getQuoteById } from '../../services/databaseService';
+import { LaserBodyMap, Quote } from '../../types';
+import { getQuoteById, getMapaCorporalDoLaserPublico } from '../../services/databaseService';
 import { formatBRL } from '../../utils/formatters';
 import {
   calcularOrcamento,
@@ -39,6 +39,14 @@ const linkWhatsApp = (telefone: string | undefined, texto: string): string => {
  */
 export const PublicQuoteEntry: React.FC = () => {
   const [quote, setQuote] = useState<Quote | null>(null);
+  /**
+   * Mapa corporal do espelho público — esta página não tem login e não pode ler `procedures`.
+   * Best-effort: sem ele o PDF simplesmente sai sem a página das áreas.
+   */
+  const [mapaCorporal, setMapaCorporal] = useState<LaserBodyMap | null>(null);
+  useEffect(() => {
+    void getMapaCorporalDoLaserPublico().then(setMapaCorporal).catch(() => {});
+  }, []);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [mostrarPdf, setMostrarPdf] = useState(false);
@@ -318,6 +326,7 @@ export const PublicQuoteEntry: React.FC = () => {
 
       {mostrarPdf && (
         <QuotePreviewModal
+          mapaCorporal={mapaCorporal}
           quote={quote}
           clinic={null}
           onClose={() => setMostrarPdf(false)}

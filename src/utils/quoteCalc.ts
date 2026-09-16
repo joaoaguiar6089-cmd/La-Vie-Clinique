@@ -6,6 +6,7 @@ import {
   QuotePayment,
   QuoteStatus,
 } from "../types";
+import { isLaserCategory } from "./templateMatching";
 
 /** Padrões do módulo quando a clínica ainda não configurou nada. */
 export const QUOTE_DEFAULTS = {
@@ -155,6 +156,26 @@ export const calcularOrcamento = (input: QuoteCalcInput): QuoteTotals => {
     total,
     descontoEfetivoPercentual,
   };
+};
+
+/**
+ * Quantos "procedimentos" um conjunto de itens representa para efeito do desconto de plano
+ * combinado — **todas as áreas de laser contam como uma só**.
+ *
+ * Cinco itens num orçamento normal são mesmo um plano combinado: botox, preenchimento,
+ * bioestimulador, fio e skinbooster. Cinco áreas de depilação a laser são uma venda só, e o mapa
+ * corporal torna trivial marcar cinco. Sem esta contagem, todo orçamento de laser nasceria com a
+ * sugestão no teto de 10% — um desconto que ninguém decidiu dar, aceito por quem estivesse com
+ * pressa. Num orçamento misto, laser + botox continuam valendo 2.
+ */
+export const contarProcedimentosParaDesconto = (itens: Pick<QuoteItem, "categoria">[]): number => {
+  let naoLaser = 0;
+  let temLaser = false;
+  for (const item of itens) {
+    if (isLaserCategory(item.categoria)) temLaser = true;
+    else naoLaser += 1;
+  }
+  return naoLaser + (temLaser ? 1 : 0);
 };
 
 /** Sugestão do desconto de plano combinado: % por procedimento, limitado ao teto. Editável depois. */

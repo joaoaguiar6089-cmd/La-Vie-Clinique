@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Patient,
   PatientGender,
@@ -6,6 +6,8 @@ import {
   AnamnesisQuestion,
   AnamnesisRecord,
   ClinicProfile,
+  LaserAreaRef,
+  Procedure,
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { subirImagemOuManter } from '../../services/imageStorage';
@@ -18,6 +20,9 @@ import { OrientationImageCard } from './OrientationImageCard';
 import { ConsentTermView } from './ConsentTermView';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
+import { LaserAreaPicker } from '../laser/LaserAreaPicker';
+import { ehTemplateDeLaser } from '../../utils/templateMatching';
+import { listarNomesDeAreas, montarEspelhoPublico } from '../../utils/laserAreas';
 import {
   X,
   Camera,
@@ -29,6 +34,7 @@ import {
   PenTool,
   IdCard,
   Share2,
+  Scan,
 } from 'lucide-react';
 
 const formatCpf = (raw: string): string => {
@@ -96,8 +102,18 @@ interface AnamnesisFormFillModalProps {
   templates: AnamnesisTemplate[];
   generalQuestions: AnamnesisQuestion[];
   clinicProfile: ClinicProfile;
+  /** Catálogo — o mapa corporal do laser é montado a partir dele. */
+  catalogProcedures: Procedure[];
   initialPatientId?: string;
   initialTemplateId?: string;
+  /**
+   * Área do laser que já entra marcada no manequim — o `procedureId` do card que abriu esta ficha.
+   *
+   * Existe porque a ficha de laser é uma só para as treze regiões: sem isto, clicar "Anamnese" em
+   * "Virilha Completa" e em "Axilas" abriria a mesma tela vazia, e a escolha feita no catálogo se
+   * perderia no caminho.
+   */
+  initialAreaLaserId?: string;
   onSavePatient: (patient: Patient) => Promise<void>;
   onSaveRecord: (record: AnamnesisRecord) => Promise<void>;
   onOpenRecordDetail?: (record: AnamnesisRecord) => void;
@@ -110,8 +126,10 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   templates,
   generalQuestions,
   clinicProfile,
+  catalogProcedures,
   initialPatientId,
   initialTemplateId,
+  initialAreaLaserId,
   onSavePatient,
   onSaveRecord,
   onOpenRecordDetail,
@@ -171,9 +189,10 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
       setPatientMode('select');
       setSelectedPatientId(initialPatientId);
     }
+    setAreasConfirmadas(new Set(initialAreaLaserId ? [initialAreaLaserId] : []));
     setLinkFoiCompartilhado(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialTemplateId, initialPatientId]);
+  }, [isOpen, initialTemplateId, initialPatientId, initialAreaLaserId]);
 
   // When selected patient changes, auto-fill general questions that match
   useEffect(() => {
@@ -190,6 +209,34 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
   const currentGenero = patientMode === 'new' ? newPatientGender : selectedPatientGender;
+  /**
+   * Áreas marcadas pela profissional no atendimento — a conduta, não o pedido.
+   *
+   * O mapa é montado a partir do catálogo em memória (esta tela é autenticada), pela mesma função
+   * que gera o espelho público, para que a profissional veja exatamente o mesmo desenho que a
+   * paciente viu no link.
+   */
+  const ehFichaDeLaser = ehTemplateDeLaser(currentTemplate);
+  const mapaCorporal = useMemo(
+    () => montarEspelhoPublico(catalogProcedures, clinicProfile),
+    [catalogProcedures, clinicProfile]
+  );
+  const [areasConfirmadas, setAreasConfirmadas] = useState<Set<string>>(new Set());
+
+  const alternarAreaConfirmada = (procedureId: string) =>
+    setAreasConfirmadas((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(procedureId)) proximo.delete(procedureId);
+      else proximo.add(procedureId);
+      return proximo;
+    });
+
+  const refsConfirmadas: LaserAreaRef[] = mapaCorporal.areas
+    .filter((a) => areasConfirmadas.has(a.procedureId))
+    .map((a) => ({ procedureId: a.procedureId, nomeCurto: a.nomeCurto }));
+
+  const nomesDasAreasConfirmadas = listarNomesDeAreas(refsConfirmadas);
+
   const previewFotoModelo = currentTemplate ? resolveTemplatePhoto(currentTemplate, currentGenero || undefined) : undefined;
   const orientationImage = resolveOrientationImage(currentTemplate);
   const consentSections = resolveConsentTerm(currentTemplate);
@@ -379,6 +426,8 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           ],
           especificas: currentTemplate.perguntasEspecificas || [],
         },
+        // Ficha presencial: a profissional é quem marca, então isto é conduta confirmada.
+        areasConfirmadas: ehFichaDeLaser && refsConfirmadas.length > 0 ? refsConfirmadas : undefined,
         observacoesFinais: observacoesFinais.trim() || undefined,
         origemPreenchimento: 'presencial_clinica',
         createdAt: new Date().toISOString(),
@@ -709,6 +758,37 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
           {/* TERMO DE CONSENTIMENTO — logo abaixo das perguntas gerais, como no formulário online */}
           {consentSections && <ConsentTermView sections={consentSections} />}
+
+          {/* ÁREAS DO LASER — só nas fichas de depilação a laser */}
+          {ehFichaDeLaser && (
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-3">
+              <div className="border-b border-[rgba(26,26,26,.07)] pb-3">
+                <h4 className="text-[15px] font-semibold text-[#1A1A1A] flex items-center gap-2">
+                  <Scan className="w-4 h-4 text-[#A67C52]" />
+                  Áreas a tratar
+                </h4>
+                <p className="text-[13px] text-[#8a8578] mt-0.5">
+                  Marque as regiões desta sessão. Fica gravado como a conduta da profissional,
+                  separado do que a paciente pediu pelo link.
+                </p>
+              </div>
+
+              <LaserAreaPicker
+                mapa={mapaCorporal}
+                selecionadas={areasConfirmadas}
+                onToggle={alternarAreaConfirmada}
+                alturaManequim={460}
+                vazioMensagem="Nenhum procedimento de laser tem área desenhada ainda. Configure o mapa no cadastro de procedimentos."
+              />
+
+              {areasConfirmadas.size > 0 && (
+                <p className="text-[13px] text-[#1A1A1A] bg-[#FCE4EF] border border-[#F3C6DC] rounded-xl px-3 py-2 leading-snug">
+                  <strong>{areasConfirmadas.size}</strong>{' '}
+                  {areasConfirmadas.size === 1 ? 'área' : 'áreas'}: {nomesDasAreasConfirmadas}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* SECTION 2: PERGUNTAS ESPECÍFICAS DO PROCEDIMENTO */}
           {currentTemplate && (

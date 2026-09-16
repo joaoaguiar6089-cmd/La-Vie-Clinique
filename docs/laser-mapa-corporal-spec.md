@@ -42,6 +42,22 @@ interface LaserArea {
 }
 ```
 
+> ⚠️ **`formas` é `number[][]` só em memória.** O Firestore **não aceita array dentro
+> de array**, e este projeto tornava isso pior do que um erro: `cleanForFirestore`
+> percorre a estrutura e, ao encontrar `[0.44, 0.105]`, trata como objeto e grava
+> `{0: 0.44, 1: 0.105}`. A gravação passava sem erro, a lista continuava contando
+> "1 forma", e **o desenho simplesmente não aparecia** — `forma.length` num objeto é
+> `undefined`.
+>
+> Por isso cada polígono é gravado como **uma string** `"x1,y1,x2,y2"`, convertida por
+> `serializarAreas` / `desserializarAreas` na fronteira do banco (`saveProcedureToDb`,
+> `subscribeToProcedures`, o espelho público). Além de ser aceita, a string é menor
+> que o array de `double` equivalente — 8 bytes por número contra ~6 por coordenada.
+>
+> `desserializarAreas` lê os três formatos que já existiram: string, array numérico
+> cru e o `{0:…, 1:…}` achatado pelo bug — para que ninguém precise redesenhar as
+> áreas feitas antes da correção.
+
 - **Coordenadas normalizadas 0–1**, arredondadas para **3 casas decimais** — num
   manequim de 1000px é precisão sub-pixel e corta o peso do polígono pela metade.
 - **Caminho simplificado para ~40 pontos** por forma (Douglas–Peucker) no momento
@@ -56,16 +72,20 @@ interface LaserArea {
 ```ts
 laserManequimFrenteUrl?: string;
 laserManequimCostasUrl?: string;
-laserPadroes?: {                   // herdados por toda área nova, ver §1.3
-  recoveryTime?: string;
+laserPadroes?: {                   // herdados por toda área de laser, ver §1.3
+  description?: string;
   contraindications?: string;
+  recoveryTime?: string;
   idealCandidate?: string;
-  benefits?: string[];
-  images?: string[];
-  quoteDetails?: QuoteItemDetail[];
-  assignedDoctorIds?: string[];
 };
 ```
+
+São **quatro campos de texto**, e não a lista maior que se cogitou na sessão. Foto,
+benefícios, detalhes de orçamento e profissionais ficaram de fora porque cada um
+exigiria seu próprio editor nas Configurações, e nenhum tem o problema que motivou a
+herança: uma foto errada se vê no card, uma contraindicação errada não se vê em lugar
+nenhum até alguém se machucar. Os quatro que entraram são exatamente os textos que
+repetem palavra por palavra nas treze áreas.
 
 ### 1.3 Padrões da categoria: **vivos, com sobrescrita**
 
@@ -191,6 +211,23 @@ redigitar um preço sequer e sem sair da tela.
 | Fechar o modal com laço desenhado e não aplicado | Aviso "você tem uma área desenhada que ainda não foi aplicada". Nunca aplicar sozinho — criaria procedimento sem nome nem preço no catálogo de produção. |
 | Mapeamento em tela pequena | **Desktop apenas.** Recado claro no celular ("abra no computador para editar o mapa") em vez de uma versão capenga. Desenhar laço com o dedo em 380px e preencher 6 campos ao lado não existe. |
 
+### 3.4 Gestão das áreas (Configurações → "Configurar áreas")
+
+O cadastro desenha **uma** área por vez, com o foco naquele procedimento. Falta a
+visão do conjunto — e é só nela que se percebe que duas regiões se encavalaram ou que
+dois botões vizinhos cruzaram as linhas guia.
+
+O painel mostra o mapa inteiro por vista e, ao lado, a lista das áreas com o número
+de formas de cada uma. Dele saem três ações:
+
+- **Arrastar o botão** para onde ele deve ficar, num modo que se liga por interruptor.
+  Grava sozinho, sem botão de confirmar: são poucos bytes, e um "salvar" separado
+  significaria perder o ajuste ao fechar a janela sem clicar nele.
+- **Voltar o botão à posição automática**, quando o ajuste manual ficou pior.
+- **Remover a área do mapa** — que **não apaga o procedimento**. Ele continua no
+  catálogo, com preço, buscável no orçamento; só deixa de aparecer no manequim e volta
+  para a faixa "Sem área no mapa". São coisas diferentes e a tela nunca as mistura.
+
 ---
 
 ## 4. Seleção — o componente compartilhado
@@ -254,6 +291,18 @@ que já está no seed, onde **o mapa é a etapa de escolha das áreas**.
 - As 13 ficam **ocultas, não apagadas**: fichas já preenchidas apontam para elas por
   `templateId` e deixariam de renderizar. Somem da lista e do
   `ShareAnamnesisLinkModal`, continuam resolvendo para registros antigos.
+- **O seletor filtra por regra, não pela marca no banco.** `fichasParaEscolher()`
+  descarta as ocultas *e* mantém uma só ficha de laser, decidindo pelo conteúdo: uma
+  ficha de laser amarrada a um `procedimentoId`, ou com a região no nome
+  ("Depilação a Laser - ½ Perna"), é de uma área só.
+
+  A marca `oculta` depende de uma migração que roda **uma vez por navegador** e que,
+  na primeira versão, reconhecia só os 13 IDs do seed (`tpl-laser-*`) — fichas criadas
+  pela própria equipe nascem com `tpl-<timestamp>` e escapavam, voltando a aparecer no
+  seletor. Filtrar por regra dá o mesmo resultado em qualquer máquina, tenha a
+  migração rodado, falhado ou nunca começado.
+- **Os 13 procedimentos continuam no catálogo**, intactos. O que foi consolidado é a
+  ficha de anamnese, não o catálogo: o preço é por área e é isso que se vende.
 - `AnamnesisRecord.procedimentoNome` vira o guarda-chuva "Depilação a Laser"; o
   conteúdo real vive em `areasSolicitadas` / `areasConfirmadas`.
 
@@ -322,6 +371,23 @@ empurre sozinho todo orçamento de laser para o teto. Continua editável.
 
 O manequim com as áreas contratadas sai no PDF, com **interruptor para desligar** —
 orçamento de laser com o desenho vende melhor, mas nem toda profissional vai querer.
+
+Duas decisões de implementação, ambas tomadas para não pôr em risco o que já roda:
+
+- **É uma página própria, anexada no fim**, e não um bloco no meio do documento. O
+  `paginar()` de `QuotePrintable` distribui blocos de altura medida entre as páginas
+  e é o que segura o layout aprovado; enfiar ali um bloco de altura variável
+  arriscaria a paginação de **todo** orçamento da clínica, inclusive os que não têm
+  laser nenhum. Como página anexa, o pior caso é uma folha a mais.
+- **O mapa não é copiado para dentro do orçamento.** Só o interruptor
+  (`Quote.mostrarMapaCorporal`, um booleano) fica gravado; os polígonos chegam por
+  prop na hora de imprimir — do catálogo no painel, do espelho público na página da
+  paciente. Copiar ~10 KB de mapa para cada orçamento emitido custaria dez write
+  units por documento para guardar N vezes a mesma coisa.
+
+  A consequência aceita é que redesenhar uma área muda o desenho de orçamentos
+  antigos. Para anatomia isso é inofensivo — ao contrário do preço e do contato da
+  clínica, que continuam congelados em `quote.clinica` justamente por não serem.
 
 ### 6.7 Ponte com a anamnese
 

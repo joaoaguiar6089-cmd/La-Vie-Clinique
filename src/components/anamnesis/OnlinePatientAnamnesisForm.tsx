@@ -6,6 +6,8 @@ import {
   Patient,
   PatientGender,
   AnamnesisRecord,
+  LaserAreaRef,
+  LaserBodyMap,
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { subirImagemOuManter } from '../../services/imageStorage';
@@ -17,6 +19,9 @@ import { ClinicLogo } from '../ClinicLogo';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import { OrientationImageCard } from './OrientationImageCard';
 import { ConsentTermView } from './ConsentTermView';
+import { LaserAreaPicker } from '../laser/LaserAreaPicker';
+import { ehTemplateDeLaser } from '../../utils/templateMatching';
+import { listarNomesDeAreas } from '../../utils/laserAreas';
 import {
   Camera,
   CheckCircle2,
@@ -54,6 +59,14 @@ interface OnlinePatientAnamnesisFormProps {
   prefillRespostasGerais?: Record<string, any>;
   /** ID of the professional assigned when the share link was generated (see ShareAnamnesisLinkModal). */
   professionalId?: string;
+  /**
+   * Mapa corporal do laser, lido do espelho público (`clinic_settings/laser_body_map`).
+   *
+   * Chega por prop porque esta tela não tem login e não pode ler `procedures`, onde as áreas
+   * moram de verdade. Ausente = a clínica ainda não publicou o mapa; a ficha continua válida,
+   * só sem a etapa de áreas.
+   */
+  mapaCorporal?: LaserBodyMap | null;
   onSaveRecord: (record: AnamnesisRecord) => Promise<void>;
   onSavePatient: (patient: Patient) => Promise<void>;
   onSaved: (record: AnamnesisRecord) => void;
@@ -72,6 +85,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
   existingRecord,
   prefillRespostasGerais,
   professionalId,
+  mapaCorporal,
   onSaveRecord,
   onSavePatient,
   onSaved,
@@ -123,6 +137,38 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
   // Patient's uploaded photo (optional)
   const [fotoPacienteUrl, setFotoPacienteUrl] = useState<string>(existingRecord?.fotoPacienteUrl || '');
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+
+  /**
+   * Áreas que a paciente marcou no manequim.
+   *
+   * Só aparece em fichas de depilação a laser. O reconhecimento é por `ehTemplateDeLaser`, e não
+   * só pela categoria: a ficha guarda-chuva nasceu com a categoria "Laser & Alta Tecnologia", que
+   * `isLaserCategory` não reconhece — e o manequim simplesmente não aparecia.
+   */
+  const ehFichaDeLaser = ehTemplateDeLaser(template);
+  const [areasSelecionadas, setAreasSelecionadas] = useState<Set<string>>(
+    () => new Set((existingRecord?.areasSolicitadas || []).map((a) => a.procedureId))
+  );
+
+  const alternarArea = (procedureId: string) =>
+    setAreasSelecionadas((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(procedureId)) proximo.delete(procedureId);
+      else proximo.add(procedureId);
+      return proximo;
+    });
+
+  /**
+   * As referências gravadas no registro, com o nome de hoje.
+   *
+   * O nome vai junto do ID de propósito: uma ficha de março precisa continuar dizendo "Virilha
+   * Completa" mesmo que o procedimento seja renomeado ou saia do catálogo depois.
+   */
+  const refsDasAreas: LaserAreaRef[] = (mapaCorporal?.areas || [])
+    .filter((a) => areasSelecionadas.has(a.procedureId))
+    .map((a) => ({ procedureId: a.procedureId, nomeCurto: a.nomeCurto }));
+
+  const nomesDasAreasSelecionadas = listarNomesDeAreas(refsDasAreas);
 
   // Consent checkbox — already implicitly given on a prior save
   const [termoAceito, setTermoAceito] = useState(isEditing);
@@ -322,6 +368,11 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
           ],
           especificas: template.perguntasEspecificas || [],
         },
+        // O que a paciente pediu. `areasConfirmadas` nasce como cópia disto e passa a ser da
+        // profissional a partir daí — são dois campos justamente para que corrigir um não apague
+        // o registro do outro.
+        areasSolicitadas: ehFichaDeLaser ? refsDasAreas : existingRecord?.areasSolicitadas,
+        areasConfirmadas: existingRecord?.areasConfirmadas,
         observacoesFinais:
           existingRecord?.observacoesFinais ||
           'Ficha preenchida online previamente pelo(a) paciente via link compartilhado.',
@@ -626,6 +677,39 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
             </div>
 
             {orientationImage && <OrientationImageCard image={orientationImage} />}
+
+            {/*
+              Escolha das áreas, só nas fichas de depilação a laser.
+              Vem antes das perguntas de saúde porque é o que a paciente veio dizer: as 19
+              perguntas de segurança são a triagem daquilo que ela escolheu aqui.
+            */}
+            {ehFichaDeLaser && (
+              <div className="bg-white rounded-2xl p-5 shadow-[0_3px_14px_rgba(0,0,0,.04)]">
+                <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1">
+                  Quais áreas você quer tratar?
+                </label>
+                <p className="text-[13px] text-[#8a8578] mb-3">
+                  Toque nas regiões do corpo, ou nos botões. Pode escolher quantas quiser — nada
+                  aqui é compromisso de compra.
+                </p>
+
+                <LaserAreaPicker
+                  mapa={mapaCorporal}
+                  selecionadas={areasSelecionadas}
+                  onToggle={alternarArea}
+                  alturaManequim={430}
+                  vazioMensagem="O mapa de áreas ainda não foi configurado pela clínica. Você pode seguir e combinar as áreas no atendimento."
+                />
+
+                {areasSelecionadas.size > 0 && (
+                  <p className="text-[13px] text-[#1A1A1A] mt-3 bg-[#FCE4EF] border border-[#F3C6DC] rounded-xl px-3 py-2 leading-snug">
+                    <strong>{areasSelecionadas.size}</strong>{' '}
+                    {areasSelecionadas.size === 1 ? 'área escolhida' : 'áreas escolhidas'}:{' '}
+                    {nomesDasAreasSelecionadas}
+                  </p>
+                )}
+              </div>
+            )}
 
             {patientSpecificQuestions.length > 0 && (
               <div className="bg-white rounded-2xl p-5 divide-y divide-[rgba(26,26,26,.07)] shadow-[0_3px_14px_rgba(0,0,0,.04)]">

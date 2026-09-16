@@ -1,5 +1,6 @@
 import React from 'react';
 import { Procedure, ClinicProfile } from '../types';
+import { resolverCamposDoLaser } from '../utils/laserAreas';
 import { formatBRL } from '../utils/formatters';
 import { getCatalogPrice, formatDiscountPercent } from '../utils/catalogPricing';
 import { getProcedureDoctors, getClinicDoctors } from '../utils/doctorHelpers';
@@ -213,9 +214,19 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
   showPrices = true,
   discountPercent = 0,
 }) => {
+  /**
+   * As áreas de laser recebem aqui os padrões da categoria (descrição, contraindicação,
+   * recuperação, candidato ideal) para os campos que deixaram em branco.
+   *
+   * É justamente no catálogo impresso que o texto clínico desatualizado vira problema de verdade:
+   * o PDF sai da clínica e vive por meses. Resolver na hora de imprimir garante que a última
+   * correção feita nas Configurações alcance as treze áreas de uma vez.
+   */
+  const comPadroes = procedures.map((p) => resolverCamposDoLaser(p, clinic.laserPadroes));
+
   const filteredProcedures = selectedCategory === 'Todos'
-    ? procedures
-    : procedures.filter(p => p.category === selectedCategory);
+    ? comPadroes
+    : comPadroes.filter(p => p.category === selectedCategory);
 
   // Group procedures into distinct categories
   const categoriesList: string[] = Array.from(new Set(filteredProcedures.map(p => p.category)));

@@ -60,6 +60,20 @@ interface LaserBodyMapViewProps {
   /** Altura do manequim em pixels. O cadastro pede grande; a ficha impressa, menor. */
   alturaManequim?: number;
   vazioMensagem?: string;
+  /**
+   * Só a figura, sem botões nem chips — para a ficha impressa, onde nada é clicável e o nome das
+   * áreas já sai por extenso na lista ao lado. Botões ali seriam tinta gasta repetindo texto.
+   */
+  ocultarBotoes?: boolean;
+  /**
+   * Quando presente, os botões do anel viram arrastáveis e esta função recebe a posição nova, em
+   * fração 0–1 do contêiner — o mesmo espaço em que `LaserArea.botao` é gravado.
+   *
+   * O anel acerta a maioria dos casos sozinho, mas não todos: duas áreas vizinhas na mesma altura
+   * acabam com as linhas guia cruzadas, e nenhuma regra automática resolve isso melhor do que
+   * alguém arrastando uma delas uma vez.
+   */
+  onMoverBotao?: (chave: string, posicao: { x: number; y: number }) => void;
 }
 
 interface Medidas {
@@ -74,7 +88,9 @@ interface Medidas {
 
 export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
   imagemUrl,
-  areas,
+  // Nunca `undefined`: este componente é montado por quatro telas diferentes, e uma lista ausente
+  // custava a tela toda num `areas.map` — caro demais para um valor que não tem por que faltar.
+  areas = [],
   selecionadas,
   onToggle,
   modoAutoria = false,
@@ -84,6 +100,8 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
   mostrarPreco = false,
   alturaManequim = 560,
   vazioMensagem,
+  ocultarBotoes = false,
+  onMoverBotao,
 }) => {
   const externoRef = useRef<HTMLDivElement>(null);
   const figuraRef = useRef<HTMLDivElement>(null);
@@ -114,6 +132,9 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
   const tracoRef = useRef<number[]>([]);
   const [tracoVisivel, setTracoVisivel] = useState<number[]>([]);
 
+  /** Botão em arraste. `moveu` distingue um reposicionamento de um clique parado. */
+  const arrastando = useRef<{ chave: string; moveu: boolean } | null>(null);
+
   /**
    * Antes da primeira medição não dá para saber qual montagem cabe — e chutar tem custo visível:
    * assumir "estreito" faz a grade de chips do celular piscar em cima de toda tela larga antes de
@@ -121,8 +142,8 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
    * aparece na hora, que é o que está sendo medido.
    */
   const medido = larguraExterna > 0;
-  const usarAnel = medido && larguraExterna >= LARGURA_MINIMA_ANEL;
-  const usarChips = medido && !usarAnel;
+  const usarAnel = medido && !ocultarBotoes && larguraExterna >= LARGURA_MINIMA_ANEL;
+  const usarChips = medido && !ocultarBotoes && !usarAnel;
 
   /**
    * As coordenadas são relativas (0–1), mas o SVG precisa de pixels para que a espessura do traço
@@ -496,8 +517,44 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
               type="button"
               onMouseEnter={() => setEmFoco(p.chave)}
               onMouseLeave={() => setEmFoco((atual) => (atual === p.chave ? null : atual))}
-              onClick={() => onToggle?.(p.chave)}
-              className={`absolute z-10 px-2.5 py-1.5 rounded-sm border text-[12px] leading-tight max-w-[150px] transition-colors shadow-[0_1px_4px_rgba(0,0,0,.06)] ${
+              onClick={() => {
+                // Um arraste termina em `click` também. Sem esta guarda, reposicionar um botão
+                // marcaria ou desmarcaria a área junto — e a pessoa levaria um tempo até perceber
+                // que foi o próprio ajuste que mexeu na seleção.
+                if (arrastando.current?.moveu) return;
+                onToggle?.(p.chave);
+              }}
+              onPointerDown={(e) => {
+                if (!onMoverBotao) return;
+                e.preventDefault();
+                // A marca do arraste vem primeiro, e a captura depois, dentro de try/catch:
+                // `setPointerCapture` lança quando o ponteiro já não está ativo, e capturar antes
+                // de marcar fazia o throw abortar o gesto inteiro sem deixar rastro na tela.
+                arrastando.current = { chave: p.chave, moveu: false };
+                try {
+                  (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+                } catch {
+                  // Sem captura o arraste termina se o cursor sair do botão — pior, mas funciona.
+                }
+              }}
+              onPointerMove={(e) => {
+                const atual = arrastando.current;
+                if (!onMoverBotao || atual?.chave !== p.chave) return;
+                const r = externoRef.current?.getBoundingClientRect();
+                if (!r) return;
+                atual.moveu = true;
+                onMoverBotao(p.chave, {
+                  x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+                  y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)),
+                });
+              }}
+              onPointerUp={() => {
+                // O `click` dispara logo depois; a marca só é limpa no quadro seguinte.
+                window.setTimeout(() => {
+                  arrastando.current = null;
+                }, 0);
+              }}
+              className={`absolute z-10 px-2.5 py-1.5 rounded-sm border text-[12px] leading-tight max-w-[150px] transition-colors shadow-[0_1px_4px_rgba(0,0,0,.06)] ${onMoverBotao ? 'cursor-grab active:cursor-grabbing touch-none' : ''} ${
                 ativa
                   ? 'bg-[#FCE4EF] border-[#D6317F] text-[#8E1A54] font-semibold'
                   : 'bg-white border-gray-200 text-[#1A1A1A] hover:border-[#C0392B]'

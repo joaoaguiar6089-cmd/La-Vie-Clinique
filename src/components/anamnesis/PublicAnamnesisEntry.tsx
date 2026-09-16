@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { buildPublicLink } from '../../utils/publicLinks';
-import { AnamnesisTemplate, AnamnesisRecord, Patient, ClinicProfile, AnamnesisQuestion } from '../../types';
+import { AnamnesisTemplate, AnamnesisRecord, Patient, ClinicProfile, AnamnesisQuestion, LaserBodyMap } from '../../types';
 import {
   getAnamnesisTemplateById,
   getPatientById,
@@ -10,6 +10,7 @@ import {
   getClinicProfileOnce,
   savePatient,
   saveAnamnesisRecord,
+  getMapaCorporalDoLaserPublico,
 } from '../../services/databaseService';
 import { OnlinePatientAnamnesisForm } from './OnlinePatientAnamnesisForm';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
@@ -160,6 +161,8 @@ export const PublicAnamnesisEntry: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [identityConfirmed, setIdentityConfirmed] = useState(false);
+  /** Espelho público do mapa corporal do laser. `null` até chegar, ou se a clínica não publicou. */
+  const [mapaCorporal, setMapaCorporal] = useState<LaserBodyMap | null>(null);
   // Incrementado por "Tentar novamente" — reexecuta o carregamento sem recarregar a página inteira.
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -188,6 +191,15 @@ export const PublicAnamnesisEntry: React.FC = () => {
           })
           .catch((err) => console.warn('Perfil da clínica indisponível na página pública:', err));
 
+        // O mapa corporal segue a mesma regra do perfil: buscado em paralelo e incapaz de derrubar
+        // o carregamento. Ele só faz falta nas fichas de laser, e mesmo lá a ficha continua
+        // preenchível sem ele — as áreas ficam para combinar no atendimento.
+        void getMapaCorporalDoLaserPublico()
+          .then((mapa) => {
+            if (!cancelled) setMapaCorporal(mapa);
+          })
+          .catch((err) => console.warn('Mapa corporal indisponível na página pública:', err));
+
         // MODE A — returning to an already-created ficha via its personal link
         if (fichaParam) {
           const record = await getAnamnesisRecordById(fichaParam);
@@ -214,6 +226,10 @@ export const PublicAnamnesisEntry: React.FC = () => {
           setTemplate({
             id: record.templateId || '',
             procedimentoNome: record.procedimentoNome,
+            // A categoria vem junto porque é ela que liga a etapa de áreas do laser. Sem isto, a
+            // paciente que voltasse ao próprio link para revisar não veria mais o manequim — e
+            // as áreas que ela já tinha marcado sumiriam da tela sem explicação.
+            categoria: tplDoRegistro?.categoria,
             tem_foto: true,
             fotoModeloUrl: record.fotoModeloUrl,
             imagemOrientativaUrl: tplDoRegistro?.imagemOrientativaUrl,
@@ -481,6 +497,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
 
         {showPdfModal && (
           <PrintableAnamnesisSheet
+            mapaCorporal={mapaCorporal}
             record={savedRecord}
             clinicProfile={clinicProfile}
             onClose={() => setShowPdfModal(false)}
@@ -523,6 +540,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
           </p>
         </div>
         <PrintableAnamnesisSheet
+          mapaCorporal={mapaCorporal}
           record={existingRecord}
           clinicProfile={clinicProfile}
           onClose={() => {}}
@@ -544,6 +562,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
         existingRecord={existingRecord}
         prefillRespostasGerais={prefillGerais}
         professionalId={profissionalParam || undefined}
+        mapaCorporal={mapaCorporal}
         onSavePatient={savePatient}
         onSaveRecord={saveAnamnesisRecord}
         onSaved={handleSaved}

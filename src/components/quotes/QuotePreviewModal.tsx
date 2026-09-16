@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Download, Loader2, AlertCircle } from 'lucide-react';
-import { ClinicProfile, Quote } from '../../types';
+import { ClinicProfile, LaserBodyMap, Quote } from '../../types';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
 import { montarSnapshotClinica, SNAPSHOT_CLINICA_PADRAO } from '../../utils/quoteFactory';
 import { QuotePrintable } from './QuotePrintable';
@@ -9,6 +9,11 @@ interface QuotePreviewModalProps {
   quote: Quote | null;
   /** Perfil atual da clínica; `null` na página pública, que não tem acesso a ele. */
   clinic: ClinicProfile | null;
+  /**
+   * Mapa corporal do laser, para a página das áreas contratadas no PDF. O painel monta do
+   * catálogo; a página pública lê o espelho, que é o que ela consegue ler sem login.
+   */
+  mapaCorporal?: LaserBodyMap | null;
   onClose: () => void;
 }
 
@@ -30,6 +35,7 @@ const nomeArquivo = (pacienteNome: string, numero: string): string => {
  */
 export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
   quote,
+  mapaCorporal,
   clinic,
   onClose,
 }) => {
@@ -129,6 +135,7 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
             {/* Orçamentos antigos não têm o retrato da clínica: cai no perfil atual */}
             <QuotePrintable
               quote={quote}
+              mapaCorporal={mapaCorporal}
               clinic={
                 quote.clinica ||
                 (clinic ? montarSnapshotClinica(clinic) : SNAPSHOT_CLINICA_PADRAO)

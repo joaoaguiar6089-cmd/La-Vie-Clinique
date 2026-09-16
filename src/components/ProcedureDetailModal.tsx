@@ -16,6 +16,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { Procedure, ClinicProfile } from '../types';
+import { resolverCamposDoLaser } from '../utils/laserAreas';
 import { formatBRL } from '../utils/formatters';
 import { buildSingleProcedureWhatsAppUrl } from '../utils/exportHelpers';
 import { getProcedureDoctors } from '../utils/doctorHelpers';
@@ -30,7 +31,7 @@ interface ProcedureDetailModalProps {
 }
 
 export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
-  procedure,
+  procedure: procedureBruto,
   clinic,
   isOpen,
   onClose,
@@ -38,6 +39,15 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
   onShareSingle,
 }) => {
   const [activeImgIndex, setActiveImgIndex] = useState(0);
+
+  /**
+   * Nas áreas de depilação a laser, os campos deixados em branco vêm dos padrões da categoria
+   * (Configurações → Depilação a Laser). Resolver aqui, e não gravar resolvido, é o que permite
+   * corrigir uma contraindicação clínica em um lugar só e alcançar as treze áreas.
+   */
+  const procedure = procedureBruto
+    ? resolverCamposDoLaser(procedureBruto, clinic.laserPadroes)
+    : null;
 
   if (!isOpen || !procedure) return null;
 
@@ -76,7 +86,7 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
               </button>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => onShareSingle(procedure)}
+                  onClick={() => onShareSingle(procedureBruto!)}
                   className="w-11 h-11 rounded-full bg-[rgba(26,26,26,.6)] text-white flex items-center justify-center active:scale-95 transition-all"
                 >
                   <Share2 className="w-[18px] h-[18px]" />
@@ -84,7 +94,7 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
                 <button
                   onClick={() => {
                     onClose();
-                    onEdit(procedure);
+                    onEdit(procedureBruto!);
                   }}
                   className="w-11 h-11 rounded-full bg-[rgba(26,26,26,.6)] text-white flex items-center justify-center active:scale-95 transition-all"
                 >
@@ -428,7 +438,7 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
                     Agendar no WhatsApp
                   </a>
                   <button
-                    onClick={() => onShareSingle(procedure)}
+                    onClick={() => onShareSingle(procedureBruto!)}
                     className="h-[50px] px-4 rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-[#1A1A1A] text-[14px] font-semibold flex items-center justify-center gap-1.5 hover:border-[#A67C52] transition-all"
                   >
                     <Share2 className="w-4 h-4 text-[#A67C52]" />
@@ -437,7 +447,7 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
                   <button
                     onClick={() => {
                       onClose();
-                      onEdit(procedure);
+                      onEdit(procedureBruto!);
                     }}
                     className="h-[50px] px-4 rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-[#1A1A1A] text-[14px] font-semibold flex items-center justify-center gap-1.5 hover:border-[#A67C52] transition-all"
                   >

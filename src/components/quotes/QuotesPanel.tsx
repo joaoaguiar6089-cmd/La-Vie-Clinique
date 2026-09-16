@@ -37,6 +37,7 @@ import {
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { QuoteFormModal } from './QuoteFormModal';
 import { QuotePreviewModal } from './QuotePreviewModal';
+import { montarEspelhoPublico } from '../../utils/laserAreas';
 import { QuoteShareModal } from './QuoteShareModal';
 
 interface QuotesPanelProps {
@@ -61,6 +62,12 @@ const STATUS_CLASS: Record<QuoteStatus, string> = {
 };
 
 export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedures }) => {
+  /** Mapa corporal do catálogo, para a página das áreas contratadas no PDF. */
+  const mapaDoLaser = useMemo(
+    () => montarEspelhoPublico(catalogProcedures, clinic),
+    [catalogProcedures, clinic]
+  );
+
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [erro, setErro] = useState<string | null>(null);
@@ -461,6 +468,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
       <QuotePreviewModal
         quote={quoteNaPrevia}
         clinic={clinic}
+        mapaCorporal={mapaDoLaser}
         onClose={() => setQuoteNaPrevia(null)}
       />
 

@@ -30,6 +30,7 @@ import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { AnamnesisFormFillModal } from '../anamnesis/AnamnesisFormFillModal';
+import { montarEspelhoPublico } from '../../utils/laserAreas';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
 import { QuoteFormModal } from '../quotes/QuoteFormModal';
 import { QuotePreviewModal } from '../quotes/QuotePreviewModal';
@@ -99,6 +100,15 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   onSalvarOrcamento,
   onOrcamentoCompartilhado,
 }) => {
+  /**
+   * Mapa corporal do laser, montado do catálogo — a ficha impressa desta tela precisa desenhar as
+   * áreas, e o registro guarda só os IDs e nomes delas.
+   */
+  const mapaDoLaser = React.useMemo(
+    () => montarEspelhoPublico(catalogProcedures, clinic),
+    [catalogProcedures, clinic]
+  );
+
   const [aba, setAba] = useState<Aba>('anamneses');
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
 
@@ -341,6 +351,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         templates={templates}
         generalQuestions={generalQuestions}
         clinicProfile={clinic}
+        catalogProcedures={catalogProcedures}
         initialPatientId={patient.id}
         onSavePatient={onSalvarPaciente}
         onSaveRecord={onSalvarFicha}
@@ -356,6 +367,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           );
           return (
             <PrintableAnamnesisSheet
+              mapaCorporal={mapaDoLaser}
               record={records.find((r) => r.id === fichaAberta.id) || fichaAberta}
               clinicProfile={clinic}
               onClose={() => setFichaAberta(null)}
@@ -381,6 +393,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
       />
 
       <QuotePreviewModal
+        mapaCorporal={mapaDoLaser}
         quote={orcamentoNaPrevia}
         clinic={clinic}
         onClose={() => setOrcamentoNaPrevia(null)}

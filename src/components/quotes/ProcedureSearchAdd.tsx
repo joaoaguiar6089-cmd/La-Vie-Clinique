@@ -1,19 +1,41 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, Scan } from 'lucide-react';
 import { Procedure } from '../../types';
 import { formatBRL } from '../../utils/formatters';
+import { isLaserCategory } from '../../utils/templateMatching';
 
 interface ProcedureSearchAddProps {
   procedures: Procedure[];
   onAdd: (procedure: Procedure) => void;
+  /**
+   * Abre o mapa corporal da depilação a laser. Quando presente, a busca ganha uma entrada
+   * guarda-chuva fixa no topo do grupo de laser.
+   *
+   * Os 13 procedimentos de área continuam listados normalmente logo abaixo: são procedimentos
+   * plenos, com foto e preço próprios, e quem sabe o nome prefere digitar. O mapa é um caminho a
+   * mais, para quem está com a paciente na frente escolhendo — os dois levam ao mesmo item, e o
+   * laser é idempotente justamente por isso.
+   */
+  onAbrirMapa?: () => void;
+  /** Quantas áreas de laser já estão no orçamento — mostrado na entrada do mapa. */
+  areasNoMapa?: number;
 }
 
 /**
  * Botão que abre a busca no catálogo para acrescentar um procedimento. Diferente do
  * ProcedureMultiSelect (que filtra), aqui cada clique adiciona um item novo — o
  * mesmo procedimento pode entrar duas vezes, por exemplo em regiões diferentes.
+ *
+ * A exceção é a depilação a laser, onde a região já é o procedimento: lá o segundo clique não
+ * duplica (ver `addProcedure` em `QuoteFormModal`), porque "Axilas" duas vezes seria cobrar
+ * axilas duas vezes.
  */
-export const ProcedureSearchAdd: React.FC<ProcedureSearchAddProps> = ({ procedures, onAdd }) => {
+export const ProcedureSearchAdd: React.FC<ProcedureSearchAddProps> = ({
+  procedures,
+  onAdd,
+  onAbrirMapa,
+  areasNoMapa = 0,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -89,6 +111,29 @@ export const ProcedureSearchAdd: React.FC<ProcedureSearchAddProps> = ({ procedur
                   <div className="px-3 py-1.5 bg-gray-50 text-[10px] font-semibold uppercase tracking-wider text-gray-400 sticky top-0">
                     {category}
                   </div>
+
+                  {/* Entrada guarda-chuva, fixa no topo do grupo de laser e com cara própria. */}
+                  {onAbrirMapa && isLaserCategory(category) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAbrirMapa();
+                        setIsOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2.5 bg-[#FDF3F7] hover:bg-[#FBE7F0] border-b border-[#F3C6DC] transition-colors flex items-center justify-between gap-3"
+                    >
+                      <span className="text-xs font-semibold text-[#8E1A54] flex items-center gap-1.5">
+                        <Scan className="w-3.5 h-3.5 shrink-0" />
+                        Selecionar áreas no mapa
+                      </span>
+                      {areasNoMapa > 0 && (
+                        <span className="text-[11px] text-[#8E1A54] shrink-0 tabular-nums">
+                          {areasNoMapa} no orçamento
+                        </span>
+                      )}
+                    </button>
+                  )}
+
                   {procs.map((proc) => (
                     <button
                       key={proc.id}

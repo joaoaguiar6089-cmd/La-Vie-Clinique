@@ -31,13 +31,21 @@ import {
   QuoteDraft,
   QuoteStoredStatus,
   LaserBodyMap,
+  ConsentTermSection,
 } from '../types';
 import { formatQuoteNumber } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
 import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
 import { subirImagem, subirImagemOuManter } from './imageStorage';
-import { montarEspelhoPublico, LASER_MANEQUIM_MAX_LADO } from '../utils/laserAreas';
+import { isLaserCategory } from '../utils/templateMatching';
+import { paraArray } from '../utils/firestoreShapes';
+import {
+  montarEspelhoPublico,
+  serializarAreas,
+  desserializarAreas,
+  LASER_MANEQUIM_MAX_LADO,
+} from '../utils/laserAreas';
 import {
   DEFAULT_GENERAL_QUESTIONS,
   DEFAULT_PROCEDURE_TEMPLATES,
@@ -85,6 +93,27 @@ function cleanForFirestore<T extends Record<string, any>>(obj: T): T {
     }
   }
   return cleaned;
+}
+
+/**
+ * Põe uma ficha-modelo lida do banco numa forma em que as telas possam confiar.
+ *
+ * Uma única ficha com um campo torto apagava o app inteiro: sem `procedimentoNome`, a ordenação
+ * alfabética lançava em `localeCompare`; com `perguntasEspecificas` em forma de mapa, o
+ * preenchimento lançava no `.map`. Nos dois casos a tela ficava branca, sem nada que indicasse
+ * qual ficha era a culpada.
+ */
+function normalizarTemplateLido(tpl: AnamnesisTemplate): AnamnesisTemplate {
+  const bruto = tpl as unknown as Record<string, unknown>;
+  return {
+    ...tpl,
+    procedimentoNome: typeof tpl.procedimentoNome === 'string' ? tpl.procedimentoNome : '',
+    categoria: normalizeLaserCategory(tpl.categoria),
+    perguntasEspecificas: paraArray<AnamnesisQuestion>(bruto.perguntasEspecificas),
+    ...(bruto.termoConsentimentoSecoes !== undefined
+      ? { termoConsentimentoSecoes: paraArray<ConsentTermSection>(bruto.termoConsentimentoSecoes) }
+      : {}),
+  };
 }
 
 /**
@@ -339,7 +368,13 @@ export function normalizeLaserCategory(category?: string): string {
  */
 export function normalizeProcedureList(procedures: Procedure[]): Procedure[] {
   return procedures
-    .map((proc) => ({ ...proc, category: normalizeLaserCategory(proc.category) }))
+    .map((proc) => ({
+      ...proc,
+      category: normalizeLaserCategory(proc.category),
+      // As áreas voltam do banco em formato de gravação (string por polígono) e precisam virar
+      // números antes de qualquer tela tentar desenhá-las. Ver `desserializarAreas`.
+      laserAreas: desserializarAreas((proc as unknown as Record<string, unknown>).laserAreas),
+    }))
     .sort((a, b) => (a.order || 99) - (b.order || 99));
 }
 
@@ -365,6 +400,12 @@ export function subscribeToProcedures(
         // incomoda ninguém — a tela já mostra a categoria unificada, e o próximo salvamento do
         // procedimento grava a forma normalizada junto com o resto.
         proc.category = normalizeLaserCategory(proc.category);
+        // Mesma ideia: converter só para exibir. Os polígonos são gravados como texto (o Firestore
+        // não aceita array dentro de array) e precisam voltar a ser números antes de qualquer tela
+        // tentar desenhá-los — sem isso o manequim aparece vazio, com a lista de áreas cheia.
+        proc.laserAreas = desserializarAreas(
+          (proc as unknown as Record<string, unknown>).laserAreas
+        );
         items.push(proc);
       });
       onUpdate(items);
@@ -444,7 +485,20 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure
   };
 
   const docRef = doc(db, PROCEDURES_COLLECTION, procedureAtualizado.id);
-  const dataToSave = cleanForFirestore(procedureAtualizado);
+  const areasGravaveis = serializarAreas(procedureAtualizado.laserAreas);
+  const dataToSave = {
+    ...cleanForFirestore(procedureAtualizado),
+    /**
+     * Serializado **depois** do `cleanForFirestore`, e nunca antes: ele percorre a estrutura e
+     * achataria cada polígono num objeto `{0: x, 1: y}`. A gravação passaria sem erro e o desenho
+     * nunca mais apareceria.
+     *
+     * E `deleteField()` em vez de omitir quando não há área: a gravação usa `merge: true`, onde um
+     * campo ausente é um campo **preservado**. Omitir faria "remover a área" não remover nada — o
+     * desenho antigo continuaria no banco, voltando na próxima leitura.
+     */
+    laserAreas: areasGravaveis ?? deleteField(),
+  };
 
   const bytes = estimateFirestoreDocBytes(dataToSave);
   if (bytes > FIRESTORE_DOC_SAFE_BYTES) {
@@ -759,7 +813,22 @@ export async function publicarMapaCorporalDoLaser(
 
     const ref = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_LASER_MAP_DOC_ID);
     // Sem merge: uma área removida do catálogo precisa sumir daqui também.
-    await setDoc(ref, cleanForFirestore(mapa), { merge: false });
+    // E com os polígonos serializados pelo mesmo motivo de `procedures` — o espelho é um documento
+    // do Firestore como qualquer outro, e array dentro de array não passa nele também.
+    await setDoc(
+      ref,
+      cleanForFirestore({
+        ...mapa,
+        areas: mapa.areas.map((a) => ({
+          procedureId: a.procedureId,
+          nomeCurto: a.nomeCurto,
+          vista: a.vista,
+          formas: a.formas.map((f) => f.join(',')),
+          ...(a.botao ? { botao: a.botao } : {}),
+        })),
+      }),
+      { merge: false }
+    );
     assinaturaDoMapaPublicado = assinatura;
   } catch (err) {
     console.warn('O mapa corporal do laser não pôde ser publicado no espelho público:', err);
@@ -776,8 +845,31 @@ export async function getMapaCorporalDoLaserPublico(): Promise<LaserBodyMap | nu
   try {
     const snap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_LASER_MAP_DOC_ID));
     if (!snap.exists()) return null;
-    const dados = snap.data() as LaserBodyMap;
-    return { ...dados, areas: dados.areas || [] };
+    const dados = snap.data() as Record<string, unknown>;
+
+    // Cada entrada vira uma área de uma forma só para reaproveitar o leitor tolerante, que também
+    // recupera os espelhos gravados antes desta correção.
+    const areas = (Array.isArray(dados.areas) ? dados.areas : [])
+      .map((bruta) => {
+        const registro = bruta as Record<string, unknown>;
+        const area = desserializarAreas([registro])?.[0];
+        if (!area) return null;
+        return {
+          procedureId: String(registro.procedureId || ''),
+          nomeCurto: String(registro.nomeCurto || ''),
+          vista: area.vista,
+          formas: area.formas,
+          ...(area.botao ? { botao: area.botao } : {}),
+        };
+      })
+      .filter((a): a is NonNullable<typeof a> => !!a && !!a.procedureId);
+
+    return {
+      manequimFrenteUrl: dados.manequimFrenteUrl as string | undefined,
+      manequimCostasUrl: dados.manequimCostasUrl as string | undefined,
+      areas,
+      updatedAt: dados.updatedAt as string | undefined,
+    };
   } catch (err) {
     console.warn('Não foi possível ler o mapa corporal do laser:', err);
     return null;
@@ -809,10 +901,12 @@ export async function reorderProceduresInDb(procedures: Procedure[]): Promise<vo
  * do app era o maior desperdício de leituras do sistema. A marca é por navegador: no pior caso a
  * sincronização roda uma vez em cada máquina, em vez de sempre.
  */
+// v3: a regra de ocultar passou a olhar o conteúdo da ficha (é de laser? é de uma área só?) em
+// vez dos 13 IDs do seed — fichas criadas pela equipe nascem com outro ID e escapavam.
 // v2: a sincronização deixou de recriar as 13 fichas por área e passou a ocultá-las, promovendo a
 // ficha única. Trocar a chave faz o ajuste rodar uma vez em cada máquina que já tinha a marca v1 —
 // sem isso, quem já abriu o app antes nunca veria a consolidação acontecer.
-const LASER_SYNC_DONE_KEY = 'lavie:laser-templates-sync:v2';
+const LASER_SYNC_DONE_KEY = 'lavie:laser-templates-sync:v3';
 
 function laserSyncJaRodou(): boolean {
   try {
@@ -989,10 +1083,27 @@ async function migrarPerguntasProfissionalGluteo(): Promise<void> {
  */
 export const LASER_TEMPLATE_UNICO_ID = 'tpl-epilacao-laser';
 
-/** Os 13 IDs semeados, um por área. São exatamente estes que a ficha única aposenta. */
-const IDS_FICHAS_POR_AREA = DEFAULT_PROCEDURE_TEMPLATES.filter((t) =>
-  t.id.startsWith('tpl-laser-')
-).map((t) => t.id);
+/**
+ * Uma ficha de laser que cobre **uma área só** — e portanto foi aposentada pela ficha única.
+ *
+ * A regra olha o conteúdo, não o ID. A primeira versão desta migração listava os 13 IDs do seed
+ * (`tpl-laser-*`), o que só funcionava num banco semeado por ela: fichas criadas pela própria
+ * equipe nascem com `tpl-<timestamp>`, escapavam da lista e continuavam aparecendo no seletor,
+ * exatamente o que esta função existe para impedir.
+ *
+ * O que caracteriza uma ficha por área: ser de laser e estar amarrada a um procedimento
+ * específico, ou trazer a região no próprio nome ("Depilação a Laser - ½ Perna"). A ficha única
+ * nunca é escondida.
+ */
+const ehFichaDeLaserPorArea = (tpl: AnamnesisTemplate): boolean => {
+  if (tpl.id === LASER_TEMPLATE_UNICO_ID) return false;
+  const nome = tpl.procedimentoNome || '';
+  const ehDeLaser = isLaserCategory(tpl.categoria) || nome.toLowerCase().includes('laser');
+  if (!ehDeLaser) return false;
+  // "Depilação a Laser" sozinho é o guarda-chuva; com sufixo, é uma região.
+  const temRegiaoNoNome = /laser\s*[-–—:]/i.test(nome);
+  return Boolean(tpl.procedimentoId) || temRegiaoNoNome;
+};
 
 /**
  * Consolida a anamnese de laser numa ficha só e aposenta as treze por área.
@@ -1071,11 +1182,10 @@ async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void
       }
     }
 
-    // 2. As treze por área: ocultar as que existem, e **não recriar** as que não existem.
-    for (const id of IDS_FICHAS_POR_AREA) {
-      const existente = existentes.find((t) => t.id === id);
-      if (!existente || existente.oculta) continue;
-      batch.update(doc(db, ANAMNESIS_TEMPLATES_COLLECTION, id), {
+    // 2. As fichas por área: ocultar as que existem, e **não recriar** as que não existem.
+    for (const existente of existentes) {
+      if (existente.oculta || !ehFichaDeLaserPorArea(existente)) continue;
+      batch.update(doc(db, ANAMNESIS_TEMPLATES_COLLECTION, existente.id), {
         oculta: true,
         updatedAt: new Date().toISOString(),
       });
@@ -1171,13 +1281,14 @@ export function subscribeToAnamnesisTemplates(
     (snapshot) => {
       const items: AnamnesisTemplate[] = [];
       snapshot.forEach((docSnap) => {
-        const tpl = { ...(docSnap.data() as AnamnesisTemplate), id: docSnap.id };
         // Normalização só para exibição — mesma decisão de `subscribeToProcedures`.
-        tpl.categoria = normalizeLaserCategory(tpl.categoria);
-        items.push(tpl);
+        items.push(
+          normalizarTemplateLido({ ...(docSnap.data() as AnamnesisTemplate), id: docSnap.id })
+        );
       });
-      // Sort alphabetically by procedure name
-      items.sort((a, b) => a.procedimentoNome.localeCompare(b.procedimentoNome));
+      // Ordem alfabética. O `|| ''` sobrevive a uma ficha sem nome: sem ele, `localeCompare`
+      // lançava aqui dentro e derrubava a assinatura inteira, deixando o app sem ficha nenhuma.
+      items.sort((a, b) => (a.procedimentoNome || '').localeCompare(b.procedimentoNome || ''));
       onUpdate(items);
     },
     (error) => {
@@ -1369,12 +1480,10 @@ export async function getAnamnesisTemplateById(templateId: string): Promise<Anam
   const docRef = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, templateId);
   const snap = await getDoc(docRef);
   if (!snap.exists()) return null;
-  const tpl = { ...(snap.data() as AnamnesisTemplate), id: snap.id };
   // Mesma normalização de exibição da assinatura em tempo real: agora que ninguém reescreve a
   // categoria no banco, quem lê avulso precisa normalizar por conta própria — é por aqui que a
-  // página pública da paciente carrega a ficha.
-  tpl.categoria = normalizeLaserCategory(tpl.categoria);
-  return tpl;
+  // página pública da paciente carrega a ficha, e é lá que uma tela branca é mais cara.
+  return normalizarTemplateLido({ ...(snap.data() as AnamnesisTemplate), id: snap.id });
 }
 
 /**

@@ -163,6 +163,104 @@ export const criarFormaAPartirDoTraco = (
   return forma.map(arredondar);
 };
 
+// ==========================================
+// GRAVAÇÃO: O FIRESTORE NÃO ACEITA ARRAY DENTRO DE ARRAY
+// ==========================================
+
+/**
+ * `LaserArea.formas` é `number[][]` — um array de arrays, que o **Firestore recusa**: um array não
+ * pode conter outro array. Pior do que recusar, no caminho deste projeto ele nem chegava a
+ * recusar: `cleanForFirestore` percorre a estrutura e, ao encontrar `[0.44, 0.105]`, trata como
+ * objeto e grava `{0: 0.44, 1: 0.105}`. A gravação passava sem erro, a lista continuava contando
+ * "1 forma", e o desenho simplesmente não aparecia — `forma.length` num objeto é `undefined`.
+ *
+ * Então a forma de gravar é diferente da forma de trabalhar: cada polígono vira **uma string**
+ * `"x1,y1,x2,y2"`. Além de ser aceita, ela é menor que o array equivalente — cada `double` do
+ * Firestore ocupa 8 bytes, e `"0.123,"` ocupa 6 —, o que importa numa cota medida em KB gravados.
+ *
+ * A geometria acima continua inteiramente numérica: a conversão vive só na fronteira do banco.
+ */
+
+/** Uma área no formato em que ela é gravada. */
+export interface LaserAreaGravada {
+  id: string;
+  vista: LaserVista;
+  formas: string[];
+  botao?: { x: number; y: number };
+}
+
+const formaParaTexto = (forma: number[]): string => forma.join(',');
+
+/**
+ * Lê uma forma em qualquer um dos três formatos que já existiram no banco.
+ *
+ * O terceiro é o estrago descrito acima — áreas desenhadas antes desta correção estão gravadas
+ * como `{0: x, 1: y, ...}`. Elas são recuperáveis (os números estão todos lá, na ordem), e
+ * recuperá-las aqui evita pedir que alguém redesenhe treze regiões à mão.
+ */
+const formaDeQualquerCoisa = (bruta: unknown): number[] | null => {
+  if (typeof bruta === 'string') {
+    const pontos = bruta.split(',').map(Number).filter((n) => isFinite(n));
+    return pontos.length >= 6 ? pontos : null;
+  }
+  if (Array.isArray(bruta)) {
+    const pontos = bruta.map(Number).filter((n) => isFinite(n));
+    return pontos.length >= 6 ? pontos : null;
+  }
+  if (bruta && typeof bruta === 'object') {
+    // `{0: x, 1: y, ...}` — a forma achatada pelo `cleanForFirestore`. A ordem vem das chaves.
+    const registro = bruta as Record<string, unknown>;
+    const pontos = Object.keys(registro)
+      .map(Number)
+      .filter((k) => isFinite(k))
+      .sort((a, b) => a - b)
+      .map((k) => Number(registro[String(k)]))
+      .filter((n) => isFinite(n));
+    return pontos.length >= 6 ? pontos : null;
+  }
+  return null;
+};
+
+/** Converte as áreas para gravar. */
+export const serializarAreas = (areas?: LaserArea[]): LaserAreaGravada[] | undefined => {
+  if (!areas || areas.length === 0) return undefined;
+  const saida = areas
+    .map((a) => ({
+      id: a.id,
+      vista: a.vista,
+      formas: a.formas.map(formaParaTexto).filter(Boolean),
+      ...(a.botao ? { botao: a.botao } : {}),
+    }))
+    .filter((a) => a.formas.length > 0);
+  return saida.length > 0 ? saida : undefined;
+};
+
+/** Converte as áreas lidas do banco, tolerando os formatos antigos. */
+export const desserializarAreas = (brutas: unknown): LaserArea[] | undefined => {
+  if (!Array.isArray(brutas) || brutas.length === 0) return undefined;
+
+  const saida: LaserArea[] = [];
+  for (const bruta of brutas) {
+    if (!bruta || typeof bruta !== 'object') continue;
+    const registro = bruta as Record<string, unknown>;
+    const listaDeFormas = Array.isArray(registro.formas) ? registro.formas : [];
+    const formas = listaDeFormas
+      .map(formaDeQualquerCoisa)
+      .filter((f): f is number[] => !!f);
+    if (formas.length === 0) continue;
+
+    saida.push({
+      id: typeof registro.id === 'string' ? registro.id : crypto.randomUUID(),
+      vista: registro.vista === 'costas' ? 'costas' : 'frente',
+      formas,
+      ...(registro.botao && typeof registro.botao === 'object'
+        ? { botao: registro.botao as { x: number; y: number } }
+        : {}),
+    });
+  }
+  return saida.length > 0 ? saida : undefined;
+};
+
 /** Espelha a forma no eixo vertical da imagem — como "Axilas" e "Maçã do Rosto" ganham o par. */
 export const espelharForma = (forma: number[]): number[] => {
   const espelhada: number[] = [];

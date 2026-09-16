@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Quote, QuoteClinicSnapshot, QuoteItem } from '../../types';
+import { LaserBodyMap, Quote, QuoteClinicSnapshot, QuoteItem } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import {
   calcularOrcamento,
@@ -9,6 +9,9 @@ import {
   itemValorFinal,
   NOME_FORMA_PAGAMENTO,
 } from '../../utils/quoteCalc';
+import { isLaserCategory } from '../../utils/templateMatching';
+import { nomeCurtoDaArea } from '../../utils/laserAreas';
+import { LaserBodyMapView } from '../laser/LaserBodyMapView';
 
 /** A4 a 96dpi — mesma métrica que o exportElementAsPDF já usa no catálogo. */
 const PAGE_W = 794;
@@ -503,13 +506,53 @@ const paginar = (
 interface QuotePrintableProps {
   quote: Quote;
   clinic: QuoteClinicSnapshot;
+  /**
+   * Mapa corporal do laser, para a página das áreas contratadas.
+   *
+   * Vem por prop em vez de ficar gravado no orçamento: o mapa tem ~10 KB, e a cota deste projeto
+   * conta KB gravados — copiá-lo para dentro de cada orçamento emitido custaria dez unidades por
+   * documento, para guardar a mesma coisa N vezes. O painel monta do catálogo; a página pública,
+   * que não tem login, lê o espelho `clinic_settings/laser_body_map`.
+   *
+   * A consequência aceita é que redesenhar uma área muda o desenho de orçamentos antigos. Para
+   * anatomia isso é inofensivo — ao contrário do preço e do contato da clínica, que continuam
+   * congelados em `quote.clinica` justamente por não serem.
+   */
+  mapaCorporal?: LaserBodyMap | null;
   /** Chamado quando as páginas já estão montadas e o elemento pode virar PDF. */
   onReady?: () => void;
 }
 
-export const QuotePrintable: React.FC<QuotePrintableProps> = ({ quote, clinic, onReady }) => {
+export const QuotePrintable: React.FC<QuotePrintableProps> = ({
+  quote,
+  clinic,
+  mapaCorporal,
+  onReady,
+}) => {
   const [layout, setLayout] = useState<PaginaLayout[] | null>(null);
   const medicaoRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Itens de laser deste orçamento — o que a página do manequim pinta.
+   *
+   * Sai do próprio `quote`, e não do catálogo: um orçamento já emitido precisa continuar
+   * imprimindo o que foi vendido mesmo que o procedimento tenha sido renomeado ou removido
+   * depois. É a mesma razão pela qual o documento carrega `clinica` como retrato.
+   */
+  const areasContratadas = new Set(
+    quote.itens.filter((i) => i.procedureId && isLaserCategory(i.categoria)).map((i) => i.procedureId as string)
+  );
+
+  const nomesDasAreasContratadas = quote.itens
+    .filter((i) => i.procedureId && isLaserCategory(i.categoria))
+    .map((i) => nomeCurtoDaArea(i.titulo))
+    .join(' · ');
+
+  /** Só quando há áreas, o mapa foi guardado no orçamento e a profissional não desligou. */
+  const temPaginaDoMapa =
+    quote.mostrarMapaCorporal !== false &&
+    areasContratadas.size > 0 &&
+    (mapaCorporal?.areas || []).some((a) => areasContratadas.has(a.procedureId));
 
   useEffect(() => {
     let cancelado = false;
@@ -655,10 +698,87 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({ quote, clinic, o
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {indice + 1}/{layout.length}
+            {indice + 1}/{layout.length + (temPaginaDoMapa ? 1 : 0)}
           </div>
         </div>
       ))}
+
+      {/*
+        Manequim das áreas contratadas — uma página própria no fim.
+
+        Fica fora do `paginar()` de propósito. Aquele cálculo distribui blocos de altura medida
+        entre as páginas e é o que segura o layout aprovado do orçamento; enfiar um bloco de altura
+        variável no meio dele arriscaria a paginação de todo orçamento da clínica, inclusive os que
+        não têm laser nenhum. Como página anexa, o pior caso é uma folha a mais.
+      */}
+      {layout && temPaginaDoMapa && (
+        <div data-pdf-page={layout.length + 1} style={estiloPagina}>
+          <CabecalhoCompacto quote={quote} />
+
+          <div style={{ textAlign: 'center' }}>
+            <span
+              style={{
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '.14em',
+                color: BRONZE,
+                fontWeight: 600,
+              }}
+            >
+              Áreas contratadas
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 28, marginTop: 8 }}>
+            {(['frente', 'costas'] as const).map((vista) => {
+              const daVista = (mapaCorporal?.areas || []).filter((a) => a.vista === vista);
+              const imagem =
+                vista === 'frente'
+                  ? mapaCorporal?.manequimFrenteUrl
+                  : mapaCorporal?.manequimCostasUrl;
+              if (!imagem || !daVista.some((a) => areasContratadas.has(a.procedureId))) return null;
+              return (
+                <div key={vista} style={{ textAlign: 'center' }}>
+                  <LaserBodyMapView
+                    imagemUrl={imagem}
+                    areas={daVista.map((a) => ({
+                      chave: a.procedureId,
+                      nomeCurto: a.nomeCurto,
+                      area: { id: a.procedureId, vista: a.vista, formas: a.formas },
+                    }))}
+                    selecionadas={areasContratadas}
+                    alturaManequim={420}
+                    ocultarBotoes
+                  />
+                  <span style={{ fontSize: 9, color: '#8A857C', letterSpacing: '.1em' }}>
+                    {vista === 'frente' ? 'FRENTE' : 'COSTAS'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <p style={{ fontSize: 11, color: PRETO, textAlign: 'center', marginTop: 10 }}>
+            {nomesDasAreasContratadas}
+          </p>
+
+          <div style={{ flex: 1 }} />
+          <RodapeLegal clinic={clinic} />
+
+          <div
+            style={{
+              position: 'absolute',
+              right: PAD_X,
+              bottom: PAD_BOTTOM / 2,
+              fontSize: 9,
+              color: '#8A857C',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {layout.length + 1}/{layout.length + 1}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

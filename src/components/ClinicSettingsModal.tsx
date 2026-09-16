@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, Scan } from 'lucide-react';
-import { ClinicProfile, Professional } from '../types';
+import { ClinicProfile, LaserCategoryDefaults, Professional } from '../types';
 import { createProfessionalLogin } from '../services/authService';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
@@ -41,6 +41,39 @@ const MANEQUINS: { campo: ManequimCampo; rotulo: string }[] = [
  */
 const LASER_MANEQUIM_MAX_DIM = 1400;
 
+/** Campos que toda área de laser herda desta tela quando os deixa em branco no cadastro. */
+const LASER_PADROES_CAMPOS: {
+  campo: keyof LaserCategoryDefaults;
+  rotulo: string;
+  dica: string;
+  linhas: number;
+}[] = [
+  {
+    campo: 'description',
+    rotulo: 'Descrição do procedimento',
+    dica: 'Remoção progressiva dos pelos com laser de diodo, com resfriamento contínuo da pele...',
+    linhas: 3,
+  },
+  {
+    campo: 'contraindications',
+    rotulo: 'Contraindicações',
+    dica: 'Gestantes, pele bronzeada ou queimada de sol, uso de isotretinoína nos últimos 6 meses...',
+    linhas: 3,
+  },
+  {
+    campo: 'recoveryTime',
+    rotulo: 'Recuperação',
+    dica: 'Sem downtime. Leve vermelhidão por algumas horas.',
+    linhas: 2,
+  },
+  {
+    campo: 'idealCandidate',
+    rotulo: 'Candidato ideal',
+    dica: 'Pessoas com pelos escuros e pele não bronzeada, buscando redução definitiva.',
+    linhas: 2,
+  },
+];
+
 interface ClinicSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -50,6 +83,11 @@ interface ClinicSettingsModalProps {
   currentUserUid?: string;
   /** Se a profissional logada tem poderes de admin (excluir contas, conceder/revogar admin). */
   isAdminUser: boolean;
+  /**
+   * Abre a gestão das áreas do mapa corporal. Mora no App, e não aqui, porque precisa do catálogo
+   * e da gravação de procedimento — que são de outro módulo.
+   */
+  onAbrirMapaDeAreas?: () => void;
 }
 
 export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
@@ -59,6 +97,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   onSave,
   currentUserUid,
   isAdminUser,
+  onAbrirMapaDeAreas,
 }) => {
   const [formData, setFormData] = useState<ClinicProfile>(() => {
     const initialProfessionals: Professional[] = clinic.professionals && clinic.professionals.length > 0
@@ -996,6 +1035,62 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                 {avisoManequim}
               </p>
             )}
+
+            {onAbrirMapaDeAreas && (
+              <div className="flex items-start justify-between gap-3 flex-wrap bg-white/70 border border-white/80 rounded-sm px-3 py-2.5">
+                <p className="text-[11px] text-gray-500 leading-relaxed flex-1 min-w-[200px]">
+                  As áreas são desenhadas no cadastro de cada procedimento. Aqui você vê o mapa
+                  inteiro de uma vez — para conferir encavalamentos, reposicionar botões ou remover
+                  uma área.
+                </p>
+                <button
+                  type="button"
+                  onClick={onAbrirMapaDeAreas}
+                  className="px-3.5 py-2 rounded-xs bg-white border border-gray-200 text-[12px] font-medium text-[#1A1A1A] hover:border-[#A67C52] transition-colors flex items-center gap-1.5 shrink-0"
+                >
+                  <Scan className="w-3.5 h-3.5" />
+                  Configurar áreas
+                </button>
+              </div>
+            )}
+
+            {/*
+              Padrões da categoria.
+
+              Contraindicação, recuperação, candidato ideal e a descrição comercial são idênticos
+              nas treze áreas — o que muda de buço para axila é o preço. Mantê-los em treze cópias
+              significa, na prática, que uma correção clínica nunca chega a todas. Aqui a herança é
+              viva: a área só guarda o campo quando alguém o edita lá; vazio usa o que está abaixo.
+            */}
+            <div className="pt-1 space-y-3">
+              <div>
+                <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[#A67C52]">
+                  Padrões da categoria
+                </h4>
+                <p className="text-[11px] text-gray-500 leading-relaxed mt-0.5">
+                  Valem para toda área de laser que deixar o campo em branco no cadastro. Corrigir
+                  aqui corrige em todas de uma vez.
+                </p>
+              </div>
+
+              {LASER_PADROES_CAMPOS.map(({ campo, rotulo, dica, linhas }) => (
+                <div key={campo}>
+                  <label className="block text-xs font-medium text-[#1A1A1A] mb-1">{rotulo}</label>
+                  <textarea
+                    rows={linhas}
+                    value={formData.laserPadroes?.[campo] || ''}
+                    onChange={(e) =>
+                      handleChange('laserPadroes', {
+                        ...(formData.laserPadroes || {}),
+                        [campo]: e.target.value,
+                      })
+                    }
+                    placeholder={dica}
+                    className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Footer actions */}

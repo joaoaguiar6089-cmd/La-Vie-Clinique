@@ -5,6 +5,7 @@ import { ProcedureDetailModal } from './components/ProcedureDetailModal';
 import { ProcedureFormModal } from './components/ProcedureFormModal';
 import { ShareExportModal } from './components/ShareExportModal';
 import { ClinicSettingsModal } from './components/ClinicSettingsModal';
+import { LaserAreasManagerModal } from './components/laser/LaserAreasManagerModal';
 import { AnamnesisModule, AnamnesisOpenRequest } from './components/anamnesis/AnamnesisModule';
 import { PatientsModule } from './components/patients/PatientsModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
@@ -138,6 +139,7 @@ function MainCatalogApp() {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isLaserAreasOpen, setIsLaserAreasOpen] = useState(false);
   const [singleProcedureToExport, setSingleProcedureToExport] = useState<Procedure | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastTone, setToastTone] = useState<'ok' | 'erro'>('ok');
@@ -815,6 +817,18 @@ function MainCatalogApp() {
         onSave={handleSaveClinic}
         currentUserUid={authUser?.uid}
         isAdminUser={isAdminUser}
+        onAbrirMapaDeAreas={() => setIsLaserAreasOpen(true)}
+      />
+
+      {/* Gestão das áreas do laser — conferir o mapa inteiro, reposicionar botões, remover áreas.
+          Mora aqui, e não dentro das Configurações, porque precisa do catálogo e da gravação de
+          procedimento, que são de outro módulo. */}
+      <LaserAreasManagerModal
+        isOpen={isLaserAreasOpen}
+        onClose={() => setIsLaserAreasOpen(false)}
+        procedures={procedures}
+        clinic={clinic}
+        onSalvarProcedimento={handleSaveProcedure}
       />
 
       {/* 5. Confirmação de ações destrutivas */}

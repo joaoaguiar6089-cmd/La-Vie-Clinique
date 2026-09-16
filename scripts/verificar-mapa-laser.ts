@@ -17,8 +17,16 @@ import {
   nomeCurtoDaArea,
   posicionarBotoesDoAnel,
   LASER_MAX_PONTOS_POR_FORMA,
+  serializarAreas,
+  desserializarAreas,
 } from '../src/utils/laserAreas';
-import { LaserArea } from '../src/types';
+import {
+  ehTemplateDeLaser,
+  fichasParaEscolher,
+  mapearTemplatesPorProcedimento,
+} from '../src/utils/templateMatching';
+import { paraArray } from '../src/utils/firestoreShapes';
+import { AnamnesisTemplate, LaserArea } from '../src/types';
 
 let falhas = 0;
 const ok = (nome: string, condicao: boolean, extra = '') => {
@@ -153,6 +161,159 @@ ok(
   maisProximo - meiaLarguraDaFigura >= 0.03,
   `folga = ${(maisProximo - meiaLarguraDaFigura).toFixed(3)}`
 );
+
+console.log('\n== ida e volta do banco (o Firestore não aceita array dentro de array)');
+const areaOriginal: LaserArea = {
+  id: 'a1',
+  vista: 'costas',
+  formas: [
+    [0.1, 0.2, 0.3, 0.2, 0.3, 0.4],
+    [0.7, 0.2, 0.9, 0.2, 0.9, 0.4],
+  ],
+  botao: { x: 0.12, y: 0.34 },
+};
+
+const gravavel = serializarAreas([areaOriginal])!;
+ok('grava cada polígono como texto', typeof gravavel[0].formas[0] === 'string', gravavel[0].formas[0]);
+ok(
+  'nenhum array dentro de array no que vai para o banco',
+  gravavel.every((a) => a.formas.every((f) => !Array.isArray(f)))
+);
+
+const voltou = desserializarAreas(gravavel)!;
+ok('volta com as duas formas', voltou[0].formas.length === 2);
+ok('volta idêntica', JSON.stringify(voltou[0].formas) === JSON.stringify(areaOriginal.formas));
+ok('preserva a vista', voltou[0].vista === 'costas');
+ok('preserva o botão ajustado', voltou[0].botao?.x === 0.12 && voltou[0].botao?.y === 0.34);
+ok('área sem forma não vira área', serializarAreas([{ ...areaOriginal, formas: [] }]) === undefined);
+
+// O estrago real: `cleanForFirestore` achatava cada polígono em `{0: x, 1: y, ...}`. Quem
+// desenhou antes da correção tem isso gravado, e precisa continuar conseguindo ver o desenho.
+const achatadaPeloBugAntigo = [
+  {
+    id: 'a1',
+    vista: 'frente',
+    formas: [{ 0: 0.1, 1: 0.2, 2: 0.3, 3: 0.2, 4: 0.3, 5: 0.4 }],
+  },
+];
+const recuperada = desserializarAreas(achatadaPeloBugAntigo);
+ok(
+  'recupera o formato achatado pelo bug antigo',
+  JSON.stringify(recuperada?.[0].formas[0]) === JSON.stringify([0.1, 0.2, 0.3, 0.2, 0.3, 0.4]),
+  JSON.stringify(recuperada?.[0].formas[0])
+);
+ok(
+  'e o formato numérico cru também (rascunho local)',
+  desserializarAreas([{ id: 'x', vista: 'frente', formas: [[0.1, 0.2, 0.3, 0.2, 0.3, 0.4]] }])?.[0]
+    .formas[0].length === 6
+);
+ok('lixo não vira área', desserializarAreas([{ id: 'x', vista: 'frente', formas: [null, 'ab'] }]) === undefined);
+
+console.log('\n== o seletor de ficha mostra UMA depilação a laser');
+// O caso real: fichas por área criadas pela própria equipe nascem com `tpl-<timestamp>`, não com
+// os IDs do seed. A regra precisa olhar o conteúdo, senão elas voltam a aparecer no seletor.
+const fichas = [
+  { id: 'tpl-epilacao-laser', procedimentoNome: 'Depilação a Laser', categoria: 'Depilação a Laser', tem_foto: false, perguntasEspecificas: [] },
+  { id: 'tpl-laser-meia-perna', procedimentoId: 'proc-1', procedimentoNome: 'Depilação a Laser - ½ Perna', categoria: 'Depilação a Laser', tem_foto: false, perguntasEspecificas: [] },
+  { id: 'tpl-1758000000000', procedimentoId: 'proc-2', procedimentoNome: 'Depilação a Laser - Axilas', categoria: 'Depilação a Laser', tem_foto: false, perguntasEspecificas: [] },
+  { id: 'tpl-botox', procedimentoNome: 'Botox (Toxina Botulínica)', categoria: 'Injetáveis & Face', tem_foto: false, perguntasEspecificas: [] },
+  { id: 'tpl-gluteo', procedimentoNome: 'Harmonização Glútea', categoria: 'Corporal & Injetáveis', tem_foto: false, perguntasEspecificas: [] },
+] as AnamnesisTemplate[];
+
+const oferecidas = fichasParaEscolher(fichas);
+const nomesOferecidos = oferecidas.map((t) => t.procedimentoNome);
+ok(
+  'só uma ficha de laser sobra',
+  nomesOferecidos.filter((n) => n.toLowerCase().includes('laser')).length === 1,
+  JSON.stringify(nomesOferecidos)
+);
+ok('e ela se chama "Depilação a Laser"', nomesOferecidos.includes('Depilação a Laser'));
+ok('a de ½ Perna sai do seletor', !nomesOferecidos.some((n) => n.includes('½ Perna')));
+ok(
+  'a de Axilas com ID de timestamp também sai',
+  !nomesOferecidos.some((n) => n.includes('Axilas'))
+);
+ok('as fichas de outras categorias ficam', nomesOferecidos.length === 3, String(nomesOferecidos.length));
+
+const mapa = mapearTemplatesPorProcedimento(fichas, [
+  { id: 'proc-1', title: 'Depilação a Laser - ½ Perna', category: 'Depilação a Laser' } as any,
+  { id: 'proc-2', title: 'Depilação a Laser - Axilas', category: 'Depilação a Laser' } as any,
+]);
+ok(
+  'todo procedimento de laser aponta para a ficha única',
+  mapa.get('proc-1')?.id === 'tpl-epilacao-laser' && mapa.get('proc-2')?.id === 'tpl-epilacao-laser',
+  `${mapa.get('proc-1')?.id} / ${mapa.get('proc-2')?.id}`
+);
+
+console.log('\n== dado torto não pode apagar a tela');
+// Tela branca de verdade, encontrada em uso: uma ficha sem `procedimentoNome` fazia
+// `chaveDeNome` lançar em pleno render, e o app inteiro sumia. O dado vem do Firestore, onde um
+// campo pode simplesmente não existir — então a tolerância é obrigação, não gentileza.
+const sobrevive = (nome: string, fn: () => unknown) => {
+  try {
+    fn();
+    ok(nome, true);
+  } catch (e) {
+    ok(nome, false, (e as Error).message);
+  }
+};
+
+sobrevive('ficha sem procedimentoNome', () =>
+  fichasParaEscolher([{ id: 'a', categoria: 'Botox' } as unknown as AnamnesisTemplate])
+);
+sobrevive('ficha com procedimentoNome nulo', () =>
+  fichasParaEscolher([
+    { id: 'a', procedimentoNome: null, categoria: 'x' } as unknown as AnamnesisTemplate,
+  ])
+);
+sobrevive('item nulo no meio da lista', () =>
+  fichasParaEscolher([
+    null as unknown as AnamnesisTemplate,
+    { id: 'b', procedimentoNome: 'Botox', categoria: 'y' } as AnamnesisTemplate,
+  ])
+);
+sobrevive('lista vazia', () => fichasParaEscolher([]));
+sobrevive('mapear com ficha sem nome', () =>
+  mapearTemplatesPorProcedimento([{ id: 'a', categoria: 'x' } as unknown as AnamnesisTemplate], [])
+);
+
+console.log('\n== campo que volta do banco como mapa em vez de array');
+// A tela branca relatada: `perguntasEspecificas` gravada como `{0: …, 1: …}`. O engano é duplo —
+// `.length` é `undefined`, então a checagem de lista vazia passa direto, e o `.map` logo abaixo
+// derruba tudo. O TypeScript não ajuda: o tipo continua dizendo que é um array.
+const comoMapa = { 0: { id: 'q1' }, 1: { id: 'q2' }, 2: { id: 'q3' } };
+ok(
+  'a forma de mapa realmente engana a checagem de vazio',
+  (comoMapa as unknown as unknown[]).length === undefined
+);
+const recuperadas = paraArray<{ id: string }>(comoMapa);
+ok('vira array de verdade', Array.isArray(recuperadas));
+ok('preserva a ordem das chaves', recuperadas.map((q) => q.id).join(',') === 'q1,q2,q3');
+ok('array normal passa intacto', paraArray([{ id: 'z' }]).length === 1);
+ok('ausente vira lista vazia', paraArray(undefined).length === 0);
+ok('nulo vira lista vazia', paraArray(null).length === 0);
+ok('objeto sem chave numérica vira lista vazia', paraArray({ a: 1 }).length === 0);
+
+console.log('\n== o gatilho do manequim reconhece a ficha guarda-chuva');
+// O manequim sumiu da anamnese porque a ficha única nasceu no seed com a categoria
+// "Laser & Alta Tecnologia", que `isLaserCategory` (feita para "Depilação a Laser") não reconhece.
+// Uma migração renomeia — mas depender dela é o que já falhou duas vezes.
+const tpl = (o: Partial<AnamnesisTemplate>) => ehTemplateDeLaser(o as AnamnesisTemplate);
+ok(
+  'guarda-chuva com a categoria do seed',
+  tpl({ id: 'tpl-epilacao-laser', procedimentoNome: 'Epilação a Laser', categoria: 'Laser & Alta Tecnologia' })
+);
+ok(
+  'guarda-chuva já renomeado pela migração',
+  tpl({ id: 'tpl-epilacao-laser', procedimentoNome: 'Depilação a Laser', categoria: 'Depilação a Laser' })
+);
+ok(
+  'ficha por área também dispara o mapa',
+  tpl({ id: 'tpl-x', procedimentoNome: 'Depilação a Laser - Axilas', categoria: 'Depilação a Laser' })
+);
+ok('botox não dispara', !tpl({ id: 'tpl-botox', procedimentoNome: 'Botox', categoria: 'Injetáveis & Face' }));
+ok('ficha sem nome não quebra', !tpl({ id: 'tpl-y', categoria: 'Facial' }));
+ok('nulo não quebra', !ehTemplateDeLaser(null));
 
 console.log('\n== posição arrastada à mão vence a automática');
 const comBotaoFixo = [

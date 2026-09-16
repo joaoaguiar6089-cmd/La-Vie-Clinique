@@ -9,6 +9,8 @@ import {
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
 import { ConsentTermView } from './ConsentTermView';
+import { LaserBodyMapView } from '../laser/LaserBodyMapView';
+import { listarNomesDeAreas } from '../../utils/laserAreas';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
 import { subirImagemOuManter } from '../../services/imageStorage';
 import {
@@ -63,6 +65,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   onSaveRecord,
   orientationImage,
   consentSections,
+  mapaCorporal,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -167,6 +170,28 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   const isStaff = viewerRole === 'staff';
   const showMedicoSection = isStaff && medicoQuestions.length > 0;
   const referenceImageSrc = (isStaff && record.fotoModeloAnotadaUrl) || record.fotoModeloUrl;
+
+  // ---- Áreas do laser ----
+  const areasSolicitadas = record.areasSolicitadas || [];
+  const areasConfirmadas = record.areasConfirmadas || [];
+  const temAreasDeLaser = areasSolicitadas.length > 0 || areasConfirmadas.length > 0;
+
+  /**
+   * O que é pintado no manequim: a conduta quando existe, senão o pedido.
+   *
+   * A confirmada vence porque é o que vai ser tratado — mas a solicitada continua impressa por
+   * extenso logo ao lado, para o documento preservar o que a paciente pediu mesmo quando as duas
+   * divergem.
+   */
+  const areasParaDesenhar = new Set(
+    (areasConfirmadas.length > 0 ? areasConfirmadas : areasSolicitadas).map((a) => a.procedureId)
+  );
+
+  const areasDivergem =
+    areasConfirmadas.length > 0 &&
+    areasSolicitadas.length > 0 &&
+    (areasConfirmadas.length !== areasSolicitadas.length ||
+      areasConfirmadas.some((c) => !areasSolicitadas.some((s) => s.procedureId === c.procedureId)));
   const patientImageSrc =
     (isStaff && record.fotoPacienteAnotadaUrl) || record.fotoPacienteUrl || record.fotoUrl;
 
@@ -317,6 +342,90 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
               </span>
             </div>
           </div>
+
+          {/*
+            Áreas do laser — logo abaixo da identificação, porque numa ficha de depilação é a
+            informação que a profissional procura primeiro no atendimento.
+
+            O manequim sai como SVG em linha (não imagem rasterizada): o registro já carrega foto
+            de referência, foto do paciente e as versões anotadas, e tem o teto de 1 MB do
+            Firestore para respeitar. A lista por extenso acompanha porque desenho não se lê em voz
+            alta nem se copia para uma mensagem.
+          */}
+          {temAreasDeLaser && (
+            <div className="mb-6">
+              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-[#A67C52] border-b border-[rgba(26,26,26,.12)] pb-1 mb-3">
+                Áreas de depilação a laser
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-5 items-start">
+                <div className="space-y-2.5">
+                  {areasSolicitadas.length > 0 && (
+                    <div>
+                      <span className="block text-[10px] uppercase tracking-wider text-[#8a8578]">
+                        Solicitadas pela paciente
+                      </span>
+                      <span className="text-[13px] text-[#1A1A1A]">
+                        {listarNomesDeAreas(areasSolicitadas)}
+                      </span>
+                    </div>
+                  )}
+
+                  {areasConfirmadas.length > 0 && (
+                    <div>
+                      <span className="block text-[10px] uppercase tracking-wider text-[#8a8578]">
+                        Confirmadas para tratamento
+                      </span>
+                      <span className="text-[13px] font-semibold text-[#1A1A1A]">
+                        {listarNomesDeAreas(areasConfirmadas)}
+                      </span>
+                    </div>
+                  )}
+
+                  {areasDivergem && (
+                    <p className="text-[11px] text-[#8E5B1A] bg-[#FDF6E7] border border-[#F0DCB4] rounded-sm px-2.5 py-1.5 leading-snug">
+                      A conduta difere do que a paciente pediu pelo link. As duas listas ficam
+                      registradas.
+                    </p>
+                  )}
+                </div>
+
+                {mapaCorporal && (
+                  <div className="flex gap-3 shrink-0">
+                    {(['frente', 'costas'] as const).map((vista) => {
+                      const daVista = mapaCorporal.areas.filter((a) => a.vista === vista);
+                      const imagem =
+                        vista === 'frente'
+                          ? mapaCorporal.manequimFrenteUrl
+                          : mapaCorporal.manequimCostasUrl;
+                      // Uma vista sem área marcada é só um boneco em branco ocupando papel.
+                      if (!imagem || !daVista.some((a) => areasParaDesenhar.has(a.procedureId))) {
+                        return null;
+                      }
+                      return (
+                        <div key={vista} className="text-center">
+                          <LaserBodyMapView
+                            imagemUrl={imagem}
+                            areas={daVista.map((a) => ({
+                              chave: a.procedureId,
+                              nomeCurto: a.nomeCurto,
+                              area: { id: a.procedureId, vista: a.vista, formas: a.formas },
+                            }))}
+                            selecionadas={areasParaDesenhar}
+                            alturaManequim={210}
+                            ocultarBotoes
+                          />
+                          <span className="block text-[9px] uppercase tracking-wider text-[#8a8578] mt-1">
+                            {vista === 'frente' ? 'Frente' : 'Costas'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Respostas do Paciente — Outras Perguntas Gerais */}
           {patientGeneralQuestions.length > 0 && (

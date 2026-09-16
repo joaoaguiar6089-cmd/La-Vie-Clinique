@@ -24,6 +24,7 @@ import {
   calcularDataValidade,
   montarTextoApresentacao,
   sugerirDescontoCombinado,
+  contarProcedimentosParaDesconto,
 } from '../../utils/quoteCalc';
 import {
   criarOpcaoPagamento,
@@ -35,6 +36,11 @@ import { PatientSearchSelect } from './PatientSearchSelect';
 import { ProcedureSearchAdd } from './ProcedureSearchAdd';
 import { QuoteItemEditor } from './QuoteItemEditor';
 import { QuotePaymentOptionEditor } from './QuotePaymentOptionEditor';
+import { LaserQuoteMapModal } from '../laser/LaserQuoteMapModal';
+import { ConfirmDialog } from '../ConfirmDialog';
+import { getRecordsForPatient } from '../../services/databaseService';
+import { isLaserCategory } from '../../utils/templateMatching';
+import { nomeCurtoDaArea } from '../../utils/laserAreas';
 
 interface QuoteFormModalProps {
   isOpen: boolean;
@@ -108,6 +114,13 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   const [opcoesPagamento, setOpcoesPagamento] = useState<QuotePaymentOption[]>([]);
   const [negociacao, setNegociacao] = useState('');
   const [observacoes, setObservacoes] = useState('');
+  const [mapaAberto, setMapaAberto] = useState(false);
+  /** Item de laser que a profissional tentou desmarcar mas que já foi editado — pede confirmação. */
+  const [confirmarRemocao, setConfirmarRemocao] = useState<QuoteItem | null>(null);
+  /** Aviso de que a lista nasceu da ficha de anamnese da paciente. */
+  const [avisoDaAnamnese, setAvisoDaAnamnese] = useState<{ quantidade: number; data: string } | null>(null);
+  /** Interruptor da página do manequim no PDF. Padrão ligado. */
+  const [mostrarMapaCorporal, setMostrarMapaCorporal] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -134,6 +147,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       setOpcoesPagamento(base.pagamento.opcoes.map((o) => ({ ...o })));
       setNegociacao(base.pagamento.negociacao || '');
       setObservacoes(base.observacoes || '');
+      setMostrarMapaCorporal(base.mostrarMapaCorporal !== false);
     } else {
       const emissao = new Date().toISOString();
       setDataEmissao(emissao);
@@ -151,13 +165,72 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       setOpcoesPagamento([criarOpcaoPagamento('pix')]);
       setNegociacao('');
       setObservacoes('');
+      setMostrarMapaCorporal(true);
     }
     setErrors({});
     setIsSaving(false);
+    setAvisoDaAnamnese(null);
     // `clinic` e `professionals` mudam de referência a cada sync do perfil e
     // reabririam o formulário zerado no meio da edição — por isso ficam de fora
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, quoteToEdit?.id, seedFrom?.id, initialPatient?.id]);
+
+  /**
+   * Áreas que a paciente já pediu na ficha de anamnese entram pré-selecionadas.
+   *
+   * É o ponto em que as duas pontas do mapa viram uma coisa só: ela marcou virilha e axila pelo
+   * link, e o orçamento abre com as duas na lista em vez de a profissional reconstruir de memória
+   * o que a paciente respondeu.
+   *
+   * Só em orçamento novo e só uma vez por abertura: num orçamento já salvo, a lista de itens é o
+   * que foi negociado, e reescrevê-la a partir de uma ficha antiga seria desfazer trabalho. Falha
+   * de leitura não faz nada — o orçamento abre vazio, como sempre abriu.
+   */
+  useEffect(() => {
+    if (!isOpen || base || !pacienteId) return;
+    let cancelado = false;
+
+    (async () => {
+      try {
+        const registros = await getRecordsForPatient(pacienteId);
+        if (cancelado) return;
+
+        const comAreas = registros
+          .filter((r) => (r.areasConfirmadas?.length || 0) > 0 || (r.areasSolicitadas?.length || 0) > 0)
+          .sort((a, b) => (b.dataAtendimento || b.createdAt).localeCompare(a.dataAtendimento || a.createdAt));
+
+        const maisRecente = comAreas[0];
+        if (!maisRecente) return;
+
+        // A conduta da profissional vence o pedido da paciente quando as duas existem.
+        const refs = maisRecente.areasConfirmadas?.length
+          ? maisRecente.areasConfirmadas
+          : maisRecente.areasSolicitadas || [];
+
+        const doCatalogo = refs
+          .map((r) => procedures.find((p) => p.id === r.procedureId))
+          .filter((p): p is Procedure => !!p);
+
+        if (doCatalogo.length === 0) return;
+
+        setItens((prev) => {
+          if (prev.length > 0) return prev; // Alguém já mexeu enquanto a leitura voltava.
+          return doCatalogo.map((p) => montarItemDoProcedimento(p, professionals));
+        });
+        setAvisoDaAnamnese({
+          quantidade: doCatalogo.length,
+          data: maisRecente.dataAtendimento || maisRecente.createdAt,
+        });
+      } catch (err) {
+        console.warn('Não foi possível ler as áreas da ficha de anamnese da paciente:', err);
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, pacienteId, base?.id]);
 
   // A mensagem acompanha o nome enquanto ninguém a editar à mão
   useEffect(() => {
@@ -185,10 +258,76 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     [itens, temDescontoCombinado, descontoCombinadoPercentual, pagamento]
   );
 
+  /** Todas as áreas de laser contam como um só procedimento aqui. Ver `quoteCalc`. */
+  const procedimentosParaDesconto = useMemo(
+    () => contarProcedimentosParaDesconto(itens),
+    [itens]
+  );
+
+  /**
+   * `procedureId` dos itens de laser já na lista — o que o mapa desenha como selecionado.
+   *
+   * Fica **antes** do `return null` porque é um hook: declarado depois, ele deixaria de rodar
+   * com o modal fechado e mudaria a ordem dos hooks entre renderizações, que é justamente o que o
+   * React proíbe.
+   */
+  const areasNoOrcamento = useMemo(
+    () =>
+      new Set(
+        itens
+          .filter((i) => i.procedureId && isLaserCategory(i.categoria))
+          .map((i) => i.procedureId as string)
+      ),
+    [itens]
+  );
+
   if (!isOpen) return null;
 
+  /**
+   * Acrescenta um procedimento à lista.
+   *
+   * Duplicar é permitido de propósito no catálogo geral — o mesmo procedimento pode entrar duas
+   * vezes, em regiões diferentes. **Em depilação a laser essa justificativa não existe: a região
+   * já É o procedimento**, e "Axilas" duas vezes é cobrar axilas duas vezes. Por isso o laser é
+   * idempotente: já está na lista, não entra de novo, só acende no mapa.
+   *
+   * O efeito colateral bom é que a lista e o mapa viram o mesmo estado, e o controle vivo passa a
+   * funcionar nos dois sentidos — digitar "Axilas" na busca acende a área no manequim.
+   */
   const addProcedure = (procedure: Procedure) =>
-    setItens((prev) => [...prev, montarItemDoProcedimento(procedure, professionals)]);
+    setItens((prev) => {
+      if (isLaserCategory(procedure.category) && prev.some((i) => i.procedureId === procedure.id)) {
+        return prev;
+      }
+      return [...prev, montarItemDoProcedimento(procedure, professionals)];
+    });
+
+  /**
+   * Um item já mexido pela profissional: desconto, número de sessões ou detalhes alterados.
+   *
+   * Serve à trava do controle vivo — desmarcar no mapa remove o item, mas desmarcar por engano um
+   * item onde ela já negociou 20% e 6 sessões apagaria um trabalho que não se refaz sozinho.
+   */
+  const itemFoiEditado = (item: QuoteItem): boolean =>
+    item.temDesconto ||
+    item.maisDeUmaSessao ||
+    (item.detalhes || []).some((d) => d.titulo.trim() || d.valor.trim());
+
+  const alternarAreaDoLaser = (procedureId: string) => {
+    const existente = itens.find((i) => i.procedureId === procedureId);
+
+    if (!existente) {
+      const procedimento = procedures.find((p) => p.id === procedureId);
+      if (procedimento) addProcedure(procedimento);
+      return;
+    }
+
+    if (itemFoiEditado(existente)) {
+      setConfirmarRemocao(existente);
+      return;
+    }
+    removeItem(existente.id);
+  };
 
   const updateItem = (item: QuoteItem) =>
     setItens((prev) => prev.map((i) => (i.id === item.id ? item : i)));
@@ -208,7 +347,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   const handleToggleCombinado = (checked: boolean) => {
     setTemDescontoCombinado(checked);
     if (checked && descontoCombinadoPercentual === 0) {
-      setDescontoCombinadoPercentual(sugerirDescontoCombinado(itens.length, clinic));
+      setDescontoCombinadoPercentual(sugerirDescontoCombinado(procedimentosParaDesconto, clinic));
     }
   };
 
@@ -250,6 +389,9 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       descontoCombinadoPercentual: temDescontoCombinado ? descontoCombinadoPercentual : undefined,
       pagamento,
       observacoes: observacoes.trim() || undefined,
+      // Só grava quando é `false`: o padrão é mostrar, e um campo a menos no documento é um campo
+      // a menos de peso na cota por gravação.
+      mostrarMapaCorporal: mostrarMapaCorporal ? undefined : false,
       clinica: montarSnapshotClinica(clinic),
       total: totais.total,
     };
@@ -437,7 +579,41 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
             </div>
 
             <div className="flex flex-wrap items-start gap-2">
-              <ProcedureSearchAdd procedures={procedures} onAdd={addProcedure} />
+              <ProcedureSearchAdd
+                procedures={procedures}
+                onAdd={addProcedure}
+                onAbrirMapa={() => setMapaAberto(true)}
+                areasNoMapa={areasNoOrcamento.size}
+              />
+              {areasNoOrcamento.size > 0 && (
+                <label className="w-full flex items-center gap-2 text-[11px] text-[#1A1A1A] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mostrarMapaCorporal}
+                    onChange={(e) => setMostrarMapaCorporal(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-[#A67C52]"
+                  />
+                  Incluir o manequim com as áreas contratadas no PDF
+                </label>
+              )}
+
+              {avisoDaAnamnese && (
+                <p className="w-full text-[11px] text-[#8E1A54] bg-[#FDF3F7] border border-[#F3C6DC] rounded-sm px-2.5 py-1.5 leading-snug flex items-start justify-between gap-2">
+                  <span>
+                    {avisoDaAnamnese.quantidade}{' '}
+                    {avisoDaAnamnese.quantidade === 1 ? 'área veio' : 'áreas vieram'} da ficha de{' '}
+                    {new Date(avisoDaAnamnese.data).toLocaleDateString('pt-BR')}. Desmarque no mapa
+                    o que não entrar.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAvisoDaAnamnese(null)}
+                    className="shrink-0 underline underline-offset-2 hover:no-underline"
+                  >
+                    ok
+                  </button>
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() => setItens((prev) => [...prev, montarItemAvulso()])}
@@ -480,8 +656,10 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   />
                 </div>
                 <p className="text-[11px] text-gray-500 pb-2">
-                  Sugestão: {sugerirDescontoCombinado(itens.length, clinic)}% para {itens.length}{' '}
-                  procedimentos · abate {formatBRL(totais.descontoCombinadoValor)}
+                  Sugestão: {sugerirDescontoCombinado(procedimentosParaDesconto, clinic)}% para{' '}
+                  {procedimentosParaDesconto}{' '}
+                  {procedimentosParaDesconto === 1 ? 'procedimento' : 'procedimentos'} · abate{' '}
+                  {formatBRL(totais.descontoCombinadoValor)}
                 </p>
               </div>
             )}
@@ -601,6 +779,35 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Fora do <form>: um clique no mapa não pode disparar o submit do orçamento. */}
+      <LaserQuoteMapModal
+        isOpen={mapaAberto}
+        onClose={() => setMapaAberto(false)}
+        procedures={procedures}
+        clinic={clinic}
+        selecionadas={areasNoOrcamento}
+        onToggle={alternarAreaDoLaser}
+      />
+
+      <ConfirmDialog
+        pedido={
+          confirmarRemocao
+            ? {
+                titulo: `Remover ${nomeCurtoDaArea(confirmarRemocao.titulo)} do orçamento?`,
+                mensagem:
+                  'Este item já foi ajustado — desconto, número de sessões ou detalhes. Removê-lo ' +
+                  'descarta esses ajustes, e eles não voltam ao marcar a área de novo.',
+                textoConfirmar: 'Remover mesmo assim',
+                onConfirmar: () => {
+                  removeItem(confirmarRemocao.id);
+                  setConfirmarRemocao(null);
+                },
+              }
+            : null
+        }
+        onFechar={() => setConfirmarRemocao(null)}
+      />
     </div>
   );
 };
