@@ -59,7 +59,7 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({
           src={images[0]}
           alt={procedure.title}
           className="w-full h-full object-cover"
-          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
         />
         <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded bg-[#1A1A1A]/85 text-[#FAF9F5] text-[10px] font-bold uppercase tracking-wider">
           {procedure.category}

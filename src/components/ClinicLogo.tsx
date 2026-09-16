@@ -67,7 +67,6 @@ export const ClinicLogo: React.FC<ClinicLogoProps> = ({
           alt={clinic.name ? `Logo — ${clinic.name}` : 'Logo da clínica'}
           className={`w-full h-full ${fit === 'cover' ? 'object-cover' : 'object-contain'} block`}
           referrerPolicy="no-referrer"
-          crossOrigin="anonymous"
         />
       </span>
     );

@@ -15,7 +15,7 @@ async function safeGetImageBase64(src: string): Promise<string | null> {
   return new Promise<string | null>((resolve) => {
     const timer = setTimeout(() => {
       resolve(null);
-    }, 2500);
+    }, 8000);
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -44,7 +44,10 @@ async function safeGetImageBase64(src: string): Promise<string | null> {
       resolve(null);
     };
 
-    img.src = src;
+    // A mesma foto já foi baixada para aparecer na tela, e lá sem `crossOrigin` — o navegador
+    // guardou aquela resposta como opaca. Reaproveitá-la aqui faria a leitura dos pixels falhar
+    // mesmo com o CORS do bucket configurado, então este parâmetro força um download próprio.
+    img.src = src + (src.includes('?') ? '&' : '?') + '__cors=1';
   });
 }
 
@@ -70,22 +73,36 @@ function createPlaceholderDataUrl(width: number, height: number, color = '#E8E6D
  * Any image that fails to load/convert (broken URL, CORS block, timeout) is
  * swapped for a local placeholder — leaving the original cross-origin src in
  * place is what taints the canvas and makes canvas.toDataURL() throw later.
+ *
+ * Isto reescreve o `src` dos elementos que estão na tela, então devolve uma função que desfaz a
+ * troca. Sem ela, uma foto que não pôde ser convertida (bucket sem CORS, rede lenta) ficava como
+ * um retângulo cinza na pré-visualização depois da exportação — a tela passava a mostrar um
+ * problema do PDF como se fosse do catálogo.
  */
-async function prepareImagesForExport(element: HTMLElement): Promise<void> {
+async function prepareImagesForExport(element: HTMLElement): Promise<() => void> {
   const images = Array.from(element.querySelectorAll('img'));
+  const originais: { img: HTMLImageElement; src: string }[] = [];
+
   await Promise.all(
     images.map(async (img) => {
       if (!img.src || img.src.startsWith('data:')) return;
       const fallbackWidth = img.naturalWidth || img.width || 300;
       const fallbackHeight = img.naturalHeight || img.height || 300;
+      const srcOriginal = img.src;
       try {
         const base64 = await safeGetImageBase64(img.src);
+        originais.push({ img, src: srcOriginal });
         img.src = base64 || createPlaceholderDataUrl(fallbackWidth, fallbackHeight);
       } catch {
+        originais.push({ img, src: srcOriginal });
         img.src = createPlaceholderDataUrl(fallbackWidth, fallbackHeight);
       }
     })
   );
+
+  return () => {
+    for (const { img, src } of originais) img.src = src;
+  };
 }
 
 const CAPTURE_SCALE = 2;
@@ -164,36 +181,40 @@ export async function exportElementAsImage(
     if (document.fonts) {
       await document.fonts.ready;
     }
-    await prepareImagesForExport(element);
+    const restaurarImagens = await prepareImagesForExport(element);
 
-    const targetElement = element.querySelector<HTMLElement>('[data-pdf-page="1"]') || element;
+    try {
+      const targetElement = element.querySelector<HTMLElement>('[data-pdf-page="1"]') || element;
 
-    const canvas = await html2canvas(targetElement, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#F8F7F4',
-      logging: false,
-      scrollX: 0,
-      scrollY: 0,
-      windowWidth: 1200,
-      ignoreElements: (node) => {
-        if (node instanceof HTMLElement && node.classList?.contains('no-export')) {
-          return true;
-        }
-        return false;
-      },
-    });
+      const canvas = await html2canvas(targetElement, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#F8F7F4',
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 1200,
+        ignoreElements: (node) => {
+          if (node instanceof HTMLElement && node.classList?.contains('no-export')) {
+            return true;
+          }
+          return false;
+        },
+      });
 
-    const dataUrl = canvas.toDataURL('image/png');
+      const dataUrl = canvas.toDataURL('image/png');
 
-    const link = document.createElement('a');
-    link.href = dataUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    return dataUrl;
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return dataUrl;
+    } finally {
+      restaurarImagens();
+    }
   } catch (error) {
     console.error('Error generating image:', error);
     throw error;
@@ -215,147 +236,151 @@ export async function exportElementAsPDF(
     }
 
     // 2. Pre-process images into data URLs
-    await prepareImagesForExport(element);
+    const restaurarImagens = await prepareImagesForExport(element);
 
-    // 3. Query discrete page containers
-    const pageElements = Array.from(element.querySelectorAll<HTMLElement>('[data-pdf-page]'));
-
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-      compress: true,
-    });
-
-    const pdfWidth = pdf.internal.pageSize.getWidth(); // 210 mm
-    const pdfHeight = pdf.internal.pageSize.getHeight(); // 297 mm
-
-    if (pageElements.length > 0) {
-      for (let i = 0; i < pageElements.length; i++) {
-        const pageEl = pageElements[i];
-
-        if (i > 0) {
-          pdf.addPage();
-        }
-
-        // Render current discrete page
-        const canvas = await html2canvas(pageEl, {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#F8F7F4',
-          logging: false,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: 1200,
-        });
-
-        const pageImgData = canvas.toDataURL('image/jpeg', 0.95);
-
-        // Add exact full-bleed page to A4 PDF
-        pdf.addImage(pageImgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-
-        // Add Interactive PDF Clickable Links (Table of Contents & Navigation)
-        const pageRect = pageEl.getBoundingClientRect();
-        const linkNodes = Array.from(pageEl.querySelectorAll<HTMLElement>('[data-link-page]'));
-
-        linkNodes.forEach((linkNode) => {
-          const linkRect = linkNode.getBoundingClientRect();
-          const targetPageNum = parseInt(linkNode.getAttribute('data-link-page') || '1', 10);
-
-          if (targetPageNum && pageRect.width > 0 && pageRect.height > 0) {
-            const relX = ((linkRect.left - pageRect.left) / pageRect.width) * pdfWidth;
-            const relY = ((linkRect.top - pageRect.top) / pageRect.height) * pdfHeight;
-            const relW = (linkRect.width / pageRect.width) * pdfWidth;
-            const relH = (linkRect.height / pageRect.height) * pdfHeight;
-
-            try {
-              pdf.link(relX, relY, relW, relH, { pageNumber: targetPageNum });
-            } catch (linkErr) {
-              console.warn('Could not register pdf link annotation:', linkErr);
-            }
-          }
-        });
-
-        // Add Interactive External URL Clickable Links (WhatsApp, Web, etc.)
-        const urlNodes = Array.from(pageEl.querySelectorAll<HTMLElement>('[data-link-url]'));
-
-        urlNodes.forEach((urlNode) => {
-          const linkRect = urlNode.getBoundingClientRect();
-          const targetUrl = urlNode.getAttribute('data-link-url');
-
-          if (targetUrl && pageRect.width > 0 && pageRect.height > 0) {
-            const relX = ((linkRect.left - pageRect.left) / pageRect.width) * pdfWidth;
-            const relY = ((linkRect.top - pageRect.top) / pageRect.height) * pdfHeight;
-            const relW = (linkRect.width / pageRect.width) * pdfWidth;
-            const relH = (linkRect.height / pageRect.height) * pdfHeight;
-
-            try {
-              pdf.link(relX, relY, relW, relH, { url: targetUrl });
-            } catch (linkErr) {
-              console.warn('Could not register pdf url link annotation:', linkErr);
-            }
-          }
-        });
-      }
-    } else {
-      // Fallback for single container elements without [data-pdf-page] — these are typically
-      // scrollable content living inside a fixed-position modal, so capture via an off-screen
-      // clone rather than html2canvas(element) directly (see captureElementFullHeight).
-      const { canvas, avoidBreakRanges } = await captureElementFullHeight(element);
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      // Canvas pixels per output mm — derived from width, since the whole image (and every page
-      // slice cut from it) is scaled to exactly pdfWidth wide, preserving aspect ratio.
-      const pxPerMm = imgWidth / pdfWidth;
-      const pageHeightPx = pdfHeight * pxPerMm;
-
-      let sliceTop = 0;
-      let isFirstPage = true;
-      while (sliceTop < imgHeight) {
-        let sliceBottom = Math.min(imgHeight, sliceTop + pageHeightPx);
-
-        // If this natural page break would land inside a card/section marked to stay whole
-        // (page-break-inside-avoid / print:break-inside-avoid), end the page right before it
-        // instead — the element starts fresh on the next page rather than being split. Falls
-        // through to the natural cut if the element alone is taller than a full page.
-        const conflict = avoidBreakRanges.find(
-          (r) => r.top > sliceTop && r.top < sliceBottom && r.bottom > sliceBottom
-        );
-        if (conflict && conflict.top > sliceTop) {
-          sliceBottom = conflict.top;
-        }
-
-        const sliceHeightPx = sliceBottom - sliceTop;
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = imgWidth;
-        sliceCanvas.height = sliceHeightPx;
-        sliceCanvas
-          .getContext('2d')!
-          .drawImage(canvas, 0, sliceTop, imgWidth, sliceHeightPx, 0, 0, imgWidth, sliceHeightPx);
-
-        if (!isFirstPage) pdf.addPage();
-        pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, pdfWidth, sliceHeightPx / pxPerMm, undefined, 'FAST');
-
-        isFirstPage = false;
-        sliceTop = sliceBottom;
-      }
-    }
-
-    // Direct Blob download trigger for maximum browser compatibility
     try {
-      const blob = pdf.output('blob');
-      const blobUrl = URL.createObjectURL(blob);
-      const downloadLink = document.createElement('a');
-      downloadLink.href = blobUrl;
-      downloadLink.download = filename;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-    } catch {
-      // Secondary fallback
-      pdf.save(filename);
+      // 3. Query discrete page containers
+      const pageElements = Array.from(element.querySelectorAll<HTMLElement>('[data-pdf-page]'));
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true,
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth(); // 210 mm
+      const pdfHeight = pdf.internal.pageSize.getHeight(); // 297 mm
+
+      if (pageElements.length > 0) {
+        for (let i = 0; i < pageElements.length; i++) {
+          const pageEl = pageElements[i];
+
+          if (i > 0) {
+            pdf.addPage();
+          }
+
+          // Render current discrete page
+          const canvas = await html2canvas(pageEl, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#F8F7F4',
+            logging: false,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: 1200,
+          });
+
+          const pageImgData = canvas.toDataURL('image/jpeg', 0.95);
+
+          // Add exact full-bleed page to A4 PDF
+          pdf.addImage(pageImgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+
+          // Add Interactive PDF Clickable Links (Table of Contents & Navigation)
+          const pageRect = pageEl.getBoundingClientRect();
+          const linkNodes = Array.from(pageEl.querySelectorAll<HTMLElement>('[data-link-page]'));
+
+          linkNodes.forEach((linkNode) => {
+            const linkRect = linkNode.getBoundingClientRect();
+            const targetPageNum = parseInt(linkNode.getAttribute('data-link-page') || '1', 10);
+
+            if (targetPageNum && pageRect.width > 0 && pageRect.height > 0) {
+              const relX = ((linkRect.left - pageRect.left) / pageRect.width) * pdfWidth;
+              const relY = ((linkRect.top - pageRect.top) / pageRect.height) * pdfHeight;
+              const relW = (linkRect.width / pageRect.width) * pdfWidth;
+              const relH = (linkRect.height / pageRect.height) * pdfHeight;
+
+              try {
+                pdf.link(relX, relY, relW, relH, { pageNumber: targetPageNum });
+              } catch (linkErr) {
+                console.warn('Could not register pdf link annotation:', linkErr);
+              }
+            }
+          });
+
+          // Add Interactive External URL Clickable Links (WhatsApp, Web, etc.)
+          const urlNodes = Array.from(pageEl.querySelectorAll<HTMLElement>('[data-link-url]'));
+
+          urlNodes.forEach((urlNode) => {
+            const linkRect = urlNode.getBoundingClientRect();
+            const targetUrl = urlNode.getAttribute('data-link-url');
+
+            if (targetUrl && pageRect.width > 0 && pageRect.height > 0) {
+              const relX = ((linkRect.left - pageRect.left) / pageRect.width) * pdfWidth;
+              const relY = ((linkRect.top - pageRect.top) / pageRect.height) * pdfHeight;
+              const relW = (linkRect.width / pageRect.width) * pdfWidth;
+              const relH = (linkRect.height / pageRect.height) * pdfHeight;
+
+              try {
+                pdf.link(relX, relY, relW, relH, { url: targetUrl });
+              } catch (linkErr) {
+                console.warn('Could not register pdf url link annotation:', linkErr);
+              }
+            }
+          });
+        }
+      } else {
+        // Fallback for single container elements without [data-pdf-page] — these are typically
+        // scrollable content living inside a fixed-position modal, so capture via an off-screen
+        // clone rather than html2canvas(element) directly (see captureElementFullHeight).
+        const { canvas, avoidBreakRanges } = await captureElementFullHeight(element);
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        // Canvas pixels per output mm — derived from width, since the whole image (and every page
+        // slice cut from it) is scaled to exactly pdfWidth wide, preserving aspect ratio.
+        const pxPerMm = imgWidth / pdfWidth;
+        const pageHeightPx = pdfHeight * pxPerMm;
+
+        let sliceTop = 0;
+        let isFirstPage = true;
+        while (sliceTop < imgHeight) {
+          let sliceBottom = Math.min(imgHeight, sliceTop + pageHeightPx);
+
+          // If this natural page break would land inside a card/section marked to stay whole
+          // (page-break-inside-avoid / print:break-inside-avoid), end the page right before it
+          // instead — the element starts fresh on the next page rather than being split. Falls
+          // through to the natural cut if the element alone is taller than a full page.
+          const conflict = avoidBreakRanges.find(
+            (r) => r.top > sliceTop && r.top < sliceBottom && r.bottom > sliceBottom
+          );
+          if (conflict && conflict.top > sliceTop) {
+            sliceBottom = conflict.top;
+          }
+
+          const sliceHeightPx = sliceBottom - sliceTop;
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = imgWidth;
+          sliceCanvas.height = sliceHeightPx;
+          sliceCanvas
+            .getContext('2d')!
+            .drawImage(canvas, 0, sliceTop, imgWidth, sliceHeightPx, 0, 0, imgWidth, sliceHeightPx);
+
+          if (!isFirstPage) pdf.addPage();
+          pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, pdfWidth, sliceHeightPx / pxPerMm, undefined, 'FAST');
+
+          isFirstPage = false;
+          sliceTop = sliceBottom;
+        }
+      }
+
+      // Direct Blob download trigger for maximum browser compatibility
+      try {
+        const blob = pdf.output('blob');
+        const blobUrl = URL.createObjectURL(blob);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = blobUrl;
+        downloadLink.download = filename;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      } catch {
+        // Secondary fallback
+        pdf.save(filename);
+      }
+    } finally {
+      restaurarImagens();
     }
   } catch (error) {
     console.error('Error generating interactive PDF with html2canvas-pro:', error);

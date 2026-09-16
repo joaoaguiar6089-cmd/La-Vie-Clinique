@@ -52,7 +52,6 @@ const HorizontalProcedureCard: React.FC<ProcedureCardProps> = ({
         alt={proc.title}
         className="w-full h-full object-cover block"
         referrerPolicy="no-referrer"
-        crossOrigin="anonymous"
       />
       <div className="absolute top-3.5 left-3.5 px-3 py-1 rounded-sm bg-[#1A1A1C]/90 text-[#D8A47F] text-[10px] font-bold uppercase tracking-wider shadow-sm">
         {proc.category}
@@ -411,7 +410,6 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
                                 alt={doc.name}
                                 className="w-full h-full object-cover block"
                                 referrerPolicy="no-referrer"
-                                crossOrigin="anonymous"
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-[#D8A47F] font-serif-luxury text-xl font-bold bg-[#1A1A1C]">
