@@ -2,7 +2,9 @@ import {
   collection,
   doc,
   getDocs,
+  getDocsFromServer,
   getDoc,
+  getDocFromServer,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -156,6 +158,35 @@ export function isQuotaOrOfflineError(error: unknown): boolean {
 }
 
 /**
+ * Responde "esta coleção está vazia?" com uma leitura confirmada pelo SERVIDOR, ou `null` quando
+ * não foi possível confirmar.
+ *
+ * Por que não dá para usar `getDocs` aqui: o app roda com `persistentLocalCache`, e nesse modo
+ * uma leitura feita offline NÃO falha — ela é resolvida pelo cache. Num navegador de cache frio
+ * (primeira visita, dados do site limpos, aba anônima) o resultado é um snapshot vazio
+ * indistinguível de uma coleção realmente vazia. Quem chama usa essa resposta para decidir se
+ * popula a coleção com os dados padrão, o que sobrescreve o que a clínica editou; e como o SDK
+ * enfileira escritas feitas offline, o estrago só aparecia no servidor minutos depois, quando a
+ * conexão voltava. Semear é destrutivo: na dúvida (`null`), não se escreve nada.
+ */
+async function colecaoVaziaNoServidor(nomeColecao: string): Promise<boolean | null> {
+  try {
+    const snap = await getDocsFromServer(query(collection(db, nomeColecao), limit(1)));
+    return snap.empty;
+  } catch (err) {
+    // 'unavailable' é o código que o SDK usa quando a leitura forçada no servidor não sai por
+    // falta de rede — esperado, e exatamente o caso que esta função existe para detectar.
+    const semRede = (err as { code?: string })?.code === 'unavailable';
+    if (semRede || isQuotaOrOfflineError(err)) {
+      console.warn(`Sem confirmação do servidor sobre "${nomeColecao}" — carga inicial adiada.`);
+    } else {
+      console.error(`Erro ao consultar "${nomeColecao}" no servidor; carga inicial adiada:`, err);
+    }
+    return null;
+  }
+}
+
+/**
  * Replace all procedures in Firestore with the current official catalog from PDF.
  */
 export async function replaceAllProceduresWithOfficialPdfCatalog(): Promise<void> {
@@ -203,19 +234,17 @@ export async function replaceAllProceduresWithOfficialPdfCatalog(): Promise<void
  */
 export async function seedInitialDataIfEmpty(): Promise<void> {
   if (quotaExhaustedSession) return;
-  try {
-    // Ler a coleção inteira só para perguntar "está vazia?" custava uma leitura por procedimento,
-    // toda vez que o app abria — e logo depois a assinatura em tempo real lia tudo de novo. Um
-    // `limit(1)` responde a mesma pergunta por 1 leitura, e os dois procedimentos legados são
-    // consultados pelo ID em vez de varridos.
-    const primeiroProc = await getDocs(query(collection(db, PROCEDURES_COLLECTION), limit(1)));
-    const colecaoVazia = primeiroProc.empty;
 
+  // Só uma leitura confirmada pelo servidor autoriza escrever aqui — ver colecaoVaziaNoServidor.
+  const colecaoVazia = await colecaoVaziaNoServidor(PROCEDURES_COLLECTION);
+  if (colecaoVazia === null) return;
+
+  try {
     const [proc1, proc2] = colecaoVazia
       ? [null, null]
       : await Promise.all([
-          getDoc(doc(db, PROCEDURES_COLLECTION, 'proc-1')),
-          getDoc(doc(db, PROCEDURES_COLLECTION, 'proc-2')),
+          getDocFromServer(doc(db, PROCEDURES_COLLECTION, 'proc-1')),
+          getDocFromServer(doc(db, PROCEDURES_COLLECTION, 'proc-2')),
         ]);
     const hasOldTemplate = !!proc1?.exists() || !!proc2?.exists();
 
@@ -229,9 +258,11 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
         if (proc2?.exists()) await deleteDoc(doc(db, PROCEDURES_COLLECTION, 'proc-2')).catch(() => {});
       }
 
-      // Ensure clinic profile exists and has official doctor photo
+      // Ensure clinic profile exists and has official doctor photo. A leitura precisa vir do
+      // servidor: o setDoc abaixo grava o perfil padrão por cima, e um "não existe" vindo de um
+      // cache frio apagaria nome, contato e equipe da clínica.
       const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
-      const clinicSnap = await getDoc(clinicRef);
+      const clinicSnap = await getDocFromServer(clinicRef);
       if (!clinicSnap.exists()) {
         await setDoc(clinicRef, cleanForFirestore({
           ...DEFAULT_CLINIC_PROFILE,
@@ -292,80 +323,22 @@ export function normalizeLaserCategory(category?: string): string {
 }
 
 /**
- * Mescla a lista de procedimentos atuais (vindos do Firestore ou localStorage)
- * com o catálogo oficial completo (SAMPLE_PROCEDURES).
+ * Prepara para exibição a lista de procedimentos vinda do Firestore (ou do cache local):
+ * unifica as categorias antigas de depilação a laser e ordena por `order`.
  *
- * Garante que personalizações feitas pelo usuário (ex: troca de fotos, novos preços)
- * sejam SEMPRE preservadas com prioridade máxima, ao mesmo tempo em que impede
- * que os outros procedimentos da clínica desapareçam se o Firestore ainda não tiver
- * sincronizado todos os itens ou se apenas um foi salvo individualmente.
+ * Esta função também reinseria, na lista, todo procedimento do catálogo oficial que não estivesse
+ * nela — e uma rotina irmã regravava esses "ausentes" no Firestore. A intenção era proteger contra
+ * uma sincronização parcial, mas o efeito prático era desfazer exclusões: a lista de excluídos
+ * vivia só no localStorage de cada navegador, então qualquer outro aparelho (ou o mesmo depois de
+ * limpar os dados do site) via o procedimento como "faltando" e o recriava no banco para todo
+ * mundo. O Firestore é a fonte da verdade: o que não está lá não aparece e não volta. O catálogo
+ * oficial só é gravado quando a coleção está comprovadamente vazia ou quando a clínica pede
+ * "Restaurar catálogo oficial".
  */
-export function mergeWithDefaultProcedures(
-  currentProcedures: Procedure[],
-  deletedIds: string[] = []
-): Procedure[] {
-  const deletedSet = new Set(deletedIds);
-  const currentMap = new Map<string, Procedure>();
-
-  // 1. Adiciona os procedimentos existentes/editados (prioridade absoluta do usuário)
-  for (const proc of currentProcedures) {
-    if (!deletedSet.has(proc.id)) {
-      currentMap.set(proc.id, {
-        ...proc,
-        category: normalizeLaserCategory(proc.category),
-      });
-    }
-  }
-
-  // 2. Preenche os procedimentos base do catálogo oficial que ainda não constam na lista
-  for (const defaultProc of SAMPLE_PROCEDURES) {
-    if (!deletedSet.has(defaultProc.id) && !currentMap.has(defaultProc.id)) {
-      currentMap.set(defaultProc.id, {
-        ...defaultProc,
-        category: normalizeLaserCategory(defaultProc.category),
-      });
-    }
-  }
-
-  const merged = Array.from(currentMap.values());
-  return merged.sort((a, b) => (a.order || 99) - (b.order || 99));
-}
-
-/**
- * Sincroniza em segundo plano quaisquer procedimentos padrão do catálogo oficial
- * que ainda não existam no Firestore, sem jamais sobrescrever os já customizados pelo usuário.
- */
-export async function ensureAllDefaultProceduresInFirestore(
-  existingProcedures: Procedure[],
-  deletedIds: string[] = []
-): Promise<void> {
-  if (quotaExhaustedSession) return;
-  try {
-    const existingIds = new Set(existingProcedures.map((p) => p.id));
-    const deletedSet = new Set(deletedIds);
-    const missing = SAMPLE_PROCEDURES.filter((p) => !existingIds.has(p.id) && !deletedSet.has(p.id));
-
-    if (missing.length > 0) {
-      console.log(`Sincronizando ${missing.length} procedimentos base ausentes no Firestore...`);
-      const batch = writeBatch(db);
-      for (const proc of missing) {
-        const ref = doc(db, PROCEDURES_COLLECTION, proc.id);
-        batch.set(ref, cleanForFirestore({
-          ...proc,
-          category: normalizeLaserCategory(proc.category),
-          updatedAt: new Date().toISOString(),
-        }));
-      }
-      await batch.commit();
-      console.log('Procedimentos base sincronizados no Firestore com sucesso.');
-    }
-  } catch (err) {
-    if (isQuotaOrOfflineError(err)) {
-      console.warn('Cota de leitura/escrita diária atingida ao sincronizar procedimentos base.');
-    } else {
-      console.error('Erro ao sincronizar procedimentos base ausentes:', err);
-    }
-  }
+export function normalizeProcedureList(procedures: Procedure[]): Procedure[] {
+  return procedures
+    .map((proc) => ({ ...proc, category: normalizeLaserCategory(proc.category) }))
+    .sort((a, b) => (a.order || 99) - (b.order || 99));
 }
 
 /**
@@ -491,7 +464,9 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure
  */
 export async function deleteProcedureFromDb(procedureId: string): Promise<void> {
   const docRef = doc(db, PROCEDURES_COLLECTION, procedureId);
-  await deleteDoc(docRef);
+  // Sem confirmação do servidor a exclusão fica apenas na fila local do SDK e a promise nunca
+  // resolve: a tela diria "removido" para um procedimento que continua no banco.
+  await comConfirmacaoDoServidor(deleteDoc(docRef), 'da exclusão do procedimento');
 }
 
 /**
@@ -605,12 +580,11 @@ function marcarLaserSyncComoFeito(): void {
 export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
   if (quotaExhaustedSession) return;
   try {
-    // 1. Seed General Questions if empty — `limit(1)` responde "está vazia?" por 1 leitura,
-    //    em vez de uma por pergunta cadastrada.
-    const genQSnap = await getDocs(
-      query(collection(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION), limit(1))
-    );
-    if (genQSnap.empty) {
+    // 1. Seed General Questions if empty — a resposta precisa vir do servidor, senão um cache
+    //    frio faz o app regravar as perguntas padrão por cima das que a clínica editou.
+    const perguntasVazias = await colecaoVaziaNoServidor(ANAMNESIS_GENERAL_QUESTIONS_COLLECTION);
+    if (perguntasVazias === null) return;
+    if (perguntasVazias) {
       console.log('Seeding initial general questions for anamnesis...');
       const batch = writeBatch(db);
       DEFAULT_GENERAL_QUESTIONS.forEach((q) => {
@@ -621,8 +595,9 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
     }
 
     // 2. Seed Procedure Templates if empty, or sync laser templates if missing
-    const primeiroTpl = await getDocs(query(collection(db, ANAMNESIS_TEMPLATES_COLLECTION), limit(1)));
-    if (primeiroTpl.empty) {
+    const templatesVazios = await colecaoVaziaNoServidor(ANAMNESIS_TEMPLATES_COLLECTION);
+    if (templatesVazios === null) return;
+    if (templatesVazios) {
       console.log('Seeding initial procedure templates for anamnesis...');
       const batch = writeBatch(db);
       DEFAULT_PROCEDURE_TEMPLATES.forEach((tpl) => {
@@ -636,14 +611,15 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
     } else if (!laserSyncJaRodou()) {
       // Sincroniza fichas das categorias Depilação a Laser (Facial, Íntima e Corporal) e suas 13
       // perguntas. Só aqui a coleção inteira é lida — e só na primeira vez em cada navegador.
-      const tplSnap = await getDocs(collection(db, ANAMNESIS_TEMPLATES_COLLECTION));
+      const tplSnap = await getDocsFromServer(collection(db, ANAMNESIS_TEMPLATES_COLLECTION));
       await syncLaserAnamnesisTemplates(tplSnap);
       marcarLaserSyncComoFeito();
     }
 
     // 3. Seed Patients if empty
-    const patSnap = await getDocs(collection(db, PATIENTS_COLLECTION));
-    if (patSnap.empty) {
+    const pacientesVazios = await colecaoVaziaNoServidor(PATIENTS_COLLECTION);
+    if (pacientesVazios === null) return;
+    if (pacientesVazios) {
       console.log('Seeding initial sample patients...');
       const batch = writeBatch(db);
       SAMPLE_PATIENTS.forEach((p) => {
@@ -654,8 +630,9 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
     }
 
     // 4. Seed Anamnesis Records if empty
-    const recSnap = await getDocs(collection(db, ANAMNESIS_RECORDS_COLLECTION));
-    if (recSnap.empty) {
+    const fichasVazias = await colecaoVaziaNoServidor(ANAMNESIS_RECORDS_COLLECTION);
+    if (fichasVazias === null) return;
+    if (fichasVazias) {
       console.log('Seeding initial sample anamnesis records...');
       const batch = writeBatch(db);
       SAMPLE_ANAMNESIS_RECORDS.forEach((r) => {
