@@ -33,6 +33,15 @@ import {
 } from './services/databaseService';
 import { DEFAULT_PROCEDURE_TEMPLATES } from './data/anamnesisInitialData';
 import { onAuthChange, logout, type User } from './services/authService';
+import { firebaseConfig } from './lib/firebase';
+
+/**
+ * Endereço do banco no console do Firebase, montado a partir da configuração em vez de escrito à
+ * mão. Antes o `projectId` e o id do banco estavam colados direto no `href`, e ao trocar de banco
+ * o link continuava apontando para o anterior — justamente no aviso que a clínica abre quando
+ * precisa investigar a cota.
+ */
+const URL_DO_BANCO_NO_CONSOLE = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${firebaseConfig.firestoreDatabaseId || '(default)'}/data`;
 
 const STORAGE_KEY_PROCEDURES = 'aura_bronze_procedures_v1';
 const STORAGE_KEY_CLINIC = 'aura_bronze_clinic_v1';
@@ -577,16 +586,16 @@ function MainCatalogApp() {
             <div className="flex items-start sm:items-center gap-2.5">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
               <span>
-                <strong>Modo Offline (Cota diária do Firebase atingida):</strong> O limite gratuito diário de 50.000 leituras do Firestore foi atingido hoje. O aplicativo segue funcionando normalmente com os dados locais salvos. A cota é renovada automaticamente pelo Google às 04:00 BRT.
+                <strong>Modo Offline (Cota diária do Firebase atingida):</strong> O limite gratuito diário do Firestore foi atingido hoje — pode ser o de leitura ou o de gravação. Consultar os dados segue funcionando; salvar pode falhar até a cota virar. A cota é renovada automaticamente pelo Google às 04:00 BRT.
               </span>
             </div>
             <a
-              href="https://console.firebase.google.com/project/database-dra-karoline/firestore/databases/ai-studio-aurabronzecatlog-2ed33bb0-bfc5-4dcb-8c57-c6bd40087442/data?openUpgradeDialog=true"
+              href={URL_DO_BANCO_NO_CONSOLE}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 font-semibold text-amber-900 hover:text-amber-950 underline underline-offset-2 shrink-0 self-start sm:self-auto"
             >
-              Ativar plano Blaze no Firebase &rarr;
+              Ver o uso no Firebase &rarr;
             </a>
           </div>
         )}

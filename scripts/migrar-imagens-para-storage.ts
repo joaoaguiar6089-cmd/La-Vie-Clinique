@@ -19,9 +19,10 @@
  *      Se estiver, espere o próximo ciclo (a cota zera à meia-noite no horário do Pacífico,
  *      por volta das 4h ou 5h de Brasília).
  *
- * Uso:
+ * Uso (o script pergunta o login da clínica; a senha não aparece na tela):
  *   npx tsx scripts/migrar-imagens-para-storage.ts            (simulação: só lê, e mostra o relatório)
  *   npx tsx scripts/migrar-imagens-para-storage.ts --aplicar  (grava de verdade)
+ *   npx tsx scripts/migrar-imagens-para-storage.ts --banco <id> --aplicar   (em outro banco)
  *
  * É seguro rodar mais de uma vez: campos que já são URL são ignorados.
  */
@@ -32,16 +33,31 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { obterCredenciais, explicarErro, encerrar } from './credenciais';
 
 const aplicar = process.argv.includes('--aplicar');
 
 const raiz = dirname(dirname(fileURLToPath(import.meta.url)));
 const config = JSON.parse(readFileSync(join(raiz, 'firebase-applet-config.json'), 'utf8'));
 
+/**
+ * `--banco <id>` aponta para outro banco sem editar o arquivo de config.
+ *
+ * Existe por causa da migração de banco: esta rotina precisa rodar no banco NOVO, e não no antigo.
+ * No antigo (Enterprise, que cobra a cota por KB gravado) reescrever os ~3 MB de imagens embutidas
+ * custaria alguns milhares de unidades da cota diária; no novo (Standard, que cobra por documento)
+ * são algumas dezenas de gravações. Como o Firebase Storage é do projeto e não do banco, as
+ * imagens enviadas valem para os dois lados de qualquer forma.
+ */
+function argumento(nome: string): string | undefined {
+  const i = process.argv.indexOf(nome);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+const banco = argumento('--banco') || config.firestoreDatabaseId || '(default)';
+
 const app = initializeApp(config);
-const db = config.firestoreDatabaseId
-  ? getFirestore(app, config.firestoreDatabaseId)
-  : getFirestore(app);
+const db = getFirestore(app, banco);
 const storage = getStorage(app);
 
 /** Campos de imagem (string única) de cada coleção, na ordem em que aparecem no documento. */
@@ -237,19 +253,16 @@ function relatar(
 }
 
 async function main(): Promise<void> {
-  const email = process.env.FIREBASE_EMAIL;
-  const senha = process.env.FIREBASE_SENHA;
-  if (!email || !senha) {
-    console.error(
-      'Defina FIREBASE_EMAIL e FIREBASE_SENHA com um login de admin da clínica — as regras exigem\n' +
-        'autenticação para gravar em anamnesis_templates, clinic_settings, procedures e no Storage.\n\n' +
-        '  FIREBASE_EMAIL=... FIREBASE_SENHA=... npx tsx scripts/migrar-imagens-para-storage.ts --aplicar'
-    );
-    process.exit(1);
-  }
-  await signInWithEmailAndPassword(getAuth(app), email, senha);
-
+  // Antes de pedir a senha, e não depois: quem digitar o login precisa já ter visto em qual banco
+  // a rotina vai mexer, para poder cancelar com Ctrl+C se for o errado.
+  console.log(`Banco: ${banco}`);
   console.log(aplicar ? 'MODO APLICAR — as alterações serão gravadas.' : 'SIMULAÇÃO — nada será gravado.');
+  console.log('');
+
+  const { email, senha } = await obterCredenciais(
+    'As regras exigem login para gravar em anamnesis_templates, clinic_settings, procedures e no Storage.'
+  );
+  await signInWithEmailAndPassword(getAuth(app), email, senha);
 
   // Do mais caro para o mais barato: o perfil da clínica é gravado em todo salvamento das
   // configurações e republicado no espelho público, então é onde cada KB pesa mais.
@@ -261,10 +274,11 @@ async function main(): Promise<void> {
   if (!aplicar) {
     console.log('\nRode de novo com --aplicar para gravar.');
   }
-  process.exit(0);
+  await encerrar(app, 0);
 }
 
-main().catch((err) => {
-  console.error('\nFalhou:', err);
-  process.exit(1);
+main().catch(async (err) => {
+  // Sem rastro de pilha: quem roda isto quer saber o que fazer, não em que linha do Node parou.
+  console.error('\n' + explicarErro(err) + '\n');
+  await encerrar(app, 1);
 });

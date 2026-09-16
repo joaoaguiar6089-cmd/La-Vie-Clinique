@@ -1,0 +1,11 @@
+{
+  "firestore": [
+    {
+      "database": "banco-novo",
+      "rules": "firestore.rules"
+    }
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  }
+}
