@@ -487,27 +487,31 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
                           key={catName}
                           href={`#catalog-page-${targetPage}`}
                           data-link-page={targetPage}
-                          className="group flex items-center justify-between p-4 bg-white hover:bg-[#FAF9F5] active:bg-[#F2EFEB] rounded-xl border border-[#E8E6DE] hover:border-[#B88358] shadow-xs hover:shadow-md transition-all cursor-pointer no-underline text-[#1A1A1C]"
+                          className="group flex items-center justify-between gap-2 p-3.5 bg-white hover:bg-[#FAF9F5] active:bg-[#F2EFEB] rounded-xl border border-[#E8E6DE] hover:border-[#B88358] shadow-xs hover:shadow-md transition-all cursor-pointer no-underline text-[#1A1A1C]"
                         >
-                          <div className="flex items-center gap-3 min-w-0 pr-2">
-                            <span className="w-8 h-8 rounded-full bg-[#FAF9F5] group-hover:bg-[#1A1A1C] text-[#9C663D] group-hover:text-[#D8A47F] border border-[#E8E6DE] flex items-center justify-center text-xs font-bold transition-colors shrink-0 shadow-2xs">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="w-7 h-7 rounded-full bg-[#FAF9F5] group-hover:bg-[#1A1A1C] text-[#9C663D] group-hover:text-[#D8A47F] border border-[#E8E6DE] flex items-center justify-center text-[11px] font-bold transition-colors shrink-0 shadow-2xs">
                               {targetPage}
                             </span>
                             <div className="min-w-0">
-                              <h3 className="text-[14px] font-bold text-[#1A1A1C] group-hover:text-[#9C663D] transition-colors leading-tight truncate">
+                              {/* Nome inteiro, sem corte: o sumário é a única página em que a
+                                  categoria aparece por extenso, e "Ultrassom Microfocado -
+                                  Corporal" virava "Ultrassom Microfocado - Co...". Fonte menor e
+                                  quebra em duas linhas em vez de truncar. */}
+                              <h3 className="text-[12px] font-bold text-[#1A1A1C] group-hover:text-[#9C663D] transition-colors leading-snug break-words hyphens-auto">
                                 {catName}
                               </h3>
-                              <span className="text-xs text-[#71717A] block truncate mt-0.5 font-medium">
+                              <span className="text-[11px] text-[#71717A] block mt-0.5 font-medium">
                                 {countInCat} {countInCat === 1 ? 'procedimento' : 'procedimentos'}
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5 text-[#B88358] group-hover:text-[#8C5D38] group-hover:translate-x-0.5 transition-all shrink-0 bg-[#FAF9F5] px-2.5 py-1 rounded-md border border-[#E8E6DE]">
-                            <span className="text-xs font-bold tracking-wider uppercase">
+                          <div className="flex items-center gap-1 text-[#B88358] group-hover:text-[#8C5D38] group-hover:translate-x-0.5 transition-all shrink-0 bg-[#FAF9F5] px-2 py-1 rounded-md border border-[#E8E6DE]">
+                            <span className="text-[10px] font-bold tracking-wider uppercase whitespace-nowrap">
                               Pág. {targetPage}
                             </span>
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="w-3.5 h-3.5" />
                           </div>
                         </a>
                       );
