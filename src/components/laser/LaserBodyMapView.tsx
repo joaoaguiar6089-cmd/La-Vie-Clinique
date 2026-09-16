@@ -102,7 +102,17 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
   const [proporcao, setProporcao] = useState<number | null>(null);
   const [emFoco, setEmFoco] = useState<string | null>(null);
   const [pulsando, setPulsando] = useState<string | null>(null);
-  const [traco, setTraco] = useState<number[]>([]);
+  /**
+   * O traço em andamento mora numa ref, e não no estado.
+   *
+   * Os `pointermove` de um contorno chegam muito mais rápido do que o React re-renderiza: vários
+   * caem no mesmo quadro, e todos leem o mesmo valor antigo do fechamento anterior. Com estado, um
+   * gesto rápido perde pontos — e um gesto rápido o bastante perde todos, porque cada evento lê
+   * o traço ainda vazio e desiste. A ref é a acumulação correta; o estado abaixo existe só para
+   * desenhar a prévia na tela.
+   */
+  const tracoRef = useRef<number[]>([]);
+  const [tracoVisivel, setTracoVisivel] = useState<number[]>([]);
 
   /**
    * Antes da primeira medição não dá para saber qual montagem cabe — e chutar tem custo visível:
@@ -180,25 +190,36 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
     if (!onLacoConcluido) return;
     const ponto = pontoNaFigura(e);
     if (!ponto) return;
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    setTraco(ponto);
+    // A captura mantém o traço vivo quando o dedo escapa da figura no meio do contorno — o que
+    // acontece toda vez que se desenha uma área que encosta na borda. Falhar aqui não pode
+    // cancelar o desenho: `setPointerCapture` lança se o ponteiro já não estiver ativo, e um
+    // throw no início do gesto deixaria o laço inteiro sem resposta, sem nada na tela explicando.
+    try {
+      (e.target as Element).setPointerCapture?.(e.pointerId);
+    } catch {
+      // Segue sem captura: o traço termina se sair da figura, que é pior mas continua funcionando.
+    }
+    tracoRef.current = ponto;
+    setTracoVisivel(ponto);
   };
 
   const continuarLaco = (e: React.PointerEvent) => {
-    if (!onLacoConcluido || traco.length === 0) return;
+    if (!onLacoConcluido || tracoRef.current.length === 0) return;
     const ponto = pontoNaFigura(e);
     if (!ponto) return;
-    setTraco((atual) => [...atual, ...ponto]);
+    tracoRef.current = [...tracoRef.current, ...ponto];
+    setTracoVisivel(tracoRef.current);
   };
 
   const encerrarLaco = () => {
-    if (!onLacoConcluido || traco.length === 0) return;
+    if (!onLacoConcluido || tracoRef.current.length === 0) return;
     const figura = figuraRef.current;
     if (figura) {
       const r = figura.getBoundingClientRect();
-      onLacoConcluido(traco, r.width, r.height);
+      onLacoConcluido(tracoRef.current, r.width, r.height);
     }
-    setTraco([]);
+    tracoRef.current = [];
+    setTracoVisivel([]);
   };
 
   /**
@@ -411,10 +432,10 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
             ))}
 
             {/* O traço em andamento, enquanto o dedo/mouse não solta. */}
-            {traco.length >= 4 && (
+            {tracoVisivel.length >= 4 && (
               <polyline
-                points={traco.reduce<string[]>((acc, v, i) => {
-                  if (i % 2 === 0) acc.push(`${v},${traco[i + 1]}`);
+                points={tracoVisivel.reduce<string[]>((acc, v, i) => {
+                  if (i % 2 === 0) acc.push(`${v},${tracoVisivel[i + 1]}`);
                   return acc;
                 }, []).join(' ')}
                 fill="rgba(214,69,69,.14)"

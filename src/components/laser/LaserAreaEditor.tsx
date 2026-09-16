@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronsLeftRight, Monitor, RotateCcw, Settings2, Trash2 } from 'lucide-react';
 import { ClinicProfile, LaserArea, LaserVista, Procedure } from '../../types';
 import {
@@ -22,8 +22,15 @@ import { LaserBodyMapView, AreaExibida } from './LaserBodyMapView';
  * lá na frente, quando uma paciente tocasse na virilha e selecionasse a linha alba.
  */
 
-/** Abaixo disto a tela não comporta desenhar um laço à mão livre com precisão. */
-const LARGURA_MINIMA_AUTORIA = 900;
+/**
+ * Abaixo desta largura **de janela** a tela não comporta desenhar um laço à mão livre com precisão.
+ *
+ * Mede a janela, e não o contêiner: a largura do contêiner é decisão nossa (o modal do cadastro
+ * nasceu com 768px), então usá-la para decidir "cabe ou não cabe" faz o editor diagnosticar como
+ * celular um desktop cujo modal por acaso estava estreito — foi exatamente o que aconteceu.
+ * A janela é a única medida que de fato responde "que aparelho é este".
+ */
+const LARGURA_MINIMA_AUTORIA = 1000;
 
 interface LaserAreaEditorProps {
   procedures: Procedure[];
@@ -50,10 +57,17 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
   children,
 }) => {
   const [vista, setVista] = useState<LaserVista>('frente');
-  const [larguraDisponivel, setLarguraDisponivel] = useState(0);
-  const medirRef = (el: HTMLDivElement | null) => {
-    if (el && !larguraDisponivel) setLarguraDisponivel(el.getBoundingClientRect().width);
-  };
+
+  // Acompanha o redimensionamento em vez de medir uma vez só: a medição única travava o
+  // diagnóstico para sempre, e nem girar o aparelho nem maximizar a janela o desfaziam.
+  const [larguraDaJanela, setLarguraDaJanela] = useState(() =>
+    typeof window === 'undefined' ? LARGURA_MINIMA_AUTORIA : window.innerWidth
+  );
+  useEffect(() => {
+    const aoRedimensionar = () => setLarguraDaJanela(window.innerWidth);
+    window.addEventListener('resize', aoRedimensionar);
+    return () => window.removeEventListener('resize', aoRedimensionar);
+  }, []);
 
   const manequins: Record<LaserVista, string | undefined> = {
     frente: clinic.laserManequimFrenteUrl,
@@ -153,9 +167,9 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
   // RENDER
   // ==========================================
 
-  if (larguraDisponivel > 0 && larguraDisponivel < LARGURA_MINIMA_AUTORIA) {
+  if (larguraDaJanela < LARGURA_MINIMA_AUTORIA) {
     return (
-      <div ref={medirRef} className="py-10 px-6 text-center">
+      <div className="py-10 px-6 text-center">
         <Monitor className="w-7 h-7 text-[#A67C52] mx-auto mb-3" />
         <p className="text-[13px] font-semibold text-[#1A1A1A] mb-1">
           Abra no computador para editar o mapa
@@ -170,7 +184,7 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
 
   if (semNenhumManequim) {
     return (
-      <div ref={medirRef} className="py-8 px-6 text-center bg-[#FDF6E7] border border-[#F0DCB4] rounded-sm">
+      <div className="py-8 px-6 text-center bg-[#FDF6E7] border border-[#F0DCB4] rounded-sm">
         <p className="text-[13px] font-semibold text-[#1A1A1A] mb-1">
           Os manequins ainda não foram enviados
         </p>
@@ -194,7 +208,7 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
   }
 
   return (
-    <div ref={medirRef} className="space-y-3">
+    <div className="space-y-3">
       {/* Abas Frente / Costas — uma vista de cada vez, para o manequim ficar grande. */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-1 bg-white/70 border border-white/80 rounded-sm p-1">

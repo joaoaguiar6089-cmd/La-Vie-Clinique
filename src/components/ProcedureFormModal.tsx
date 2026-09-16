@@ -545,7 +545,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
       <div 
-        className="relative w-full max-w-3xl bg-[#F9F8F6]/95 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl border border-white/60 my-6 transition-all"
+        // O modo laser precisa de um modal largo: manequim grande de um lado, painel de campos do
+        // outro, e ainda o anel de botões em volta. Com os `max-w-3xl` (768px) do cadastro comum
+        // não sobra largura para nada disso.
+        className={`relative w-full bg-[#F9F8F6]/95 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl border border-white/60 my-6 transition-all ${
+          ehLaser ? 'max-w-[1240px]' : 'max-w-3xl'
+        }`}
         id="procedure-form-modal"
       >
         {/* Header */}
