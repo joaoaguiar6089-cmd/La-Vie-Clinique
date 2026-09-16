@@ -18,6 +18,8 @@ interface BlankAnamnesisSheetProps {
   onClose: () => void;
 }
 
+type VersaoFoto = 'feminino' | 'masculino' | 'unica';
+
 /** Linhas pontilhadas para escrever à caneta. */
 const RuledLines: React.FC<{ count?: number }> = ({ count = 1 }) => (
   <div className="pt-1.5 space-y-4">
@@ -172,6 +174,29 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
   const [incluirPerguntasProfissional, setIncluirPerguntasProfissional] = useState(true);
   const [incluirImagemOrientativa, setIncluirImagemOrientativa] = useState(true);
   const [incluirTermoConsentimento, setIncluirTermoConsentimento] = useState(true);
+  const [incluirFotoAnotacao, setIncluirFotoAnotacao] = useState(true);
+  const [versaoFotoAnotacao, setVersaoFotoAnotacao] = useState<VersaoFoto>('feminino');
+
+  /**
+   * A foto de referência é a mesma tela que o profissional anota no sistema. Aqui ela sai limpa,
+   * para ser marcada à caneta na folha impressa.
+   *
+   * A ficha em branco não tem paciente, então não há gênero para escolher a versão como acontece
+   * na ficha preenchida — quando a ficha-modelo traz as duas, quem imprime decide qual vai.
+   */
+  const fotosAnotacao: { versao: VersaoFoto; rotulo: string; url: string }[] = [];
+  if (template.fotoModeloFemininoUrl) {
+    fotosAnotacao.push({ versao: 'feminino', rotulo: 'Feminino', url: template.fotoModeloFemininoUrl });
+  }
+  if (template.fotoModeloMasculinoUrl) {
+    fotosAnotacao.push({ versao: 'masculino', rotulo: 'Masculino', url: template.fotoModeloMasculinoUrl });
+  }
+  // Fichas antigas, anteriores à separação por gênero, têm uma imagem só.
+  if (fotosAnotacao.length === 0 && template.fotoModeloUrl) {
+    fotosAnotacao.push({ versao: 'unica', rotulo: 'Referência', url: template.fotoModeloUrl });
+  }
+  const fotoAnotacao =
+    fotosAnotacao.find((f) => f.versao === versaoFotoAnotacao) || fotosAnotacao[0];
 
   const nonDuplicateGeneral = generalQuestions.filter((q) => !isDuplicateIdentQuestion(q));
   const especificas = template.perguntasEspecificas || [];
@@ -270,6 +295,40 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
               />
               Imagem orientativa
             </label>
+          )}
+
+          {fotoAnotacao && (
+            <div className="flex items-center gap-2.5">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
+                <input
+                  type="checkbox"
+                  checked={incluirFotoAnotacao}
+                  onChange={(e) => setIncluirFotoAnotacao(e.target.checked)}
+                  className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                />
+                Imagem para anotação
+              </label>
+
+              {/* Só faz sentido escolher quando a ficha-modelo tem as duas versões. */}
+              {incluirFotoAnotacao && fotosAnotacao.length > 1 && (
+                <div className="flex items-center gap-1">
+                  {fotosAnotacao.map((f) => (
+                    <button
+                      key={f.versao}
+                      type="button"
+                      onClick={() => setVersaoFotoAnotacao(f.versao)}
+                      className={`px-2 py-0.5 rounded-xs text-[11px] font-semibold border transition-colors ${
+                        fotoAnotacao.versao === f.versao
+                          ? 'bg-[#A67C52] text-white border-[#A67C52]'
+                          : 'bg-white text-gray-600 border-gray-300 hover:border-[#A67C52]'
+                      }`}
+                    >
+                      {f.rotulo}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {consentSections && (
@@ -424,6 +483,24 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
               {medicoQuestions.map((q, idx) => (
                 <QuestionBlock key={q.id} question={q} index={idx + 1} />
               ))}
+            </div>
+          )}
+
+          {/* Foto de referência, limpa, para marcar à caneta na folha impressa */}
+          {fotoAnotacao && incluirFotoAnotacao && (
+            <div className="mb-6 page-break-inside-avoid">
+              <SectionHeading
+                title="Imagem para Anotação"
+                hint="Marque à caneta durante o atendimento"
+              />
+              <div className="border border-gray-200 rounded-sm bg-white p-3 flex justify-center">
+                <img
+                  src={fotoAnotacao.url}
+                  alt={`Mapa de referência para anotação — ${template.procedimentoNome}`}
+                  className="block w-full h-auto object-contain rounded-xs"
+                  style={{ maxHeight: '620px' }}
+                />
+              </div>
             </div>
           )}
 
