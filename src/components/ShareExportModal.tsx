@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { Procedure, ClinicProfile } from '../types';
 import { exportElementAsPDF, exportElementAsImage, buildWhatsAppCatalogShareUrl } from '../utils/exportHelpers';
 import { normalizeDiscountPercent, formatDiscountPercent, MAX_CATALOG_DISCOUNT } from '../utils/catalogPricing';
+import { buildPublicLink } from '../utils/publicLinks';
 import { PrintableCatalog } from './PrintableCatalog';
 import { PrintableCard } from './PrintableCard';
 import { ProcedureMultiSelect } from './ProcedureMultiSelect';
@@ -127,7 +128,9 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     setTimeout(() => setCopiedText(false), 3000);
   };
 
-  const shareCatalogUrl = window.location.href;
+  // O QR fica exposto na recepção: tem de apontar para o endereço público, e sem os parâmetros
+  // que por acaso estiverem na barra de endereços da equipe.
+  const shareCatalogUrl = buildPublicLink(clinic, {});
 
   // Campo de desconto geral — reaproveitado nas abas de catálogo e de card individual.
   const discountControl = (

@@ -51,6 +51,12 @@ export interface ClinicProfile {
   instagram: string;
   address: string;
   cityState: string;
+  /**
+   * Endereço público do app, usado como base dos links enviados à paciente (ficha de anamnese,
+   * orçamento e QR Code do catálogo). Vazio = usa o endereço da janela em que a equipe está.
+   * Ver `utils/publicLinks.ts`.
+   */
+  publicBaseUrl?: string;
   logoUrl?: string;
   watermarkEnabled?: boolean;
   coverBannerUrl?: string;

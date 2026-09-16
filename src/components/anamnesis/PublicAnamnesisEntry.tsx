@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { buildPublicLink } from '../../utils/publicLinks';
 import { AnamnesisTemplate, AnamnesisRecord, Patient, ClinicProfile, AnamnesisQuestion } from '../../types';
 import {
   getAnamnesisTemplateById,
@@ -305,9 +306,9 @@ export const PublicAnamnesisEntry: React.FC = () => {
     }
   };
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-  const personalLink = savedRecord ? `${origin}${pathname}?ficha=${savedRecord.id}` : '';
+  const personalLink = savedRecord
+    ? buildPublicLink(clinicProfile, { ficha: savedRecord.id })
+    : '';
 
   const handleCopyPersonalLink = () => {
     navigator.clipboard.writeText(personalLink);

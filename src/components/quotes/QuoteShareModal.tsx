@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { X, Copy, Check, MessageCircle, Lock } from 'lucide-react';
-import { Quote } from '../../types';
+import { ClinicProfile, Quote } from '../../types';
+import { buildPublicLink } from '../../utils/publicLinks';
 
 interface QuoteShareModalProps {
   quote: Quote | null;
+  /** Só o endereço público interessa aqui — é o que decide a base do link. */
+  clinic?: Pick<ClinicProfile, 'publicBaseUrl'>;
   onClose: () => void;
   /** Marca como enviado na primeira vez que o link sai daqui — o que trava a edição. */
   onCompartilhado: (quote: Quote) => void;
 }
 
-const montarLink = (quoteId: string): string => {
-  const { origin, pathname } = window.location;
-  return `${origin}${pathname}?orcamento=${quoteId}`;
-};
+const montarLink = (quoteId: string, clinic?: Pick<ClinicProfile, 'publicBaseUrl'>): string =>
+  buildPublicLink(clinic, { orcamento: quoteId });
 
 const linkWhatsApp = (telefone: string | undefined, texto: string): string => {
   const digitos = (telefone || '').replace(/\D/g, '');
@@ -23,6 +24,7 @@ const linkWhatsApp = (telefone: string | undefined, texto: string): string => {
 
 export const QuoteShareModal: React.FC<QuoteShareModalProps> = ({
   quote,
+  clinic,
   onClose,
   onCompartilhado,
 }) => {
@@ -30,7 +32,7 @@ export const QuoteShareModal: React.FC<QuoteShareModalProps> = ({
 
   if (!quote) return null;
 
-  const link = montarLink(quote.id);
+  const link = montarLink(quote.id, clinic);
   const primeiraVez = quote.status === 'rascunho';
   const mensagem = `Olá, ${quote.pacienteNome.split(' ')[0]}! Preparamos o seu orçamento (nº ${quote.numero}). É só abrir aqui: ${link}`;
 

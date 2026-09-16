@@ -810,6 +810,26 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                 />
               </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                  Endereço público do sistema
+                </label>
+                <input
+                  type="text"
+                  value={formData.publicBaseUrl || ''}
+                  onChange={(e) => handleChange('publicBaseUrl', e.target.value)}
+                  placeholder="https://catalogo.lavieclinique.com.br"
+                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                />
+                <p className="text-[11px] text-gray-500 mt-1.5 leading-snug">
+                  Base dos links enviados à paciente — ficha de anamnese, orçamento e QR Code do
+                  catálogo. Preencha com o endereço que abre <strong>sem pedir login</strong>. Em
+                  branco, o link usa o endereço da janela em que você estiver: se o painel foi
+                  aberto por um endereço de desenvolvimento, a paciente recebe esse endereço e cai
+                  numa tela de login. Para conferir, abra o link numa aba anônima.
+                </p>
+              </div>
             </div>
           </div>
 

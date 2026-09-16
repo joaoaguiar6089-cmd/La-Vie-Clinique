@@ -466,6 +466,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
 
       <QuoteShareModal
         quote={quoteParaCompartilhar}
+        clinic={clinic}
         onClose={() => setQuoteParaCompartilhar(null)}
         onCompartilhado={handleCompartilhado}
       />

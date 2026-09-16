@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { buildPublicLink } from '../../utils/publicLinks';
 import { AnamnesisTemplate, Patient, ClinicProfile } from '../../types';
 import {
   X,
@@ -58,16 +59,12 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
   const selectedPatient = patients.find((p) => p.id === selectedPatientId);
   const canShare = !!selectedProfessionalId;
 
-  // Compute public link
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-  const patientParam = selectedPatientId ? `&paciente=${encodeURIComponent(selectedPatientId)}` : '';
-  const professionalParam = selectedProfessionalId
-    ? `&profissional=${encodeURIComponent(selectedProfessionalId)}`
-    : '';
-  const shareableUrl = `${origin}${pathname}?anamnese=${encodeURIComponent(
-    selectedTemplate?.id || ''
-  )}${patientParam}${professionalParam}`;
+  // Compute public link — base vem do perfil da clínica, não da janela (ver utils/publicLinks.ts)
+  const shareableUrl = buildPublicLink(clinicProfile, {
+    anamnese: selectedTemplate?.id || '',
+    paciente: selectedPatientId,
+    profissional: selectedProfessionalId,
+  });
 
   // WhatsApp formatted message
   const targetPhone = selectedPatient?.contato

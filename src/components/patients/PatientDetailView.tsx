@@ -388,6 +388,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
 
       <QuoteShareModal
         quote={orcamentoParaCompartilhar}
+        clinic={clinic}
         onClose={() => setOrcamentoParaCompartilhar(null)}
         onCompartilhado={onOrcamentoCompartilhado}
       />

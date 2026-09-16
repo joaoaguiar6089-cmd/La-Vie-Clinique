@@ -293,14 +293,20 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
           {/* Cabeçalho da clínica */}
           <div className="border-b-2 border-[#1A1A1A] pb-5 mb-6 flex items-start justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-serif-luxury text-2xl font-bold tracking-tight text-[#1A1A1A]">
-                  {clinicProfile.name || 'LA VIE CLINIQUE'}
-                </span>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-[#A67C52] border-l border-[#A67C52]/40 pl-2">
-                  Prontuário & Anamnese
-                </span>
-              </div>
+              {/* O documento se apresenta pelo que ele é. Antes o topo trazia só o nome da
+                  clínica, e uma folha impressa não dizia de qual procedimento era sem que
+                  alguém lesse o corpo dela. O selo "Prontuário & Anamnese" saiu porque o
+                  título agora diz a mesma coisa.
+
+                  "La Vie Clinique" é a marca, e vai literal: o nome cadastrado no perfil é a
+                  razão social por extenso, longa demais para um título — ela continua logo
+                  abaixo, que é onde identifica a clínica. */}
+              <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-[#1A1A1A] leading-tight">
+                Anamnese - {template.procedimentoNome} - La Vie Clinique
+              </h2>
+              <p className="text-xs font-semibold text-[#1A1A1A] mt-1.5">
+                {clinicProfile.name || 'La Vie Clinique'}
+              </p>
               <p className="text-xs text-gray-500 italic mt-0.5">
                 {clinicProfile.tagline || 'Excelência Médica e Estética Avançada'}
               </p>
