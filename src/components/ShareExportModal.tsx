@@ -287,8 +287,8 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           {/* Controls Bar for PDF & Image */}
           {(activeTab === 'pdf' || activeTab === 'image') && (
             <div className="bg-white/50 backdrop-blur-md p-4 rounded-sm border border-white/60 mb-6 flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-end gap-4">
-                <div>
+              <div className="flex flex-col sm:flex-row flex-wrap sm:items-end gap-3 sm:gap-4 w-full sm:w-auto">
+                <div className="w-full sm:w-auto">
                   <label className="block text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
                     Filtrar por Categoria
                   </label>
@@ -297,7 +297,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                     onChange={(e) => setSelectedCategory(e.target.value)}
                     disabled={selectedProcedureIds.length > 0}
                     title={selectedProcedureIds.length > 0 ? 'Desative a seleção específica de procedimentos para usar o filtro por categoria' : undefined}
-                    className="px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-[#1A1A1A] disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto px-3 py-2 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-[#1A1A1A] disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {categories.map((cat, idx) => (
                       <option key={idx} value={cat}>{cat}</option>
@@ -309,11 +309,14 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   procedures={procedures}
                   selectedIds={selectedProcedureIds}
                   onChange={setSelectedProcedureIds}
+                  currentCategory={selectedCategory}
                 />
 
-                {discountControl}
+                <div className="w-full sm:w-auto">
+                  {discountControl}
+                </div>
 
-                <div className="flex items-center pb-2">
+                <div className="flex items-center sm:pb-2 pt-1 sm:pt-0">
                   <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-600">
                     <input
                       type="checkbox"

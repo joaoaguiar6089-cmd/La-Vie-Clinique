@@ -312,7 +312,16 @@ function MainCatalogApp() {
     try {
       localStorage.setItem(STORAGE_KEY_PROCEDURES, JSON.stringify(procedures));
     } catch (e) {
-      console.error('Error saving procedures to localStorage:', e);
+      console.warn('Aviso: cota de localStorage atingida, salvando versão sanitizada:', e);
+      try {
+        const sanitized = procedures.map((p) => ({
+          ...p,
+          images: (p.images || []).map((img) => (img && img.startsWith('data:') ? '' : img)),
+        }));
+        localStorage.setItem(STORAGE_KEY_PROCEDURES, JSON.stringify(sanitized));
+      } catch {
+        // Ignora caso o storage local esteja totalmente ocupado
+      }
     }
   }, [procedures]);
 
@@ -371,42 +380,40 @@ function MainCatalogApp() {
 
   // Handlers with Firestore Persistence
   const handleSaveProcedure = async (procedure: Procedure) => {
-    // Guardado antes da atualização otimista: se a gravação falhar, o estado volta ao que era.
-    // Sem isso a tela (e o localStorage) continuavam mostrando a foto nova de um procedimento que
-    // o Firestore recusou — e a alteração "sumia" sozinha no próximo sync.
     const anterior = procedures.find((p) => p.id === procedure.id) || null;
 
     try {
       setSyncStatus('syncing');
-      // Optimistic update
+
+      // Persiste no Firebase Storage e Firestore com confirmação garantida do servidor
+      const salvo = await saveProcedureToDb(procedure);
+
+      // Atualiza o estado da aplicação com as URLs definitivas geradas pelo Storage
       setProcedures((prev) => {
-        const existingIndex = prev.findIndex((p) => p.id === procedure.id);
+        const existingIndex = prev.findIndex((p) => p.id === salvo.id);
         if (existingIndex >= 0) {
           const updated = [...prev];
-          updated[existingIndex] = procedure;
+          updated[existingIndex] = salvo;
           return updated;
         } else {
-          return [procedure, ...prev];
+          return [salvo, ...prev];
         }
       });
 
-      // Persist to Firebase Firestore
-      await saveProcedureToDb(procedure);
       setSyncStatus('synced');
-      showToast(`Procedimento "${procedure.title}" salvo e sincronizado na nuvem!`);
+      showToast(`Procedimento "${salvo.title}" salvo e sincronizado na nuvem!`);
     } catch (err) {
       console.error('Error saving procedure to Firestore:', err);
       setSyncStatus('error');
 
       // Reverte para o estado anterior — nada de manter na tela algo que não foi gravado.
-      setProcedures((prev) =>
-        anterior
-          ? prev.map((p) => (p.id === procedure.id ? anterior : p))
-          : prev.filter((p) => p.id !== procedure.id)
-      );
+      if (anterior) {
+        setProcedures((prev) => prev.map((p) => (p.id === procedure.id ? anterior : p)));
+      }
 
       const motivo = err instanceof Error ? err.message : 'Erro desconhecido ao gravar na nuvem.';
       showToast(`Não foi possível salvar "${procedure.title}". ${motivo}`, 'erro');
+      throw err;
     }
   };
 

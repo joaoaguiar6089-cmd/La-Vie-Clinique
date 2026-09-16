@@ -42,6 +42,13 @@ service firebase.storage {
       allow write: if request.auth != null && ehImagem() && cabeNoLimite();
     }
 
+    // Fotos dos procedimentos do catálogo oficial.
+    // Qualquer paciente ou visitante com o catálogo aberto pode visualizar; apenas a equipe logada grava/atualiza.
+    match /procedimentos/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+    }
+
     // Qualquer outro caminho fica fechado.
     match /{allPaths=**} {
       allow read, write: if false;

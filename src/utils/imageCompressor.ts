@@ -47,6 +47,50 @@ export function downscaleImage(file: File, maxDim = 1200, quality = 0.82): Promi
 }
 
 /**
+ * Redimensiona e recomprime uma string data:image/... já carregada na memória
+ * garantindo que mesmo fotos recortadas fiquem muito leves (<= 80 KB).
+ */
+export function downscaleDataUrl(dataUrl: string, maxDim = 1000, quality = 0.78): Promise<string> {
+  if (!dataUrl || !dataUrl.startsWith('data:image')) return Promise.resolve(dataUrl);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      // Se a imagem já é menor que maxDim e o payload base64 for razoavelmente pequeno, mantém
+      if (width <= maxDim && height <= maxDim && dataUrl.length < 150000) {
+        resolve(dataUrl);
+        return;
+      }
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, width, height);
+      const mime = dataUrl.startsWith('data:image/png') ? 'image/png' : 'image/jpeg';
+      resolve(canvas.toDataURL(mime, quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+/**
  * Firestore rejects any document over 1MB (measured on the serialized document, not the JSON
  * string), and base64 photos stored inline are by far the biggest thing we write. Estimating the
  * size *before* the write lets the UI say "essa foto é grande demais" instead of letting the

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope, FileText, Crop } from 'lucide-react';
+import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope, FileText, Crop, Loader2 } from 'lucide-react';
 import { Procedure, Professional, QuoteItemDetail } from '../types';
 import { PRESET_IMAGE_LIBRARY, INITIAL_CATEGORIES } from '../data/initialData';
 import { formatBRL } from '../utils/formatters';
-import { estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
+import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
+import { subirImagemOuManter } from '../services/imageStorage';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 
 /**
@@ -22,7 +23,7 @@ const PROCEDURE_PHOTO_ASPECTS: AspectOption[] = [
 interface ProcedureFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (procedure: Procedure) => void;
+  onSave: (procedure: Procedure) => Promise<void> | void;
   procedureToEdit?: Procedure | null;
   existingCategories: string[];
   availableDoctors?: Professional[];
@@ -54,6 +55,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [benefits, setBenefits] = useState<string[]>([]);
   const [newBenefitInput, setNewBenefitInput] = useState('');
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savingStatus, setSavingStatus] = useState('');
 
   const allCategories = Array.from(
     new Set([
@@ -277,7 +280,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setQuoteDetails((prev) => prev.filter((d) => d.id !== id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
@@ -307,13 +310,35 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       ? images
       : ['https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80'];
 
+    const procedureId = procedureToEdit ? procedureToEdit.id : `proc-${Date.now()}`;
+
+    setIsSaving(true);
+    setSavingStatus('Preparando fotos...');
+
+    let uploadedImages: string[] = [];
+    try {
+      uploadedImages = await Promise.all(
+        finalImages.map(async (img, idx) => {
+          if (img && img.startsWith('data:')) {
+            setSavingStatus(`Enviando foto ${idx + 1} de ${finalImages.length} para a nuvem...`);
+            const compressed = await downscaleDataUrl(img, 1000, 0.78);
+            return await subirImagemOuManter(compressed, `procedimentos/${procedureId}`);
+          }
+          return img;
+        })
+      );
+    } catch (uploadErr) {
+      console.warn('Aviso ao preparar fotos do procedimento:', uploadErr);
+      uploadedImages = finalImages;
+    }
+
     // Linhas em branco (ou só com título) não viram detalhe: iriam para o PDF como rótulo sem resposta
     const cleanedQuoteDetails: QuoteItemDetail[] = quoteDetails
       .map((d) => ({ ...d, titulo: d.titulo.trim(), valor: d.valor.trim() }))
       .filter((d) => d.titulo && d.valor);
 
     const procedureData: Procedure = {
-      id: procedureToEdit ? procedureToEdit.id : `proc-${Date.now()}`,
+      id: procedureId,
       title: title.trim(),
       subtitle: subtitle.trim() || undefined,
       category: finalCategory,
@@ -325,7 +350,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       duration: duration.trim() || undefined,
       sessionsRecommended: sessionsRecommended.trim() || undefined,
       recoveryTime: recoveryTime.trim() || undefined,
-      images: finalImages,
+      images: uploadedImages,
       benefits: benefits.length > 0 ? benefits : ['Melhora estética e bem-estar'],
       areasTreated: areasTreated.length > 0 ? areasTreated : undefined,
       contraindications: contraindications.trim() || undefined,
@@ -348,11 +373,26 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setErrors({
         images: `As imagens somam ${(bytes / 1024 / 1024).toFixed(2)} MB e passam do limite de 1 MB por procedimento. Remova alguma foto (ou use um link de imagem) antes de salvar.`,
       });
+      setIsSaving(false);
+      setSavingStatus('');
       return;
     }
 
-    onSave(procedureData);
-    onClose();
+    setSavingStatus('Sincronizando com o servidor...');
+    try {
+      await onSave(procedureData);
+      onClose();
+    } catch (saveErr) {
+      console.error('Falha ao salvar procedimento:', saveErr);
+      const motivo = saveErr instanceof Error ? saveErr.message : 'Erro ao persistir na nuvem.';
+      setErrors((prev) => ({
+        ...prev,
+        images: `Não foi possível salvar na nuvem: ${motivo}`,
+      }));
+    } finally {
+      setIsSaving(false);
+      setSavingStatus('');
+    }
   };
 
   if (!isOpen) return null;
@@ -1052,15 +1092,26 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={cropSource !== null}
+              disabled={cropSource !== null || isSaving}
               className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
-              <Check className="w-4 h-4" />
-              {cropSource
-                ? 'Enquadrando foto...'
-                : procedureToEdit
-                ? 'Salvar Alterações'
-                : 'Cadastrar Procedimento'}
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>{savingStatus || 'Salvando...'}</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>
+                    {cropSource
+                      ? 'Enquadrando foto...'
+                      : procedureToEdit
+                      ? 'Salvar Alterações'
+                      : 'Cadastrar Procedimento'}
+                  </span>
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -1073,8 +1124,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
         title={adjustingImage ? 'Reenquadrar foto do procedimento' : 'Enquadrar foto do procedimento'}
         description="Arraste e dê zoom até a foto ficar como você quer que apareça no card, no catálogo e nos compartilhamentos."
         aspectOptions={PROCEDURE_PHOTO_ASPECTS}
-        maxOutputDim={1400}
-        quality={0.82}
+        maxOutputDim={1000}
+        quality={0.78}
         confirmLabel={adjustingImage ? 'Salvar recorte' : 'Adicionar foto'}
         progressLabel={
           !adjustingImage && cropQueueTotal > 1

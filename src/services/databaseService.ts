@@ -32,7 +32,8 @@ import {
 import { formatQuoteNumber } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
-import { estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
+import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
+import { subirImagemOuManter } from './imageStorage';
 import {
   DEFAULT_GENERAL_QUESTIONS,
   DEFAULT_PROCEDURE_TEMPLATES,
@@ -218,10 +219,16 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
         ]);
     const hasOldTemplate = !!proc1?.exists() || !!proc2?.exists();
 
-    if (colecaoVazia || hasOldTemplate) {
+    if (colecaoVazia) {
       console.log('Seeding official PDF catalog to Firebase Firestore...');
       await replaceAllProceduresWithOfficialPdfCatalog();
     } else {
+      // Se houver algum procedimento de teste legado, remove individualmente sem apagar as alterações do usuário
+      if (hasOldTemplate) {
+        if (proc1?.exists()) await deleteDoc(doc(db, PROCEDURES_COLLECTION, 'proc-1')).catch(() => {});
+        if (proc2?.exists()) await deleteDoc(doc(db, PROCEDURES_COLLECTION, 'proc-2')).catch(() => {});
+      }
+
       // Ensure clinic profile exists and has official doctor photo
       const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
       const clinicSnap = await getDoc(clinicRef);
@@ -427,18 +434,40 @@ export function subscribeToClinicProfile(
 /**
  * Save or update a single procedure.
  *
- * Fotos enviadas pelo formulário viram base64 e ficam dentro do próprio documento. Se o conjunto
- * passar do teto de 1MB do Firestore, o `setDoc` falha — mas só *depois* que o cache local já
- * aplicou a alteração, então a tela mostra a foto nova e ela some minutos depois, quando o
- * listener volta a sincronizar com o servidor. Barrar aqui, com uma mensagem que diz o que fazer,
- * troca esse "salvou e desfez sozinho" por um erro imediato e acionável.
+ * Envia as fotos do procedimento para o Firebase Storage para que fiquem guardadas como URLs leves
+ * em vez de base64 pesadas dentro do documento do Firestore. Caso o Storage esteja indisponível,
+ * as imagens recebem compressão client-side garantindo que o documento permaneça seguro (< 250 KB)
+ * e abaixo do teto de 1 MB do Firestore. Além disso, utiliza comConfirmacaoDoServidor para assegurar
+ * que o servidor do Firestore confirmou a gravação antes de dar como salvo.
  */
-export async function saveProcedureToDb(procedure: Procedure): Promise<void> {
-  const docRef = doc(db, PROCEDURES_COLLECTION, procedure.id);
-  const dataToSave = cleanForFirestore({
+export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure> {
+  // Se ainda houver alguma imagem em base64, processa e envia para o Firebase Storage
+  let imagensFinais = procedure.images || [];
+  if (imagensFinais.some((img) => img && img.startsWith('data:'))) {
+    imagensFinais = await Promise.all(
+      imagensFinais.map(async (img) => {
+        if (img && img.startsWith('data:')) {
+          try {
+            const comp = await downscaleDataUrl(img, 1000, 0.78);
+            return await subirImagemOuManter(comp, `procedimentos/${procedure.id}`);
+          } catch (err) {
+            console.warn('Falha ao subir imagem para o Storage, mantendo versão comprimida:', err);
+            return await downscaleDataUrl(img, 1000, 0.78);
+          }
+        }
+        return img;
+      })
+    );
+  }
+
+  const procedureAtualizado: Procedure = {
     ...procedure,
+    images: imagensFinais,
     updatedAt: new Date().toISOString(),
-  });
+  };
+
+  const docRef = doc(db, PROCEDURES_COLLECTION, procedureAtualizado.id);
+  const dataToSave = cleanForFirestore(procedureAtualizado);
 
   const bytes = estimateFirestoreDocBytes(dataToSave);
   if (bytes > FIRESTORE_DOC_SAFE_BYTES) {
@@ -449,7 +478,12 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<void> {
     );
   }
 
-  await setDoc(docRef, dataToSave, { merge: true });
+  await comConfirmacaoDoServidor(
+    setDoc(docRef, dataToSave, { merge: true }),
+    'do procedimento'
+  );
+
+  return procedureAtualizado;
 }
 
 /**
