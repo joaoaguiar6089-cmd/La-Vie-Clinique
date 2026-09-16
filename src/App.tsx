@@ -25,7 +25,7 @@ import {
   saveProcedureToDb,
   deleteProcedureFromDb,
   saveClinicProfileToDb,
-  publishPublicClinicProfile,
+  publicarEspelhoPublicoSeMudou,
   replaceAllProceduresWithOfficialPdfCatalog,
   subscribeToAnamnesisTemplates,
   isQuotaOrOfflineError,
@@ -217,10 +217,14 @@ function MainCatalogApp() {
 
               // Garante que o espelho público exista mesmo em clínicas que nunca reabriram as
               // configurações desde que ele passou a ser usado — é dele que a página da paciente
-              // tira nome, telefone e equipe. Uma vez por sessão, e nunca bloqueante.
+              // tira nome, telefone e equipe. Nunca bloqueante.
+              //
+              // O `ref` evita a repetição dentro desta montagem; ele zera a cada F5, e por isso a
+              // decisão de gravar mesmo mora em `publicarEspelhoPublicoSeMudou`, que compara o
+              // conteúdo com o da última publicação e não escreve nada quando nada mudou.
               if (!publicProfilePublishedRef.current) {
                 publicProfilePublishedRef.current = true;
-                publishPublicClinicProfile(enrichedClinic).catch((err) =>
+                publicarEspelhoPublicoSeMudou(enrichedClinic).catch((err) =>
                   console.warn('Não foi possível publicar o espelho público da clínica:', err)
                 );
               }
@@ -474,7 +478,12 @@ function MainCatalogApp() {
     try {
       setSyncStatus('syncing');
       setClinic(updatedClinic);
-      await saveClinicProfileToDb(updatedClinic);
+      // O perfil que volta traz logo, capa e fotos da equipe já como URL do Storage, no lugar das
+      // base64 que entraram pelo formulário. É essa versão que precisa ficar na tela e no backup
+      // local — senão o navegador segue carregando (e o localStorage segue guardando) algumas
+      // centenas de KB de imagem à toa até o próximo F5.
+      const clinicaSalva = await saveClinicProfileToDb(updatedClinic);
+      setClinic(clinicaSalva);
       setSyncStatus('synced');
       showToast('Dados da clínica e equipe médica sincronizados no Firebase!');
     } catch (err) {

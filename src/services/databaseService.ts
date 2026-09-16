@@ -357,11 +357,13 @@ export function subscribeToProcedures(
       const items: Procedure[] = [];
       snapshot.forEach((docSnap) => {
         const proc = { ...(docSnap.data() as Procedure), id: docSnap.id };
-        const catNormalizada = normalizeLaserCategory(proc.category);
-        if (catNormalizada !== proc.category) {
-          proc.category = catNormalizada;
-          updateDoc(doc(db, PROCEDURES_COLLECTION, proc.id), { category: catNormalizada }).catch(() => {});
-        }
+        // Normaliza apenas para exibir. Gravar de volta daqui era uma gravação disparada pela
+        // *chegada* do dado, e não por uma ação de alguém: toda máquina que abrisse o app
+        // reescrevia os mesmos documentos, e um `category` ausente (`undefined` virando `''`) gerava
+        // uma gravação por procedimento, todo dia, em cada navegador. O valor antigo no banco não
+        // incomoda ninguém — a tela já mostra a categoria unificada, e o próximo salvamento do
+        // procedimento grava a forma normalizada junto com o resto.
+        proc.category = normalizeLaserCategory(proc.category);
         items.push(proc);
       });
       onUpdate(items);
@@ -499,6 +501,63 @@ function toPublicClinicProfile(profile: ClinicProfile): Partial<ClinicProfile> {
   };
 }
 
+// ==========================================
+// IMAGENS DA CLÍNICA — logo, capa e fotos da equipe
+// ==========================================
+
+/**
+ * Pasta do Storage onde moram as imagens de identidade da clínica. Ver `storage.rules`: leitura
+ * aberta (a página da paciente mostra o logo sem login), gravação só para a equipe autenticada.
+ */
+const CLINIC_IMAGES_FOLDER = 'clinica';
+
+const ehImagemEmbutida = (valor?: string): boolean => !!valor && valor.startsWith('data:');
+
+/**
+ * Sobe para o Storage o logo, a capa e as fotos da equipe que ainda estiverem em base64.
+ *
+ * Estas eram as últimas imagens do sistema gravadas dentro do próprio documento do Firestore —
+ * procedimentos e fotos de anamnese já iam para o Storage. O perfil é gravado em dois documentos
+ * (o principal e o espelho público), e o espelho é reescrito inteiro, sem merge. Com um logo PNG
+ * de 512px e as fotos da equipe embutidas, cada gravação empurrava algumas centenas de KB — e a
+ * cota diária do Firestore é medida em KB gravados, não em número de gravações. Com as imagens
+ * no Storage o perfil volta a ser texto: poucos KB.
+ *
+ * Tolerante a falha como o resto do `imageStorage`: se o Storage recusar, a base64 continua valendo
+ * e nada quebra na tela — só volta a ficar caro.
+ */
+async function subirImagensDaClinica(profile: ClinicProfile): Promise<ClinicProfile> {
+  const temEmbutida =
+    ehImagemEmbutida(profile.logoUrl) ||
+    ehImagemEmbutida(profile.coverBannerUrl) ||
+    (profile.professionals || []).some((p) => ehImagemEmbutida(p.photoUrl));
+  if (!temEmbutida) return profile;
+
+  const [logoUrl, coverBannerUrl, professionals] = await Promise.all([
+    ehImagemEmbutida(profile.logoUrl)
+      ? subirImagemOuManter(profile.logoUrl as string, `${CLINIC_IMAGES_FOLDER}/logo`)
+      : Promise.resolve(profile.logoUrl),
+    ehImagemEmbutida(profile.coverBannerUrl)
+      ? subirImagemOuManter(profile.coverBannerUrl as string, `${CLINIC_IMAGES_FOLDER}/capa`)
+      : Promise.resolve(profile.coverBannerUrl),
+    Promise.all(
+      (profile.professionals || []).map(async (p) =>
+        ehImagemEmbutida(p.photoUrl)
+          ? {
+              ...p,
+              photoUrl: await subirImagemOuManter(
+                p.photoUrl as string,
+                `${CLINIC_IMAGES_FOLDER}/equipe`
+              ),
+            }
+          : p
+      )
+    ),
+  ]);
+
+  return { ...profile, logoUrl, coverBannerUrl, professionals };
+}
+
 /**
  * Save or update the clinic profile and clinical team settings.
  *
@@ -506,19 +565,37 @@ function toPublicClinicProfile(profile: ClinicProfile): Partial<ClinicProfile> {
  * A falha do espelho não derruba o salvamento principal: perder a marca na página pública é um
  * problema menor do que perder a edição do perfil.
  */
-export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<void> {
+export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<ClinicProfile> {
+  const comImagensNoStorage = await subirImagensDaClinica(profile);
+
   const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
   const dataToSave = cleanForFirestore({
-    ...profile,
+    ...comImagensNoStorage,
     updatedAt: new Date().toISOString(),
   });
+
+  // Mesmo guarda que procedimentos e fichas-modelo já tinham. Só dispara se o Storage estiver
+  // indisponível e as imagens tiverem ficado dentro do próprio documento.
+  const bytes = estimateFirestoreDocBytes(dataToSave);
+  if (bytes > FIRESTORE_DOC_SAFE_BYTES) {
+    throw new Error(
+      `Os dados da clínica somam ${(bytes / 1024 / 1024).toFixed(2)} MB e ultrapassam o limite de ` +
+        `1 MB por documento. Isso acontece quando o Firebase Storage está indisponível e as imagens ` +
+        `(logo e fotos da equipe) precisam ficar dentro do cadastro. Remova uma imagem e salve de novo.`
+    );
+  }
+
   await setDoc(clinicRef, dataToSave, { merge: true });
 
   try {
-    await publishPublicClinicProfile(profile);
+    await publicarEspelhoPublicoSeMudou(comImagensNoStorage);
   } catch (err) {
     console.warn('Perfil salvo, mas o espelho público da clínica não pôde ser atualizado:', err);
   }
+
+  // Devolve o perfil com as imagens já como URL do Storage: é essa versão que a tela e o backup
+  // local devem passar a guardar, em vez das base64 que entraram.
+  return comImagensNoStorage;
 }
 
 /** Escreve (ou reescreve) o espelho público do perfil da clínica. */
@@ -532,6 +609,61 @@ export async function publishPublicClinicProfile(profile: ClinicProfile): Promis
     }),
     { merge: false } // sem merge: um profissional removido da equipe precisa sumir daqui também
   );
+}
+
+/**
+ * Assinatura curta do conteúdo público do perfil — serve só para responder "mudou ou não mudou"
+ * desde a última publicação. `updatedAt` fica de fora de propósito: ele muda a cada gravação e
+ * faria todo perfil parecer diferente de si mesmo.
+ */
+function assinaturaDoEspelhoPublico(profile: ClinicProfile): string {
+  const publico = JSON.stringify(toPublicClinicProfile(profile));
+  let hash = 5381;
+  for (let i = 0; i < publico.length; i++) {
+    hash = ((hash << 5) + hash + publico.charCodeAt(i)) | 0;
+  }
+  return `${hash}:${publico.length}`;
+}
+
+const ESPELHO_PUBLICO_KEY = 'lavie:espelho-publico-publicado:v1';
+
+/** De tempos em tempos republica mesmo sem mudança, para reconstruir um espelho apagado à mão. */
+const ESPELHO_PUBLICO_REVALIDA_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Publica o espelho público apenas quando ele realmente mudou.
+ *
+ * Antes isto rodava uma vez por montagem do app, protegido só por um `useRef` — que zera a cada
+ * F5, a cada reabertura do atalho e a cada recarga do servidor de desenvolvimento. Cada abertura
+ * reescrevia o documento inteiro, sem merge. Era de longe o maior consumidor da cota diária de
+ * gravação: um dia normal de uso reescrevia o mesmo perfil dezenas de vezes sem que uma vírgula
+ * tivesse mudado. A marca é por navegador, então no pior caso a publicação acontece uma vez em
+ * cada máquina, em vez de sempre.
+ */
+export async function publicarEspelhoPublicoSeMudou(profile: ClinicProfile): Promise<void> {
+  const assinatura = assinaturaDoEspelhoPublico(profile);
+
+  try {
+    const marca = localStorage.getItem(ESPELHO_PUBLICO_KEY);
+    if (marca) {
+      const { assinatura: anterior, em } = JSON.parse(marca) as {
+        assinatura?: string;
+        em?: number;
+      };
+      const aindaRecente = typeof em === 'number' && Date.now() - em < ESPELHO_PUBLICO_REVALIDA_MS;
+      if (anterior === assinatura && aindaRecente) return;
+    }
+  } catch {
+    // Sem localStorage (aba anônima com storage bloqueado): publica, que é o comportamento antigo.
+  }
+
+  await publishPublicClinicProfile(profile);
+
+  try {
+    localStorage.setItem(ESPELHO_PUBLICO_KEY, JSON.stringify({ assinatura, em: Date.now() }));
+  } catch {
+    // idem — sem a marca, volta a publicar na próxima abertura.
+  }
 }
 
 /**
@@ -768,8 +900,12 @@ async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void
         hasChanges = true;
       } else {
         const updates: Partial<AnamnesisTemplate> = {};
-        if (existing.categoria !== tplDefault.categoria) {
-          updates.categoria = tplDefault.categoria;
+        // Comparadas pelas formas normalizadas: uma ficha gravada como "Depilação a Laser - Facial"
+        // e o padrão "Depilação a Laser" são a mesma categoria, e tratar as duas como diferentes
+        // fazia esta rotina regravar exatamente o valor antigo que a tela acabara de unificar.
+        const categoriaPadrao = normalizeLaserCategory(tplDefault.categoria);
+        if (normalizeLaserCategory(existing.categoria) !== categoriaPadrao) {
+          updates.categoria = categoriaPadrao;
         }
 
         const currentQuestions = existing.perguntasEspecificas || [];
@@ -892,11 +1028,8 @@ export function subscribeToAnamnesisTemplates(
       const items: AnamnesisTemplate[] = [];
       snapshot.forEach((docSnap) => {
         const tpl = { ...(docSnap.data() as AnamnesisTemplate), id: docSnap.id };
-        const catNormalizada = normalizeLaserCategory(tpl.categoria);
-        if (catNormalizada !== tpl.categoria) {
-          tpl.categoria = catNormalizada;
-          updateDoc(doc(db, ANAMNESIS_TEMPLATES_COLLECTION, tpl.id), { categoria: catNormalizada }).catch(() => {});
-        }
+        // Normalização só para exibição — mesma decisão de `subscribeToProcedures`.
+        tpl.categoria = normalizeLaserCategory(tpl.categoria);
         items.push(tpl);
       });
       // Sort alphabetically by procedure name
@@ -1092,7 +1225,12 @@ export async function getAnamnesisTemplateById(templateId: string): Promise<Anam
   const docRef = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, templateId);
   const snap = await getDoc(docRef);
   if (!snap.exists()) return null;
-  return { ...(snap.data() as AnamnesisTemplate), id: snap.id };
+  const tpl = { ...(snap.data() as AnamnesisTemplate), id: snap.id };
+  // Mesma normalização de exibição da assinatura em tempo real: agora que ninguém reescreve a
+  // categoria no banco, quem lê avulso precisa normalizar por conta própria — é por aqui que a
+  // página pública da paciente carrega a ficha.
+  tpl.categoria = normalizeLaserCategory(tpl.categoria);
+  return tpl;
 }
 
 /**

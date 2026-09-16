@@ -42,6 +42,17 @@ service firebase.storage {
       allow write: if request.auth != null && ehImagem() && cabeNoLimite();
     }
 
+    // Identidade da clínica: logo, banner de capa e fotos da equipe.
+    //
+    // Estas eram as últimas imagens que ainda ficavam em base64 dentro do Firestore. O perfil da
+    // clínica é gravado em dois documentos e o espelho público é reescrito inteiro, então cada
+    // imagem embutida era cobrada de novo a cada gravação. Leitura aberta porque a página da
+    // paciente (ficha e orçamento, ambas sem login) mostra o logo e a foto da profissional.
+    match /clinica/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+    }
+
     // Fotos dos procedimentos do catálogo oficial.
     // Qualquer paciente ou visitante com o catálogo aberto pode visualizar; apenas a equipe logada grava/atualiza.
     match /procedimentos/{allPaths=**} {
