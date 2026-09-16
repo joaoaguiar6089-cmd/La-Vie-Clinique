@@ -42,6 +42,7 @@ import {
   SAMPLE_PATIENTS,
   SAMPLE_ANAMNESIS_RECORDS,
   LASER_HEALTH_QUESTIONS,
+  PERGUNTAS_PROFISSIONAL_GLUTEO,
 } from '../data/anamnesisInitialData';
 import { isLaserCategory } from '../utils/templateMatching';
 
@@ -616,6 +617,12 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       marcarLaserSyncComoFeito();
     }
 
+    // A ficha de Harmonização Glútea das clínicas que já usavam o sistema antes do bloco de
+    // avaliação da profissional existir. Controle no próprio documento, roda uma vez só.
+    if (!templatesVazios) {
+      await migrarPerguntasProfissionalGluteo();
+    }
+
     // 3. Seed Patients if empty
     const pacientesVazios = await colecaoVaziaNoServidor(PATIENTS_COLLECTION);
     if (pacientesVazios === null) return;
@@ -647,6 +654,76 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
     } else {
       console.error('Error seeding initial anamnesis data:', err);
     }
+  }
+}
+
+const GLUTEO_TEMPLATE_ID = 'tpl-harmonizacao-glutea';
+const GLUTEO_MIGRACAO = 'gluteo-perguntas-profissional-v1';
+/** Atalho local: evita a leitura de confirmação em toda abertura, depois da primeira. */
+const GLUTEO_MIGRACAO_LOCAL_KEY = 'lavie:gluteo-perguntas-profissional:v1';
+
+/**
+ * Acrescenta à ficha de Harmonização Glútea o bloco de avaliação clínica respondido pela
+ * profissional (queixa, estratégia, evolução e as cinco notas de 1 a 10).
+ *
+ * Roda uma única vez por clínica: o controle é o `migracoesAplicadas` gravado na própria ficha,
+ * então apagar uma dessas perguntas na tela é definitivo — ela não volta na próxima abertura,
+ * nem em outro aparelho. Só acrescenta o que falta, comparando por id, e nunca toca no que a
+ * equipe já tiver editado.
+ */
+async function migrarPerguntasProfissionalGluteo(): Promise<void> {
+  try {
+    if (localStorage.getItem(GLUTEO_MIGRACAO_LOCAL_KEY)) return;
+  } catch {
+    // localStorage indisponível — segue pela leitura no servidor.
+  }
+
+  try {
+    const ref = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, GLUTEO_TEMPLATE_ID);
+    // Do servidor: um cache frio devolveria a ficha sem as perguntas que a equipe acrescentou
+    // na tela, e a gravação abaixo as apagaria.
+    const snap = await getDocFromServer(ref);
+    if (!snap.exists()) return;
+
+    const ficha = snap.data() as AnamnesisTemplate;
+    if ((ficha.migracoesAplicadas || []).includes(GLUTEO_MIGRACAO)) {
+      try {
+        localStorage.setItem(GLUTEO_MIGRACAO_LOCAL_KEY, '1');
+      } catch {
+        // sem atalho local; a leitura acima continua resolvendo
+      }
+      return;
+    }
+
+    const atuais = ficha.perguntasEspecificas || [];
+    const faltando = PERGUNTAS_PROFISSIONAL_GLUTEO.filter(
+      (nova) => !atuais.some((q) => q.id === nova.id)
+    );
+
+    const perguntas = [...atuais, ...faltando].map((q, idx) => ({ ...q, ordem: idx + 1 }));
+
+    await updateDoc(ref, {
+      ...cleanForFirestore({
+        perguntasEspecificas: perguntas,
+        migracoesAplicadas: [...(ficha.migracoesAplicadas || []), GLUTEO_MIGRACAO],
+      }),
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      localStorage.setItem(GLUTEO_MIGRACAO_LOCAL_KEY, '1');
+    } catch {
+      // idem
+    }
+
+    if (faltando.length > 0) {
+      console.log(
+        `Ficha de Harmonização Glútea: ${faltando.length} perguntas da profissional adicionadas.`
+      );
+    }
+  } catch (err) {
+    // Sem rede, sem cota ou sem permissão: a migração fica para a próxima abertura.
+    console.warn('Migração das perguntas da profissional (Harmonização Glútea) adiada:', err);
   }
 }
 

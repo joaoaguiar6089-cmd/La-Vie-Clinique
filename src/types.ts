@@ -154,6 +154,14 @@ export interface AnamnesisTemplate {
   termoConsentimentoSecoes?: ConsentTermSection[];
   perguntasEspecificas: AnamnesisQuestion[];
   descricao?: string;
+  /**
+   * Migrações de conteúdo já aplicadas a esta ficha (ex.: 'gluteo-perguntas-profissional-v1').
+   *
+   * Mora no documento, e não no localStorage, porque a pergunta que ela responde é sobre a
+   * clínica, não sobre o navegador: uma marca local faria a migração rodar de novo em cada
+   * aparelho novo e ressuscitar perguntas que a equipe tivesse apagado de propósito.
+   */
+  migracoesAplicadas?: string[];
   updatedAt?: string;
 }
 

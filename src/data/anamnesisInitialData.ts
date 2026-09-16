@@ -202,6 +202,146 @@ export const ALL_LASER_PROCEDURE_QUESTIONS: AnamnesisQuestion[] = [
 /**
  * Fichas-modelo padrão para os procedimentos requisitados pela clínica La Vie
  */
+/**
+ * Bloco de avaliação clínica da Harmonização Glútea, respondido pela profissional (não pela
+ * paciente). Fica exportado à parte porque duas coisas o consomem: a ficha-modelo padrão logo
+ * abaixo, para clínicas novas, e a migração em databaseService que o acrescenta à ficha que já
+ * existe no Firestore de quem começou a usar o sistema antes destas perguntas existirem.
+ *
+ * `ordem` sai daqui zerada de propósito — quem aplica renumera a lista inteira no fim.
+ */
+export const PERGUNTAS_PROFISSIONAL_GLUTEO: AnamnesisQuestion[] = [
+  {
+    id: 'gluteo-prof-queixa',
+    texto: 'Principal queixa:',
+    tipo_campo: 'texto_longo',
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-alteracao',
+    texto: 'Alteração identificada:',
+    tipo_campo: 'texto_longo',
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-objetivo',
+    texto: 'Objetivo estético:',
+    tipo_campo: 'texto_longo',
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-estrategia',
+    texto: 'Estratégia proposta:',
+    tipo_campo: 'multipla_escolha',
+    opcoes: [
+      'Glúteo Max',
+      'Bioestimulador',
+      'Ácido hialurônico',
+      'Hexapeptídeos',
+      'Associação de técnicas',
+      'Hidroxiapatita de cálcio',
+      'Outro',
+    ],
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-estrategia-outro',
+    texto: 'Se marcou "Outro" na estratégia, especifique qual:',
+    tipo_campo: 'texto_curto',
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-quantidade',
+    texto: 'Quantidade de produto utilizado:',
+    tipo_campo: 'texto_longo',
+    ajuda:
+      'Registre a quantidade de cada técnica assinalada acima — ex.: Bioestimulador, 2 frascos; ' +
+      'Ácido hialurônico, 10 ml.',
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-prioridade',
+    texto: 'Prioridade de tratamento:',
+    tipo_campo: 'texto_curto',
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-evolucao-paciente',
+    texto: 'Evolução percebida pela paciente:',
+    tipo_campo: 'texto_longo',
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-evolucao-profissional',
+    texto: 'Evolução observada pelo profissional:',
+    tipo_campo: 'texto_longo',
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-projecao',
+    texto: 'Projeção',
+    tipo_campo: 'escala',
+    escalaMax: 10,
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-simetria',
+    texto: 'Simetria',
+    tipo_campo: 'escala',
+    escalaMax: 10,
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-contorno',
+    texto: 'Contorno',
+    tipo_campo: 'escala',
+    escalaMax: 10,
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-qualidade-pele',
+    texto: 'Qualidade da pele',
+    tipo_campo: 'escala',
+    escalaMax: 10,
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'gluteo-prof-satisfacao',
+    texto: 'Satisfação',
+    tipo_campo: 'escala',
+    escalaMax: 10,
+    obrigatoria: false,
+    ordem: 0,
+    publicoAlvo: 'medico',
+  },
+];
+
 export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
   {
     id: 'tpl-botox',
@@ -430,6 +570,7 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
         obrigatoria: false,
         ordem: 5,
       },
+      ...PERGUNTAS_PROFISSIONAL_GLUTEO.map((q, i) => ({ ...q, ordem: 6 + i })),
     ],
   },
   {
