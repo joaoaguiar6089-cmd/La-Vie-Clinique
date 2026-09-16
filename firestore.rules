@@ -15,6 +15,16 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
+    // Mapa corporal da depilação a laser: as duas imagens dos manequins e os polígonos de cada
+    // área, sem preço nenhum. A paciente escolhe as áreas pretendidas pela ficha de anamnese, que
+    // ela abre por link e sem conta — e a coleção `procedures`, onde as áreas realmente moram,
+    // exige login para leitura. Mesma solução (e mesma posição, antes da regra geral) do
+    // public_profile logo acima.
+    match /clinic_settings/laser_body_map {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
     // Clinic settings document: identidade da clínica, profissionais cadastradas, contato.
     // Contém os vínculos de login (email/uid/isAdmin) das profissionais — não pode ser público.
     match /clinic_settings/{docId} {

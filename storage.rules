@@ -53,6 +53,13 @@ service firebase.storage {
       allow write: if request.auth != null && ehImagem() && cabeNoLimite();
     }
 
+    // Manequins do mapa corporal da depilação a laser (corpo frente e corpo costas). Leitura
+    // aberta porque a paciente vê o manequim ao escolher as áreas na ficha, sem login.
+    match /clinica/laser-manequim/{arquivo} {
+      allow read: if true;
+      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+    }
+
     // Fotos dos procedimentos do catálogo oficial.
     // Qualquer paciente ou visitante com o catálogo aberto pode visualizar; apenas a equipe logada grava/atualiza.
     match /procedimentos/{allPaths=**} {

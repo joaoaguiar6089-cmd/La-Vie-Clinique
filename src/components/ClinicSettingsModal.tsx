@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon } from 'lucide-react';
+import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, Scan } from 'lucide-react';
 import { ClinicProfile, Professional } from '../types';
 import { createProfessionalLogin } from '../services/authService';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
@@ -23,6 +23,23 @@ const CLINIC_LOGO_ASPECTS: AspectOption[] = [
   { id: 'original', label: 'Original', ratio: null },
   { id: 'quadrado', label: 'Quadrado', ratio: 1 },
 ];
+
+/**
+ * Os dois manequins do mapa corporal da depilação a laser. São só dois campos, e sem variante por
+ * gênero: a silhueta é neutra e as áreas são desenhadas uma vez para todo mundo.
+ */
+type ManequimCampo = 'laserManequimFrenteUrl' | 'laserManequimCostasUrl';
+
+const MANEQUINS: { campo: ManequimCampo; rotulo: string }[] = [
+  { campo: 'laserManequimFrenteUrl', rotulo: 'Corpo — Frente' },
+  { campo: 'laserManequimCostasUrl', rotulo: 'Corpo — Costas' },
+];
+
+/**
+ * Maior lado da imagem gerada. As áreas precisam ficar nítidas num manequim grande, mas o arquivo
+ * ainda vai para o Storage e é baixado pela paciente no celular — 1400px é o meio-termo.
+ */
+const LASER_MANEQUIM_MAX_DIM = 1400;
 
 interface ClinicSettingsModalProps {
   isOpen: boolean;
@@ -100,6 +117,13 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   const [photoCropSource, setPhotoCropSource] = useState<File | string | null>(null);
   /** Mesma ideia do recorte da foto, para o logo da clínica. */
   const [logoCropSource, setLogoCropSource] = useState<File | string | null>(null);
+  const [manequimCrop, setManequimCrop] = useState<{
+    campo: ManequimCampo;
+    source: File | string;
+    opcoes: AspectOption[];
+    substituindo: boolean;
+  } | null>(null);
+  const [avisoManequim, setAvisoManequim] = useState<string | null>(null);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
   const [creatingLoginForId, setCreatingLoginForId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -122,6 +146,49 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     e.target.value = '';
     if (!file || !file.type.startsWith('image/')) return;
     setLogoCropSource(file);
+  };
+
+  /**
+   * Troca de manequim é travada na proporção da imagem que já está lá.
+   *
+   * As áreas do mapa guardam coordenadas relativas à imagem (0–1). Substituir a frente por um
+   * arquivo mais largo ou mais alto não moveria um número sequer no banco, mas jogaria a virilha
+   * na coxa em todas as áreas daquela vista de uma vez — um estrago silencioso, que só aparece
+   * quando alguém abre o mapa. Travar o recorte na proporção atual mantém as coordenadas válidas.
+   *
+   * Frente e costas **não** precisam combinar entre si: cada vista tem seu próprio sistema de
+   * coordenadas. Por isso a trava é por slot, e o primeiro envio de cada um é livre.
+   */
+  const proporcaoDaImagem = (url: string): Promise<number | null> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img.naturalHeight ? img.naturalWidth / img.naturalHeight : null);
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+
+  const handleManequimUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    campo: ManequimCampo
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+
+    const atual = formData[campo];
+    const proporcao = atual ? await proporcaoDaImagem(atual) : null;
+
+    setManequimCrop({
+      campo,
+      source: file,
+      opcoes: proporcao
+        ? [{ id: 'atual', label: 'Proporção atual', ratio: proporcao }]
+        : [
+            { id: 'corpo', label: 'Corpo inteiro', ratio: 1 / 2.2 },
+            { id: 'original', label: 'Original', ratio: null },
+          ],
+      substituindo: Boolean(atual),
+    });
   };
 
   const handleChange = (field: keyof ClinicProfile, value: any) => {
@@ -865,6 +932,72 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
             </div>
           </div>
 
+          {/* Mapa corporal da depilação a laser */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+              <Scan className="w-3.5 h-3.5" />
+              Depilação a Laser — Mapa Corporal
+            </h3>
+
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              Os dois manequins sobre os quais as áreas de aplicação são desenhadas. Servem para
+              ambos os gêneros — as áreas são desenhadas uma vez só. Envie de preferência em PNG
+              com fundo transparente, e use a mesma silhueta nas duas vistas.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {MANEQUINS.map(({ campo, rotulo }) => {
+                const url = formData[campo];
+                return (
+                  <div
+                    key={campo}
+                    className="bg-white/70 border border-white/80 rounded-sm p-3 flex flex-col items-center gap-2"
+                  >
+                    <span className="text-[11px] font-semibold text-[#1A1A1A] uppercase tracking-wider">
+                      {rotulo}
+                    </span>
+
+                    <div className="h-40 flex items-center justify-center w-full bg-[#F9F8F6] rounded-xs border border-dashed border-[#d8d2c8] overflow-hidden">
+                      {url ? (
+                        <img src={url} alt={rotulo} className="h-full w-auto object-contain" />
+                      ) : (
+                        <span className="text-[10px] text-gray-400">Nenhuma imagem enviada</span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] cursor-pointer transition-colors flex items-center gap-1">
+                        <ImageIcon className="w-3 h-3" />
+                        {url ? 'Trocar' : 'Enviar'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleManequimUpload(e, campo)}
+                          className="hidden"
+                        />
+                      </label>
+                      {url && (
+                        <button
+                          type="button"
+                          onClick={() => handleChange(campo, '')}
+                          className="text-[11px] text-red-500 hover:text-red-700 font-medium"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {avisoManequim && (
+              <p className="text-[11px] text-[#8E5B1A] bg-[#FDF6E7] border border-[#F0DCB4] rounded-sm px-3 py-2 leading-relaxed">
+                {avisoManequim}
+              </p>
+            )}
+          </div>
+
           {/* Footer actions */}
           <div className="pt-4 border-t border-white/60 flex items-center justify-end gap-3 sticky bottom-0 bg-[#F9F8F6]/95 backdrop-blur-md py-2">
             <button
@@ -934,6 +1067,36 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         onConfirm={(dataUrl) => {
           handleChange('logoUrl', dataUrl);
           setLogoCropSource(null);
+        }}
+      />
+
+      {/* Manequim: PNG pelo mesmo motivo do logo (a silhueta costuma vir com fundo transparente) e
+          num lado maior generoso — as áreas desenhadas por cima precisam ficar nítidas. */}
+      <ImageCropperModal
+        isOpen={manequimCrop !== null}
+        source={manequimCrop?.source ?? null}
+        title="Enquadrar manequim"
+        description={
+          manequimCrop?.substituindo
+            ? 'A proporção está travada na da imagem atual: as áreas já desenhadas nesta vista usam coordenadas relativas a ela e sairiam do lugar com outra proporção.'
+            : 'A figura inteira precisa caber no quadro. Deixe uma folga em volta do corpo.'
+        }
+        aspectOptions={manequimCrop?.opcoes}
+        maxOutputDim={LASER_MANEQUIM_MAX_DIM}
+        quality={0.92}
+        outputMimeType="image/png"
+        confirmLabel="Usar este manequim"
+        onCancel={() => setManequimCrop(null)}
+        onConfirm={(dataUrl) => {
+          if (manequimCrop) {
+            handleChange(manequimCrop.campo, dataUrl);
+            setAvisoManequim(
+              manequimCrop.substituindo
+                ? 'Manequim substituído. Abra um procedimento de depilação a laser e confira se as áreas desta vista continuam no lugar certo.'
+                : null
+            );
+          }
+          setManequimCrop(null);
         }}
       />
     </div>

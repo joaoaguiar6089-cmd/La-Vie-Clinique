@@ -196,14 +196,23 @@ async function migrarPerfilDaClinica(): Promise<void> {
     const alteracoes: Record<string, unknown> = {};
     const tocados: string[] = [];
 
-    for (const campo of ['logoUrl', 'coverBannerUrl'] as const) {
+    // Os dois manequins do mapa corporal do laser entram aqui pelo mesmo motivo que o logo: são
+    // imagens grandes que, embutidas, tornam caro cada salvamento do perfil. Hoje o app se recusa
+    // a gravá-las em base64 (ver `subirManequinsDoLaser`), mas o script continua sendo a rede
+    // para um documento que tenha vindo de antes dessa trava.
+    const PASTAS: Record<string, string> = {
+      logoUrl: 'clinica/logo',
+      coverBannerUrl: 'clinica/capa',
+      laserManequimFrenteUrl: 'clinica/laser-manequim',
+      laserManequimCostasUrl: 'clinica/laser-manequim',
+    };
+
+    for (const campo of Object.keys(PASTAS)) {
       const valor = dados[campo];
       if (!ehBase64(valor)) continue;
       bytesLiberados += valor.length;
       tocados.push(campo);
-      alteracoes[campo] = aplicar
-        ? await subir(valor, `clinica/${campo === 'logoUrl' ? 'logo' : 'capa'}`)
-        : valor;
+      alteracoes[campo] = aplicar ? await subir(valor, PASTAS[campo]) : valor;
     }
 
     const equipe = Array.isArray(dados.professionals) ? (dados.professionals as any[]) : [];

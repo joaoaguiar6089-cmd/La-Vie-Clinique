@@ -30,12 +30,14 @@ import {
   Quote,
   QuoteDraft,
   QuoteStoredStatus,
+  LaserBodyMap,
 } from '../types';
 import { formatQuoteNumber } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
 import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
-import { subirImagemOuManter } from './imageStorage';
+import { subirImagem, subirImagemOuManter } from './imageStorage';
+import { montarEspelhoPublico, LASER_MANEQUIM_MAX_LADO } from '../utils/laserAreas';
 import {
   DEFAULT_GENERAL_QUESTIONS,
   DEFAULT_PROCEDURE_TEMPLATES,
@@ -44,7 +46,6 @@ import {
   LASER_HEALTH_QUESTIONS,
   PERGUNTAS_PROFISSIONAL_GLUTEO,
 } from '../data/anamnesisInitialData';
-import { isLaserCategory } from '../utils/templateMatching';
 
 const PROCEDURES_COLLECTION = 'procedures';
 const CLINIC_SETTINGS_COLLECTION = 'clinic_settings';
@@ -566,7 +567,10 @@ async function subirImagensDaClinica(profile: ClinicProfile): Promise<ClinicProf
  * problema menor do que perder a edição do perfil.
  */
 export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<ClinicProfile> {
-  const comImagensNoStorage = await subirImagensDaClinica(profile);
+  // Os manequins sobem primeiro e por um caminho estrito: se o Storage recusar, esta linha lança
+  // e o perfil não é gravado. É de propósito — ver `subirManequinsDoLaser`.
+  const comManequins = await subirManequinsDoLaser(profile);
+  const comImagensNoStorage = await subirImagensDaClinica(comManequins);
 
   const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
   const dataToSave = cleanForFirestore({
@@ -666,6 +670,120 @@ export async function publicarEspelhoPublicoSeMudou(profile: ClinicProfile): Pro
   }
 }
 
+// ==========================================
+// MAPA CORPORAL DA DEPILAÇÃO A LASER
+// ==========================================
+
+/**
+ * Espelho público do mapa corporal. Existe pela mesma razão do `public_profile`: a paciente
+ * escolhe as áreas pretendidas dentro da ficha de anamnese, que ela abre por link e sem conta —
+ * e `procedures`, onde as áreas moram de verdade, exige login para leitura.
+ *
+ * Leva os polígonos e os nomes curtos, nunca os preços.
+ */
+const CLINIC_LASER_MAP_DOC_ID = 'laser_body_map';
+
+const LASER_MANEQUIM_FOLDER = `${CLINIC_IMAGES_FOLDER}/laser-manequim`;
+
+/**
+ * Sobe os dois manequins para o Storage — e, ao contrário de todo o resto do `imageStorage`,
+ * **recusa o fallback para base64**.
+ *
+ * Em qualquer outra imagem do sistema, cair na base64 é um retrocesso tolerável: a tela continua
+ * funcionando e só volta a ficar caro. Aqui não. Um manequim de corpo inteiro nítido pesa de 400 a
+ * 900 KB, o que em base64 vira 530 KB a 1,2 MB — e a cota deste projeto conta write units de 1 KiB
+ * gravado, de um teto diário de 20.000. Duas dessas dentro de `clinic_settings` seriam mais de mil
+ * unidades por gravação, em um documento que é reescrito a cada ajuste do perfil, com risco de
+ * estourar o teto de 1 MB por documento e travar as Configurações de vez.
+ *
+ * Então, se o Storage recusar, esta função lança: melhor a equipe ver "não foi possível enviar" e
+ * tentar de novo do que salvar um perfil que envenena a cota da clínica inteira.
+ */
+async function subirManequinsDoLaser(profile: ClinicProfile): Promise<ClinicProfile> {
+  const campos = ['laserManequimFrenteUrl', 'laserManequimCostasUrl'] as const;
+  if (!campos.some((campo) => ehImagemEmbutida(profile[campo]))) return profile;
+
+  const resultado: ClinicProfile = { ...profile };
+
+  for (const campo of campos) {
+    const valor = profile[campo];
+    if (!ehImagemEmbutida(valor)) continue;
+
+    const reduzida = await downscaleDataUrl(valor as string, LASER_MANEQUIM_MAX_LADO, 0.92);
+    const { url, noStorage } = await subirImagem(reduzida, LASER_MANEQUIM_FOLDER);
+    if (!noStorage) {
+      throw new Error(
+        'Não foi possível enviar a imagem do manequim para o Firebase Storage. Verifique a ' +
+          'conexão e se as regras de storage.rules foram publicadas, e tente novamente. A imagem ' +
+          'não foi salva — manequins são grandes demais para ficar dentro do documento.'
+      );
+    }
+    resultado[campo] = url;
+  }
+
+  return resultado;
+}
+
+/**
+ * Assinatura do conteúdo do espelho, para não regravar um documento idêntico.
+ *
+ * Fica só em memória, sem marca no `localStorage` como o espelho do perfil: este espelho nunca é
+ * publicado em carregamento de página — só por ação explícita da equipe — então não há a enxurrada
+ * de reescritas por F5 que aquela marca resolve.
+ */
+let assinaturaDoMapaPublicado: string | null = null;
+
+/**
+ * Publica `clinic_settings/laser_body_map` a partir do catálogo em memória.
+ *
+ * **Só pode ser chamada a partir de uma ação explícita da equipe** (aplicar uma área, salvar as
+ * Configurações). Nunca de dentro de um `useEffect` de carregamento nem de um callback de
+ * `onSnapshot`: são ~10 KB por gravação, e uma vez por abertura do app, vezes dezenas de aberturas
+ * diárias, vira consumo de fundo real da cota — foi exatamente assim que o espelho do perfil virou
+ * o maior consumidor do dia antes de ganhar a marca de "publica só se mudou".
+ *
+ * Não derruba quem chamou: perder a atualização do mapa público é menos grave do que perder o
+ * salvamento da área que acabou de ser desenhada.
+ */
+export async function publicarMapaCorporalDoLaser(
+  procedures: Procedure[],
+  clinic: Pick<ClinicProfile, 'laserManequimFrenteUrl' | 'laserManequimCostasUrl'>
+): Promise<void> {
+  try {
+    const mapa = montarEspelhoPublico(procedures, clinic);
+
+    // `updatedAt` fora da assinatura: ele muda sempre e faria todo mapa parecer diferente de si.
+    const { updatedAt: _ignorado, ...conteudo } = mapa;
+    const assinatura = JSON.stringify(conteudo);
+    if (assinatura === assinaturaDoMapaPublicado) return;
+
+    const ref = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_LASER_MAP_DOC_ID);
+    // Sem merge: uma área removida do catálogo precisa sumir daqui também.
+    await setDoc(ref, cleanForFirestore(mapa), { merge: false });
+    assinaturaDoMapaPublicado = assinatura;
+  } catch (err) {
+    console.warn('O mapa corporal do laser não pôde ser publicado no espelho público:', err);
+  }
+}
+
+/**
+ * Lê o mapa corporal na página pública (ficha de anamnese aberta pela paciente, sem login).
+ *
+ * Devolve `null` quando o mapa ainda não foi publicado — a clínica pode não ter enviado os
+ * manequins, e a ficha precisa continuar funcionando sem a etapa de áreas em vez de não abrir.
+ */
+export async function getMapaCorporalDoLaserPublico(): Promise<LaserBodyMap | null> {
+  try {
+    const snap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_LASER_MAP_DOC_ID));
+    if (!snap.exists()) return null;
+    const dados = snap.data() as LaserBodyMap;
+    return { ...dados, areas: dados.areas || [] };
+  } catch (err) {
+    console.warn('Não foi possível ler o mapa corporal do laser:', err);
+    return null;
+  }
+}
+
 /**
  * Reorder procedures in Firestore using a batch write.
  */
@@ -691,7 +809,10 @@ export async function reorderProceduresInDb(procedures: Procedure[]): Promise<vo
  * do app era o maior desperdício de leituras do sistema. A marca é por navegador: no pior caso a
  * sincronização roda uma vez em cada máquina, em vez de sempre.
  */
-const LASER_SYNC_DONE_KEY = 'lavie:laser-templates-sync:v1';
+// v2: a sincronização deixou de recriar as 13 fichas por área e passou a ocultá-las, promovendo a
+// ficha única. Trocar a chave faz o ajuste rodar uma vez em cada máquina que já tinha a marca v1 —
+// sem isso, quem já abriu o app antes nunca veria a consolidação acontecer.
+const LASER_SYNC_DONE_KEY = 'lavie:laser-templates-sync:v2';
 
 function laserSyncJaRodou(): boolean {
   try {
@@ -860,87 +981,110 @@ async function migrarPerguntasProfissionalGluteo(): Promise<void> {
 }
 
 /**
- * Garante que todas as fichas de Depilação a Laser (Facial, Íntima e Corporal)
- * existam no Firestore e contenham as 13 perguntas de saúde obrigatórias.
+ * ID da ficha única de Depilação a Laser.
+ *
+ * Reaproveita a `tpl-epilacao-laser`, que já existe no seed com as 19 perguntas de segurança, em
+ * vez de criar uma décima quinta ficha de laser: fichas de anamnese já preenchidas que apontem
+ * para ela continuam resolvendo normalmente.
+ */
+export const LASER_TEMPLATE_UNICO_ID = 'tpl-epilacao-laser';
+
+/** Os 13 IDs semeados, um por área. São exatamente estes que a ficha única aposenta. */
+const IDS_FICHAS_POR_AREA = DEFAULT_PROCEDURE_TEMPLATES.filter((t) =>
+  t.id.startsWith('tpl-laser-')
+).map((t) => t.id);
+
+/**
+ * Consolida a anamnese de laser numa ficha só e aposenta as treze por área.
+ *
+ * O que havia antes: uma ficha para Buço, outra para Queixo, outra para Axilas — treze ao todo,
+ * **todas repetindo as mesmas 19 perguntas de segurança**, e todas recriadas a cada abertura do
+ * app. Na prática, uma cliente que queria axilas, virilha e meia perna recebia três links e
+ * respondia três vezes se tinha diabetes. Agora a área é escolhida no mapa corporal, dentro de uma
+ * ficha única.
+ *
+ * As treze ficam **ocultas, não apagadas**: fichas já preenchidas apontam para elas por
+ * `templateId`, e apagar faria uma anamnese assinada deixar de renderizar. E a ocultação é por ID
+ * exato do seed, não por categoria — uma ficha de laser que a própria clínica tenha criado à mão
+ * não é nossa para esconder.
  */
 async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void> {
   try {
-    const existingTemplates: AnamnesisTemplate[] = [];
+    const existentes: AnamnesisTemplate[] = [];
     tplSnap.forEach((docSnap) => {
-      existingTemplates.push({ ...(docSnap.data() as AnamnesisTemplate), id: docSnap.id });
+      existentes.push({ ...(docSnap.data() as AnamnesisTemplate), id: docSnap.id });
     });
 
-    const laserTemplatesToEnsure = DEFAULT_PROCEDURE_TEMPLATES.filter(
-      (tpl) =>
-        isLaserCategory(tpl.categoria) ||
-        tpl.id.startsWith('tpl-laser-') ||
-        tpl.id === 'tpl-epilacao-laser'
-    );
-
     const batch = writeBatch(db);
-    let hasChanges = false;
+    let mudou = false;
 
-    for (const tplDefault of laserTemplatesToEnsure) {
-      const existing = existingTemplates.find(
-        (t) =>
-          t.id === tplDefault.id ||
-          (t.procedimentoId && t.procedimentoId === tplDefault.procedimentoId) ||
-          t.procedimentoNome.toLowerCase() === tplDefault.procedimentoNome.toLowerCase()
+    // 1. A ficha única. A categoria precisa ser "Depilação a Laser" — é ela que faz
+    //    `isLaserCategory` reconhecer a ficha e liberar a etapa do mapa corporal no formulário.
+    const modeloUnico = DEFAULT_PROCEDURE_TEMPLATES.find((t) => t.id === LASER_TEMPLATE_UNICO_ID);
+    const unicaExistente = existentes.find((t) => t.id === LASER_TEMPLATE_UNICO_ID);
+    const perguntasDoModelo = modeloUnico?.perguntasEspecificas || [];
+
+    if (!unicaExistente && modeloUnico) {
+      batch.set(
+        doc(db, ANAMNESIS_TEMPLATES_COLLECTION, LASER_TEMPLATE_UNICO_ID),
+        cleanForFirestore({
+          ...modeloUnico,
+          procedimentoNome: 'Depilação a Laser',
+          categoria: 'Depilação a Laser',
+          oculta: false,
+          updatedAt: new Date().toISOString(),
+        })
       );
+      mudou = true;
+    } else if (unicaExistente) {
+      const ajustes: Partial<AnamnesisTemplate> = {};
+      if (unicaExistente.categoria !== 'Depilação a Laser') {
+        ajustes.categoria = 'Depilação a Laser';
+      }
+      if (unicaExistente.procedimentoNome !== 'Depilação a Laser') {
+        ajustes.procedimentoNome = 'Depilação a Laser';
+      }
+      if (unicaExistente.oculta) ajustes.oculta = false;
 
-      if (!existing) {
-        const ref = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, tplDefault.id);
-        batch.set(
-          ref,
-          cleanForFirestore({
-            ...tplDefault,
-            updatedAt: new Date().toISOString(),
-          })
-        );
-        hasChanges = true;
-      } else {
-        const updates: Partial<AnamnesisTemplate> = {};
-        // Comparadas pelas formas normalizadas: uma ficha gravada como "Depilação a Laser - Facial"
-        // e o padrão "Depilação a Laser" são a mesma categoria, e tratar as duas como diferentes
-        // fazia esta rotina regravar exatamente o valor antigo que a tela acabara de unificar.
-        const categoriaPadrao = normalizeLaserCategory(tplDefault.categoria);
-        if (normalizeLaserCategory(existing.categoria) !== categoriaPadrao) {
-          updates.categoria = categoriaPadrao;
-        }
+      // As 19 perguntas de segurança não são negociáveis: faltando alguma, ela volta ao fim da
+      // lista. Comparar por texto além do ID cobre as fichas mexidas à mão pela equipe.
+      const atuais = unicaExistente.perguntasEspecificas || [];
+      const faltando = perguntasDoModelo.filter(
+        (req) =>
+          !atuais.some(
+            (q) => q.id === req.id || q.texto.trim().toLowerCase() === req.texto.trim().toLowerCase()
+          )
+      );
+      if (faltando.length > 0) {
+        ajustes.perguntasEspecificas = [...atuais, ...faltando].map((q, i) => ({
+          ...q,
+          ordem: i + 1,
+        }));
+      }
 
-        const currentQuestions = existing.perguntasEspecificas || [];
-        const requiredQuestions = tplDefault.perguntasEspecificas || [];
-        const missingQuestions = requiredQuestions.filter((reqQ) => {
-          const jaExiste = currentQuestions.some(
-            (cq) =>
-              cq.id === reqQ.id ||
-              cq.texto.trim().toLowerCase() === reqQ.texto.trim().toLowerCase()
-          );
-          return !jaExiste;
+      if (Object.keys(ajustes).length > 0) {
+        batch.update(doc(db, ANAMNESIS_TEMPLATES_COLLECTION, LASER_TEMPLATE_UNICO_ID), {
+          ...cleanForFirestore(ajustes),
+          updatedAt: new Date().toISOString(),
         });
-
-        if (missingQuestions.length > 0) {
-          const updatedQuestions = [...currentQuestions, ...missingQuestions].map((q, idx) => ({
-            ...q,
-            ordem: idx + 1,
-          }));
-          updates.perguntasEspecificas = updatedQuestions;
-        }
-
-        if (Object.keys(updates).length > 0) {
-          const ref = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, existing.id);
-          batch.update(ref, {
-            ...cleanForFirestore(updates),
-            updatedAt: new Date().toISOString(),
-          });
-          hasChanges = true;
-        }
+        mudou = true;
       }
     }
 
-    if (hasChanges) {
-      console.log('Fichas e perguntas de Depilação a Laser sincronizadas com sucesso no Firestore.');
+    // 2. As treze por área: ocultar as que existem, e **não recriar** as que não existem.
+    for (const id of IDS_FICHAS_POR_AREA) {
+      const existente = existentes.find((t) => t.id === id);
+      if (!existente || existente.oculta) continue;
+      batch.update(doc(db, ANAMNESIS_TEMPLATES_COLLECTION, id), {
+        oculta: true,
+        updatedAt: new Date().toISOString(),
+      });
+      mudou = true;
+    }
+
+    if (mudou) {
       await batch.commit();
+      console.log('Anamnese de laser consolidada numa ficha única; fichas por área ocultadas.');
     }
   } catch (err) {
     console.warn('Sincronização de fichas de laser no Firestore:', err);

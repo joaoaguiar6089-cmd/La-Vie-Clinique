@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope, FileText, Crop, Loader2 } from 'lucide-react';
-import { Procedure, Professional, QuoteItemDetail } from '../types';
+import { ClinicProfile, LaserArea, Procedure, Professional, QuoteItemDetail } from '../types';
 import { PRESET_IMAGE_LIBRARY, INITIAL_CATEGORIES } from '../data/initialData';
 import { formatBRL } from '../utils/formatters';
 import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
 import { subirImagemOuManter } from '../services/imageStorage';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
+import { isLaserCategory } from '../utils/templateMatching';
+import { LaserAreaEditor } from './laser/LaserAreaEditor';
 
 /**
  * A mesma foto aparece em frames bem diferentes (card da lista e detalhe em paisagem, cartão
@@ -27,6 +29,11 @@ interface ProcedureFormModalProps {
   procedureToEdit?: Procedure | null;
   existingCategories: string[];
   availableDoctors?: Professional[];
+  /** Catálogo inteiro — o mapa de laser precisa mostrar as áreas dos outros procedimentos. */
+  allProcedures?: Procedure[];
+  /** Manequins e padrões da categoria de laser. */
+  clinic?: ClinicProfile;
+  onAbrirConfiguracoes?: () => void;
 }
 
 export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
@@ -36,6 +43,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   procedureToEdit,
   existingCategories,
   availableDoctors = [],
+  allProcedures = [],
+  clinic,
+  onAbrirConfiguracoes,
 }) => {
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
@@ -89,6 +99,23 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [customDoctorNames, setCustomDoctorNames] = useState<string[]>([]);
   const [newCustomDoctorInput, setNewCustomDoctorInput] = useState('');
 
+  // ---- Modo laser ----
+  /** Áreas da região em edição. Vazio = nada desenhado ainda, painel de campos fechado. */
+  const [laserAreas, setLaserAreas] = useState<LaserArea[]>([]);
+  /**
+   * Procedimento escolhido na faixa "Sem área no mapa". Diferente de `procedureToEdit`: aquele é
+   * quem abriu o modal, este é quem vai receber o desenho da vez. É o que permite mapear os treze
+   * já cadastrados em sequência, sem fechar o modal e sem redigitar preço.
+   */
+  const [procedimentoLaserAlvo, setProcedimentoLaserAlvo] = useState<Procedure | null>(null);
+  const [mostrarTodosCampos, setMostrarTodosCampos] = useState(false);
+  const [areaAplicada, setAreaAplicada] = useState<string | null>(null);
+  const [confirmandoSaida, setConfirmandoSaida] = useState(false);
+
+  const categoriaEfetiva =
+    (isAddingCustomCategory && customCategory.trim()) || customCategory.trim() || category;
+  const ehLaser = isLaserCategory(categoriaEfetiva);
+
   const [showPresetLibrary, setShowPresetLibrary] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadError, setUploadError] = useState('');
@@ -118,6 +145,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setIdealCandidate(procedureToEdit.idealCandidate || '');
       setIsFeatured(Boolean(procedureToEdit.isFeatured));
       setQuoteDetails(procedureToEdit.quoteDetails || []);
+      setLaserAreas(procedureToEdit.laserAreas || []);
       setAssignedDoctorIds(procedureToEdit.assignedDoctorIds || []);
       setCustomDoctorNames(
         procedureToEdit.assignedDoctorNames
@@ -146,10 +174,15 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setIdealCandidate('Pessoas que buscam harmonia e prevenção do envelhecimento');
       setIsFeatured(false);
       setQuoteDetails([]);
+      setLaserAreas([]);
       // Default to first doctor if available
       setAssignedDoctorIds(availableDoctors.length > 0 ? [availableDoctors[0].id] : []);
       setCustomDoctorNames([]);
     }
+    setProcedimentoLaserAlvo(null);
+    setMostrarTodosCampos(false);
+    setAreaAplicada(null);
+    setConfirmandoSaida(false);
     setErrors({});
     setUploadError('');
     // Um recorte pendente pertence ao procedimento anterior — abrir outro cadastro o descarta.
@@ -280,19 +313,29 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setQuoteDetails((prev) => prev.filter((d) => d.id !== id));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /**
+   * Grava o procedimento. Serve aos dois caminhos do formulário: o "Salvar" de sempre, que fecha o
+   * modal, e o "Aplicar" do modo laser, que mantém o modal aberto para a próxima área.
+   *
+   * Devolve `true` quando gravou, para que quem chamou saiba se pode seguir adiante.
+   */
+  const salvarProcedimento = async ({ fecharAoFim }: { fecharAoFim: boolean }): Promise<boolean> => {
     const newErrors: Record<string, string> = {};
 
     if (!title.trim()) newErrors.title = 'O título do procedimento é obrigatório';
-    if (!description.trim()) newErrors.description = 'A descrição é obrigatória';
+    // No modo laser a descrição sai do caminho crítico: ela é a mesma nas treze áreas e vem dos
+    // padrões da categoria. Exigi-la aqui obrigaria a escrever o mesmo parágrafo treze vezes.
+    if (!ehLaser && !description.trim()) newErrors.description = 'A descrição é obrigatória';
     if (!price || isNaN(Number(price)) || Number(price) < 0) {
       newErrors.price = 'Informe um valor numérico válido';
+    }
+    if (ehLaser && laserAreas.length === 0) {
+      newErrors.laser = 'Destaque ao menos uma área no manequim antes de aplicar.';
     }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      return;
+      return false;
     }
 
     const finalCategory = (isAddingCustomCategory && customCategory.trim())
@@ -310,7 +353,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       ? images
       : ['https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80'];
 
-    const procedureId = procedureToEdit ? procedureToEdit.id : `proc-${Date.now()}`;
+    // No modo laser, o "dono" da área pode ser um procedimento escolhido na faixa de pendentes, e
+    // não o que abriu o modal — é assim que os treze já cadastrados ganham área sem virar cópia.
+    const baseDoProcedimento = procedimentoLaserAlvo || procedureToEdit;
+    const procedureId = baseDoProcedimento ? baseDoProcedimento.id : `proc-${Date.now()}`;
 
     setIsSaving(true);
     setSavingStatus('Preparando fotos...');
@@ -361,8 +407,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       quoteDetails: cleanedQuoteDetails,
       assignedDoctorIds: assignedDoctorIds.length > 0 ? assignedDoctorIds : undefined,
       assignedDoctorNames: finalDoctorNames.length > 0 ? finalDoctorNames : undefined,
-      order: procedureToEdit?.order || 99,
-      createdAt: procedureToEdit?.createdAt || new Date().toISOString(),
+      // Fora do laser o campo some do documento em vez de ir vazio: `saveProcedureToDb` grava com
+      // merge, então um array vazio apagaria as áreas, mas `undefined` é descartado — e é isso que
+      // faz a troca de categoria (que já limpou o estado) remover o desenho de fato.
+      laserAreas: ehLaser && laserAreas.length > 0 ? laserAreas : undefined,
+      order: baseDoProcedimento?.order || 99,
+      createdAt: baseDoProcedimento?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
@@ -375,13 +425,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       });
       setIsSaving(false);
       setSavingStatus('');
-      return;
+      return false;
     }
 
     setSavingStatus('Sincronizando com o servidor...');
     try {
       await onSave(procedureData);
-      onClose();
+      if (fecharAoFim) onClose();
+      return true;
     } catch (saveErr) {
       console.error('Falha ao salvar procedimento:', saveErr);
       const motivo = saveErr instanceof Error ? saveErr.message : 'Erro ao persistir na nuvem.';
@@ -389,10 +440,104 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
         ...prev,
         images: `Não foi possível salvar na nuvem: ${motivo}`,
       }));
+      return false;
     } finally {
       setIsSaving(false);
       setSavingStatus('');
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await salvarProcedimento({ fecharAoFim: true });
+  };
+
+  /**
+   * "Aplicar" do modo laser: grava esta área e devolve o formulário limpo para a próxima.
+   *
+   * Grava na hora, uma área por vez, em vez de acumular tudo para um "Salvar" no fim. São treze
+   * regiões numa sentada — perder o trabalho inteiro por uma aba fechada ou uma queda de rede não
+   * compensa as doze gravações economizadas, que na cota do Firestore são alguns KB.
+   */
+  const handleAplicarArea = async () => {
+    const gravou = await salvarProcedimento({ fecharAoFim: false });
+    if (!gravou) return;
+
+    setAreaAplicada(title.trim());
+    window.setTimeout(() => setAreaAplicada(null), 2600);
+
+    // Volta ao estado "nenhuma área em edição": o mapa fica pronto para o próximo laço, e a área
+    // recém-aplicada já aparece como botão, vinda do catálogo.
+    setLaserAreas([]);
+    setProcedimentoLaserAlvo(null);
+    setTitle('');
+    setPrice('');
+    setPromotionalPrice('');
+    setMostrarTodosCampos(false);
+    setErrors({});
+  };
+
+  /** Há desenho na tela que ainda não virou procedimento. */
+  const temRascunhoNaoAplicado =
+    ehLaser && laserAreas.length > 0 && !procedureToEdit && !procedimentoLaserAlvo;
+
+  /**
+   * Trocar a categoria para fora do laser descarta o desenho.
+   *
+   * Sem manequim onde aparecer, uma área vira dado invisível: ninguém a vê para apagar e ela
+   * ressuscita no dia em que a categoria voltar, provavelmente já sem relação com o que o
+   * procedimento virou. Descartar é a única saída que não deixa lixo escondido — e o aviso
+   * aparece antes, não depois.
+   */
+  const handleCategoriaChange = (nova: string) => {
+    const saindoDoLaser = ehLaser && !isLaserCategory(nova) && laserAreas.length > 0;
+    if (saindoDoLaser) {
+      const nome = (procedimentoLaserAlvo || procedureToEdit)?.title || 'esta área';
+      if (
+        !window.confirm(
+          `Ao sair da categoria "Depilação a Laser", a área desenhada para ${nome} é apagada. Continuar?`
+        )
+      ) {
+        return;
+      }
+      setLaserAreas([]);
+      setProcedimentoLaserAlvo(null);
+    }
+    setCategory(nova);
+  };
+
+  /** Carrega no painel um procedimento que já existe, para ele receber o próximo desenho. */
+  const handleSelecionarProcedimentoDoMapa = (proc: Procedure) => {
+    setProcedimentoLaserAlvo(proc);
+    setTitle(proc.title);
+    setSubtitle(proc.subtitle || '');
+    setDescription(proc.description || '');
+    setPrice(proc.price ? String(proc.price) : '');
+    setPromotionalPrice(proc.promotionalPrice ? String(proc.promotionalPrice) : '');
+    setPriceNote(proc.priceNote || 'por sessão');
+    setIsStartingPrice(Boolean(proc.isStartingPrice));
+    setDuration(proc.duration || '');
+    setSessionsRecommended(proc.sessionsRecommended || '');
+    setRecoveryTime(proc.recoveryTime || '');
+    setImages(proc.images || []);
+    setBenefits(proc.benefits || []);
+    setAreasTreated(proc.areasTreated || []);
+    setContraindications(proc.contraindications || '');
+    setIdealCandidate(proc.idealCandidate || '');
+    setIsFeatured(Boolean(proc.isFeatured));
+    setQuoteDetails(proc.quoteDetails || []);
+    setAssignedDoctorIds(proc.assignedDoctorIds || []);
+    setLaserAreas(proc.laserAreas || []);
+    setErrors({});
+  };
+
+  /** Fechar com um laço desenhado e não aplicado pede confirmação — o desenho se perde. */
+  const handleFechar = () => {
+    if (temRascunhoNaoAplicado && !confirmandoSaida) {
+      setConfirmandoSaida(true);
+      return;
+    }
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -414,7 +559,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleFechar}
             className="p-1.5 rounded-xs text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -423,6 +568,196 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 max-h-[80vh] overflow-y-auto">
+          {/* ==========================================
+              MODO LASER — o mapa corporal substitui a entrada normal do formulário.
+              A ordem é a do fluxo pedido: categoria → destacar a área → nome → demais dados.
+              ========================================== */}
+          {ehLaser && (
+            <div className="space-y-4">
+              {!mostrarTodosCampos && (
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-[#1A1A1A] mb-1">Categoria</label>
+                    <select
+                      value={category}
+                      onChange={(e) => handleCategoriaChange(e.target.value)}
+                      className="w-full px-3 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    >
+                      {allCategories.map((cat, idx) => (
+                        <option key={idx} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-[#8a8578] pb-2 flex-1">
+                    Esta categoria abre o mapa corporal. Destaque a região no manequim para liberar
+                    os campos do procedimento.
+                  </p>
+                </div>
+              )}
+
+              {areaAplicada && (
+                <p className="text-[12px] text-[#1B5E20] bg-[#E8F5E9] border border-[#C8E6C9] rounded-sm px-3 py-2 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" />
+                  <strong>{areaAplicada}</strong> aplicada ao mapa. Destaque a próxima área.
+                </p>
+              )}
+
+              {errors.laser && (
+                <p className="text-[12px] text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {errors.laser}
+                </p>
+              )}
+
+              <LaserAreaEditor
+                procedures={allProcedures}
+                clinic={clinic || ({} as ClinicProfile)}
+                procedimentoEmEdicao={procedimentoLaserAlvo || procedureToEdit}
+                laserAreas={laserAreas}
+                onLaserAreasChange={setLaserAreas}
+                onSelecionarProcedimento={handleSelecionarProcedimentoDoMapa}
+                onAbrirConfiguracoes={onAbrirConfiguracoes}
+              >
+                <div className="bg-white/70 border border-white/80 rounded-sm p-4 space-y-3">
+                  {procedimentoLaserAlvo && (
+                    <p className="text-[11px] text-[#8E5B1A] bg-[#FDF6E7] border border-[#F0DCB4] rounded-xs px-2.5 py-1.5 leading-snug">
+                      Desenhando a área de um procedimento que já existe. O preço cadastrado foi
+                      mantido.
+                    </p>
+                  )}
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                      Nome do procedimento *
+                    </label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Ex: Virilha Completa"
+                      className={`w-full px-3 py-2 rounded-sm bg-white border text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] ${
+                        errors.title ? 'border-red-400' : 'border-gray-200'
+                      }`}
+                    />
+                    {errors.title && (
+                      <p className="text-[10px] text-red-600 mt-1">{errors.title}</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                        Valor (R$) *
+                      </label>
+                      <input
+                        type="number"
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        min="0"
+                        step="0.01"
+                        className={`w-full px-3 py-2 rounded-sm bg-white border text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] ${
+                          errors.price ? 'border-red-400' : 'border-gray-200'
+                        }`}
+                      />
+                      {errors.price && (
+                        <p className="text-[10px] text-red-600 mt-1">{errors.price}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                        Promocional
+                      </label>
+                      <input
+                        type="number"
+                        value={promotionalPrice}
+                        onChange={(e) => setPromotionalPrice(e.target.value)}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                      Observação de preço
+                    </label>
+                    <input
+                      type="text"
+                      value={priceNote}
+                      onChange={(e) => setPriceNote(e.target.value)}
+                      placeholder="por sessão"
+                      className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                        Duração
+                      </label>
+                      <input
+                        type="text"
+                        value={duration}
+                        onChange={(e) => setDuration(e.target.value)}
+                        placeholder="20 min"
+                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                        Sessões
+                      </label>
+                      <input
+                        type="text"
+                        value={sessionsRecommended}
+                        onChange={(e) => setSessionsRecommended(e.target.value)}
+                        placeholder="6 a 10 sessões"
+                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAplicarArea}
+                    disabled={isSaving}
+                    className="w-full px-4 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest hover:bg-[#8e6945] active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:active:scale-100"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {savingStatus || 'Aplicando...'}
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Aplicar
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMostrarTodosCampos((v) => !v)}
+                    className="w-full text-[11px] text-[#A67C52] hover:text-[#8e6945] font-medium underline underline-offset-2"
+                  >
+                    {mostrarTodosCampos
+                      ? 'Ocultar os demais campos'
+                      : 'Mostrar todos os campos do cadastro'}
+                  </button>
+
+                  <p className="text-[10px] text-[#8a8578] leading-snug">
+                    Descrição, contraindicações, recuperação e fotos vêm dos padrões da categoria
+                    quando ficam em branco — preencha só o que for diferente nesta área.
+                  </p>
+                </div>
+              </LaserAreaEditor>
+            </div>
+          )}
+
+          {(!ehLaser || mostrarTodosCampos) && (
+            <>
           {/* Section 1: Basic Information */}
           <div className="space-y-4">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
@@ -467,7 +802,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   <div className="flex gap-2">
                     <select
                       value={category}
-                      onChange={(e) => setCategory(e.target.value)}
+                      onChange={(e) => handleCategoriaChange(e.target.value)}
                       className="flex-1 px-3 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                     >
                       {allCategories.map((cat, idx) => (
@@ -1081,17 +1416,32 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             )}
           </div>
 
+            </>
+          )}
+
           {/* Form Actions Footer */}
           <div className="pt-4 border-t border-white/60 flex items-center justify-end gap-3 sticky bottom-0 bg-[#F9F8F6]/90 backdrop-blur-md py-2">
+            {confirmandoSaida && (
+              <p className="text-[11px] text-[#8E5B1A] mr-auto leading-snug max-w-sm">
+                Há uma área desenhada que ainda não foi aplicada — ela se perde ao fechar. Toque em
+                Fechar de novo para confirmar.
+              </p>
+            )}
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-sm border border-white/80 text-xs font-semibold uppercase tracking-wider text-gray-600 hover:bg-white transition-colors"
+              onClick={handleFechar}
+              className={`px-4 py-2.5 rounded-sm border text-xs font-semibold uppercase tracking-wider transition-colors ${
+                confirmandoSaida
+                  ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
+                  : 'border-white/80 text-gray-600 hover:bg-white'
+              }`}
             >
-              Cancelar
+              {/* Em modo laser quem grava é o "Aplicar" de cada área — não há o que cancelar. */}
+              {ehLaser ? 'Fechar' : 'Cancelar'}
             </button>
             <button
               type="submit"
+              hidden={ehLaser}
               disabled={cropSource !== null || isSaving}
               className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >

@@ -13,7 +13,7 @@ import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { Procedure, ClinicProfile, Professional, AppView, AnamnesisTemplate } from './types';
-import { mapearTemplatesPorProcedimento } from './utils/templateMatching';
+import { mapearTemplatesPorProcedimento, isLaserCategory } from './utils/templateMatching';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { ClinicLogo } from './components/ClinicLogo';
 import { RefreshCw, Check, Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
@@ -25,6 +25,7 @@ import {
   saveProcedureToDb,
   deleteProcedureFromDb,
   saveClinicProfileToDb,
+  publicarMapaCorporalDoLaser,
   publicarEspelhoPublicoSeMudou,
   replaceAllProceduresWithOfficialPdfCatalog,
   subscribeToAnamnesisTemplates,
@@ -386,6 +387,16 @@ function MainCatalogApp() {
         }
       });
 
+      // Uma área aplicada (ou removida) muda o mapa que a paciente vê na ficha de anamnese, então
+      // o espelho público acompanha o salvamento. Só quando o procedimento é de laser: um botox
+      // salvo não tem por que reescrever um documento de 10 KB.
+      if (isLaserCategory(salvo.category) || isLaserCategory(anterior?.category)) {
+        const catalogoAtualizado = procedures.some((p) => p.id === salvo.id)
+          ? procedures.map((p) => (p.id === salvo.id ? salvo : p))
+          : [...procedures, salvo];
+        await publicarMapaCorporalDoLaser(catalogoAtualizado, clinic);
+      }
+
       setSyncStatus('synced');
       showToast(`Procedimento "${salvo.title}" salvo e sincronizado na nuvem!`);
     } catch (err) {
@@ -484,6 +495,7 @@ function MainCatalogApp() {
   };
 
   const handleSaveClinic = async (updatedClinic: ClinicProfile) => {
+    const anterior = clinic;
     try {
       setSyncStatus('syncing');
       setClinic(updatedClinic);
@@ -493,12 +505,27 @@ function MainCatalogApp() {
       // centenas de KB de imagem à toa até o próximo F5.
       const clinicaSalva = await saveClinicProfileToDb(updatedClinic);
       setClinic(clinicaSalva);
+
+      // O espelho público carrega as URLs dos manequins, então ele acompanha o salvamento do
+      // perfil. Chamada explícita, a partir da ação da equipe — nunca em carregamento de tela.
+      await publicarMapaCorporalDoLaser(procedures, clinicaSalva);
+
       setSyncStatus('synced');
       showToast('Dados da clínica e equipe médica sincronizados no Firebase!');
     } catch (err) {
       console.error('Error saving clinic to Firestore:', err);
       setSyncStatus('error');
-      showToast('Dados da clínica atualizados localmente.');
+      // Desfaz o estado otimista: ao contrário do resto do sistema, aqui a falha pode ser a recusa
+      // deliberada de gravar um manequim que não subiu para o Storage. Manter a versão otimista
+      // deixaria a base64 de 500 KB viva na tela e no localStorage — exatamente o que a recusa
+      // existe para impedir — sob um aviso de "salvo localmente" que seria mentira.
+      setClinic(anterior);
+      showToast(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Não foi possível salvar os dados da clínica. Tente novamente.',
+        'erro'
+      );
     }
   };
 
@@ -758,6 +785,13 @@ function MainCatalogApp() {
         procedureToEdit={selectedProcedureForEdit}
         existingCategories={categories}
         availableDoctors={clinic.professionals || []}
+        allProcedures={procedures}
+        clinic={clinic}
+        onAbrirConfiguracoes={() => {
+          setIsFormModalOpen(false);
+          setSelectedProcedureForEdit(null);
+          setIsSettingsModalOpen(true);
+        }}
       />
 
       {/* 3. Export / Share Modal (PDF, Image, WhatsApp, QR) */}

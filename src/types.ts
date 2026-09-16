@@ -12,6 +12,97 @@ export interface Professional {
   isAdmin?: boolean; // Concede acesso administrativo (gerenciar contas de outras profissionais)
 }
 
+// ==========================================
+// MAPA CORPORAL DA DEPILAÇÃO A LASER — TIPOS
+// ==========================================
+
+/** Qual dos dois manequins. Uma área nunca atravessa as duas: ela é frente OU costas. */
+export type LaserVista = 'frente' | 'costas';
+
+/**
+ * A região do corpo onde este procedimento de laser é aplicado, desenhada por cima do manequim.
+ *
+ * Mora dentro do próprio `Procedure` (e não numa coleção à parte) por três motivos: um polígono
+ * simplificado ocupa ~500 bytes, longe do teto de 1 MB do documento; apagar o procedimento apaga
+ * a área junto, sem órfãos; e o catálogo já vive em memória, então o mapa monta sem leitura extra.
+ *
+ * As coordenadas são **relativas à imagem** (0–1), não em pixels — é isso que deixa o mesmo
+ * desenho servir ao manequim gigante do cadastro e ao pequeno do celular. Por consequência,
+ * trocar a imagem do manequim por uma de proporção diferente desloca todas as áreas; ver
+ * `LASER_MANEQUIM_MAX_LADO` e a trava de proporção em `utils/laserAreas.ts`.
+ */
+export interface LaserArea {
+  id: string;
+  vista: LaserVista;
+  /**
+   * Uma ou mais formas fechadas, cada uma como `[x1,y1,x2,y2,...]` em 0–1 com 3 casas decimais.
+   * Mais de uma porque várias regiões são simétricas e descontínuas: "Axilas" são duas manchas,
+   * "Maçã do Rosto" são duas. Um contorno em U ligando os dois lados seria mentira anatômica.
+   */
+  formas: number[][];
+  /** Posição do botão arrastada à mão, em 0–1. Ausente = o anel calcula sozinho. */
+  botao?: { x: number; y: number };
+}
+
+/**
+ * Referência enxuta a uma área, para quem só precisa saber *qual* foi escolhida.
+ *
+ * Guarda o nome junto com o ID de propósito: a ficha de uma paciente atendida em março precisa
+ * continuar dizendo "Virilha Completa" mesmo que o procedimento seja renomeado ou saia do
+ * catálogo depois — mesma razão pela qual `QuoteItem` espelha `profissionalNome`.
+ */
+export interface LaserAreaRef {
+  procedureId: string;
+  nomeCurto: string;
+}
+
+/**
+ * Campos que toda área de laser herda da categoria em vez de repetir. Contraindicação,
+ * recuperação e candidato ideal não mudam de buço para axila, e mantê-los em 13 cópias
+ * significa, na prática, que uma correção clínica nunca chega a todas.
+ *
+ * A herança é **viva**: o procedimento só guarda o campo quando ele é editado ali; vazio = usa o
+ * padrão, resolvido na leitura por `resolverCamposDoLaser()`.
+ */
+export interface LaserCategoryDefaults {
+  /**
+   * Texto comercial do procedimento. Entra aqui, e não só nos campos clínicos, porque no laser ele
+   * também é o mesmo em todas as áreas — o que muda de buço para axila é o preço, não a explicação
+   * do que o laser de diodo faz.
+   */
+  description?: string;
+  recoveryTime?: string;
+  contraindications?: string;
+  idealCandidate?: string;
+  benefits?: string[];
+  images?: string[];
+  quoteDetails?: QuoteItemDetail[];
+  assignedDoctorIds?: string[];
+}
+
+/**
+ * Espelho público do mapa, em `clinic_settings/laser_body_map`.
+ *
+ * Existe porque `procedures` exige login para leitura (`firestore.rules`) e a paciente preenche a
+ * anamnese sem conta — sem este documento, a página pública não enxerga área nenhuma. Leva só o
+ * necessário para desenhar e escolher: **nunca preço**, que é a mesma razão pela qual
+ * `clinic_settings/public_profile` não leva os e-mails da equipe.
+ */
+export interface LaserBodyMapEntry {
+  procedureId: string;
+  nomeCurto: string;
+  vista: LaserVista;
+  formas: number[][];
+  botao?: { x: number; y: number };
+}
+
+export interface LaserBodyMap {
+  manequimFrenteUrl?: string;
+  manequimCostasUrl?: string;
+  areas: LaserBodyMapEntry[];
+  updatedAt?: string;
+}
+
 export interface Procedure {
   id: string;
   title: string;
@@ -34,6 +125,12 @@ export interface Procedure {
   quoteDetails?: QuoteItemDetail[]; // "Detalhes para orçamento" — pares título/resposta que pré-preenchem o item no orçamento
   assignedDoctorIds?: string[]; // IDs of assigned doctors
   assignedDoctorNames?: string[]; // Names/credentials for display or custom entry
+  /**
+   * Regiões deste procedimento no manequim. Só existe quando `isLaserCategory(category)` — trocar
+   * a categoria para fora do laser descarta o desenho (com aviso), porque uma área sem manequim
+   * onde aparecer é lixo que ninguém vê para apagar.
+   */
+  laserAreas?: LaserArea[];
   order: number;
   createdAt: string;
   updatedAt?: string;
@@ -68,6 +165,17 @@ export interface ClinicProfile {
   quoteCombinedDiscountCap?: number; // Teto do desconto de plano combinado, em % (padrão 10)
   quoteLegalNotice?: string; // Aviso legal do rodapé do orçamento
   quoteOpeningTemplate?: string; // Mensagem de abertura sugerida; aceita {primeiroNome}
+  /**
+   * Mapa corporal da depilação a laser — os dois manequins sobre os quais as áreas são desenhadas.
+   * Sem sexo, aproveitados para ambos os gêneros: as áreas são desenhadas uma vez só.
+   *
+   * As duas precisam ter a **mesma proporção**, imposta no envio. As áreas guardam coordenadas
+   * relativas à imagem, então uma troca por proporção diferente jogaria a virilha na coxa.
+   */
+  laserManequimFrenteUrl?: string;
+  laserManequimCostasUrl?: string;
+  /** Campos herdados por toda área de laser. Ver `LaserCategoryDefaults`. */
+  laserPadroes?: LaserCategoryDefaults;
 }
 
 /** Telas do painel autenticado — a navegação é por estado, o app não tem rotas. */
@@ -168,6 +276,14 @@ export interface AnamnesisTemplate {
    * aparelho novo e ressuscitar perguntas que a equipe tivesse apagado de propósito.
    */
   migracoesAplicadas?: string[];
+  /**
+   * Some das listas e do compartilhamento de link, mas continua existindo.
+   *
+   * Nasceu para aposentar as 13 fichas de laser (uma por área, todas repetindo as mesmas 19
+   * perguntas de segurança) sem quebrar as fichas já preenchidas que apontam para elas por
+   * `templateId` — apagar de verdade faria uma anamnese assinada deixar de renderizar.
+   */
+  oculta?: boolean;
   updatedAt?: string;
 }
 
@@ -212,6 +328,21 @@ export interface AnamnesisRecord {
     gerais: AnamnesisQuestion[];
     especificas: AnamnesisQuestion[];
   };
+  /**
+   * Áreas do mapa corporal que a **paciente** marcou como pretendidas. Só IDs e nomes curtos —
+   * os polígonos ficam no catálogo e no espelho público, nunca copiados para cá (o registro já
+   * carrega fotos e tem o teto de 1 MB do Firestore para respeitar).
+   */
+  areasSolicitadas?: LaserAreaRef[];
+  /**
+   * Áreas que a **profissional** confirmou para tratamento. Nasce como cópia de
+   * `areasSolicitadas` e é editável a partir dali.
+   *
+   * São dois campos e não um porque o que a paciente pediu é um dado clínico por si: com um só,
+   * a profissional tirar a virilha apagaria o registro de que ela foi pedida. Mesmo espírito do
+   * `publicoAlvo: 'paciente' | 'medico'` das perguntas.
+   */
+  areasConfirmadas?: LaserAreaRef[];
   observacoesFinais?: string;
   origemPreenchimento?: 'online_paciente' | 'presencial_clinica';
   createdAt: string;
