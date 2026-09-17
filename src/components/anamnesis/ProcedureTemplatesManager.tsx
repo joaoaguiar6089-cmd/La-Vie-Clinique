@@ -40,6 +40,7 @@ import {
   AlertCircle,
   Layers,
   ChevronRight,
+  ChevronDown,
   Share2,
   Upload,
   Image as ImageIcon,
@@ -191,11 +192,6 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
 
   const procedimentoDoTemplate = (tpl: AnamnesisTemplate): Procedure | undefined =>
     procedimentoDoTemplateCompartilhado(tpl, indiceDeProcedimentos);
-
-  const idsComFicha = new Set(
-    templates.map((tpl) => procedimentoDoTemplate(tpl)?.id).filter((id): id is string => !!id)
-  );
-  const procedimentosSemFicha = catalogProcedures.filter((p) => !idsComFicha.has(p.id));
 
   // Valor do seletor no editor. Fichas antigas não têm `procedimentoId`, então o casamento por
   // nome é o que faz o seletor já abrir na opção certa em vez de "Não vinculado".
@@ -554,60 +550,25 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
           />
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xs text-[11px] font-medium transition-all whitespace-nowrap border ${
-                selectedCategory === cat
-                  ? 'bg-[#A67C52] text-white border-[#A67C52] shadow-2xs'
-                  : 'bg-white/80 text-gray-600 border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+        {/* Categoria em lista suspensa: a clínica tem categorias demais para caber numa fileira de
+            pílulas sem virar rolagem horizontal. */}
+        <div className="relative w-full sm:w-64">
+          <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            aria-label="Filtrar por categoria"
+            className="w-full appearance-none pl-9 pr-9 py-2 text-xs rounded-sm bg-white/80 border border-gray-200 text-[#1A1A1A] font-medium cursor-pointer focus:outline-hidden focus:border-[#A67C52] focus:bg-white"
+          >
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat === 'Todas' ? 'Todas as categorias' : cat}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         </div>
       </div>
-
-      {/* Procedimentos do catálogo que ainda não têm ficha-modelo — é o que fazia a lista da
-          anamnese divergir dos procedimentos cadastrados. */}
-      {procedimentosSemFicha.length > 0 && (
-        <div className="bg-amber-50/70 border border-amber-200 rounded-sm p-4 sm:p-5 space-y-3">
-          <div className="flex items-start gap-2.5">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
-                {procedimentosSemFicha.length}{' '}
-                {procedimentosSemFicha.length === 1
-                  ? 'procedimento cadastrado ainda sem ficha'
-                  : 'procedimentos cadastrados ainda sem ficha'}
-              </h4>
-              <p className="text-[11px] text-amber-800/80 mt-0.5 leading-relaxed">
-                Eles estão no catálogo, mas não aparecem na hora de preencher uma anamnese nem no link
-                enviado à paciente. Clique em um deles para criar a ficha já vinculada.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {procedimentosSemFicha.map((proc) => (
-              <button
-                key={proc.id}
-                type="button"
-                onClick={() => handleOpenNewTemplateForProcedure(proc)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xs bg-white border border-amber-300 text-[11px] font-medium text-amber-900 hover:border-[#A67C52] hover:text-[#A67C52] transition-colors shadow-2xs"
-                title={`Criar a ficha de anamnese de "${proc.title}"`}
-              >
-                <Plus className="w-3 h-3" />
-                {proc.title}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Templates Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
