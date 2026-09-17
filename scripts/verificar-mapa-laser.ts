@@ -12,6 +12,7 @@ import {
   areaDaForma,
   areaNoPonto,
   centroDaArea,
+  centroDaForma,
   criarFormaAPartirDoTraco,
   espelharForma,
   nomeCurtoDaArea,
@@ -26,6 +27,7 @@ import {
   mapearTemplatesPorProcedimento,
 } from '../src/utils/templateMatching';
 import { paraArray } from '../src/utils/firestoreShapes';
+import { ALL_LASER_PROCEDURE_QUESTIONS as PERGUNTAS_LASER } from '../src/data/anamnesisInitialData';
 import { AnamnesisTemplate, LaserArea } from '../src/types';
 
 let falhas = 0;
@@ -314,6 +316,93 @@ ok(
 ok('botox não dispara', !tpl({ id: 'tpl-botox', procedimentoNome: 'Botox', categoria: 'Injetáveis & Face' }));
 ok('ficha sem nome não quebra', !tpl({ id: 'tpl-y', categoria: 'Facial' }));
 ok('nulo não quebra', !ehTemplateDeLaser(null));
+
+console.log('\n== questionário de laser (protocolo de 27 perguntas)');
+// A lista é clínica: uma pergunta que suma, mude de público ou perca alternativas altera o que a
+// profissional vê antes de disparar o laser. Fixar aqui torna qualquer alteração deliberada.
+ok('são 27 perguntas', PERGUNTAS_LASER.length === 27, String(PERGUNTAS_LASER.length));
+ok(
+  '21 da paciente e 6 da profissional',
+  PERGUNTAS_LASER.filter((q) => q.publicoAlvo === 'paciente').length === 21 &&
+    PERGUNTAS_LASER.filter((q) => q.publicoAlvo === 'medico').length === 6
+);
+ok('nenhum ID repetido', new Set(PERGUNTAS_LASER.map((q) => q.id)).size === 27);
+ok('ordem sequencial de 1 a 27', PERGUNTAS_LASER.every((q, i) => q.ordem === i + 1));
+ok(
+  'toda pergunta de escolha tem alternativas',
+  PERGUNTAS_LASER.filter((q) => q.tipo_campo.includes('escolha')).every(
+    (q) => (q.opcoes?.length || 0) > 0
+  )
+);
+ok(
+  'as contagens de alternativas batem com o protocolo',
+  JSON.stringify(
+    PERGUNTAS_LASER.filter((q) => q.opcoes).map((q) => [q.ordem, q.opcoes!.length])
+  ) === JSON.stringify([[16, 5], [22, 6], [23, 6], [24, 6], [25, 3], [26, 3], [27, 10]]),
+  JSON.stringify(PERGUNTAS_LASER.filter((q) => q.opcoes).map((q) => [q.ordem, q.opcoes!.length]))
+);
+ok(
+  'só a 17 (ácidos) e a 26 (densidade) são opcionais',
+  JSON.stringify(PERGUNTAS_LASER.filter((q) => !q.obrigatoria).map((q) => q.ordem)) ===
+    JSON.stringify([17, 26])
+);
+ok(
+  'gravidez e contraindicações continuam obrigatórias e da paciente',
+  ['laser-gravidez', 'laser-anticoagulantes', 'laser-q17-roacutan'].every((id) => {
+    const q = PERGUNTAS_LASER.find((x) => x.id === id);
+    return q?.obrigatoria === true && q.publicoAlvo === 'paciente';
+  })
+);
+ok(
+  'o fototipo é da profissional, não da paciente',
+  PERGUNTAS_LASER.find((q) => q.id === 'laser-q15-fototipo')?.publicoAlvo === 'medico'
+);
+ok(
+  'a pergunta de tatuagem saiu',
+  !PERGUNTAS_LASER.some((q) => q.id.includes('tatuagem'))
+);
+
+console.log('\n== numeração impressa cai dentro da própria mancha');
+// Na ficha em branco cada área ganha um número, e a legenda ao lado diz o nome. O centro **da
+// área** é ponderado entre as formas: numa região simétrica ele cai exatamente entre as duas
+// manchas, sobre o corpo nu — o número flutuava no esterno e nenhuma axila ficava marcada.
+const dentroDaForma = (x: number, y: number, f: number[]): boolean => {
+  const n = f.length / 2;
+  let dentro = false;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = f[i * 2];
+    const yi = f[i * 2 + 1];
+    const xj = f[j * 2];
+    const yj = f[j * 2 + 1];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro;
+  }
+  return dentro;
+};
+
+const retangulo = (x1: number, y1: number, x2: number, y2: number) => [x1, y1, x2, y1, x2, y2, x1, y2];
+const areaSimetrica: LaserArea = {
+  id: 'axilas',
+  vista: 'frente',
+  formas: [retangulo(0.29, 0.225, 0.36, 0.27), retangulo(0.64, 0.225, 0.71, 0.27)],
+};
+
+const centroPonderado = centroDaArea(areaSimetrica);
+ok(
+  'o centro da ÁREA de fato cai fora das manchas (é o defeito que motivou a mudança)',
+  !areaSimetrica.formas.some((f) => dentroDaForma(centroPonderado.x, centroPonderado.y, f)),
+  `(${centroPonderado.x.toFixed(2)}, ${centroPonderado.y.toFixed(2)})`
+);
+ok(
+  'o centro de cada FORMA cai dentro dela',
+  areaSimetrica.formas.every((f) => {
+    const c = centroDaForma(f);
+    return dentroDaForma(c.x, c.y, f);
+  })
+);
+ok(
+  'uma área de duas manchas rende dois marcadores',
+  areaSimetrica.formas.length === 2
+);
 
 console.log('\n== posição arrastada à mão vence a automática');
 const comBotaoFixo = [

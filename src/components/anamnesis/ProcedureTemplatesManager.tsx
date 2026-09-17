@@ -20,6 +20,7 @@ import {
   procedimentoDoTemplate as procedimentoDoTemplateCompartilhado,
   isLaserCategory,
 } from '../../utils/templateMatching';
+import { montarEspelhoPublico } from '../../utils/laserAreas';
 import { ALL_LASER_PROCEDURE_QUESTIONS } from '../../data/anamnesisInitialData';
 import { DEFAULT_CLINIC_PROFILE } from '../../data/initialData';
 import {
@@ -176,6 +177,15 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
   // procedimentos reais da clínica. A regra do vínculo mora em `utils/templateMatching` porque o
   // card do catálogo usa a mesma para decidir se o botão "Anamnese" abre ou fica travado —
   // divergir aqui deixaria um botão travado num procedimento que esta tela jura ter ficha.
+  /**
+   * Mapa corporal montado do catálogo — a ficha em branco imprime os manequins de frente e costas
+   * para a profissional assinalar à caneta, e o registro guarda só IDs e nomes das áreas.
+   */
+  const mapaDoLaser = React.useMemo(
+    () => montarEspelhoPublico(catalogProcedures, clinicProfile || DEFAULT_CLINIC_PROFILE),
+    [catalogProcedures, clinicProfile]
+  );
+
   const indiceDeProcedimentos = criarIndiceDeProcedimentos(catalogProcedures);
   const procedimentoPorId = indiceDeProcedimentos.porId;
 
@@ -1485,6 +1495,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
           template={blankSheetTemplate}
           generalQuestions={generalQuestions}
           clinicProfile={clinicProfile || DEFAULT_CLINIC_PROFILE}
+          mapaCorporal={mapaDoLaser}
           onClose={() => setBlankSheetTemplate(null)}
         />
       )}

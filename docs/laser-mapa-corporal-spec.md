@@ -306,7 +306,28 @@ que já está no seed, onde **o mapa é a etapa de escolha das áreas**.
 - `AnamnesisRecord.procedimentoNome` vira o guarda-chuva "Depilação a Laser"; o
   conteúdo real vive em `areasSolicitadas` / `areasConfirmadas`.
 
-### 5.2 Ficha impressa
+### 5.2 Ficha em branco (para imprimir e assinalar à caneta)
+
+A folha em branco sai com os **dois manequins**, frente e costas, com todas as áreas
+desenhadas e **nenhuma marcada** — é o ponto: quem imprime assinala.
+
+Duas decisões que só fazem sentido no papel:
+
+- **As áreas são numeradas, com legenda ao lado.** Na tela o nome chega pelo botão do
+  anel ou pelo toque; impresso não há botão nem toque, e sem número quem olha vê uma
+  mancha hachurada sem saber se é linha alba ou tórax. A numeração é contínua entre as
+  duas vistas, para a legenda ser uma lista só — com duas sequências começando em 1,
+  um "3" no papel seria ambíguo.
+- **O número vai em cada forma, não no centro da área.** O centro da área é ponderado
+  entre as formas: numa região simétrica (axilas, ½ perna, maçã do rosto) ele cai
+  exatamente **entre** as duas manchas, sobre o corpo nu — o número flutuava no
+  esterno e nenhuma axila ficava marcada. Repetir o mesmo número nas duas é o que diz
+  que elas são a mesma área.
+
+A legenda traz quadradinho de marcar, então dá para assinalar no desenho, na lista ou
+nos dois. O bloco tem interruptor próprio em "Incluir na folha".
+
+### 5.3 Ficha impressa (preenchida)
 
 Sai a **lista** ("Áreas pretendidas: Axilas, Virilha Completa, ½ Perna") **e o
 manequim pintado**. O desenho é o que a profissional lê em 2 segundos no

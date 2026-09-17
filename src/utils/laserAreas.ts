@@ -309,6 +309,27 @@ export const tamanhoDaArea = (area: LaserArea): number =>
   area.formas.reduce((acc, f) => acc + areaDaForma(f), 0);
 
 /**
+ * Centro de uma forma isolada — média dos vértices.
+ *
+ * Existe separado de `centroDaArea` por causa da numeração impressa. O centro da *área* é ponderado
+ * entre todas as formas, o que numa região simétrica (axilas, ½ perna, maçã do rosto) cai
+ * exatamente **entre** as duas manchas, sobre o corpo nu: no papel, o número flutuava no esterno e
+ * nenhuma das duas axilas ficava marcada. Numerando forma a forma, o mesmo número aparece nas
+ * duas, que é o que diz "estas duas manchas são a mesma área".
+ */
+export const centroDaForma = (forma: number[]): { x: number; y: number } => {
+  const n = forma.length / 2;
+  if (n === 0) return { x: 0.5, y: 0.5 };
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < n; i++) {
+    x += forma[i * 2];
+    y += forma[i * 2 + 1];
+  }
+  return { x: x / n, y: y / n };
+};
+
+/**
  * Centro de massa da área, em 0–1 — de onde sai a linha guia e por onde o anel decide a posição
  * do botão.
  *

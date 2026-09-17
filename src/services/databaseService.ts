@@ -901,12 +901,13 @@ export async function reorderProceduresInDb(procedures: Procedure[]): Promise<vo
  * do app era o maior desperdício de leituras do sistema. A marca é por navegador: no pior caso a
  * sincronização roda uma vez em cada máquina, em vez de sempre.
  */
+// v4: o questionário de laser foi trocado pelo protocolo de 27 perguntas.
 // v3: a regra de ocultar passou a olhar o conteúdo da ficha (é de laser? é de uma área só?) em
 // vez dos 13 IDs do seed — fichas criadas pela equipe nascem com outro ID e escapavam.
 // v2: a sincronização deixou de recriar as 13 fichas por área e passou a ocultá-las, promovendo a
 // ficha única. Trocar a chave faz o ajuste rodar uma vez em cada máquina que já tinha a marca v1 —
 // sem isso, quem já abriu o app antes nunca veria a consolidação acontecer.
-const LASER_SYNC_DONE_KEY = 'lavie:laser-templates-sync:v3';
+const LASER_SYNC_DONE_KEY = 'lavie:laser-templates-sync:v4';
 
 function laserSyncJaRodou(): boolean {
   try {
@@ -1084,6 +1085,15 @@ async function migrarPerguntasProfissionalGluteo(): Promise<void> {
 export const LASER_TEMPLATE_UNICO_ID = 'tpl-epilacao-laser';
 
 /**
+ * Marca da revisão do questionário de laser (27 perguntas, protocolo de setembro/2026).
+ *
+ * Fica gravada em `migracoesAplicadas`, no próprio documento da ficha, e não no `localStorage`:
+ * uma marca local faria a troca rodar de novo em cada aparelho novo e desfazer, toda vez, o que a
+ * clínica tivesse ajustado depois. Mesma decisão da migração da Harmonização Glútea.
+ */
+const LASER_PERGUNTAS_MIGRACAO = 'laser-perguntas-2026-09';
+
+/**
  * Uma ficha de laser que cobre **uma área só** — e portanto foi aposentada pela ficha única.
  *
  * A regra olha o conteúdo, não o ID. A primeira versão desta migração listava os 13 IDs do seed
@@ -1157,20 +1167,43 @@ async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void
       }
       if (unicaExistente.oculta) ajustes.oculta = false;
 
-      // As 19 perguntas de segurança não são negociáveis: faltando alguma, ela volta ao fim da
-      // lista. Comparar por texto além do ID cobre as fichas mexidas à mão pela equipe.
       const atuais = unicaExistente.perguntasEspecificas || [];
-      const faltando = perguntasDoModelo.filter(
-        (req) =>
-          !atuais.some(
-            (q) => q.id === req.id || q.texto.trim().toLowerCase() === req.texto.trim().toLowerCase()
-          )
-      );
-      if (faltando.length > 0) {
-        ajustes.perguntasEspecificas = [...atuais, ...faltando].map((q, i) => ({
-          ...q,
-          ordem: i + 1,
-        }));
+      const jaAplicadas = unicaExistente.migracoesAplicadas || [];
+
+      if (!jaAplicadas.includes(LASER_PERGUNTAS_MIGRACAO)) {
+        /**
+         * Troca o questionário inteiro pelo protocolo novo — **substitui, não acrescenta**.
+         *
+         * Acrescentar não serve aqui: a revisão da clínica tirou uma pergunta ("tatuagem no local"),
+         * mudou o fototipo de paciente para profissional e reordenou tudo. Uma fusão deixaria a
+         * pergunta removida viva, o fototipo duplicado em dois públicos e a ordem embaralhada.
+         *
+         * O que se perde: ajustes que a equipe tenha feito à mão nessas perguntas. É o preço de
+         * "trocar", e vale porque é uma vez só — a marca em `migracoesAplicadas` vive no próprio
+         * documento, não no navegador, então uma máquina nova não repete a troca e não ressuscita o
+         * que a clínica editar depois.
+         *
+         * O histórico não é afetado: cada ficha preenchida guarda seu próprio `perguntasSnapshot`,
+         * com as perguntas como estavam no dia.
+         */
+        ajustes.perguntasEspecificas = perguntasDoModelo.map((q, i) => ({ ...q, ordem: i + 1 }));
+        ajustes.migracoesAplicadas = [...jaAplicadas, LASER_PERGUNTAS_MIGRACAO];
+      } else {
+        // Depois da troca, o comportamento de sempre: uma pergunta de segurança que suma volta ao
+        // fim da lista. Comparar por texto além do ID cobre fichas mexidas à mão pela equipe.
+        const faltando = perguntasDoModelo.filter(
+          (req) =>
+            !atuais.some(
+              (q) =>
+                q.id === req.id || q.texto.trim().toLowerCase() === req.texto.trim().toLowerCase()
+            )
+        );
+        if (faltando.length > 0) {
+          ajustes.perguntasEspecificas = [...atuais, ...faltando].map((q, i) => ({
+            ...q,
+            ordem: i + 1,
+          }));
+        }
       }
 
       if (Object.keys(ajustes).length > 0) {

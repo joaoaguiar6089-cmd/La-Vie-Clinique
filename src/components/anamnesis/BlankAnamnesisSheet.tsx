@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { AnamnesisQuestion, AnamnesisTemplate, ClinicProfile } from '../../types';
+import React, { useMemo, useRef, useState } from 'react';
+import { AnamnesisQuestion, AnamnesisTemplate, ClinicProfile, LaserBodyMap, LaserVista } from '../../types';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
@@ -9,14 +9,25 @@ import {
   isPatientQuestion,
 } from '../../utils/anamnesisQuestions';
 import { ConsentTermView } from './ConsentTermView';
+import { LaserBodyMapView, AreaExibida } from '../laser/LaserBodyMapView';
+import { ehTemplateDeLaser } from '../../utils/templateMatching';
 import { Printer, Download, X, Loader2, Stethoscope } from 'lucide-react';
 
 interface BlankAnamnesisSheetProps {
   template: AnamnesisTemplate;
   generalQuestions: AnamnesisQuestion[];
   clinicProfile: ClinicProfile;
+  /**
+   * Mapa corporal do laser, para a folha sair com os manequins de frente e costas a serem
+   * assinalados à caneta. Vem por prop, como a imagem orientativa: o mapa mora no catálogo, e
+   * quem monta a tela é quem o busca.
+   */
+  mapaCorporal?: LaserBodyMap | null;
   onClose: () => void;
 }
+
+/** Nada vem marcado numa folha em branco — a marcação é feita à caneta, depois de imprimir. */
+const VAZIO: Set<string> = new Set();
 
 type VersaoFoto = 'feminino' | 'masculino' | 'unica';
 
@@ -163,6 +174,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
   template,
   generalQuestions,
   clinicProfile,
+  mapaCorporal,
   onClose,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -171,6 +183,39 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
   const orientationImage = resolveOrientationImage(template);
   const consentSections = resolveConsentTerm(template);
 
+  /**
+   * As duas vistas do mapa, prontas para desenhar — só as que têm manequim **e** área.
+   *
+   * A numeração é contínua entre elas (`numeroInicial`) para a legenda ser uma lista só: com duas
+   * sequências começando em 1, um "3" no papel seria ambíguo entre frente e costas.
+   */
+  const vistasDoMapa = useMemo(() => {
+    const manequins: Record<LaserVista, string | undefined> = {
+      frente: mapaCorporal?.manequimFrenteUrl,
+      costas: mapaCorporal?.manequimCostasUrl,
+    };
+    const rotulos: Record<LaserVista, string> = { frente: 'Frente', costas: 'Costas' };
+
+    let proximoNumero = 1;
+    return (['frente', 'costas'] as LaserVista[])
+      .map((vista) => {
+        const areas: AreaExibida[] = (mapaCorporal?.areas || [])
+          .filter((a) => a.vista === vista)
+          .map((a) => ({
+            chave: a.procedureId,
+            nomeCurto: a.nomeCurto,
+            area: { id: a.procedureId, vista: a.vista, formas: a.formas },
+          }));
+        const numeroInicial = proximoNumero;
+        proximoNumero += areas.length;
+        return { vista, rotulo: rotulos[vista], imagem: manequins[vista], areas, numeroInicial };
+      })
+      .filter((v) => v.imagem && v.areas.length > 0);
+  }, [mapaCorporal]);
+
+  const mostrarMapaLaser = ehTemplateDeLaser(template) && vistasDoMapa.length > 0;
+
+  const [incluirMapaCorporal, setIncluirMapaCorporal] = useState(true);
   const [incluirPerguntasProfissional, setIncluirPerguntasProfissional] = useState(true);
   const [incluirImagemOrientativa, setIncluirImagemOrientativa] = useState(true);
   const [incluirTermoConsentimento, setIncluirTermoConsentimento] = useState(true);
@@ -284,6 +329,18 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
               </span>
             </span>
           </label>
+
+          {mostrarMapaLaser && (
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
+              <input
+                type="checkbox"
+                checked={incluirMapaCorporal}
+                onChange={(e) => setIncluirMapaCorporal(e.target.checked)}
+                className="accent-[#A67C52] w-4 h-4 rounded-xs"
+              />
+              Mapa corporal (áreas do laser)
+            </label>
+          )}
 
           {orientationImage && (
             <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
@@ -436,6 +493,59 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
                   className="block w-full h-auto object-contain rounded-xs"
                   style={{ maxHeight: '1040px' }}
                 />
+              </div>
+            </div>
+          )}
+
+          {/*
+            Mapa corporal do laser — frente e costas, com todas as áreas e **nenhuma marcada**.
+            É o ponto da folha: quem imprime assinala à caneta.
+
+            Vai numerado e com legenda ao lado porque no papel não há botão nem toque: sem o
+            número, quem olha vê uma mancha hachurada e não tem como saber se é linha alba ou
+            tórax. A legenda traz quadradinho para marcar, então dá para assinalar no desenho, na
+            lista, ou nos dois.
+          */}
+          {mostrarMapaLaser && incluirMapaCorporal && (
+            <div className="mb-6 page-break-inside-avoid">
+              <SectionHeading title="Áreas de aplicação — assinale as regiões" />
+
+              <div className="border border-gray-200 rounded-sm bg-[#FAF9F6] p-3">
+                <div className="flex flex-wrap items-start justify-center gap-6">
+                  {vistasDoMapa.map(({ vista, rotulo, imagem, areas, numeroInicial }) => (
+                    <div key={vista} className="text-center">
+                      <LaserBodyMapView
+                        imagemUrl={imagem}
+                        areas={areas}
+                        selecionadas={VAZIO}
+                        alturaManequim={330}
+                        ocultarBotoes
+                        numerar
+                        numeroInicial={numeroInicial}
+                      />
+                      <span className="block text-[9px] uppercase tracking-wider text-gray-500 mt-1 font-bold">
+                        {rotulo}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-gray-200 grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-1.5">
+                  {vistasDoMapa.flatMap(({ areas, numeroInicial }) =>
+                    areas.map((a, i) => (
+                      <span
+                        key={a.chave}
+                        className="flex items-center gap-1.5 text-[10px] text-gray-700 leading-tight"
+                      >
+                        <TickBox />
+                        <span className="font-bold text-[#C0392B] tabular-nums">
+                          {numeroInicial + i}.
+                        </span>
+                        {a.nomeCurto}
+                      </span>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           )}

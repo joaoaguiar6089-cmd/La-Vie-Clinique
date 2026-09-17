@@ -3,6 +3,7 @@ import { LaserArea } from '../../types';
 import {
   areaParaPath,
   areaNoPonto,
+  centroDaForma,
   formaParaPath,
   posicionarBotoesDoAnel,
 } from '../../utils/laserAreas';
@@ -74,6 +75,16 @@ interface LaserBodyMapViewProps {
    * alguém arrastando uma delas uma vez.
    */
   onMoverBotao?: (chave: string, posicao: { x: number; y: number }) => void;
+  /**
+   * Desenha um número dentro de cada área, para casar a figura com uma legenda ao lado.
+   *
+   * Existe para o papel. Na tela, o nome da área chega pelo botão do anel ou pelo toque; impresso,
+   * não há botão nem toque — sem número, quem olha vê uma mancha hachurada e não tem como saber se
+   * é "Linha Alba" ou "Tórax".
+   */
+  numerar?: boolean;
+  /** Primeiro número da sequência. Deixa a legenda seguir contínua entre frente e costas. */
+  numeroInicial?: number;
 }
 
 interface Medidas {
@@ -102,6 +113,8 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
   vazioMensagem,
   ocultarBotoes = false,
   onMoverBotao,
+  numerar = false,
+  numeroInicial = 1,
 }) => {
   const externoRef = useRef<HTMLDivElement>(null);
   const figuraRef = useRef<HTMLDivElement>(null);
@@ -439,6 +452,36 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
                 </g>
               );
             })}
+
+            {/* Números da legenda, no centro de massa de cada área. */}
+            {numerar &&
+              areas.flatMap((a, i) =>
+                // Um número por **forma**, não por área: numa região simétrica o centro da área cai
+                // entre as duas manchas, em cima do corpo nu, e nenhuma das duas fica marcada.
+                // Repetir o número nas duas é o que diz que elas são a mesma área.
+                a.area.formas.map((forma, f) => {
+                  const c = centroDaForma(forma);
+                  const cx = c.x * larguraSvg;
+                  const cy = c.y * alturaSvg;
+                  return (
+                    <g key={`numero-${a.chave}-${f}`} style={{ pointerEvents: 'none' }}>
+                      {/* Disco branco por baixo: sobre a hachura vermelha um número solto some. */}
+                      <circle cx={cx} cy={cy} r={9} fill="#FFFFFF" stroke="#C0392B" strokeWidth={1.4} />
+                      <text
+                        x={cx}
+                        y={cy}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fontSize={11}
+                        fontWeight={700}
+                        fill="#C0392B"
+                      >
+                        {numeroInicial + i}
+                      </text>
+                    </g>
+                  );
+                })
+              )}
 
             {/* Formas já desenhadas nesta sessão, ainda não aplicadas. */}
             {(rascunho || []).map((forma, i) => (

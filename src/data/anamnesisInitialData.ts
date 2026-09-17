@@ -15,8 +15,13 @@ export const DEFAULT_GENERAL_QUESTIONS: AnamnesisQuestion[] = [
 ];
 
 /**
- * As 13 perguntas de saúde obrigatórias para procedimentos de Depilação a Laser
- * (Facial, Íntima e Corporal), conforme protocolo clínico e triagem dermatológica.
+ * Triagem de saúde da Depilação a Laser — o que a paciente responde.
+ *
+ * Os IDs são estáveis e descritivos de propósito. Uma ficha já preenchida guarda as respostas
+ * por ID (`respostasEspecificas`), então renomear um ID desliga a resposta correspondente em todo
+ * o histórico. Por isso as perguntas que continuaram existentes mantiveram o ID antigo, mesmo
+ * quando a ordem mudou — e as novas ganharam nome descritivo, sem número, para que a próxima
+ * reordenação não crie a tentação de renumerá-las.
  */
 export const LASER_HEALTH_QUESTIONS: AnamnesisQuestion[] = [
   {
@@ -123,42 +128,22 @@ export const LASER_HEALTH_QUESTIONS: AnamnesisQuestion[] = [
     ordem: 13,
     publicoAlvo: 'paciente',
   },
-  {
-    id: 'laser-q14-tatuagem',
-    texto: 'Possui tatuagem no local de aplicação?',
-    tipo_campo: 'sim_nao',
-    obrigatoria: true,
-    ordem: 14,
-    publicoAlvo: 'paciente',
-  },
 ];
 
 /**
- * Perguntas técnicas complementares de segurança específica para procedimentos a laser.
+ * Segurança técnica e histórico recente — ainda respondidos pela paciente.
+ *
+ * São as perguntas que decidem se a sessão pode acontecer **hoje**: bronzeamento recente,
+ * isotretinoína, método de remoção usado por último, ácidos na região, anticoagulantes, hormônios,
+ * gravidez e ciclo menstrual.
  */
 export const LASER_TECHNICAL_QUESTIONS: AnamnesisQuestion[] = [
-  {
-    id: 'laser-q15-fototipo',
-    texto: 'Fototipo de pele estimado de acordo com a escala de Fitzpatrick:',
-    tipo_campo: 'unica_escolha',
-    opcoes: [
-      'Fototipo I (Pele muito clara, sempre queima, nunca bronzeia)',
-      'Fototipo II (Pele clara, queima com facilidade, bronzeia pouco)',
-      'Fototipo III (Pele morena clara, queima moderadamente, bronzeia gradual)',
-      'Fototipo IV (Pele morena média, queima raramente, bronzeia facilmente)',
-      'Fototipo V (Pele morena escura, muito raramente queima)',
-      'Fototipo VI (Pele negra, nunca queima)',
-    ],
-    obrigatoria: true,
-    ordem: 15,
-    publicoAlvo: 'paciente',
-  },
   {
     id: 'laser-q16-sol',
     texto: 'Exposição solar intensa, praia ou bronzeamento artificial nos últimos 20 dias?',
     tipo_campo: 'sim_nao',
     obrigatoria: true,
-    ordem: 16,
+    ordem: 14,
     publicoAlvo: 'paciente',
   },
   {
@@ -166,7 +151,7 @@ export const LASER_TECHNICAL_QUESTIONS: AnamnesisQuestion[] = [
     texto: 'Uso oral de isotretinoína (Roacutan) nos últimos 6 meses?',
     tipo_campo: 'sim_nao',
     obrigatoria: true,
-    ordem: 17,
+    ordem: 15,
     publicoAlvo: 'paciente',
   },
   {
@@ -181,7 +166,7 @@ export const LASER_TECHNICAL_QUESTIONS: AnamnesisQuestion[] = [
       'Laser anterior',
     ],
     obrigatoria: true,
-    ordem: 18,
+    ordem: 16,
     publicoAlvo: 'paciente',
   },
   {
@@ -189,14 +174,143 @@ export const LASER_TECHNICAL_QUESTIONS: AnamnesisQuestion[] = [
     texto: 'Aplicação de ácidos tópicos (glicólico, retinóico, salicílico) na região a ser tratada?',
     tipo_campo: 'sim_nao',
     obrigatoria: false,
+    ordem: 17,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-anticoagulantes',
+    texto: 'Usa anticoagulantes?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 18,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-medicamentos-hormonais',
+    texto: 'Utiliza medicamentos hormonais ou anticoncepcionais?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
     ordem: 19,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-gravidez',
+    // O asterisco vem do formulário da clínica: gravidez é contraindicação absoluta, e a pergunta
+    // é marcada para saltar aos olhos de quem confere a ficha antes da sessão.
+    texto: '* Está grávida ou existe possibilidade de gravidez?',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 20,
+    publicoAlvo: 'paciente',
+  },
+  {
+    id: 'laser-menstruada',
+    texto:
+      'Está menstruada? (especialmente relevante para algumas áreas e conforto, embora não seja ' +
+      'contraindicação absoluta)',
+    tipo_campo: 'sim_nao',
+    obrigatoria: true,
+    ordem: 21,
     publicoAlvo: 'paciente',
   },
 ];
 
+/**
+ * Avaliação da profissional — pele e pelo, o que define os parâmetros do disparo.
+ *
+ * Não vai ao formulário online: `publicoAlvo: 'medico'` mantém estas perguntas fora do link que a
+ * paciente recebe e dentro da parte que a profissional preenche no atendimento.
+ */
+export const LASER_PROFESSIONAL_QUESTIONS: AnamnesisQuestion[] = [
+  {
+    id: 'laser-q15-fototipo',
+    texto: 'Fototipo de pele estimado de acordo com a escala de Fitzpatrick:',
+    tipo_campo: 'unica_escolha',
+    opcoes: [
+      'Fototipo I (Pele muito clara, sempre queima, nunca bronzeia)',
+      'Fototipo II (Pele clara, queima com facilidade, bronzeia pouco)',
+      'Fototipo III (Pele morena clara, queima moderadamente, bronzeia gradual)',
+      'Fototipo IV (Pele morena média, queima raramente, bronzeia facilmente)',
+      'Fototipo V (Pele morena escura, muito raramente queima)',
+      'Fototipo VI (Pele negra, nunca queima)',
+    ],
+    obrigatoria: true,
+    ordem: 22,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'laser-fototipo-confirmado',
+    texto: 'Fototipo de Fitzpatrick:',
+    tipo_campo: 'multipla_escolha',
+    opcoes: ['I', 'II', 'III', 'IV', 'V', 'VI'],
+    obrigatoria: true,
+    ordem: 23,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'laser-cor-pelo',
+    texto: 'Cor do pelo',
+    tipo_campo: 'unica_escolha',
+    opcoes: [
+      'Preto',
+      'Castanho escuro',
+      'Castanho claro',
+      'Ruivo',
+      'Loiro',
+      'Grisalho ou branco',
+    ],
+    obrigatoria: true,
+    ordem: 24,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'laser-espessura-pelo',
+    texto: 'Espessura',
+    tipo_campo: 'unica_escolha',
+    opcoes: ['Fino', 'Médio', 'Grosso'],
+    obrigatoria: true,
+    ordem: 25,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'laser-densidade-pelo',
+    texto: 'DENSIDADE',
+    tipo_campo: 'unica_escolha',
+    opcoes: ['Baixa', 'Média', 'Alta'],
+    obrigatoria: false,
+    ordem: 26,
+    publicoAlvo: 'medico',
+  },
+  {
+    id: 'laser-pele-caracteristicas',
+    texto: 'PELE',
+    tipo_campo: 'multipla_escolha',
+    opcoes: [
+      'Normal',
+      'Seca',
+      'Oleosa',
+      'Sensível',
+      'Bronzeada',
+      'Com manchas / hiperpigmentação',
+      'Com foliculite',
+      'Com pelos encravados',
+      'Com cicatrizes',
+      'Com lesões ativas',
+    ],
+    obrigatoria: true,
+    ordem: 27,
+    publicoAlvo: 'medico',
+  },
+];
+
+/**
+ * As 27 perguntas da ficha de Depilação a Laser, na ordem em que saem na tela: primeiro o que a
+ * paciente responde (1–21), depois a avaliação da profissional (22–27).
+ */
 export const ALL_LASER_PROCEDURE_QUESTIONS: AnamnesisQuestion[] = [
   ...LASER_HEALTH_QUESTIONS,
   ...LASER_TECHNICAL_QUESTIONS,
+  ...LASER_PROFESSIONAL_QUESTIONS,
 ];
 
 /**
