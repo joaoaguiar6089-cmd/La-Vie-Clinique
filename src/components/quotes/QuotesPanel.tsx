@@ -9,7 +9,7 @@ import {
   Check,
   FileText,
   AlertCircle,
-  Download,
+  Eye,
   Share2,
   Ban,
 } from 'lucide-react';
@@ -338,11 +338,11 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                   <button
                     type="button"
                     onClick={() => setQuoteNaPrevia(quote)}
-                    aria-label={`Ver PDF do ${quote.numero}`}
-                    title="Ver e baixar PDF"
+                    aria-label={`Visualizar ${quote.numero}`}
+                    title="Visualizar — o botão de salvar PDF fica dentro da prévia"
                     className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
                   >
-                    <Download className="w-4 h-4" />
+                    <Eye className="w-4 h-4" />
                   </button>
 
                   {editavel && (

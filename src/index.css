@@ -47,6 +47,22 @@
   box-shadow: 0 12px 30px -4px rgba(166, 124, 82, 0.1), 0 4px 12px -2px rgba(0, 0, 0, 0.05);
 }
 
+/* Cadastro por completar — um creme de canto de olho, não um alerta. Precisa ser CSS e não
+   `bg-amber-50` do Tailwind: `.glass-card` está fora de @layer e venceria a utilitária.
+
+   O hover fica quase igual ao repouso de propósito: `.glass-card-hover` anima `all` em 0.3s, e
+   com um amarelo forte de um lado e o branco do hover do outro, passar o mouse pela lista fazia
+   as linhas piscarem. */
+.glass-card-pendente {
+  background: rgba(252, 250, 242, 0.6);
+  border-color: rgba(210, 190, 150, 0.35);
+}
+
+.glass-card-pendente.glass-card-hover:hover {
+  background: rgba(253, 252, 247, 0.8);
+  border-color: rgba(166, 124, 82, 0.35);
+}
+
 .glass-nav {
   background: rgba(249, 248, 246, 0.82);
   backdrop-filter: blur(18px);

@@ -36,3 +36,17 @@ export const formatDateOnly = (yyyyMmDd?: string): string => {
   if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString("pt-BR");
 };
+
+/**
+ * "2026-04-27" ou ISO completo -> "27/04/26". Formato curto de propósito: a legenda de última
+ * interação divide a linha da lista com o nome e o telefone, e o ano em quatro dígitos é o que
+ * fazia a linha quebrar no celular.
+ */
+export const formatDateShortYear = (valor?: string): string => {
+  if (!valor) return "";
+  // O meio-dia UTC evita o fuso puxar a data um dia para trás em "YYYY-MM-DD".
+  const d = valor.length === 10 ? new Date(`${valor}T12:00:00Z`) : new Date(valor);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)}`;
+};

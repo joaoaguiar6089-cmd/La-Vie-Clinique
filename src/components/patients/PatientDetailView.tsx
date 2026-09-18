@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   Calendar,
   ClipboardList,
-  Download,
   Eye,
   FileText,
   MessageCircle,
@@ -330,11 +329,11 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setOrcamentoNaPrevia(orcamento)}
-                      aria-label={`Ver PDF do ${orcamento.numero}`}
-                      title="Ver e baixar PDF"
+                      aria-label={`Visualizar ${orcamento.numero}`}
+                      title="Visualizar — o botão de salvar PDF fica dentro da prévia"
                       className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
                     >
-                      <Download className="w-4 h-4" />
+                      <Eye className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

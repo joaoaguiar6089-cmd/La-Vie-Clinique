@@ -715,9 +715,23 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
         <div data-pdf-page={layout.length + 1} style={estiloPagina}>
           <CabecalhoCompacto quote={quote} />
 
+          {/* O manequim sozinho não diz de que tratamento ele fala: quem abre o PDF vê um corpo
+              pintado e um rótulo genérico. O título nomeia o procedimento antes da figura. */}
           <div style={{ textAlign: 'center' }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-serif)',
+                fontSize: 20,
+                color: PRETO,
+                lineHeight: 1.15,
+              }}
+            >
+              Depilação a Laser
+            </div>
             <span
               style={{
+                display: 'inline-block',
+                marginTop: 3,
                 fontSize: 10,
                 textTransform: 'uppercase',
                 letterSpacing: '.14em',
