@@ -1,4 +1,5 @@
-import { AnamnesisRecord, Patient, Quote } from '../types';
+import { AnamnesisRecord, Attendance, Patient, Quote } from '../types';
+import { ehRealizado } from './attendances';
 
 /**
  * As linhas do painel de clientes — quem aparece na lista, em que ordem e o que ainda falta
@@ -12,7 +13,7 @@ import { AnamnesisRecord, Patient, Quote } from '../types';
 /** Ordem escolhida na lista. */
 export type OrdemDaLista = 'alfabetica' | 'interacao';
 
-export type TipoDeInteracao = 'anamnese' | 'orcamento';
+export type TipoDeInteracao = 'atendimento' | 'anamnese' | 'orcamento';
 
 export interface UltimaInteracao {
   tipo: TipoDeInteracao;
@@ -43,6 +44,7 @@ export interface LinhaDePaciente {
   pendencia?: PendenciaDeCadastro;
   totalAnamneses: number;
   totalOrcamentos: number;
+  totalAtendimentos: number;
 }
 
 /** Normaliza para comparar nomes digitados à mão com nomes do cadastro (acento e caixa não contam). */
@@ -78,6 +80,12 @@ const dataDaFicha = (r: AnamnesisRecord): string => r.createdAt || r.dataAtendim
 
 const dataDoOrcamento = (q: Quote): string => q.dataEmissao || q.createdAt || '';
 
+/**
+ * A data da visita. Só entra quem **aconteceu**: um agendamento para o Natal faria a lista dizer
+ * "última interação 25/12/26", uma data que ainda não chegou.
+ */
+const dataDoAtendimento = (a: Attendance): string => a.data || '';
+
 /** Datas chegam em dois formatos; comparar como string ordenaria "27/04" antes de "2026-04-27". */
 const emMs = (valor?: string): number => {
   if (!valor) return 0;
@@ -99,6 +107,7 @@ interface FontesDaLista {
   patients: Patient[];
   records: AnamnesisRecord[];
   quotes: Quote[];
+  atendimentos?: Attendance[];
 }
 
 /** Acumulador de uma pessoa sem cadastro, montado a partir dos documentos que a citam. */
@@ -110,6 +119,7 @@ interface Pendente {
   contatoEm: number;
   totalAnamneses: number;
   totalOrcamentos: number;
+  totalAtendimentos: number;
 }
 
 /**
@@ -123,6 +133,7 @@ export const montarLinhasDePacientes = ({
   patients,
   records,
   quotes,
+  atendimentos = [],
 }: FontesDaLista): LinhaDePaciente[] => {
   /** Cadastro por chave de nome, para acolher o que veio avulso. Em homônimos, o 1º leva. */
   const porNome = new Map<string, Patient>();
@@ -134,13 +145,17 @@ export const montarLinhasDePacientes = ({
   const porId = new Map<string, Patient>(patients.map((p) => [p.id, p]));
 
   const interacoes = new Map<string, UltimaInteracao>();
-  const contagens = new Map<string, { anamneses: number; orcamentos: number }>();
+  const contagens = new Map<
+    string,
+    { anamneses: number; orcamentos: number; atendimentos: number }
+  >();
   const pendentes = new Map<string, Pendente>();
 
   const contar = (patientId: string, tipo: TipoDeInteracao) => {
-    const atual = contagens.get(patientId) || { anamneses: 0, orcamentos: 0 };
+    const atual = contagens.get(patientId) || { anamneses: 0, orcamentos: 0, atendimentos: 0 };
     if (tipo === 'anamnese') atual.anamneses += 1;
-    else atual.orcamentos += 1;
+    else if (tipo === 'orcamento') atual.orcamentos += 1;
+    else atual.atendimentos += 1;
     contagens.set(patientId, atual);
   };
 
@@ -161,6 +176,7 @@ export const montarLinhasDePacientes = ({
       contatoEm: -1,
       totalAnamneses: 0,
       totalOrcamentos: 0,
+      totalAtendimentos: 0,
     };
     atual.ultima = maisRecente(atual.ultima, interacao);
     const quando = emMs(interacao.data);
@@ -169,7 +185,8 @@ export const montarLinhasDePacientes = ({
       atual.contatoEm = quando;
     }
     if (interacao.tipo === 'anamnese') atual.totalAnamneses += 1;
-    else atual.totalOrcamentos += 1;
+    else if (interacao.tipo === 'orcamento') atual.totalOrcamentos += 1;
+    else atual.totalAtendimentos += 1;
     pendentes.set(chave, atual);
   };
 
@@ -188,8 +205,18 @@ export const montarLinhasDePacientes = ({
     else registrarPendente(q.pacienteNome, q.pacienteContato, interacao);
   });
 
+  atendimentos.forEach((a) => {
+    // Agendamento futuro não conta como interação: ele ainda não aconteceu. Falta e remarcação
+    // também não — ninguém veio à clínica.
+    if (!ehRealizado(a)) return;
+    const interacao: UltimaInteracao = { tipo: 'atendimento', data: dataDoAtendimento(a) };
+    const dono = (a.pacienteId && porId.get(a.pacienteId)) || porNome.get(chaveDoNome(a.pacienteNome));
+    if (dono) registrar(dono.id, interacao);
+    else registrarPendente(a.pacienteNome, undefined, interacao);
+  });
+
   const doCadastro: LinhaDePaciente[] = patients.map((p) => {
-    const totais = contagens.get(p.id) || { anamneses: 0, orcamentos: 0 };
+    const totais = contagens.get(p.id) || { anamneses: 0, orcamentos: 0, atendimentos: 0 };
     return {
       id: p.id,
       nome: p.nome,
@@ -200,6 +227,7 @@ export const montarLinhasDePacientes = ({
       pendencia: !p.contato?.trim() && !p.email?.trim() ? 'sem_contato' : undefined,
       totalAnamneses: totais.anamneses,
       totalOrcamentos: totais.orcamentos,
+      totalAtendimentos: totais.atendimentos,
     };
   });
 
@@ -211,6 +239,7 @@ export const montarLinhasDePacientes = ({
     pendencia: 'sem_cadastro',
     totalAnamneses: p.totalAnamneses,
     totalOrcamentos: p.totalOrcamentos,
+    totalAtendimentos: p.totalAtendimentos,
   }));
 
   return [...doCadastro, ...semCadastro];
@@ -238,6 +267,7 @@ export const ordenarLinhas = (
 };
 
 export const ROTULO_DA_INTERACAO: Record<TipoDeInteracao, string> = {
+  atendimento: 'Atendimento',
   anamnese: 'Anamnese',
   orcamento: 'Orçamento',
 };

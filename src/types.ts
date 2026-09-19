@@ -471,3 +471,74 @@ export type QuoteDraft = Omit<
   'id' | 'numero' | 'ano' | 'sequencia' | 'status' | 'enviadoEm' | 'substituidoPor' | 'substituiu' | 'createdAt' | 'updatedAt'
 >;
 
+
+// ==========================================
+// MÓDULO DE ATENDIMENTOS — TIPOS
+// ==========================================
+
+/**
+ * Situação de um agendamento. Só existe em registro que **nasceu com data futura**: o que foi
+ * lançado para hoje ou para trás é fato consumado e não tem o que resolver.
+ *
+ * `remarcado` é estado final — o registro morre assim e um agendamento novo nasce ao lado, o que
+ * preserva o rastro de que houve remarcação. Mudar a data no mesmo documento apagaria isso.
+ */
+export type AttendanceStatus = 'agendado' | 'compareceu' | 'faltou' | 'remarcado';
+
+/**
+ * Plano de sessões — "10 sessões de laser axilas". Agrupa os atendimentos numa linha só na lista
+ * e é quem sabe o total contratado.
+ *
+ * Documento próprio, e não um campo repetido em cada atendimento, porque o total precisa de um
+ * lugar único: com 10 cópias do número, basta alguém digitar 8 numa delas para o "3/10" passar a
+ * mentir. O número da sessão, ao contrário, **não** é gravado em lugar nenhum — é contado na
+ * leitura, o que faz excluir a 3ª sessão renumerar as outras sozinha.
+ */
+export interface SessionPlan {
+  id: string;
+  pacienteId: string;
+  /** Origem no catálogo. Ausente quando o procedimento foi digitado à mão. */
+  procedureId?: string;
+  procedimentoNome: string;
+  totalSessoes: number;
+  /**
+   * Encerramento é manual, nunca automático ao bater o total: a 11ª sessão de um plano de 10
+   * (cortesia, retoque) acontece, e fechar sozinho no 10 impediria de registrá-la.
+   */
+  encerradoEm?: string; // ISO — presença = encerrado
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/**
+ * Uma visita: o que aconteceu, ou o que está marcado para acontecer.
+ *
+ * Diferente da ficha de anamnese, que é documento clínico assinado, isto é o diário da clínica —
+ * data, hora, procedimento, quem atendeu e o que foi observado. Ninguém de fora enxerga (as
+ * regras exigem login, ao contrário de `patients` e `anamnesis_records`, abertos porque a
+ * paciente preenche a própria ficha sem conta).
+ */
+export interface Attendance {
+  id: string;
+  pacienteId: string;
+  /** Espelha o nome no momento do registro, como fazem a ficha e o orçamento. */
+  pacienteNome: string;
+  data: string; // YYYY-MM-DD
+  hora?: string; // HH:MM — opcional no realizado, obrigatória no agendamento
+  procedureId?: string;
+  procedimentoNome: string;
+  /** Vínculo com o plano. Ausente = sessão avulsa. */
+  planoId?: string;
+  professionalId?: string;
+  profissionalNome?: string; // Congelado no registro, para o caso de a equipe mudar depois
+  observacoes?: string;
+  /**
+   * Presente somente em quem nasceu agendamento. Ausência é o que distingue, para sempre, o
+   * registro lançado como fato consumado daquele que um dia esteve marcado.
+   */
+  status?: AttendanceStatus;
+  /** Data e hora originais do agendamento, guardadas quando a confirmação mudou a data. */
+  agendadoPara?: string; // ISO
+  createdAt: string;
+  updatedAt?: string;
+}

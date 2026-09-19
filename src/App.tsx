@@ -657,6 +657,7 @@ function MainCatalogApp() {
               clinic={clinic}
               catalogProcedures={procedures}
               templates={anamnesisTemplates}
+              currentProfessionalId={currentProfessional?.id}
             />
           ) : currentView === 'anamnesis' ? (
             <AnamnesisModule

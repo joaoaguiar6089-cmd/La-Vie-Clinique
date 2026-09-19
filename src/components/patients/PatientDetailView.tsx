@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Calendar,
+  CalendarClock,
+  ChevronDown,
   ClipboardList,
   Eye,
   FileText,
@@ -15,12 +17,14 @@ import {
   AnamnesisQuestion,
   AnamnesisRecord,
   AnamnesisTemplate,
+  Attendance,
   ClinicProfile,
   Patient,
   Procedure,
   Quote,
   QuoteDraft,
   QuoteStatus,
+  SessionPlan,
 } from '../../types';
 import { formatBRL, formatDate, formatDateOnly } from '../../utils/formatters';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
@@ -35,6 +39,7 @@ import { QuoteFormModal } from '../quotes/QuoteFormModal';
 import { QuotePreviewModal } from '../quotes/QuotePreviewModal';
 import { QuoteShareModal } from '../quotes/QuoteShareModal';
 import { PatientPersonalDataCard } from './PatientPersonalDataCard';
+import { AttendancesTab, contarAtendimentosRealizados } from './AttendancesTab';
 
 interface PatientDetailViewProps {
   patient: Patient;
@@ -42,6 +47,10 @@ interface PatientDetailViewProps {
   records: AnamnesisRecord[];
   /** Orçamentos deste paciente, dos mais recentes para os mais antigos. */
   quotes: Quote[];
+  /** Atendimentos e agendamentos dele. */
+  atendimentos: Attendance[];
+  /** Planos de sessão dele — quem agrupa os atendimentos na aba. */
+  planos: SessionPlan[];
   /** Cadastro completo — o formulário de ficha precisa dele para a busca de paciente. */
   todosPacientes: Patient[];
   templates: AnamnesisTemplate[];
@@ -54,9 +63,23 @@ interface PatientDetailViewProps {
   onExcluirFicha: (recordId: string) => Promise<void>;
   onSalvarOrcamento: (draft: QuoteDraft, existing?: Quote) => Promise<void>;
   onOrcamentoCompartilhado: (quote: Quote) => void;
+  /** Tudo o que a aba de atendimentos faz mora no módulo — aqui só a tela. */
+  onNovoAtendimento: () => void;
+  onEditarAtendimento: (a: Attendance) => void;
+  onExcluirAtendimento: (a: Attendance) => void;
+  onConfirmarAtendimento: (a: Attendance) => void;
+  onFaltouAtendimento: (a: Attendance) => void;
+  onRemarcarAtendimento: (a: Attendance) => void;
+  onAdicionarSessao: (planoId: string) => void;
+  onEncerrarPlano: (plano: SessionPlan) => void;
+  onReabrirPlano: (plano: SessionPlan) => void;
+  onExcluirPlano: (plano: SessionPlan) => void;
 }
 
-type Aba = 'anamneses' | 'orcamentos';
+type Aba = 'atendimentos' | 'anamneses' | 'orcamentos';
+
+/** As três coisas que o menu "Novo" cria. */
+type TipoNovo = 'atendimento' | 'anamnese' | 'orcamento';
 
 const STATUS_LABEL: Record<QuoteStatus, string> = {
   rascunho: 'Rascunho',
@@ -87,6 +110,8 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   patient,
   records,
   quotes,
+  atendimentos,
+  planos,
   todosPacientes,
   templates,
   generalQuestions,
@@ -98,6 +123,16 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   onExcluirFicha,
   onSalvarOrcamento,
   onOrcamentoCompartilhado,
+  onNovoAtendimento,
+  onEditarAtendimento,
+  onExcluirAtendimento,
+  onConfirmarAtendimento,
+  onFaltouAtendimento,
+  onRemarcarAtendimento,
+  onAdicionarSessao,
+  onEncerrarPlano,
+  onReabrirPlano,
+  onExcluirPlano,
 }) => {
   /**
    * Mapa corporal do laser, montado do catálogo — a ficha impressa desta tela precisa desenhar as
@@ -108,14 +143,45 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
     [catalogProcedures, clinic]
   );
 
-  const [aba, setAba] = useState<Aba>('anamneses');
+  const [aba, setAba] = useState<Aba>('atendimentos');
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
+  const [menuNovoAberto, setMenuNovoAberto] = useState(false);
+  const menuNovoRef = useRef<HTMLDivElement>(null);
 
   const [fichaModalAberto, setFichaModalAberto] = useState(false);
   const [fichaAberta, setFichaAberta] = useState<AnamnesisRecord | null>(null);
   const [orcamentoModalAberto, setOrcamentoModalAberto] = useState(false);
   const [orcamentoNaPrevia, setOrcamentoNaPrevia] = useState<Quote | null>(null);
   const [orcamentoParaCompartilhar, setOrcamentoParaCompartilhar] = useState<Quote | null>(null);
+
+  useEffect(() => {
+    if (!menuNovoAberto) return;
+    const clicouFora = (e: MouseEvent) => {
+      if (menuNovoRef.current && !menuNovoRef.current.contains(e.target as Node)) {
+        setMenuNovoAberto(false);
+      }
+    };
+    document.addEventListener('mousedown', clicouFora);
+    return () => document.removeEventListener('mousedown', clicouFora);
+  }, [menuNovoAberto]);
+
+  /** O menu leva para a aba do que foi criado — o resultado aparece onde a pessoa olhou. */
+  const criarNovo = (tipo: TipoNovo) => {
+    setMenuNovoAberto(false);
+    if (tipo === 'atendimento') {
+      setAba('atendimentos');
+      onNovoAtendimento();
+    } else if (tipo === 'anamnese') {
+      setAba('anamneses');
+      setFichaModalAberto(true);
+    } else {
+      setAba('orcamentos');
+      setOrcamentoModalAberto(true);
+    }
+  };
+
+  /** Agendamento futuro não é atendimento feito — o contador da aba conta só o que aconteceu. */
+  const totalAtendimentos = contarAtendimentosRealizados(atendimentos);
 
   const whatsAppUrl = buildWhatsAppUrl(patient.contato);
 
@@ -138,22 +204,67 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
             {patient.nome}
           </h1>
           <p className="text-xs text-gray-500 mt-1">
+            {totalAtendimentos} atendimento{totalAtendimentos === 1 ? '' : 's'} ·{' '}
             {records.length} anamnese{records.length === 1 ? '' : 's'} · {quotes.length} orçamento
             {quotes.length === 1 ? '' : 's'}
           </p>
         </div>
 
-        {whatsAppUrl && (
-          <a
-            href={whatsAppUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-white/70 border border-emerald-200 text-emerald-700 text-xs font-semibold uppercase tracking-wider hover:bg-emerald-50 transition-colors"
-          >
-            <MessageCircle className="w-4 h-4" />
-            WhatsApp
-          </a>
-        )}
+        <div className="flex items-center gap-2">
+          {whatsAppUrl && (
+            <a
+              href={whatsAppUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-white/70 border border-emerald-200 text-emerald-700 text-xs font-semibold uppercase tracking-wider hover:bg-emerald-50 transition-colors"
+            >
+              <MessageCircle className="w-4 h-4" />
+              WhatsApp
+            </a>
+          )}
+
+          {/* Uma porta só para criar qualquer coisa desta paciente. Antes havia um botão por
+              aba, que dava duas entradas para a mesma ação e escondia as outras duas. */}
+          <div ref={menuNovoRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuNovoAberto((a) => !a)}
+              aria-haspopup="menu"
+              aria-expanded={menuNovoAberto}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#8E653D] transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Novo
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+
+            {menuNovoAberto && (
+              <div
+                role="menu"
+                className="absolute right-0 z-30 mt-1 w-52 bg-white rounded-sm border border-gray-200 shadow-xl overflow-hidden"
+              >
+                {(
+                  [
+                    { tipo: 'atendimento' as const, icone: CalendarClock, rotulo: 'Atendimento' },
+                    { tipo: 'anamnese' as const, icone: ClipboardList, rotulo: 'Anamnese' },
+                    { tipo: 'orcamento' as const, icone: Receipt, rotulo: 'Orçamento' },
+                  ]
+                ).map(({ tipo, icone: Icone, rotulo }) => (
+                  <button
+                    key={tipo}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => criarNovo(tipo)}
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-xs text-[#1A1A1A] hover:bg-[#FAF9F5] transition-colors"
+                  >
+                    <Icone className="w-4 h-4 text-[#A67C52]" />
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Dados pessoais */}
@@ -166,6 +277,12 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
       <div className="flex flex-wrap items-center gap-2 mb-4">
         {(
           [
+            {
+              id: 'atendimentos' as const,
+              icone: CalendarClock,
+              rotulo: 'Atendimentos',
+              total: totalAtendimentos,
+            },
             { id: 'anamneses' as const, icone: ClipboardList, rotulo: 'Anamneses', total: records.length },
             { id: 'orcamentos' as const, icone: Receipt, rotulo: 'Orçamentos', total: quotes.length },
           ]
@@ -196,18 +313,26 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           );
         })}
 
-        {/* "Novo" acompanha a aba visível — nunca cria a coisa errada por engano */}
-        <button
-          type="button"
-          onClick={() =>
-            aba === 'anamneses' ? setFichaModalAberto(true) : setOrcamentoModalAberto(true)
-          }
-          className="w-full sm:w-auto sm:ml-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#8E653D] transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          {aba === 'anamneses' ? 'Nova anamnese' : 'Novo orçamento'}
-        </button>
       </div>
+
+      {/* Lista de atendimentos */}
+      {aba === 'atendimentos' && (
+        <AttendancesTab
+          atendimentos={atendimentos}
+          planos={planos}
+          primeiroNome={patient.nome.split(' ')[0]}
+          onNovo={onNovoAtendimento}
+          onEditar={onEditarAtendimento}
+          onExcluir={onExcluirAtendimento}
+          onConfirmar={onConfirmarAtendimento}
+          onFaltou={onFaltouAtendimento}
+          onRemarcar={onRemarcarAtendimento}
+          onAdicionarSessao={onAdicionarSessao}
+          onEncerrarPlano={onEncerrarPlano}
+          onReabrirPlano={onReabrirPlano}
+          onExcluirPlano={onExcluirPlano}
+        />
+      )}
 
       {/* Lista de anamneses */}
       {aba === 'anamneses' &&

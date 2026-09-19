@@ -25,7 +25,9 @@ import {
   ClinicProfile,
   AnamnesisQuestion,
   AnamnesisTemplate,
+  Attendance,
   Patient,
+  SessionPlan,
   AnamnesisRecord,
   Quote,
   QuoteDraft,
@@ -71,6 +73,9 @@ const ANAMNESIS_RECORDS_COLLECTION = 'anamnesis_records';
 
 const QUOTES_COLLECTION = 'quotes';
 const COUNTERS_COLLECTION = 'counters';
+
+const ATTENDANCES_COLLECTION = 'attendances';
+const SESSION_PLANS_COLLECTION = 'session_plans';
 
 /**
  * Deeply removes undefined values so Firestore never throws 'Unsupported field value: undefined'
@@ -1741,3 +1746,132 @@ export async function getQuoteById(quoteId: string): Promise<Quote | null> {
   return normalizarQuote({ ...(snap.data() as Quote), id: snap.id });
 }
 
+
+// ==========================================
+// ATENDIMENTOS E PLANOS DE SESSÃO
+// ==========================================
+
+/**
+ * Atendimentos da clínica inteira, numa assinatura compartilhada como as demais.
+ *
+ * Coleção raiz e não subcoleção de `patients` por duas razões: a lista de clientes precisa saber
+ * a última interação de todo mundo de uma vez (uma subcoleção exigiria uma leitura por paciente),
+ * e a agenda que vem depois consulta por data atravessando pacientes.
+ */
+function subscribeToAttendancesDireto(
+  onUpdate: (data: Attendance[]) => void,
+  onError?: (err: Error) => void
+) {
+  const colRef = collection(db, ATTENDANCES_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const items: Attendance[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ ...(docSnap.data() as Attendance), id: docSnap.id });
+      });
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Attendances subscription offline/cota diária atingida.');
+      } else {
+        console.error('Attendances subscription error:', error);
+      }
+      if (onError) onError(error);
+    }
+  );
+}
+
+export function subscribeToAttendances(
+  onUpdate: (data: Attendance[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<Attendance[]>(
+    'attendances',
+    subscribeToAttendancesDireto,
+    onUpdate,
+    onError
+  );
+}
+
+export async function saveAttendance(attendance: Attendance): Promise<void> {
+  const docRef = doc(db, ATTENDANCES_COLLECTION, attendance.id);
+  const dataToSave = cleanForFirestore({
+    ...attendance,
+    updatedAt: new Date().toISOString(),
+  });
+  await setDoc(docRef, dataToSave, { merge: true });
+}
+
+export async function deleteAttendance(attendanceId: string): Promise<void> {
+  await deleteDoc(doc(db, ATTENDANCES_COLLECTION, attendanceId));
+}
+
+function subscribeToSessionPlansDireto(
+  onUpdate: (data: SessionPlan[]) => void,
+  onError?: (err: Error) => void
+) {
+  const colRef = collection(db, SESSION_PLANS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const items: SessionPlan[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ ...(docSnap.data() as SessionPlan), id: docSnap.id });
+      });
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Session plans subscription offline/cota diária atingida.');
+      } else {
+        console.error('Session plans subscription error:', error);
+      }
+      if (onError) onError(error);
+    }
+  );
+}
+
+export function subscribeToSessionPlans(
+  onUpdate: (data: SessionPlan[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<SessionPlan[]>(
+    'session_plans',
+    subscribeToSessionPlansDireto,
+    onUpdate,
+    onError
+  );
+}
+
+export async function saveSessionPlan(plan: SessionPlan): Promise<void> {
+  const docRef = doc(db, SESSION_PLANS_COLLECTION, plan.id);
+  const dataToSave = cleanForFirestore({
+    ...plan,
+    updatedAt: new Date().toISOString(),
+  });
+  await setDoc(docRef, dataToSave, { merge: true });
+}
+
+/**
+ * Apaga o plano e solta os atendimentos dele, que viram avulsos.
+ *
+ * Nunca apaga os atendimentos junto: sumir com seis registros de visita por causa de um clique
+ * num agrupador é perda que não se recupera. O que o plano guarda de verdade é o total e o
+ * agrupamento — e é só isso que se perde aqui.
+ */
+export async function deleteSessionPlan(
+  planId: string,
+  atendimentosDoPlano: Attendance[]
+): Promise<void> {
+  const batch = writeBatch(db);
+  atendimentosDoPlano.forEach((a) => {
+    batch.update(doc(db, ATTENDANCES_COLLECTION, a.id), {
+      planoId: deleteField(),
+      updatedAt: new Date().toISOString(),
+    });
+  });
+  batch.delete(doc(db, SESSION_PLANS_COLLECTION, planId));
+  await batch.commit();
+}
