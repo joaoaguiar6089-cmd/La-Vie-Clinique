@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, FileDown, Image as ImageIcon, MessageCircle, QrCode, Copy, Check, Sparkles, Share2, Layers, Download, Loader2, Percent, Tag } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
@@ -7,7 +7,7 @@ import { exportElementAsPDF, exportElementAsImage, buildWhatsAppCatalogShareUrl 
 import { normalizeDiscountPercent, formatDiscountPercent, MAX_CATALOG_DISCOUNT } from '../utils/catalogPricing';
 import { buildPublicLink } from '../utils/publicLinks';
 import { PrintableCatalog } from './PrintableCatalog';
-import { PrintableCard } from './PrintableCard';
+import { PrintableProcedureCard } from './PrintableProcedureCard';
 import { ProcedureMultiSelect } from './ProcedureMultiSelect';
 
 interface ShareExportModalProps {
@@ -42,8 +42,27 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     singleProcedureToExport ? singleProcedureToExport.id : (procedures[0]?.id || '')
   );
 
-  const catalogPrintRef = useRef<HTMLDivElement>(null);
-  const singleCardPrintRef = useRef<HTMLDivElement>(null);
+  /**
+   * "Enviar card" (detalhe do procedimento e menu do catálogo) abre este mesmo modal, mas para
+   * um trabalho só: gerar o card daquele procedimento. Nesse modo as abas do catálogo somem —
+   * quem pediu um card não passa pela tela de compartilhar o catálogo inteiro para chegar nele.
+   */
+  const isSingleCardMode = !!singleProcedureToExport;
+
+  /**
+   * O modal fica montado entre as aberturas, então o estado inicial do `useState` só valeu na
+   * primeira vez: sem este sincronismo, pedir um card depois de ter aberto o catálogo caía na
+   * aba de PDF do catálogo, com o procedimento errado selecionado.
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+    if (singleProcedureToExport) {
+      setActiveTab('single-card');
+      setSelectedSingleProcedureId(singleProcedureToExport.id);
+    } else {
+      setActiveTab('pdf');
+    }
+  }, [isOpen, singleProcedureToExport]);
 
   const activeSingleProcedure = procedures.find(p => p.id === selectedSingleProcedureId) || procedures[0];
 
@@ -100,15 +119,35 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     }
   };
 
+  const singleCardFileSlug = () =>
+    (activeSingleProcedure?.title || 'card')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+  const handleExportSingleCardPDF = async () => {
+    const el = document.getElementById('printable-single-card');
+    if (!el) return;
+    setIsExporting(true);
+    try {
+      await exportElementAsPDF(el, `card-${singleCardFileSlug()}.pdf`);
+      triggerConfetti();
+    } catch (err) {
+      console.error('Error generating single card PDF:', err);
+      alert('Houve uma falha ao gerar o PDF do card. Tente novamente.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleExportSingleCard = async () => {
     const el = document.getElementById('printable-single-card');
     if (!el) return;
     setIsExporting(true);
     try {
-      const sanitizedTitle = (activeSingleProcedure?.title || 'card')
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '-');
-      await exportElementAsImage(el, `procedimento-${sanitizedTitle}.png`);
+      await exportElementAsImage(el, `card-${singleCardFileSlug()}.png`);
       triggerConfetti();
     } catch (err) {
       console.error('Error generating single card image:', err);
@@ -203,14 +242,16 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
         <div className="bg-[#1A1A1A] text-[#E5E4E0] px-6 py-4 flex items-center justify-between border-b border-white/10">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-xs bg-white/10 text-[#C49B74]">
-              <Share2 className="w-5 h-5" />
+              {isSingleCardMode ? <Layers className="w-5 h-5" /> : <Share2 className="w-5 h-5" />}
             </div>
             <div>
               <span className="text-[10px] font-semibold uppercase tracking-widest text-[#C49B74]">
-                Exportação & Compartilhamento
+                {isSingleCardMode ? 'Card Individual · PDF' : 'Exportação & Compartilhamento'}
               </span>
               <h2 className="font-serif-luxury text-xl sm:text-2xl font-medium text-white leading-none mt-0.5">
-                Compartilhar Catálogo de Procedimentos
+                {isSingleCardMode
+                  ? `Enviar Card · ${singleProcedureToExport?.title ?? ''}`
+                  : 'Compartilhar Catálogo de Procedimentos'}
               </h2>
             </div>
           </div>
@@ -222,8 +263,10 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Selector */}
-        <div className="flex border-b border-white/60 bg-white/40 backdrop-blur-md px-4 sm:px-6 pt-3 gap-1 sm:gap-2 overflow-x-auto">
+        {/* Tab Selector — escondido quando o modal foi aberto só para um card */}
+        <div
+          className={`${isSingleCardMode ? 'hidden' : 'flex'} border-b border-white/60 bg-white/40 backdrop-blur-md px-4 sm:px-6 pt-3 gap-1 sm:gap-2 overflow-x-auto`}
+        >
           <button
             onClick={() => setActiveTab('pdf')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-t-sm text-xs font-semibold uppercase tracking-wider border-t border-x transition-all ${
@@ -379,10 +422,10 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
           {/* SINGLE CARD TAB CONTROLS */}
           {activeTab === 'single-card' && (
-            <div className="bg-white/50 backdrop-blur-md p-4 rounded-sm border border-white/60 mb-6 flex flex-wrap items-center justify-between gap-4">
-              <div className="flex-1 max-w-sm">
+            <div className="bg-white/50 backdrop-blur-md p-4 rounded-sm border border-white/60 mb-6 flex flex-wrap items-end justify-between gap-4">
+              <div className="flex-1 min-w-[220px] max-w-sm">
                 <label className="block text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
-                  Selecione o Procedimento para o Card
+                  Procedimento do Card
                 </label>
                 <select
                   value={selectedSingleProcedureId}
@@ -397,23 +440,46 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
               {discountControl}
 
-              <button
-                onClick={handleExportSingleCard}
-                disabled={isExporting}
-                className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
-              >
-                {isExporting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Gerando Card...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Baixar Card PNG
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportSingleCardPDF}
+                  disabled={isExporting}
+                  className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Gerando Card...
+                    </>
+                  ) : (
+                    <>
+                      <FileDown className="w-4 h-4" />
+                      Baixar Card PDF
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleExportSingleCard}
+                  disabled={isExporting}
+                  title="Mesmo card, em imagem — para postar ou enviar direto na conversa"
+                  className="px-4 py-2.5 rounded-sm bg-[#1A1A1A] hover:bg-[#2A2A2E] text-white text-xs font-semibold uppercase tracking-widest shadow-xs active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  <ImageIcon className="w-4 h-4 text-[#C49B74]" />
+                  PNG
+                </button>
+              </div>
+
+              {discountPercent > 0 && (
+                <p className="w-full flex items-center gap-2 text-[11px] text-[#8e6945] bg-[#A67C52]/10 border border-[#A67C52]/30 rounded-sm px-3 py-2">
+                  <Tag className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    <strong>{formatDiscountPercent(discountPercent)}% de desconto</strong> aplicado a este
+                    card: o valor de tabela sai riscado e o novo valor aparece ao lado. O cadastro do
+                    procedimento não é alterado.
+                  </span>
+                </p>
+              )}
             </div>
           )}
 
@@ -438,12 +504,13 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
           {/* PREVIEW CONTAINER FOR SINGLE CARD */}
           {activeTab === 'single-card' && activeSingleProcedure && (
-            <div className="flex flex-col items-center p-4 bg-white/30 backdrop-blur-xs rounded-sm border border-white/60">
-              <p className="text-xs text-gray-400 mb-4 text-center">
-                Card promocional formatado para envio direto ao cliente no WhatsApp ou postagem:
-              </p>
-              <div className="w-full flex justify-start sm:justify-center overflow-x-auto">
-                <PrintableCard
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs text-gray-400">
+                <span>Pré-visualização do card (mesmo layout da tela de detalhes):</span>
+                <span>Formato: A4 / 2x Retina</span>
+              </div>
+              <div className="border border-white/60 rounded-sm shadow-inner bg-[#E5E3DD] p-2 sm:p-4 max-h-[520px] overflow-auto flex justify-start sm:justify-center">
+                <PrintableProcedureCard
                   procedure={activeSingleProcedure}
                   clinic={clinic}
                   discountPercent={discountPercent}
