@@ -988,9 +988,23 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
     }
 
     // 2b. Fichas de avaliação — o que a profissional responde depois do atendimento.
+    //
+    // A migração vem ANTES do seed e **não** depende desta sondagem. Ela lê fichas de anamnese,
+    // procedimentos e perguntas gerais — coleções que já existiam. Amarrá-la a uma leitura da
+    // coleção nova significava que, enquanto `firestore.rules` não fosse publicado, a sondagem
+    // era negada, devolvia `null`, e a migração dos dados antigos nunca acontecia sem dizer nada.
+    if (!templatesVazios) {
+      await migrarPerguntasProfissionalParaAvaliacao();
+    }
+
     const avaliacoesVazias = await colecaoVaziaNoServidor(EVALUATION_TEMPLATES_COLLECTION);
-    if (avaliacoesVazias === null) return;
-    if (avaliacoesVazias && templatesVazios) {
+    if (avaliacoesVazias === null) {
+      // Só o seed da clínica nova fica para depois; nada acima depende disto.
+      console.warn(
+        'Sem confirmação do servidor sobre "evaluation_templates". Se isto persistir, publique ' +
+          'as regras: firebase deploy --only firestore:rules,storage'
+      );
+    } else if (avaliacoesVazias && templatesVazios) {
       // Clínica nova: as duas coleções nascem juntas, já separadas.
       console.log('Seeding initial evaluation templates...');
       const batch = writeBatch(db);
@@ -1001,18 +1015,6 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
         );
       });
       await batch.commit();
-    }
-
-    // Clínica que já rodava antes da separação: tira as perguntas da profissional de dentro das
-    // fichas de anamnese e as instala como fichas de avaliação. Roda uma vez só por clínica.
-    //
-    // Tomou o lugar de `migrarPerguntasProfissionalGluteo`, que fazia o caminho inverso —
-    // acrescentava à anamnese exatamente o bloco que esta tira de lá. As duas juntas se
-    // desfariam em loop a cada boot, então aquela foi removida. Fichas onde ela já rodou seguem
-    // com `gluteo-perguntas-profissional-v1` em `migracoesAplicadas`; o marcador não faz mal e
-    // registra que aquelas perguntas um dia estiveram ali.
-    if (!templatesVazios) {
-      await migrarPerguntasProfissionalParaAvaliacao();
     }
 
     // 3. Seed Patients if empty
@@ -2237,6 +2239,20 @@ async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
   } catch (e) {
     // Não derruba o boot: a migração tenta de novo na próxima abertura. O app funciona com as
     // perguntas ainda na anamnese — a tela nova simplesmente mostra menos fichas.
-    console.warn('Migração das fichas de avaliação falhou; tentará de novo:', e);
+    //
+    // `permission-denied` tem mensagem própria porque é a causa esperada logo depois de subir
+    // esta versão: as coleções `evaluation_*` são novas e caem no `allow read, write: if false`
+    // do catch-all até `firestore.rules` ser publicado. Sem dizer isto em voz alta, o sintoma é
+    // "as perguntas do profissional continuam na anamnese" e a causa fica invisível.
+    if ((e as { code?: string })?.code === 'permission-denied') {
+      console.error(
+        'MIGRAÇÃO DAS FICHAS DE AVALIAÇÃO BLOQUEADA: o banco recusou a escrita em ' +
+          '"evaluation_templates". As regras novas ainda não foram publicadas. Rode ' +
+          '`firebase deploy --only firestore:rules,storage` e recarregue a página. ' +
+          'Nada foi alterado; a migração roda sozinha na próxima abertura.'
+      );
+    } else {
+      console.warn('Migração das fichas de avaliação falhou; tentará de novo:', e);
+    }
   }
 }
