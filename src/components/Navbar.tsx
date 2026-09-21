@@ -12,12 +12,14 @@ import {
   X,
   PanelLeftOpen,
   PanelLeftClose,
+  CalendarDays,
 } from 'lucide-react';
 import { ClinicProfile, AppView } from '../types';
 import { ClinicLogo } from './ClinicLogo';
 
 /** Nome da tela atual, exibido sob o nome da clínica no cabeçalho mobile. */
 const VIEW_LABEL: Record<AppView, string> = {
+  agenda: 'Agenda',
   procedures: 'Procedimentos',
   patients: 'Pacientes',
   anamnesis: 'Anamneses',
@@ -38,6 +40,11 @@ interface NavbarProps {
    * depois da visita, então ninguém a preenche sem ser lembrado de que ela está aberta.
    */
   avaliacoesPendentesCount?: number;
+  /**
+   * Agendamentos cuja data passou sem ninguém marcar o desfecho. Mesma natureza do contador acima —
+   * trabalho represado que não aparece sozinho — e some quando é zero, pela mesma razão.
+   */
+  agendamentosPendentesCount?: number;
   currentProfessionalName?: string;
   onLogout: () => void;
 }
@@ -50,6 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   clinic,
   proceduresCount,
   avaliacoesPendentesCount,
+  agendamentosPendentesCount,
   currentProfessionalName,
   onLogout,
 }) => {
@@ -82,6 +90,18 @@ export const Navbar: React.FC<NavbarProps> = ({
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   const railItems = [
+    {
+      // Primeiro item: o dia da clínica começa na agenda, não no catálogo.
+      id: 'agenda' as const,
+      label: 'Agenda',
+      icon: CalendarDays,
+      active: currentView === 'agenda',
+      count: agendamentosPendentesCount || undefined,
+      onClick: () => {
+        onSelectView('agenda');
+        scrollToTop();
+      },
+    },
     {
       id: 'procedures' as const,
       label: 'Procedimentos',

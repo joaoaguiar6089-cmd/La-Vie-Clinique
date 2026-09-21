@@ -132,6 +132,18 @@ export interface Procedure {
   updatedAt?: string;
 }
 
+/**
+ * Um dia do expediente da clínica. `abre` ausente = fechado nesse dia.
+ *
+ * Lista de objetos e não matriz indexada por dia: o Firestore não aceita array dentro de array, e
+ * um registro com `diaSemana` explícito sobrevive a backup reimportado fora de ordem.
+ */
+export interface AgendaExpedienteDia {
+  diaSemana: number; // 0 = domingo … 6 = sábado
+  abre?: string; // HH:MM
+  fecha?: string; // HH:MM
+}
+
 export interface ClinicProfile {
   name: string;
   tagline: string;
@@ -161,6 +173,11 @@ export interface ClinicProfile {
   quoteCombinedDiscountCap?: number; // Teto do desconto de plano combinado, em % (padrão 10)
   quoteLegalNotice?: string; // Aviso legal do rodapé do orçamento
   quoteOpeningTemplate?: string; // Mensagem de abertura sugerida; aceita {primeiroNome}
+  // Módulo de agenda — ausentes = usar AGENDA_DEFAULTS de utils/agenda.ts
+  /** Expediente por dia da semana. Só pinta a grade: encaixe fora do horário continua permitido. */
+  agendaExpediente?: AgendaExpedienteDia[];
+  agendaIntervaloMin?: number; // Granularidade da grade em minutos: 15, 30 ou 60 (padrão 30)
+  agendaConfirmacaoTemplate?: string; // Mensagem de confirmação no WhatsApp; ver `mensagemDeConfirmacao`
   /**
    * Mapa corporal da depilação a laser — os dois manequins sobre os quais as áreas são desenhadas.
    * Sem sexo, aproveitados para ambos os gêneros: as áreas são desenhadas uma vez só.
@@ -175,7 +192,7 @@ export interface ClinicProfile {
 }
 
 /** Telas do painel autenticado — a navegação é por estado, o app não tem rotas. */
-export type AppView = 'procedures' | 'patients' | 'anamnesis' | 'evaluations' | 'quotes';
+export type AppView = 'agenda' | 'procedures' | 'patients' | 'anamnesis' | 'evaluations' | 'quotes';
 
 export interface FilterState {
   search: string;
@@ -544,6 +561,16 @@ export interface Attendance {
   pacienteNome: string;
   data: string; // YYYY-MM-DD
   hora?: string; // HH:MM — opcional no realizado, obrigatória no agendamento
+  /**
+   * Quanto tempo a visita ocupa na agenda, em minutos.
+   *
+   * Nasce do `duration` do catálogo (texto livre, lido por `duracaoDoProcedimento`) e é editável:
+   * o mesmo procedimento leva 30 min numa paciente e 50 noutra. Ausente = `AGENDA_DEFAULTS.duracaoMin`.
+   *
+   * Opcional de propósito — todo atendimento lançado antes da agenda existir não tem como saber
+   * quanto durou, e chutar um número seria pior do que assumir o padrão às claras.
+   */
+  duracaoMin?: number;
   procedureId?: string;
   procedimentoNome: string;
   /** Vínculo com o plano. Ausente = sessão avulsa. */

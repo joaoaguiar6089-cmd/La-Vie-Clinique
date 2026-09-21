@@ -1786,7 +1786,10 @@ export async function saveAttendance(attendance: Attendance): Promise<void> {
     ...attendance,
     updatedAt: new Date().toISOString(),
   });
-  await setDoc(docRef, dataToSave, { merge: true });
+  // Com confirmação do servidor por causa da agenda: uma gravação barrada pela cota fica na fila
+  // local e a promise nunca resolve, então a tela mostraria o horário reservado sem que nada
+  // tivesse chegado ao banco — e a recepção marcaria outra paciente em cima.
+  await comConfirmacaoDoServidor(setDoc(docRef, dataToSave, { merge: true }), 'do atendimento');
 }
 
 export async function deleteAttendance(attendanceId: string): Promise<void> {
@@ -1828,6 +1831,45 @@ export function subscribeToSessionPlans(
     onUpdate,
     onError
   );
+}
+
+/**
+ * Remarca um agendamento.
+ *
+ * O antigo **morre como `remarcado`** e um agendamento novo nasce ao lado, como manda a regra em
+ * `types.ts` — mudar a data no mesmo documento apagaria o rastro de que houve remarcação.
+ *
+ * Num `writeBatch` só: meio caminho deixaria a paciente sem horário nenhum (antigo remarcado, novo
+ * não criado) ou com dois ao mesmo tempo.
+ */
+export async function remarcarAtendimento(
+  original: Attendance,
+  destino: { data: string; hora: string }
+): Promise<Attendance> {
+  const agora = new Date().toISOString();
+
+  const novo: Attendance = {
+    ...original,
+    id: `atd-${Date.now()}`,
+    data: destino.data,
+    hora: destino.hora,
+    status: 'agendado',
+    // O desfecho e a avaliação pertencem à visita que não aconteceu, não à remarcação.
+    agendadoPara: undefined,
+    avaliacaoPreenchidaEm: undefined,
+    createdAt: agora,
+    updatedAt: agora,
+  };
+
+  const batch = writeBatch(db);
+  batch.update(doc(db, ATTENDANCES_COLLECTION, original.id), {
+    status: 'remarcado',
+    updatedAt: agora,
+  });
+  batch.set(doc(db, ATTENDANCES_COLLECTION, novo.id), cleanForFirestore(novo), { merge: true });
+  await comConfirmacaoDoServidor(batch.commit(), 'da remarcação');
+
+  return novo;
 }
 
 export async function saveSessionPlan(plan: SessionPlan): Promise<void> {

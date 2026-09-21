@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarClock, Check, Link2Off, UserPlus, X } from 'lucide-react';
+import { AlertCircle, CalendarClock, Check, Link2Off, UserPlus, Users, X } from 'lucide-react';
 import {
   Attendance,
   Patient,
@@ -16,8 +16,10 @@ import {
   isoParaData,
 } from '../common/MaskedDateTimeInput';
 import { ProcedureSearchSelect } from '../common/ProcedureSearchSelect';
+import { PatientSearchSelect } from '../quotes/PatientSearchSelect';
 import {
   agoraHHMM,
+  DataISO,
   ehDataFutura,
   hojeISO,
   mesmoProcedimento,
@@ -26,6 +28,13 @@ import {
   procedimentoSugerido,
   progressoDoPlano,
 } from '../../utils/attendances';
+import {
+  AGENDA_DEFAULTS,
+  conflitosDe,
+  duracaoDoProcedimento,
+  hhmmDeMinutos,
+  intervaloDoAtendimento,
+} from '../../utils/agenda';
 import { resolveQuoteStatus } from '../../utils/quoteCalc';
 
 /**
@@ -38,7 +47,30 @@ export type ModoDoFormulario = 'novo' | 'edicao' | 'confirmacao';
 interface AttendanceFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  patient: Patient;
+  /**
+   * `null` só no fluxo da agenda, onde o horário é escolhido antes da paciente. Enquanto for nulo,
+   * o formulário mostra a busca de paciente no topo e não deixa salvar.
+   */
+  patient: Patient | null;
+  /**
+   * Presente = a agenda abriu este formulário: a busca de paciente aparece no topo e quem escolhe
+   * volta para o módulo, que resolve o cadastro e devolve as listas já filtradas por ele.
+   */
+  selecaoDePaciente?: {
+    pacientes: Patient[];
+    onSelecionar: (paciente: { id?: string; nome: string; contato?: string }) => void;
+  };
+  /**
+   * Data e hora vindas de fora — o clique num espaço vazio da grade. Vence a data de hoje e o
+   * horário de agora, mas **não** atropela o palpite de procedimento: o slot sabe o quando, o
+   * histórico da paciente sabe o quê.
+   */
+  sementeDataHora?: { data: DataISO; hora?: string };
+  /**
+   * Todos os atendimentos da clínica, para o aviso de choque de horário. Ausente = sem aviso (a
+   * aba do paciente só tem os dele, e conflito é pergunta sobre a agenda inteira).
+   */
+  atendimentosDaClinica?: Attendance[];
   /** Se o cadastro dele ainda não existe — o formulário avisa que vai criar ao salvar. */
   cadastroSeraCriado: boolean;
   /** Atendimentos já registrados deste paciente: palpite de procedimento e contagem do plano. */
@@ -83,6 +115,9 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   isOpen,
   onClose,
   patient,
+  selecaoDePaciente,
+  sementeDataHora,
+  atendimentosDaClinica,
   cadastroSeraCriado,
   atendimentos,
   planos,
@@ -103,6 +138,9 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     procedimentoNome: string;
   }>({ procedimentoNome: '' });
   const [professionalId, setProfessionalId] = useState('');
+  const [duracao, setDuracao] = useState('');
+  /** Uma vez digitada à mão, a duração para de ser reescrita pela troca de procedimento. */
+  const [duracaoTocada, setDuracaoTocada] = useState(false);
   const [observacoes, setObservacoes] = useState('');
   const [criarPlano, setCriarPlano] = useState(false);
   const [totalSessoes, setTotalSessoes] = useState('');
@@ -121,29 +159,93 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     setCriarPlano(false);
     setTotalSessoes('');
     setDesvinculado(false);
+    setDuracaoTocada(false);
 
     if (atendimento) {
-      setData(isoParaData(atendimento.data));
-      setHora(atendimento.hora || '');
+      // A semente da grade vence a data do registro-modelo: é ela que carrega o horário clicado.
+      setData(isoParaData(sementeDataHora?.data || atendimento.data));
+      setHora(sementeDataHora?.hora ?? atendimento.hora ?? '');
       setProcedimento({
         procedureId: atendimento.procedureId,
         procedimentoNome: atendimento.procedimentoNome,
       });
       setProfessionalId(atendimento.professionalId || professionalIdPadrao || '');
+      setDuracao(atendimento.duracaoMin ? String(atendimento.duracaoMin) : '');
+      // Duração já gravada foi escolha de alguém: trocar o procedimento não a reescreve.
+      setDuracaoTocada(!!atendimento.duracaoMin);
       setObservacoes(atendimento.observacoes || '');
       return;
     }
 
     const sugestao = procedimentoSugerido(atendimentos, ultimaAnamnese, procedures);
-    setData(isoParaData(hojeISO()));
-    setHora(agoraHHMM());
+    setData(isoParaData(sementeDataHora?.data || hojeISO()));
+    setHora(sementeDataHora?.hora ?? agoraHHMM());
     setProcedimento(sugestao || { procedimentoNome: '' });
     setProfessionalId(professionalIdPadrao || '');
+    setDuracao('');
     setObservacoes('');
-  }, [isOpen, atendimento, professionalIdPadrao]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, atendimento, professionalIdPadrao, sementeDataHora]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dataISO = dataParaISO(data);
   const seraAgendamento = modo === 'novo' && !!dataISO && ehDataFutura(dataISO);
+
+  /** Quanto o catálogo diz que este procedimento leva. `undefined` para procedimento digitado. */
+  const duracaoSugerida = useMemo(
+    () =>
+      procedimento.procedureId
+        ? duracaoDoProcedimento(
+            procedures.find((p) => p.id === procedimento.procedureId)?.duration
+          )
+        : undefined,
+    [procedimento.procedureId, procedures]
+  );
+
+  // Trocar o procedimento retrás a duração do catálogo — até alguém digitar a sua, e aí ela manda.
+  useEffect(() => {
+    if (!isOpen || duracaoTocada) return;
+    setDuracao(duracaoSugerida ? String(duracaoSugerida) : '');
+  }, [isOpen, duracaoTocada, duracaoSugerida]);
+
+  const duracaoMin = Number(duracao) > 0 ? Number(duracao) : undefined;
+
+  /** "termina às 15:00" — confere o encaixe antes de salvar, sem precisar fazer a conta. */
+  const terminaAs = useMemo(() => {
+    const intervalo = intervaloDoAtendimento(
+      { hora, duracaoMin, procedureId: procedimento.procedureId },
+      procedures
+    );
+    return intervalo ? hhmmDeMinutos(intervalo.fimMin) : null;
+  }, [hora, duracaoMin, procedimento.procedureId, procedures]);
+
+  /**
+   * Choque de horário da mesma profissional. É **aviso, não trava**: encaixe é decisão da clínica,
+   * e um formulário que se recusa a salvar acaba contornado no papel.
+   */
+  const conflitos = useMemo(() => {
+    if (!atendimentosDaClinica || !dataISO || !hora.trim() || !professionalId) return [];
+    return conflitosDe(
+      {
+        id: modo === 'novo' ? undefined : atendimento?.id,
+        data: dataISO,
+        hora,
+        duracaoMin,
+        procedureId: procedimento.procedureId,
+        professionalId,
+      },
+      atendimentosDaClinica,
+      procedures
+    );
+  }, [
+    atendimentosDaClinica,
+    dataISO,
+    hora,
+    professionalId,
+    duracaoMin,
+    procedimento.procedureId,
+    procedures,
+    modo,
+    atendimento,
+  ]);
 
   /**
    * O plano que vai receber esta sessão. O "+ adicionar sessão" fixa um; fora dele, o plano
@@ -206,6 +308,12 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
 
     if (!procedimento.procedimentoNome.trim()) novos.procedimento = 'Informe o procedimento.';
 
+    if (duracao.trim() && !(Number(duracao) >= 5 && Number(duracao) <= 480)) {
+      novos.duracao = 'Entre 5 e 480 minutos.';
+    }
+
+    if (!patient) novos.paciente = 'Escolha a paciente.';
+
     if (criarPlano) {
       const total = Number(totalSessoes);
       if (!Number.isInteger(total) || total < 2) {
@@ -218,7 +326,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   const salvar = async () => {
     const novos = validar();
     setErros(novos);
-    if (Object.keys(novos).length > 0) return;
+    if (Object.keys(novos).length > 0 || !patient) return;
 
     setSalvando(true);
     setErroGeral(null);
@@ -246,6 +354,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         pacienteNome: patient.nome,
         data: dataISO!,
         hora: hora.trim() || undefined,
+        duracaoMin,
         procedureId: procedimento.procedureId,
         procedimentoNome: procedimento.procedimentoNome.trim(),
         planoId: planoNovo?.id || planoVinculado?.id,
@@ -295,7 +404,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         <div className="bg-[#1A1A1A] px-6 py-4 flex items-start justify-between gap-3 sticky top-0 z-10">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52]">
-              {patient.nome}
+              {patient?.nome || 'Escolha a paciente'}
             </p>
             <h2 id="atendimento-titulo" className="text-lg text-white font-serif-luxury">
               {TITULO[modo]}
@@ -325,7 +434,22 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
           {cadastroSeraCriado && (
             <div className="px-3 py-2 rounded-sm bg-[#A67C52]/10 border border-[#A67C52]/25 text-xs text-[#8E653D] flex items-start gap-2">
               <UserPlus className="w-3.5 h-3.5 shrink-0 mt-px" />
-              <span>O cadastro de {patient.nome} será criado ao salvar este atendimento.</span>
+              <span>O cadastro de {patient?.nome} será criado ao salvar este atendimento.</span>
+            </div>
+          )}
+
+          {/* Fluxo da agenda: o horário veio primeiro, a paciente vem aqui. */}
+          {selecaoDePaciente && (
+            <div>
+              <PatientSearchSelect
+                patients={selecaoDePaciente.pacientes}
+                pacienteId={patient?.id}
+                pacienteNome={patient?.nome || ''}
+                onSelect={selecaoDePaciente.onSelecionar}
+              />
+              {erros.paciente && (
+                <p className="mt-1 text-[11px] text-red-600">{erros.paciente}</p>
+              )}
             </div>
           )}
 
@@ -340,14 +464,14 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-3">
             <MaskedDateInput
               id="atendimento-data"
               label="Data *"
               value={data}
               onChange={setData}
               erro={erros.data}
-              autoFocus
+              autoFocus={!selecaoDePaciente}
             />
             <MaskedTimeInput
               id="atendimento-hora"
@@ -357,7 +481,50 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               erro={erros.hora}
               ajuda={seraAgendamento ? undefined : 'Opcional'}
             />
+            {/* A duração é o que dá altura ao cartão na agenda e o que deixa ver buraco livre.
+                Vem do catálogo e fica editável — a mesma sessão leva tempos diferentes. */}
+            <div>
+              <label className={labelClass} htmlFor="atendimento-duracao">
+                Duração
+              </label>
+              <div className="relative">
+                <input
+                  id="atendimento-duracao"
+                  type="text"
+                  inputMode="numeric"
+                  value={duracao}
+                  onChange={(e) => {
+                    setDuracaoTocada(true);
+                    setDuracao(e.target.value.replace(/\D/g, '').slice(0, 3));
+                  }}
+                  placeholder={String(AGENDA_DEFAULTS.duracaoMin)}
+                  className="w-full glass-input pl-3 pr-9 py-2 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 pointer-events-none">
+                  min
+                </span>
+              </div>
+              {erros.duracao ? (
+                <p className="mt-1 text-[11px] text-red-600">{erros.duracao}</p>
+              ) : (
+                terminaAs && <p className="mt-1 text-[11px] text-gray-400">até {terminaAs}</p>
+              )}
+            </div>
           </div>
+
+          {/* Aviso, não trava: quem decide abrir um encaixe é a clínica, não o formulário. */}
+          {conflitos.length > 0 && (
+            <div className="px-3 py-2 rounded-sm bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
+              <Users className="w-3.5 h-3.5 shrink-0 mt-px" />
+              <span>
+                <strong>Choque de horário.</strong>{' '}
+                {conflitos[0].profissionalNome || 'A profissional'} já tem {conflitos[0].pacienteNome}{' '}
+                às {conflitos[0].hora}
+                {conflitos.length > 1 && ' e mais ' + (conflitos.length - 1)}. Dá para salvar assim
+                mesmo, se for encaixe.
+              </span>
+            </div>
+          )}
 
           <ProcedureSearchSelect
             procedures={procedures}
@@ -489,7 +656,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
           <button
             type="button"
             onClick={salvar}
-            disabled={salvando}
+            disabled={salvando || !patient}
             className="flex items-center gap-2 px-5 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest hover:bg-[#8E653D] transition-colors disabled:opacity-60"
           >
             <Check className="w-4 h-4" />

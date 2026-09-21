@@ -11,7 +11,9 @@ import { PatientsModule } from './components/patients/PatientsModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
 import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { EvaluationsModule } from './components/evaluations/EvaluationsModule';
+import { AgendaModule } from './components/agenda/AgendaModule';
 import { filaDePendentes } from './utils/evaluations';
+import { agendamentosAtrasados } from './utils/agenda';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
@@ -343,6 +345,12 @@ function MainCatalogApp() {
     [attendances]
   );
 
+  /** Agendamentos que já passaram e continuam sem desfecho — o selo da Agenda no menu. */
+  const agendamentosPendentes = useMemo(
+    () => agendamentosAtrasados(attendances).length,
+    [attendances]
+  );
+
   const templatesPorProcedimento = useMemo(
     () => mapearTemplatesPorProcedimento(anamnesisTemplates, procedures),
     [anamnesisTemplates, procedures]
@@ -657,6 +665,7 @@ function MainCatalogApp() {
         clinic={clinic}
         proceduresCount={procedures.length}
         avaliacoesPendentesCount={avaliacoesPendentes}
+        agendamentosPendentesCount={agendamentosPendentes}
         currentProfessionalName={currentProfessional?.name}
         onLogout={logout}
       />
@@ -682,7 +691,16 @@ function MainCatalogApp() {
           </div>
         )}
         <main className="flex-1 w-full">
-          {currentView === 'procedures' ? (
+          {currentView === 'agenda' ? (
+            <AgendaModule
+              clinic={clinic}
+              catalogProcedures={procedures}
+              atendimentos={attendances}
+              pacientes={allPatients}
+              professionals={clinic.professionals || []}
+              currentProfessionalId={currentProfessional?.id}
+            />
+          ) : currentView === 'procedures' ? (
             <ProcedureManager
               procedures={procedures}
               clinic={clinic}

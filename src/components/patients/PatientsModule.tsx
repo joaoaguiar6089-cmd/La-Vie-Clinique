@@ -24,7 +24,6 @@ import {
   saveAnamnesisRecord,
   deleteAnamnesisRecord,
   saveAttendance,
-  encerrarAnamnese,
   deleteAttendance,
   saveSessionPlan,
   deleteSessionPlan,
@@ -45,7 +44,7 @@ import { PatientDetailView } from './PatientDetailView';
 import { NewPatientModal } from './NewPatientModal';
 import { AttendanceFormModal, ModoDoFormulario } from './AttendanceFormModal';
 import { EvaluationFillModal } from '../evaluations/EvaluationFillModal';
-import { anamnesesAFechar } from '../../utils/evaluations';
+import { salvarAtendimento } from '../../services/attendanceWorkflow';
 
 interface PatientsModuleProps {
   clinic: ClinicProfile;
@@ -223,42 +222,23 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   // ==========================================
 
   /**
-   * Grava a visita e, quando é o caso, tudo o que ela arrasta junto: o cadastro de quem só
-   * existia como nome, e o plano de sessões criado no mesmo formulário.
+   * Grava a visita e tudo o que ela arrasta junto — cadastro de quem só existia como nome, plano
+   * novo do formulário e o fechamento das anamneses da visita.
    *
-   * O cadastro vem primeiro de propósito. Se a gravação do atendimento falhar depois dele, a
-   * clínica fica com um cadastro a mais — inofensivo. Na ordem inversa, ficaria com um
-   * atendimento apontando para paciente que não existe.
+   * A sequência mora em `services/attendanceWorkflow.ts` porque a agenda é um segundo lugar de onde se
+   * lança atendimento, e duas cópias dela acabariam divergindo. As fichas já estão aqui em memória,
+   * então vão junto e poupam a leitura que o workflow faria sozinho.
    */
   const handleSalvarAtendimento = async (registro: Attendance, planoNovo?: SessionPlan) => {
-    if (pacienteAberto && !idsCadastrados.has(pacienteAberto.id)) {
-      await savePatient(pacienteAberto);
-    }
-    if (planoNovo) await saveSessionPlan(planoNovo);
-    await saveAttendance(registro);
-    await fecharAnamnesesDaVisita(registro);
+    await salvarAtendimento({
+      registro,
+      planoNovo,
+      pacienteACriar:
+        pacienteAberto && !idsCadastrados.has(pacienteAberto.id) ? pacienteAberto : undefined,
+      anamneses: records,
+    });
   };
 
-  /**
-   * Visita realizada fecha o link da anamnese correspondente.
-   *
-   * A marca é gravada **no registro da anamnese**, e não deduzida na hora de exibir, porque quem
-   * precisa dela é a página pública da paciente — que não tem login e, pelas regras do Firestore,
-   * não pode ler `attendances`. Sem esta gravação, a trava simplesmente não existiria na única
-   * tela onde ela importa.
-   *
-   * Falhar aqui não derruba o salvamento do atendimento: a visita registrada é o dado essencial,
-   * e a trava volta a ser tentada no próximo atendimento da mesma paciente.
-   */
-  const fecharAnamnesesDaVisita = async (registro: Attendance) => {
-    try {
-      const aFechar = anamnesesAFechar(registro, records);
-      if (aFechar.length === 0) return;
-      await Promise.all(aFechar.map((f) => encerrarAnamnese(f.id)));
-    } catch (e) {
-      console.warn('Não foi possível encerrar a anamnese após o atendimento:', e);
-    }
-  };
 
   const abrirFormulario = (estado: EstadoDoFormulario) => {
     setErro(null);
@@ -414,10 +394,13 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           onExcluirPlano={pedirExclusaoDoPlano}
         />
 
+        {/* `atendimentosDaClinica` sai de graça: a aba já assina a coleção inteira, e choque de
+            horário é pergunta sobre a agenda toda, não sobre este paciente. */}
         <AttendanceFormModal
           isOpen={!!formAtendimento}
           onClose={() => setFormAtendimento(null)}
           patient={pacienteAberto}
+          atendimentosDaClinica={attendances}
           cadastroSeraCriado={cadastroSeraCriado}
           atendimentos={doPacienteAberto.atendimentos}
           planos={doPacienteAberto.planos}

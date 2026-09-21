@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, Scan } from 'lucide-react';
-import { ClinicProfile, LaserCategoryDefaults, Professional } from '../types';
+import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, Scan, CalendarDays } from 'lucide-react';
+import { AgendaExpedienteDia, ClinicProfile, LaserCategoryDefaults, Professional } from '../types';
+import { AGENDA_DEFAULTS, INTERVALOS_DISPONIVEIS } from '../utils/agenda';
+import { mascararHora } from './common/MaskedDateTimeInput';
 import { createProfessionalLogin } from '../services/authService';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
@@ -971,6 +973,8 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
             </div>
           </div>
 
+          <SecaoAgendaDaClinica formData={formData} onChange={handleChange} />
+
           {/* Mapa corporal da depilação a laser */}
           <div className="space-y-4">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
@@ -1194,6 +1198,149 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           setManequimCrop(null);
         }}
       />
+    </div>
+  );
+};
+
+/**
+ * Configurações da agenda: expediente, granularidade da grade e a mensagem de confirmação.
+ *
+ * O expediente **não bloqueia nada** — só pinta de cinza o que está fora dele. Encaixe continua
+ * gravável, porque quem decide abrir uma exceção é a clínica, não a grade.
+ */
+const DIAS_DO_EXPEDIENTE = [
+  'Domingo',
+  'Segunda',
+  'Terça',
+  'Quarta',
+  'Quinta',
+  'Sexta',
+  'Sábado',
+];
+
+const SecaoAgendaDaClinica: React.FC<{
+  formData: ClinicProfile;
+  onChange: (campo: keyof ClinicProfile, valor: any) => void;
+}> = ({ formData, onChange }) => {
+  const tabela =
+    formData.agendaExpediente && formData.agendaExpediente.length > 0
+      ? formData.agendaExpediente
+      : AGENDA_DEFAULTS.expediente;
+
+  const doDia = (diaSemana: number): AgendaExpedienteDia =>
+    tabela.find((d) => d.diaSemana === diaSemana) || { diaSemana };
+
+  /** Reescreve a tabela inteira, sempre com os sete dias — assim nunca falta linha no banco. */
+  const atualizar = (diaSemana: number, mudanca: Partial<AgendaExpedienteDia>) => {
+    const nova = DIAS_DO_EXPEDIENTE.map((_, i) => {
+      const atual = doDia(i);
+      return i === diaSemana ? { ...atual, ...mudanca } : atual;
+    });
+    onChange('agendaExpediente', nova);
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+        <CalendarDays className="w-3.5 h-3.5" />
+        Agenda
+      </h3>
+
+      <div>
+        <p className="text-[11px] text-gray-500 leading-relaxed mb-2">
+          Horário de funcionamento. O que fica fora dele aparece em cinza na agenda — mas continua
+          clicável, para encaixe.
+        </p>
+
+        <div className="space-y-1.5">
+          {DIAS_DO_EXPEDIENTE.map((rotulo, i) => {
+            const dia = doDia(i);
+            const aberto = !!dia.abre && !!dia.fecha;
+            return (
+              <div
+                key={rotulo}
+                className="flex items-center gap-2 bg-white/60 border border-white/80 rounded-sm px-2.5 py-1.5"
+              >
+                <label className="flex items-center gap-2 w-28 shrink-0 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={aberto}
+                    onChange={(e) =>
+                      atualizar(
+                        i,
+                        e.target.checked
+                          ? { abre: '09:00', fecha: '19:00' }
+                          : // String vazia, não `undefined`: o `cleanForFirestore` remove chaves
+                            // indefinidas e o `merge: true` preservaria o horário antigo.
+                            { abre: '', fecha: '' }
+                      )
+                    }
+                    className="w-4 h-4 accent-[#A67C52]"
+                  />
+                  <span className="text-xs font-medium text-[#1A1A1A]">{rotulo}</span>
+                </label>
+
+                {aberto ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={dia.abre || ''}
+                      onChange={(e) => atualizar(i, { abre: mascararHora(e.target.value) })}
+                      placeholder="hh:mm"
+                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-xs text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                    />
+                    <span className="text-[11px] text-gray-400">às</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={dia.fecha || ''}
+                      onChange={(e) => atualizar(i, { fecha: mascararHora(e.target.value) })}
+                      placeholder="hh:mm"
+                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-xs text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                    />
+                  </div>
+                ) : (
+                  <span className="text-[11px] text-gray-400">Fechado</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+          Divisão da grade
+        </label>
+        <select
+          value={formData.agendaIntervaloMin || AGENDA_DEFAULTS.intervaloMin}
+          onChange={(e) => onChange('agendaIntervaloMin', Number(e.target.value))}
+          className="glass-input px-3 py-2 rounded-sm text-xs text-[#1A1A1A] focus:outline-hidden"
+        >
+          {INTERVALOS_DISPONIVEIS.map((m) => (
+            <option key={m} value={m}>
+              {m} minutos
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+          Mensagem de confirmação no WhatsApp
+        </label>
+        <textarea
+          rows={3}
+          value={formData.agendaConfirmacaoTemplate ?? AGENDA_DEFAULTS.confirmacaoTemplate}
+          onChange={(e) => onChange('agendaConfirmacaoTemplate', e.target.value)}
+          className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A]"
+        />
+        <p className="mt-1 text-[11px] text-gray-400">
+          Marcadores: {'{primeiroNome}'} {'{data}'} {'{hora}'} {'{procedimento}'}{' '}
+          {'{profissional}'} {'{clinica}'}
+        </p>
+      </div>
     </div>
   );
 };

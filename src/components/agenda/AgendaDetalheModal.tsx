@@ -1,0 +1,200 @@
+import React from 'react';
+import {
+  CalendarClock,
+  Check,
+  MessageCircle,
+  Pencil,
+  Stethoscope,
+  Trash2,
+  User,
+  X,
+} from 'lucide-react';
+import { Attendance, ClinicProfile, Patient, Procedure } from '../../types';
+import {
+  contatoDoAtendimento,
+  dataExtensa,
+  duracaoDoAtendimento,
+  hhmmDeMinutos,
+  mensagemDeConfirmacao,
+  minutosDoHHMM,
+} from '../../utils/agenda';
+import { ROTULO_DO_STATUS, ehPendente } from '../../utils/attendances';
+import { buildWhatsAppUrl } from '../../utils/whatsapp';
+
+/**
+ * O que um cartão da grade abre.
+ *
+ * As ações não cabem dentro do cartão — num bloco de 30 minutos não há espaço para seis botões — e
+ * espremê-las ali tornaria o clique errado o clique provável. Aqui elas ficam legíveis, e são as
+ * mesmas da aba do paciente, para não existirem dois vocabulários de desfecho no sistema.
+ */
+
+interface AgendaDetalheModalProps {
+  atendimento: Attendance;
+  clinic: ClinicProfile;
+  catalogo: Procedure[];
+  pacientes: Patient[];
+  rotuloDoPlano?: string;
+  onFechar: () => void;
+  onEditar: (a: Attendance) => void;
+  onCompareceu: (a: Attendance) => void;
+  onFaltou: (a: Attendance) => void;
+  onRemarcar: (a: Attendance) => void;
+  onExcluir: (a: Attendance) => void;
+}
+
+const acaoBase =
+  'flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-sm text-xs font-semibold transition-colors';
+
+export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
+  atendimento,
+  clinic,
+  catalogo,
+  pacientes,
+  rotuloDoPlano,
+  onFechar,
+  onEditar,
+  onCompareceu,
+  onFaltou,
+  onRemarcar,
+  onExcluir,
+}) => {
+  const inicioMin = minutosDoHHMM(atendimento.hora);
+  const duracao = duracaoDoAtendimento(atendimento, catalogo);
+  const contato = contatoDoAtendimento(atendimento, pacientes);
+  const linkWhatsApp = buildWhatsAppUrl(contato, mensagemDeConfirmacao(clinic, atendimento));
+  const pendente = ehPendente(atendimento);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="agenda-detalhe-titulo"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onFechar();
+      }}
+    >
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#F9F8F6] rounded-sm shadow-2xl border border-white/60">
+        <div className="bg-[#1A1A1A] px-6 py-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52] first-letter:uppercase">
+              {dataExtensa(atendimento.data)}
+              {inicioMin !== null
+                ? ` · ${atendimento.hora}–${hhmmDeMinutos(inicioMin + duracao)}`
+                : ' · sem horário'}
+            </p>
+            <h2 id="agenda-detalhe-titulo" className="text-lg text-white font-serif-luxury truncate">
+              {atendimento.pacienteNome}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onFechar}
+            aria-label="Fechar"
+            className="text-white/60 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="space-y-2">
+            <p className="flex items-start gap-2 text-sm text-[#1A1A1A]">
+              <Stethoscope className="w-4 h-4 text-[#A67C52] shrink-0 mt-0.5" />
+              <span className="min-w-0">
+                {atendimento.procedimentoNome}
+                {rotuloDoPlano && (
+                  <span className="block text-[11px] text-[#A67C52]">{rotuloDoPlano}</span>
+                )}
+              </span>
+            </p>
+            <p className="flex items-center gap-2 text-sm text-gray-600">
+              <User className="w-4 h-4 text-gray-400 shrink-0" />
+              {atendimento.profissionalNome || 'Sem profissional atribuída'}
+            </p>
+            {atendimento.status && (
+              <p className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-white/70 border border-white/80 text-[11px] font-semibold text-gray-600">
+                {ROTULO_DO_STATUS[atendimento.status]}
+              </p>
+            )}
+          </div>
+
+          {atendimento.observacoes && (
+            <p className="px-3 py-2.5 rounded-sm bg-white/60 border border-white/80 text-xs text-gray-600 whitespace-pre-wrap">
+              {atendimento.observacoes}
+            </p>
+          )}
+
+          {/* Confirmação por WhatsApp: abre a conversa com a mensagem pronta e **não grava nada** —
+              mesma escolha do "Falar com a clínica" do orçamento. */}
+          {pendente &&
+            (linkWhatsApp ? (
+              <a
+                href={linkWhatsApp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${acaoBase} w-full bg-[#1A1A1A] text-white hover:bg-black`}
+              >
+                <MessageCircle className="w-4 h-4" />
+                Confirmar no WhatsApp
+              </a>
+            ) : (
+              <p className="px-3 py-2.5 rounded-sm bg-white/60 border border-white/80 text-[11px] text-gray-400 text-center">
+                Sem telefone no cadastro — não dá para confirmar pelo WhatsApp.
+              </p>
+            ))}
+
+          {/* Os três desfechos, só enquanto houver o que resolver. */}
+          {pendente && (
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => onCompareceu(atendimento)}
+                className={`${acaoBase} bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100`}
+              >
+                <Check className="w-4 h-4" />
+                Compareceu
+              </button>
+              <button
+                type="button"
+                onClick={() => onFaltou(atendimento)}
+                className={`${acaoBase} bg-red-50 text-red-600 border border-red-200 hover:bg-red-100`}
+              >
+                <X className="w-4 h-4" />
+                Faltou
+              </button>
+              <button
+                type="button"
+                onClick={() => onRemarcar(atendimento)}
+                className={`${acaoBase} bg-white/70 text-gray-600 border border-gray-200 hover:border-[#A67C52]/40`}
+              >
+                <CalendarClock className="w-4 h-4" />
+                Remarcar
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 bg-white/50 border-t border-white/70 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => onExcluir(atendimento)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm text-xs font-medium text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Excluir
+          </button>
+          <button
+            type="button"
+            onClick={() => onEditar(atendimento)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest hover:bg-[#8E653D] transition-colors"
+          >
+            <Pencil className="w-4 h-4" />
+            Editar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

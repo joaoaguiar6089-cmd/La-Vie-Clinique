@@ -4,7 +4,8 @@
     {
       "name": "la-vie-clinique-dev",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--port", "5183", "--strictPort"],
+      "runtimeArgs": ["vite"],
+      "autoPort": true,
       "port": 5183
     }
   ]
