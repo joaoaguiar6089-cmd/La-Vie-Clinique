@@ -423,237 +423,248 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
 
       {/* Editor da ficha */}
       {draft && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-          <div className="bg-[#FAF9F6] w-full sm:max-w-2xl sm:rounded-sm shadow-xl min-h-screen sm:min-h-0 sm:my-8">
-            <div className="sticky top-0 z-10 bg-[#1A1A1A] px-5 py-4 flex items-center justify-between">
-              <h3 className="font-serif-luxury text-lg text-white">
-                {fichas.some((f) => f.id === draft.id) ? 'Editar ficha' : 'Nova ficha de avaliação'}
-              </h3>
-              <button
-                onClick={() => setDraft(null)}
-                className="p-1 text-gray-400 hover:text-white transition-colors"
-                aria-label="Fechar"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="px-5 py-5 space-y-5">
-              {erro && (
-                <div className="flex items-start gap-2 text-xs text-[#E11D48] bg-[#FFF1F2] border border-[#FECDD3] rounded-sm px-3 py-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
-                  <span>{erro}</span>
-                </div>
-              )}
-
-              <div>
-                <label className={labelClass} htmlFor="ficha-nome">
-                  Nome da ficha
-                </label>
-                <input
-                  id="ficha-nome"
-                  value={draft.nome}
-                  onChange={(e) => setDraft({ ...draft, nome: e.target.value })}
-                  placeholder="Ex: Avaliação — Depilação a Laser"
-                  className={inputClass}
-                />
+        <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto">
+          {/*
+            O que rola é ESTE contêiner; a centralização mora no wrapper de dentro.
+          
+            Juntar as duas coisas — `overflow-y-auto` e `items-center` no mesmo elemento — quebra
+            silenciosamente quando o conteúdo passa da altura da tela: o item centralizado transborda
+            para os dois lados, e o que sai por cima fica **fora do alcance da rolagem**. O formulário
+            abre já cortado no meio e não há como subir. Com o wrapper `min-h-full`, a centralização
+            só acontece enquanto sobra espaço; quando não sobra, o wrapper cresce e tudo é alcançável.
+          */}
+          <div className="flex min-h-full items-start sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-[#FAF9F6] w-full sm:max-w-2xl sm:rounded-sm shadow-xl min-h-screen sm:min-h-0 sm:my-8">
+              <div className="sticky top-0 z-10 bg-[#1A1A1A] px-5 py-4 flex items-center justify-between">
+                <h3 className="font-serif-luxury text-lg text-white">
+                  {fichas.some((f) => f.id === draft.id) ? 'Editar ficha' : 'Nova ficha de avaliação'}
+                </h3>
+                <button
+                  onClick={() => setDraft(null)}
+                  className="p-1 text-gray-400 hover:text-white transition-colors"
+                  aria-label="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div>
-                <label className={labelClass} htmlFor="ficha-desc">
-                  Descrição (opcional)
-                </label>
-                <input
-                  id="ficha-desc"
-                  value={draft.descricao || ''}
-                  onChange={(e) => setDraft({ ...draft, descricao: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-
-              {/* Vínculo */}
-              <div className="space-y-3 p-3.5 rounded-sm border border-gray-200 bg-white">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                  Onde esta ficha vale
-                </span>
-
-                <div>
-                  <label className={labelClass}>Categorias inteiras</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {categoriasDoCatalogo.map((cat) => {
-                      const marcada = (draft.categorias || []).includes(cat);
-                      return (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() =>
-                            setDraft({
-                              ...draft,
-                              categorias: marcada
-                                ? (draft.categorias || []).filter((c) => c !== cat)
-                                : [...(draft.categorias || []), cat],
-                            })
-                          }
-                          className={`px-2.5 py-1 rounded-sm text-[11px] font-medium border transition-colors ${
-                            marcada
-                              ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                              : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <label className={labelClass}>Procedimentos específicos</label>
-                  <ProcedureMultiSelect
-                    procedures={catalogo}
-                    selectedIds={draft.procedureIds || []}
-                    onChange={(ids) => setDraft({ ...draft, procedureIds: ids })}
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1.5">
-                    Um procedimento listado aqui usa esta ficha mesmo que a categoria dele aponte
-                    para outra — o específico sempre vence o geral.
-                  </p>
-                </div>
-              </div>
-
-              {/* Perguntas */}
-              <div className="space-y-2 p-3.5 rounded-sm border border-gray-200 bg-white">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                    Perguntas ({draft.perguntas.length})
-                  </span>
-                  <button
-                    type="button"
-                    onClick={abrirPerguntaNova}
-                    className="flex items-center gap-1 text-[11px] font-semibold text-[#A67C52] hover:underline"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Adicionar
-                  </button>
-                </div>
-
-                {draft.perguntas.length === 0 ? (
-                  <p className="text-[11px] text-gray-400 py-3 text-center">
-                    Nenhuma pergunta ainda. A ficha ainda assim abre com observações e foto.
-                  </p>
-                ) : (
-                  <div className="divide-y divide-gray-100">
-                    {draft.perguntas.map((q, idx) => (
-                      <div key={q.id} className="py-2 flex items-start gap-2">
-                        <span className="w-5 h-5 rounded-xs bg-[#1A1A1A] text-[#C49B74] font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                          {idx + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-[#1A1A1A] leading-snug">
-                            {q.texto}
-                          </p>
-                          <span className="text-[10px] text-[#A67C52]">
-                            {FIELD_TYPE_LABELS[q.tipo_campo]}
-                            {q.obrigatoria ? ' · obrigatória' : ''}
-                            {q.opcoes?.length ? ` · ${q.opcoes.length} opções` : ''}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => moverPergunta(idx, 'up')}
-                            disabled={idx === 0}
-                            className="p-1 text-gray-300 hover:text-[#1A1A1A] disabled:opacity-30"
-                            aria-label="Subir"
-                          >
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moverPergunta(idx, 'down')}
-                            disabled={idx === draft.perguntas.length - 1}
-                            className="p-1 text-gray-300 hover:text-[#1A1A1A] disabled:opacity-30"
-                            aria-label="Descer"
-                          >
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => abrirPerguntaExistente(idx)}
-                            className="p-1 text-gray-400 hover:text-[#1A1A1A]"
-                            aria-label="Editar"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removerPergunta(idx)}
-                            className="p-1 text-gray-400 hover:text-[#E11D48]"
-                            aria-label="Remover"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+              <div className="px-5 py-5 space-y-5">
+                {erro && (
+                  <div className="flex items-start gap-2 text-xs text-[#E11D48] bg-[#FFF1F2] border border-[#FECDD3] rounded-sm px-3 py-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+                    <span>{erro}</span>
                   </div>
                 )}
-              </div>
 
-              {/* Imagens */}
-              <div className="space-y-3 p-3.5 rounded-sm border border-gray-200 bg-white">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                  Mapa anatômico para anotação
-                </span>
-                <p className="text-[10px] text-gray-400 -mt-1.5">
-                  A versão por gênero é resolvida pelo cadastro da paciente. A imagem única serve
-                  de reserva quando não há versão para o gênero dela.
-                </p>
-                <div className="flex gap-3 flex-wrap">
-                  <FotoSlot rotulo="Feminino" campo="fotoModeloFemininoUrl" />
-                  <FotoSlot rotulo="Masculino" campo="fotoModeloMasculinoUrl" />
-                  <FotoSlot rotulo="Única (reserva)" campo="fotoModeloUrl" />
-                </div>
-
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A] pt-1">
+                <div>
+                  <label className={labelClass} htmlFor="ficha-nome">
+                    Nome da ficha
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={draft.temFotoSessao}
-                    onChange={(e) => setDraft({ ...draft, temFotoSessao: e.target.checked })}
-                    className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                    id="ficha-nome"
+                    value={draft.nome}
+                    onChange={(e) => setDraft({ ...draft, nome: e.target.value })}
+                    placeholder="Ex: Avaliação — Depilação a Laser"
+                    className={inputClass}
                   />
-                  <span>
-                    Pedir foto desta sessão
-                    <span className="text-gray-400 ml-1">
-                      (registro de evolução, uma por atendimento)
-                    </span>
-                  </span>
-                </label>
-              </div>
-            </div>
+                </div>
 
-            <div className="sticky bottom-0 bg-[#FAF9F6] border-t border-gray-200 px-5 py-3.5 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDraft(null)}
-                disabled={salvando}
-                className="px-4 py-2 rounded-sm border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={salvarFicha}
-                disabled={salvando}
-                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-sm bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-black disabled:opacity-40"
-              >
-                {salvando ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Check className="w-3.5 h-3.5" />
-                )}
-                Salvar ficha
-              </button>
+                <div>
+                  <label className={labelClass} htmlFor="ficha-desc">
+                    Descrição (opcional)
+                  </label>
+                  <input
+                    id="ficha-desc"
+                    value={draft.descricao || ''}
+                    onChange={(e) => setDraft({ ...draft, descricao: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+
+                {/* Vínculo */}
+                <div className="space-y-3 p-3.5 rounded-sm border border-gray-200 bg-white">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                    Onde esta ficha vale
+                  </span>
+
+                  <div>
+                    <label className={labelClass}>Categorias inteiras</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {categoriasDoCatalogo.map((cat) => {
+                        const marcada = (draft.categorias || []).includes(cat);
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() =>
+                              setDraft({
+                                ...draft,
+                                categorias: marcada
+                                  ? (draft.categorias || []).filter((c) => c !== cat)
+                                  : [...(draft.categorias || []), cat],
+                              })
+                            }
+                            className={`px-2.5 py-1 rounded-sm text-[11px] font-medium border transition-colors ${
+                              marcada
+                                ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+                                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Procedimentos específicos</label>
+                    <ProcedureMultiSelect
+                      procedures={catalogo}
+                      selectedIds={draft.procedureIds || []}
+                      onChange={(ids) => setDraft({ ...draft, procedureIds: ids })}
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1.5">
+                      Um procedimento listado aqui usa esta ficha mesmo que a categoria dele aponte
+                      para outra — o específico sempre vence o geral.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Perguntas */}
+                <div className="space-y-2 p-3.5 rounded-sm border border-gray-200 bg-white">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                      Perguntas ({draft.perguntas.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={abrirPerguntaNova}
+                      className="flex items-center gap-1 text-[11px] font-semibold text-[#A67C52] hover:underline"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Adicionar
+                    </button>
+                  </div>
+
+                  {draft.perguntas.length === 0 ? (
+                    <p className="text-[11px] text-gray-400 py-3 text-center">
+                      Nenhuma pergunta ainda. A ficha ainda assim abre com observações e foto.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-gray-100">
+                      {draft.perguntas.map((q, idx) => (
+                        <div key={q.id} className="py-2 flex items-start gap-2">
+                          <span className="w-5 h-5 rounded-xs bg-[#1A1A1A] text-[#C49B74] font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                            {idx + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-[#1A1A1A] leading-snug">
+                              {q.texto}
+                            </p>
+                            <span className="text-[10px] text-[#A67C52]">
+                              {FIELD_TYPE_LABELS[q.tipo_campo]}
+                              {q.obrigatoria ? ' · obrigatória' : ''}
+                              {q.opcoes?.length ? ` · ${q.opcoes.length} opções` : ''}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => moverPergunta(idx, 'up')}
+                              disabled={idx === 0}
+                              className="p-1 text-gray-300 hover:text-[#1A1A1A] disabled:opacity-30"
+                              aria-label="Subir"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moverPergunta(idx, 'down')}
+                              disabled={idx === draft.perguntas.length - 1}
+                              className="p-1 text-gray-300 hover:text-[#1A1A1A] disabled:opacity-30"
+                              aria-label="Descer"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => abrirPerguntaExistente(idx)}
+                              className="p-1 text-gray-400 hover:text-[#1A1A1A]"
+                              aria-label="Editar"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removerPergunta(idx)}
+                              className="p-1 text-gray-400 hover:text-[#E11D48]"
+                              aria-label="Remover"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Imagens */}
+                <div className="space-y-3 p-3.5 rounded-sm border border-gray-200 bg-white">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                    Mapa anatômico para anotação
+                  </span>
+                  <p className="text-[10px] text-gray-400 -mt-1.5">
+                    A versão por gênero é resolvida pelo cadastro da paciente. A imagem única serve
+                    de reserva quando não há versão para o gênero dela.
+                  </p>
+                  <div className="flex gap-3 flex-wrap">
+                    <FotoSlot rotulo="Feminino" campo="fotoModeloFemininoUrl" />
+                    <FotoSlot rotulo="Masculino" campo="fotoModeloMasculinoUrl" />
+                    <FotoSlot rotulo="Única (reserva)" campo="fotoModeloUrl" />
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A] pt-1">
+                    <input
+                      type="checkbox"
+                      checked={draft.temFotoSessao}
+                      onChange={(e) => setDraft({ ...draft, temFotoSessao: e.target.checked })}
+                      className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                    />
+                    <span>
+                      Pedir foto desta sessão
+                      <span className="text-gray-400 ml-1">
+                        (registro de evolução, uma por atendimento)
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="sticky bottom-0 bg-[#FAF9F6] border-t border-gray-200 px-5 py-3.5 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDraft(null)}
+                  disabled={salvando}
+                  className="px-4 py-2 rounded-sm border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={salvarFicha}
+                  disabled={salvando}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-sm bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-black disabled:opacity-40"
+                >
+                  {salvando ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  Salvar ficha
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -661,145 +672,147 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
 
       {/* Editor de pergunta */}
       {qModalAberto && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-          <form
-            onSubmit={salvarPergunta}
-            className="bg-[#FAF9F6] w-full sm:max-w-lg sm:rounded-sm shadow-xl min-h-screen sm:min-h-0 sm:my-8"
-          >
-            <div className="bg-[#1A1A1A] px-5 py-4 flex items-center justify-between">
-              <h3 className="font-serif-luxury text-lg text-white">
-                {qIndex !== null ? 'Editar pergunta' : 'Nova pergunta'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setQModalAberto(false)}
-                className="p-1 text-gray-400 hover:text-white"
-                aria-label="Fechar"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="px-5 py-5 space-y-4">
-              {qErro && (
-                <div className="flex items-start gap-2 text-xs text-[#E11D48] bg-[#FFF1F2] border border-[#FECDD3] rounded-sm px-3 py-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
-                  <span>{qErro}</span>
-                </div>
-              )}
-
-              <div>
-                <label className={labelClass} htmlFor="q-texto">
-                  Enunciado
-                </label>
-                <input
-                  id="q-texto"
-                  value={qTexto}
-                  onChange={(e) => setQTexto(e.target.value)}
-                  placeholder="Ex: Fototipo de Fitzpatrick"
-                  className={inputClass}
-                />
-              </div>
-
-              <div>
-                <label className={labelClass} htmlFor="q-tipo">
-                  Tipo de campo
-                </label>
-                <select
-                  id="q-tipo"
-                  value={qTipo}
-                  onChange={(e) => setQTipo(e.target.value as QuestionFieldType)}
-                  className={inputClass}
+        <div className="fixed inset-0 z-[60] bg-black/50 overflow-y-auto">
+          <div className="flex min-h-full items-start sm:items-center justify-center p-0 sm:p-4">
+            <form
+              onSubmit={salvarPergunta}
+              className="bg-[#FAF9F6] w-full sm:max-w-lg sm:rounded-sm shadow-xl min-h-screen sm:min-h-0 sm:my-8"
+            >
+              <div className="bg-[#1A1A1A] px-5 py-4 flex items-center justify-between">
+                <h3 className="font-serif-luxury text-lg text-white">
+                  {qIndex !== null ? 'Editar pergunta' : 'Nova pergunta'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setQModalAberto(false)}
+                  className="p-1 text-gray-400 hover:text-white"
+                  aria-label="Fechar"
                 >
-                  {Object.entries(FIELD_TYPE_LABELS).map(([valor, rotulo]) => (
-                    <option key={valor} value={valor}>
-                      {rotulo}
-                    </option>
-                  ))}
-                </select>
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              {(qTipo === 'unica_escolha' || qTipo === 'multipla_escolha') && (
+              <div className="px-5 py-5 space-y-4">
+                {qErro && (
+                  <div className="flex items-start gap-2 text-xs text-[#E11D48] bg-[#FFF1F2] border border-[#FECDD3] rounded-sm px-3 py-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+                    <span>{qErro}</span>
+                  </div>
+                )}
+
                 <div>
-                  <label className={labelClass} htmlFor="q-opcoes">
-                    Opções (uma por linha)
+                  <label className={labelClass} htmlFor="q-texto">
+                    Enunciado
                   </label>
-                  <textarea
-                    id="q-opcoes"
-                    value={qOpcoes}
-                    onChange={(e) => setQOpcoes(e.target.value)}
-                    rows={5}
-                    className={`${inputClass} resize-y`}
+                  <input
+                    id="q-texto"
+                    value={qTexto}
+                    onChange={(e) => setQTexto(e.target.value)}
+                    placeholder="Ex: Fototipo de Fitzpatrick"
+                    className={inputClass}
                   />
                 </div>
-              )}
 
-              {qTipo === 'escala' && (
                 <div>
-                  <label className={labelClass}>Escala</label>
-                  <div className="flex items-center gap-3">
-                    {[5, 10].map((max) => (
-                      <button
-                        key={max}
-                        type="button"
-                        onClick={() => setQEscalaMax(max)}
-                        className={`px-4 py-2 rounded-sm text-xs font-semibold border ${
-                          qEscalaMax === max
-                            ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                            : 'bg-white text-gray-700 border-gray-200'
-                        }`}
-                      >
-                        1 a {max}
-                      </button>
+                  <label className={labelClass} htmlFor="q-tipo">
+                    Tipo de campo
+                  </label>
+                  <select
+                    id="q-tipo"
+                    value={qTipo}
+                    onChange={(e) => setQTipo(e.target.value as QuestionFieldType)}
+                    className={inputClass}
+                  >
+                    {Object.entries(FIELD_TYPE_LABELS).map(([valor, rotulo]) => (
+                      <option key={valor} value={valor}>
+                        {rotulo}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
-              )}
 
-              <div>
-                <label className={labelClass} htmlFor="q-ajuda">
-                  Texto de ajuda (opcional)
+                {(qTipo === 'unica_escolha' || qTipo === 'multipla_escolha') && (
+                  <div>
+                    <label className={labelClass} htmlFor="q-opcoes">
+                      Opções (uma por linha)
+                    </label>
+                    <textarea
+                      id="q-opcoes"
+                      value={qOpcoes}
+                      onChange={(e) => setQOpcoes(e.target.value)}
+                      rows={5}
+                      className={`${inputClass} resize-y`}
+                    />
+                  </div>
+                )}
+
+                {qTipo === 'escala' && (
+                  <div>
+                    <label className={labelClass}>Escala</label>
+                    <div className="flex items-center gap-3">
+                      {[5, 10].map((max) => (
+                        <button
+                          key={max}
+                          type="button"
+                          onClick={() => setQEscalaMax(max)}
+                          className={`px-4 py-2 rounded-sm text-xs font-semibold border ${
+                            qEscalaMax === max
+                              ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+                              : 'bg-white text-gray-700 border-gray-200'
+                          }`}
+                        >
+                          1 a {max}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className={labelClass} htmlFor="q-ajuda">
+                    Texto de ajuda (opcional)
+                  </label>
+                  <input
+                    id="q-ajuda"
+                    value={qAjuda}
+                    onChange={(e) => setQAjuda(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
+                  <input
+                    type="checkbox"
+                    checked={qObrigatoria}
+                    onChange={(e) => setQObrigatoria(e.target.checked)}
+                    className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                  />
+                  <span>
+                    Marcar como obrigatória
+                    <span className="text-gray-400 ml-1">
+                      (sinaliza importância; não trava o salvamento)
+                    </span>
+                  </span>
                 </label>
-                <input
-                  id="q-ajuda"
-                  value={qAjuda}
-                  onChange={(e) => setQAjuda(e.target.value)}
-                  className={inputClass}
-                />
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
-                <input
-                  type="checkbox"
-                  checked={qObrigatoria}
-                  onChange={(e) => setQObrigatoria(e.target.checked)}
-                  className="accent-[#A67C52] w-4 h-4 rounded-xs"
-                />
-                <span>
-                  Marcar como obrigatória
-                  <span className="text-gray-400 ml-1">
-                    (sinaliza importância; não trava o salvamento)
-                  </span>
-                </span>
-              </label>
-            </div>
-
-            <div className="border-t border-gray-200 px-5 py-3.5 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setQModalAberto(false)}
-                className="px-4 py-2 rounded-sm border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 rounded-sm bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-black"
-              >
-                {qIndex !== null ? 'Salvar alterações' : 'Adicionar pergunta'}
-              </button>
-            </div>
-          </form>
+              <div className="border-t border-gray-200 px-5 py-3.5 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setQModalAberto(false)}
+                  className="px-4 py-2 rounded-sm border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-sm bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-black"
+                >
+                  {qIndex !== null ? 'Salvar alterações' : 'Adicionar pergunta'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

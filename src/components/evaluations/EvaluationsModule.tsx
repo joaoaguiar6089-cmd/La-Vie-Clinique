@@ -21,6 +21,7 @@ import { EvaluationQueueView } from './EvaluationQueueView';
 import { EvaluationTemplatesManager } from './EvaluationTemplatesManager';
 import { EvaluationFillModal } from './EvaluationFillModal';
 import { PrintableEvaluationSheet } from './PrintableEvaluationSheet';
+import { ModuleTabs } from '../common/ModuleTabs';
 import { filaDePendentes } from '../../utils/evaluations';
 
 interface EvaluationsModuleProps {
@@ -68,60 +69,32 @@ export const EvaluationsModule: React.FC<EvaluationsModuleProps> = ({
     [avaliando, pacientes]
   );
 
-  const abas: { id: EvaluationTab; rotulo: string; icone: typeof ClipboardCheck; contador?: number }[] =
-    [
-      { id: 'fila', rotulo: 'Avaliações', icone: ClipboardCheck, contador: pendentes.length },
-      { id: 'fichas', rotulo: 'Fichas-modelo', icone: Layers, contador: fichas.length },
-    ];
-
   return (
     <div className="space-y-6">
-      {/* Abas */}
-      <div className="flex items-center gap-1.5 border-b border-white/80">
-        {abas.map((aba) => {
-          const Icone = aba.icone;
-          const ativa = abaAtiva === aba.id;
-          return (
-            <button
-              key={aba.id}
-              type="button"
-              onClick={() => setAbaAtiva(aba.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider border-b-2 -mb-px transition-colors ${
-                ativa
-                  ? 'border-[#A67C52] text-[#1A1A1A]'
-                  : 'border-transparent text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              <Icone className="w-4 h-4" />
-              {aba.rotulo}
-              {!!aba.contador && (
-                <span
-                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    ativa ? 'bg-[#A67C52] text-white' : 'bg-gray-100 text-gray-500'
-                  }`}
-                >
-                  {aba.contador}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* Mesma barra da anamnese, literalmente o mesmo componente — ver `ModuleTabs`. */}
+      <ModuleTabs
+        tabs={[
+          {
+            id: 'fila' as const,
+            icon: ClipboardCheck,
+            label: 'Avaliações',
+            count: pendentes.length,
+          },
+          { id: 'fichas' as const, icon: Layers, label: 'Fichas-modelo', count: fichas.length },
+        ]}
+        active={abaAtiva}
+        onSelect={setAbaAtiva}
+      />
 
       {abaAtiva === 'fila' ? (
         <EvaluationQueueView atendimentos={atendimentos} onAvaliar={setAvaliando} />
       ) : (
         <div className="space-y-8">
-          <EvaluationTemplatesManager
-            fichas={fichas}
-            catalogo={catalogProcedures}
-            onSalvar={saveEvaluationTemplate}
-            onExcluir={deleteEvaluationTemplate}
-            onImprimirEmBranco={setImprimindo}
-            criarPara={criarFichaPara}
-            onCriarParaConsumido={() => setCriarFichaPara(null)}
-          />
-
+          {/*
+            Perguntas gerais acima dos modelos, como na anamnese: são herdadas por toda ficha de
+            avaliação, então quem vem ajustar um modelo vê primeiro o que já entra nele sem
+            ninguém pedir.
+          */}
           <GeneralQuestionsManager
             questions={gerais}
             onSaveQuestion={saveEvaluationGeneralQuestion}
@@ -135,6 +108,16 @@ export const EvaluationsModule: React.FC<EvaluationsModuleProps> = ({
             // apagar o trabalho da equipe.
             defaults={undefined}
             idPrefixo="avg"
+          />
+
+          <EvaluationTemplatesManager
+            fichas={fichas}
+            catalogo={catalogProcedures}
+            onSalvar={saveEvaluationTemplate}
+            onExcluir={deleteEvaluationTemplate}
+            onImprimirEmBranco={setImprimindo}
+            criarPara={criarFichaPara}
+            onCriarParaConsumido={() => setCriarFichaPara(null)}
           />
         </div>
       )}

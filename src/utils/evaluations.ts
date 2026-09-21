@@ -460,3 +460,79 @@ export const planejarMigracao = (
 
   return { fichas, anamneses };
 };
+
+// ==========================================
+// INSTALAR AS FICHAS PADRÃO NA CLÍNICA QUE JÁ RODA
+// ==========================================
+
+/**
+ * Marca da instalação das fichas de avaliação dos demais procedimentos do catálogo.
+ *
+ * Versionada: acrescentar fichas padrão amanhã pede uma marca nova (`-v2`), senão a clínica que
+ * já rodou esta nunca veria as novas. Trocar a marca é o que faz a instalação rodar de novo — e é
+ * seguro, porque `planejarInstalacaoDeFichasPadrao` só instala o que ainda não existe.
+ */
+export const MIGRACAO_FICHAS_PADRAO = 'fichas-avaliacao-demais-procedimentos-v1';
+
+/** Os procedimentos do catálogo que uma ficha de avaliação atenderia, por id ou por categoria. */
+export const procedimentosAtendidosPor = (
+  ficha: EvaluationTemplate,
+  catalogo: Procedure[]
+): Procedure[] => {
+  const ids = new Set(ficha.procedureIds || []);
+  const cats = new Set((ficha.categorias || []).map(chaveDeCategoria));
+  return (catalogo || []).filter(
+    (p) => ids.has(p.id) || cats.has(chaveDeCategoria(p.category))
+  );
+};
+
+/**
+ * Quais fichas padrão faltam nesta clínica.
+ *
+ * Roda sem banco de propósito: é a decisão inteira da instalação, e `databaseService` só a traduz
+ * em gravações. Conferida por `scripts/verificar-fichas-avaliacao.ts`.
+ *
+ * Três motivos para deixar uma ficha padrão de fora, e cada um existe por um estrago diferente:
+ *
+ * 1. **O id já está lá.** Reinstalar sobrescreveria as perguntas que a equipe editou na tela —
+ *    silenciosamente, e uma vez por clínica, sem desfazer.
+ * 2. **Nenhum procedimento do catálogo cai nela.** A clínica que apagou "Soroterapia" não quer
+ *    uma ficha de soroterapia pendurada no gerenciador sem nada a avaliar.
+ * 3. **Tudo o que ela atenderia já tem ficha.** Aqui entram as duas que vieram da anamnese pela
+ *    migração anterior, com outro id (`aval-tpl-…`) e o mesmo alvo: instalar por cima criaria
+ *    duas fichas disputando o mesmo procedimento, e a que ganha é a primeira da lista — ou seja,
+ *    sorte. `every` e não `some`: se a equipe cobriu um dos oito procedimentos de microfocado
+ *    facial à mão, os outros sete continuam descobertos e a ficha padrão ainda tem serventia. O
+ *    vínculo específico vence o de categoria em `fichaDeAvaliacaoPara`, então a ficha da equipe
+ *    continua ganhando no procedimento dela.
+ */
+export const planejarInstalacaoDeFichasPadrao = (
+  padroes: EvaluationTemplate[],
+  existentes: EvaluationTemplate[],
+  catalogo: Procedure[]
+): EvaluationTemplate[] => {
+  const jaExistem = new Set((existentes || []).map((f) => f.id));
+
+  return (padroes || [])
+    .filter((ficha) => {
+      if (jaExistem.has(ficha.id)) return false;
+
+      const alvos = procedimentosAtendidosPor(ficha, catalogo);
+      if (alvos.length === 0) return false;
+
+      const todosJaCobertos = alvos.every((p) =>
+        fichaDeAvaliacaoPara(
+          { procedureId: p.id, procedimentoNome: p.title },
+          existentes || [],
+          catalogo
+        )
+      );
+      return !todosJaCobertos;
+    })
+    .map((ficha) => ({
+      ...ficha,
+      migracoesAplicadas: Array.from(
+        new Set<string>([...(ficha.migracoesAplicadas || []), MIGRACAO_FICHAS_PADRAO])
+      ),
+    }));
+};

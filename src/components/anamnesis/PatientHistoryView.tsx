@@ -96,7 +96,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
               Anamneses Preenchidas & Enviadas
             </h3>
             <span className="px-2 py-0.5 rounded-full bg-[#A67C52]/15 text-[#A67C52] text-[10px] font-mono font-bold">
-              {records.length} Fichas Registradas
+              {patients.length} pacientes · {records.length} fichas
             </span>
           </div>
           <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">

@@ -284,249 +284,260 @@ export const EvaluationFillModal: React.FC<EvaluationFillModalProps> = ({
   const fotoSessaoExibida = fotoSessaoAnotadaUrl || fotoSessaoUrl;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-      <div className="bg-white w-full sm:max-w-3xl sm:rounded-2xl shadow-xl min-h-screen sm:min-h-0 sm:my-8">
-        {/* Cabeçalho */}
-        <div className="sticky top-0 z-10 bg-white border-b border-[rgba(26,26,26,.1)] px-4 sm:px-6 py-4 flex items-start justify-between gap-3 sm:rounded-t-2xl">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <ClipboardCheck className="w-4 h-4 text-[#A67C52] shrink-0" />
-              <h2 className="text-[17px] font-semibold text-[#1A1A1A] truncate">
-                Ficha de avaliação
-              </h2>
-            </div>
-            <p className="text-[13px] text-[#4a4740] mt-0.5 truncate">
-              {atendimento.pacienteNome} · {atendimento.procedimentoNome} ·{' '}
-              {formatDateOnly(atendimento.data)}
-            </p>
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {/*
-              Imprime o que está **gravado**, não o rascunho na tela: o documento impresso precisa
-              corresponder ao que o prontuário guarda. Por isso só aparece depois do primeiro
-              salvamento.
-            */}
-            {registro && (
-              <button
-                onClick={() => setImprimindo(true)}
-                className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
-                title="Imprimir / salvar PDF"
-                aria-label="Imprimir a ficha de avaliação"
-              >
-                <Printer className="w-5 h-5" />
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-[#1A1A1A] transition-colors"
-              aria-label="Fechar"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="px-4 sm:px-6 py-5 space-y-6">
-          {carregando ? (
-            <div className="flex items-center justify-center py-16 text-gray-400">
-              <Loader2 className="w-5 h-5 animate-spin" />
-            </div>
-          ) : (
-            <>
-              {erro && (
-                <div className="flex items-start gap-2 text-[13px] text-[#E11D48] bg-[#FFF1F2] border border-[#FECDD3] rounded-xl px-3.5 py-2.5">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{erro}</span>
-                </div>
-              )}
-
-              {/*
-                Sem ficha cadastrada, a tela não fica vazia: sobram as observações e o caminho
-                para configurar. Um vazio sem saída faria a profissional concluir que a
-                funcionalidade está quebrada.
-              */}
-              {!ficha && (
-                <div className="flex flex-wrap items-center gap-3 text-[13px] text-[#4a4740] bg-[#F9F8F6] border border-[rgba(26,26,26,.1)] rounded-xl px-3.5 py-3">
-                  <span className="flex-1 min-w-[200px]">
-                    Nenhuma ficha de avaliação cadastrada para{' '}
-                    <strong className="text-[#1A1A1A]">{atendimento.procedimentoNome}</strong>.
-                  </span>
-                  {onCadastrarFicha && (
-                    <button
-                      onClick={() =>
-                        onCadastrarFicha({
-                          procedureId: atendimento.procedureId,
-                          procedimentoNome: atendimento.procedimentoNome,
-                        })
-                      }
-                      className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#A67C52] hover:underline"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Cadastrar ficha
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {perguntas.length > 0 && (
-                <div className="space-y-4">
-                  {ficha && (
-                    <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                      {ficha.nome}
-                    </h3>
-                  )}
-                  {perguntas.map((q) => (
-                    <QuestionFieldRenderer
-                      key={q.id}
-                      question={q}
-                      value={respostas[q.id]}
-                      onChange={(v) => handleResposta(q.id, v)}
-                      // Sem asterisco: a avaliação é documento interno e se completa ao longo do
-                      // dia — marcar campo obrigatório aqui só criaria uma trava que a
-                      // profissional teria que contornar para salvar o que já sabe.
-                      hideMandatoryAsterisk
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* Mapa anatômico anotável */}
-              {fotoModeloUrl && (
-                <div className="space-y-2">
-                  <span className={labelClass}>Mapa anatômico</span>
-                  <div className="relative rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-[#F9F8F6]">
-                    <img
-                      src={fotoModeloExibida}
-                      alt="Mapa anatômico do procedimento"
-                      className="w-full object-contain max-h-[420px]"
-                    />
-                    <button
-                      onClick={() => setAnotando('modelo')}
-                      className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1A1A1A] text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                      {fotoModeloAnotadaUrl ? 'Editar anotações' : 'Anotar'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Foto da sessão */}
-              {ficha?.temFotoSessao && (
-                <div className="space-y-2">
-                  <span className={labelClass}>Foto desta sessão</span>
-                  {fotoSessaoUrl ? (
-                    <div className="relative rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-[#F9F8F6]">
-                      <img
-                        src={fotoSessaoExibida}
-                        alt="Foto da sessão"
-                        className="w-full object-contain max-h-[420px]"
-                      />
-                      <div className="absolute bottom-3 right-3 flex gap-2">
-                        <button
-                          onClick={() => {
-                            setFotoSessaoUrl('');
-                            setFotoSessaoAnotadaUrl('');
-                            setFotoSessaoAnotacoesJson(undefined);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 text-[#1A1A1A] text-[13px] font-semibold shadow-lg hover:bg-white transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          Remover
-                        </button>
-                        <button
-                          onClick={() => setAnotando('sessao')}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1A1A1A] text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                          {fotoSessaoAnotadaUrl ? 'Editar anotações' : 'Anotar'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-[rgba(26,26,26,.2)] bg-[#F9F8F6] cursor-pointer hover:border-[#A67C52] transition-colors">
-                      <Camera className="w-6 h-6 text-gray-400" />
-                      <span className="text-[13px] font-semibold text-[#4a4740]">
-                        Enviar foto desta sessão
-                      </span>
-                      <span className="text-[12px] text-gray-400">
-                        Registro de evolução — uma por atendimento
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleFotoSessao}
-                      />
-                    </label>
-                  )}
-                </div>
-              )}
-
-              {/* Observações — sempre presente, inclusive sem ficha cadastrada */}
-              <div className="space-y-1.5">
-                <label className={labelClass} htmlFor="aval-observacoes">
-                  Observações da avaliação
-                </label>
-                <textarea
-                  id="aval-observacoes"
-                  value={observacoes}
-                  onChange={(e) => setObservacoes(e.target.value)}
-                  rows={4}
-                  placeholder="O que foi observado nesta sessão, parâmetros usados, resposta do tecido, orientações dadas."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[rgba(26,26,26,.15)] text-[14px] text-[#1A1A1A] placeholder:text-gray-400 focus:outline-none focus:border-[#A67C52] transition-colors resize-y"
-                />
+    <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto">
+      {/*
+        O que rola é ESTE contêiner; a centralização mora no wrapper de dentro.
+      
+        Juntar as duas coisas — `overflow-y-auto` e `items-center` no mesmo elemento — quebra
+        silenciosamente quando o conteúdo passa da altura da tela: o item centralizado transborda
+        para os dois lados, e o que sai por cima fica **fora do alcance da rolagem**. O formulário
+        abre já cortado no meio e não há como subir. Com o wrapper `min-h-full`, a centralização
+        só acontece enquanto sobra espaço; quando não sobra, o wrapper cresce e tudo é alcançável.
+      */}
+      <div className="flex min-h-full items-start sm:items-center justify-center p-0 sm:p-4">
+        <div className="bg-white w-full sm:max-w-3xl sm:rounded-2xl shadow-xl min-h-screen sm:min-h-0 sm:my-8">
+          {/* Cabeçalho */}
+          <div className="sticky top-0 z-10 bg-white border-b border-[rgba(26,26,26,.1)] px-4 sm:px-6 py-4 flex items-start justify-between gap-3 sm:rounded-t-2xl">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="w-4 h-4 text-[#A67C52] shrink-0" />
+                <h2 className="text-[17px] font-semibold text-[#1A1A1A] truncate">
+                  Ficha de avaliação
+                </h2>
               </div>
-
-              {registro?.preenchidoEm && (
-                <p className="text-[12px] text-gray-400">
-                  Preenchida em {formatDateOnly(registro.preenchidoEm.slice(0, 10))}
-                  {registro.updatedAt &&
-                    registro.updatedAt.slice(0, 10) !== registro.preenchidoEm.slice(0, 10) &&
-                    ` · última alteração em ${formatDateOnly(registro.updatedAt.slice(0, 10))}`}
-                </p>
+              <p className="text-[13px] text-[#4a4740] mt-0.5 truncate">
+                {atendimento.pacienteNome} · {atendimento.procedimentoNome} ·{' '}
+                {formatDateOnly(atendimento.data)}
+              </p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {/*
+                Imprime o que está **gravado**, não o rascunho na tela: o documento impresso precisa
+                corresponder ao que o prontuário guarda. Por isso só aparece depois do primeiro
+                salvamento.
+              */}
+              {registro && (
+                <button
+                  onClick={() => setImprimindo(true)}
+                  className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                  title="Imprimir / salvar PDF"
+                  aria-label="Imprimir a ficha de avaliação"
+                >
+                  <Printer className="w-5 h-5" />
+                </button>
               )}
-            </>
-          )}
-        </div>
-
-        {/* Rodapé */}
-        {!carregando && (
-          <div className="sticky bottom-0 bg-white border-t border-[rgba(26,26,26,.1)] px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3 sm:rounded-b-2xl">
-            {registro ? (
-              <button
-                onClick={pedirExclusao}
-                disabled={salvando}
-                className="text-[13px] font-semibold text-gray-400 hover:text-[#E11D48] transition-colors disabled:opacity-40"
-              >
-                Excluir avaliação
-              </button>
-            ) : (
-              <span />
-            )}
-            <div className="flex items-center gap-2">
               <button
                 onClick={onClose}
-                disabled={salvando}
-                className="px-4 py-2.5 rounded-xl text-[14px] font-semibold text-[#4a4740] hover:bg-[#F9F8F6] transition-colors disabled:opacity-40"
+                className="p-2 text-gray-400 hover:text-[#1A1A1A] transition-colors"
+                aria-label="Fechar"
               >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSalvar}
-                disabled={salvando}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1A1A1A] text-white text-[14px] font-semibold hover:bg-black transition-colors disabled:opacity-40"
-              >
-                {salvando ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Check className="w-4 h-4" />
-                )}
-                Salvar avaliação
+                <X className="w-5 h-5" />
               </button>
             </div>
           </div>
-        )}
+
+          <div className="px-4 sm:px-6 py-5 space-y-6">
+            {carregando ? (
+              <div className="flex items-center justify-center py-16 text-gray-400">
+                <Loader2 className="w-5 h-5 animate-spin" />
+              </div>
+            ) : (
+              <>
+                {erro && (
+                  <div className="flex items-start gap-2 text-[13px] text-[#E11D48] bg-[#FFF1F2] border border-[#FECDD3] rounded-xl px-3.5 py-2.5">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{erro}</span>
+                  </div>
+                )}
+
+                {/*
+                  Sem ficha cadastrada, a tela não fica vazia: sobram as observações e o caminho
+                  para configurar. Um vazio sem saída faria a profissional concluir que a
+                  funcionalidade está quebrada.
+                */}
+                {!ficha && (
+                  <div className="flex flex-wrap items-center gap-3 text-[13px] text-[#4a4740] bg-[#F9F8F6] border border-[rgba(26,26,26,.1)] rounded-xl px-3.5 py-3">
+                    <span className="flex-1 min-w-[200px]">
+                      Nenhuma ficha de avaliação cadastrada para{' '}
+                      <strong className="text-[#1A1A1A]">{atendimento.procedimentoNome}</strong>.
+                    </span>
+                    {onCadastrarFicha && (
+                      <button
+                        onClick={() =>
+                          onCadastrarFicha({
+                            procedureId: atendimento.procedureId,
+                            procedimentoNome: atendimento.procedimentoNome,
+                          })
+                        }
+                        className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#A67C52] hover:underline"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Cadastrar ficha
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {perguntas.length > 0 && (
+                  <div className="space-y-4">
+                    {ficha && (
+                      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        {ficha.nome}
+                      </h3>
+                    )}
+                    {perguntas.map((q) => (
+                      <QuestionFieldRenderer
+                        key={q.id}
+                        question={q}
+                        value={respostas[q.id]}
+                        onChange={(v) => handleResposta(q.id, v)}
+                        // Sem asterisco: a avaliação é documento interno e se completa ao longo do
+                        // dia — marcar campo obrigatório aqui só criaria uma trava que a
+                        // profissional teria que contornar para salvar o que já sabe.
+                        hideMandatoryAsterisk
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Mapa anatômico anotável */}
+                {fotoModeloUrl && (
+                  <div className="space-y-2">
+                    <span className={labelClass}>Mapa anatômico</span>
+                    <div className="relative rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-[#F9F8F6]">
+                      <img
+                        src={fotoModeloExibida}
+                        alt="Mapa anatômico do procedimento"
+                        className="w-full object-contain max-h-[420px]"
+                      />
+                      <button
+                        onClick={() => setAnotando('modelo')}
+                        className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1A1A1A] text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        {fotoModeloAnotadaUrl ? 'Editar anotações' : 'Anotar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Foto da sessão */}
+                {ficha?.temFotoSessao && (
+                  <div className="space-y-2">
+                    <span className={labelClass}>Foto desta sessão</span>
+                    {fotoSessaoUrl ? (
+                      <div className="relative rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-[#F9F8F6]">
+                        <img
+                          src={fotoSessaoExibida}
+                          alt="Foto da sessão"
+                          className="w-full object-contain max-h-[420px]"
+                        />
+                        <div className="absolute bottom-3 right-3 flex gap-2">
+                          <button
+                            onClick={() => {
+                              setFotoSessaoUrl('');
+                              setFotoSessaoAnotadaUrl('');
+                              setFotoSessaoAnotacoesJson(undefined);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 text-[#1A1A1A] text-[13px] font-semibold shadow-lg hover:bg-white transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Remover
+                          </button>
+                          <button
+                            onClick={() => setAnotando('sessao')}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1A1A1A] text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            {fotoSessaoAnotadaUrl ? 'Editar anotações' : 'Anotar'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-[rgba(26,26,26,.2)] bg-[#F9F8F6] cursor-pointer hover:border-[#A67C52] transition-colors">
+                        <Camera className="w-6 h-6 text-gray-400" />
+                        <span className="text-[13px] font-semibold text-[#4a4740]">
+                          Enviar foto desta sessão
+                        </span>
+                        <span className="text-[12px] text-gray-400">
+                          Registro de evolução — uma por atendimento
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleFotoSessao}
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {/* Observações — sempre presente, inclusive sem ficha cadastrada */}
+                <div className="space-y-1.5">
+                  <label className={labelClass} htmlFor="aval-observacoes">
+                    Observações da avaliação
+                  </label>
+                  <textarea
+                    id="aval-observacoes"
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    rows={4}
+                    placeholder="O que foi observado nesta sessão, parâmetros usados, resposta do tecido, orientações dadas."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[rgba(26,26,26,.15)] text-[14px] text-[#1A1A1A] placeholder:text-gray-400 focus:outline-none focus:border-[#A67C52] transition-colors resize-y"
+                  />
+                </div>
+
+                {registro?.preenchidoEm && (
+                  <p className="text-[12px] text-gray-400">
+                    Preenchida em {formatDateOnly(registro.preenchidoEm.slice(0, 10))}
+                    {registro.updatedAt &&
+                      registro.updatedAt.slice(0, 10) !== registro.preenchidoEm.slice(0, 10) &&
+                      ` · última alteração em ${formatDateOnly(registro.updatedAt.slice(0, 10))}`}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Rodapé */}
+          {!carregando && (
+            <div className="sticky bottom-0 bg-white border-t border-[rgba(26,26,26,.1)] px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3 sm:rounded-b-2xl">
+              {registro ? (
+                <button
+                  onClick={pedirExclusao}
+                  disabled={salvando}
+                  className="text-[13px] font-semibold text-gray-400 hover:text-[#E11D48] transition-colors disabled:opacity-40"
+                >
+                  Excluir avaliação
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onClose}
+                  disabled={salvando}
+                  className="px-4 py-2.5 rounded-xl text-[14px] font-semibold text-[#4a4740] hover:bg-[#F9F8F6] transition-colors disabled:opacity-40"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSalvar}
+                  disabled={salvando}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1A1A1A] text-white text-[14px] font-semibold hover:bg-black transition-colors disabled:opacity-40"
+                >
+                  {salvando ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  Salvar avaliação
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {imprimindo && registro && (

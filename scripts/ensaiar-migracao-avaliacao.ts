@@ -15,8 +15,13 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { AnamnesisQuestion, AnamnesisTemplate, Procedure } from '../src/types';
-import { planejarMigracao } from '../src/utils/evaluations';
+import { AnamnesisQuestion, AnamnesisTemplate, EvaluationTemplate, Procedure } from '../src/types';
+import {
+  planejarInstalacaoDeFichasPadrao,
+  planejarMigracao,
+  procedimentosAtendidosPor,
+} from '../src/utils/evaluations';
+import { FICHAS_AVALIACAO_DEMAIS_PROCEDIMENTOS } from '../src/data/anamnesisInitialData';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -98,8 +103,54 @@ if (geraisDeMedico.length === 0) {
   geraisDeMedico.forEach((q) => console.log(`  ${q.id} — ${q.texto}`));
 }
 
+/**
+ * Segundo passo do boot: as fichas dos procedimentos que nunca tiveram perguntas na anamnese.
+ * Roda depois da migração e sobre o resultado dela, exatamente como em `databaseService` — o que
+ * a migração acabou de criar conta como cobertura e impede a instalação de uma ficha concorrente.
+ */
+const jaNoBanco = lerColecao<EvaluationTemplate>(pasta, 'evaluation_templates');
+const existentes = [...jaNoBanco, ...plano.fichas];
+const aInstalar = planejarInstalacaoDeFichasPadrao(
+  FICHAS_AVALIACAO_DEMAIS_PROCEDIMENTOS,
+  existentes,
+  procedures
+);
+
+console.log('\n== fichas padrão que seriam instaladas em seguida');
+if (jaNoBanco.length > 0) {
+  console.log(`  (a coleção já tem ${jaNoBanco.length} ficha(s) neste backup)`);
+}
+for (const ficha of aInstalar) {
+  const alvos = procedimentosAtendidosPor(ficha, procedures);
+  console.log(`
+  ${ficha.nome}`);
+  console.log(
+    `    vínculo ......... ${[
+      ...(ficha.categorias || []).map((c) => `categoria "${c}"`),
+      ...(ficha.procedureIds || []).map((id) => procedures.find((p) => p.id === id)?.title || id),
+    ].join(', ')}`
+  );
+  console.log(`    atende .......... ${alvos.length} procedimento(s)`);
+  console.log(`    perguntas ....... ${ficha.perguntas.length}`);
+  console.log(`    foto da sessão .. ${ficha.temFotoSessao ? 'sim' : 'não'}`);
+}
+if (aInstalar.length === 0) console.log('  (nenhuma — tudo já coberto neste backup)');
+
+const depoisDeTudo = [...existentes, ...aInstalar];
+const descobertos = procedures.filter(
+  (p) =>
+    !depoisDeTudo.some((f) => procedimentosAtendidosPor(f, procedures).some((x) => x.id === p.id))
+);
+console.log('\n== procedimentos que ficariam sem ficha de avaliação');
+if (descobertos.length === 0) {
+  console.log('  (nenhum — o catálogo inteiro fica coberto)');
+} else {
+  descobertos.forEach((p) => console.log(`  ${p.id} — ${p.title} [${p.category}]`));
+}
+
 console.log('\n== resumo');
 console.log(`  fichas de avaliação criadas ...... ${plano.fichas.length}`);
+console.log(`  fichas padrão instaladas ......... ${aInstalar.length}`);
 console.log(
   `  perguntas movidas ................ ${plano.fichas.reduce((n, f) => n + f.perguntas.length, 0)}`
 );

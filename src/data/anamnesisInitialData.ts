@@ -1209,6 +1209,850 @@ export const SAMPLE_ANAMNESIS_RECORDS: AnamnesisRecord[] = [
 ];
 
 /**
+ * As fichas de avaliação dos demais procedimentos do catálogo — tudo o que não é depilação a
+ * laser nem harmonização glútea, que já tinham as suas por terem vindo da anamnese.
+ *
+ * Por que uma lista à parte, e não escritas direto em `DEFAULT_EVALUATION_TEMPLATES`: aquela lista
+ * só é gravada em clínica **nova**, quando as duas coleções nascem juntas. A clínica que já está
+ * rodando nunca passa por ali, e sem isto estas fichas existiriam apenas no código. Quem as
+ * instala lá é `instalarFichasDeAvaliacaoPadrao`, e ela precisa saber exatamente quais fichas são
+ * "as novas" para não recriar o que a migração das perguntas da profissional já produziu.
+ *
+ * O conteúdo é o que a profissional registra **depois** do atendimento: parâmetros efetivamente
+ * usados, resposta da paciente, intercorrências e conduta para a próxima sessão. Não é triagem —
+ * histórico de saúde, alergias e contraindicações continuam na anamnese, respondidos uma vez pela
+ * paciente. Perguntar de novo aqui, a cada sessão, seria pedir à profissional que transcrevesse o
+ * que a paciente já escreveu.
+ *
+ * Nenhuma é `obrigatoria`. A decisão é a mesma da avaliação inteira: é documento interno, e uma
+ * trava no meio do expediente empurra a equipe a inventar resposta para poder salvar.
+ */
+export const FICHAS_AVALIACAO_DEMAIS_PROCEDIMENTOS: EvaluationTemplate[] = [
+  {
+    id: 'aval-us-facial',
+    nome: 'Avaliação — Ultrassom Microfocado Facial',
+    /**
+     * Por **categoria**: os oito procedimentos faciais de microfocado são a mesma aplicação em
+     * recortes diferentes de área, com os mesmos transdutores e os mesmos parâmetros. Oito fichas
+     * idênticas seriam oito lugares para manter em dia. Recorte novo no catálogo herda esta aqui.
+     */
+    categorias: ['Ultrassom Microfocado - Facial'],
+    temFotoSessao: true,
+    descricao:
+      'Parâmetros aplicados, resposta imediata e conduta. Preenchida a cada sessão.',
+    perguntas: [
+      {
+        id: 'av-usf-areas',
+        texto: 'Áreas tratadas nesta sessão:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Testa',
+          'Têmporas',
+          'Maçãs do rosto / região malar',
+          'Sulco nasogeniano',
+          'Perioral',
+          'Mandíbula / contorno',
+          'Papada / submento',
+          'Pescoço',
+          'Colo',
+        ],
+        obrigatoria: false,
+        ordem: 1,
+      },
+      {
+        id: 'av-usf-transdutores',
+        texto: 'Transdutores utilizados:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          '1.5 mm (derme superficial)',
+          '3.0 mm (derme profunda)',
+          '4.5 mm (SMAS)',
+          'Outro',
+        ],
+        obrigatoria: false,
+        ordem: 2,
+      },
+      {
+        id: 'av-usf-parametros',
+        texto: 'Parâmetros por transdutor:',
+        tipo_campo: 'texto_longo',
+        ajuda:
+          'Disparos e energia de cada transdutor assinalado acima — ex.: 4.5 mm, 300 disparos a ' +
+          '1,0 J; 3.0 mm, 250 disparos a 0,7 J.',
+        obrigatoria: false,
+        ordem: 3,
+      },
+      {
+        id: 'av-usf-tecnica',
+        texto: 'Técnica de aplicação:',
+        tipo_campo: 'unica_escolha',
+        opcoes: ['Estacionária', 'Dinâmica', 'Estacionária + dinâmica'],
+        obrigatoria: false,
+        ordem: 4,
+      },
+      {
+        id: 'av-usf-dor',
+        texto: 'Dor relatada durante a aplicação (1 = sem dor, 10 = dor máxima):',
+        tipo_campo: 'escala',
+        escalaMax: 10,
+        obrigatoria: false,
+        ordem: 5,
+      },
+      {
+        id: 'av-usf-manejo-dor',
+        texto: 'Manejo da dor:',
+        tipo_campo: 'unica_escolha',
+        opcoes: [
+          'Sem anestesia',
+          'Anestésico tópico',
+          'Analgesia oral prévia',
+          'Anestésico tópico + analgesia oral',
+          'Outro',
+        ],
+        obrigatoria: false,
+        ordem: 6,
+      },
+      {
+        id: 'av-usf-resposta-imediata',
+        texto: 'Resposta imediata observada:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Sem alteração relevante',
+          'Eritema leve',
+          'Edema discreto',
+          'Pápulas nos pontos de tratamento',
+          'Equimose',
+          'Desconforto persistente após a aplicação',
+        ],
+        obrigatoria: false,
+        ordem: 7,
+      },
+      {
+        id: 'av-usf-intercorrencias',
+        texto: 'Intercorrências e condutas adotadas:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 8,
+      },
+      {
+        id: 'av-usf-conduta',
+        texto: 'Orientações dadas e plano para a próxima sessão:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 9,
+      },
+    ],
+  },
+  {
+    id: 'aval-us-corporal',
+    nome: 'Avaliação — Ultrassom Microfocado Corporal',
+    /** Categoria separada da facial: outros transdutores, outras áreas, outro objetivo. */
+    categorias: ['Ultrassom Microfocado - Corporal'],
+    temFotoSessao: true,
+    descricao:
+      'Parâmetros, perimetria do dia e conduta. Preenchida a cada sessão.',
+    perguntas: [
+      {
+        id: 'av-usc-areas',
+        texto: 'Áreas tratadas nesta sessão:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Abdômen superior',
+          'Abdômen inferior',
+          'Flanco direito',
+          'Flanco esquerdo',
+          'Braços',
+          'Face interna das coxas',
+          'Região suprapatelar (acima dos joelhos)',
+          'Culote',
+          'Glúteos / região subglútea',
+        ],
+        obrigatoria: false,
+        ordem: 1,
+      },
+      {
+        id: 'av-usc-objetivo',
+        texto: 'Objetivo predominante da aplicação:',
+        tipo_campo: 'unica_escolha',
+        opcoes: [
+          'Flacidez tecidual (firmeza)',
+          'Gordura localizada',
+          'Flacidez + gordura localizada',
+        ],
+        obrigatoria: false,
+        ordem: 2,
+      },
+      {
+        id: 'av-usc-transdutores',
+        texto: 'Transdutores utilizados:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: ['4.5 mm', '6.0 mm', '9.0 mm', '13 mm', 'Outro'],
+        obrigatoria: false,
+        ordem: 3,
+      },
+      {
+        id: 'av-usc-parametros',
+        texto: 'Parâmetros por área:',
+        tipo_campo: 'texto_longo',
+        ajuda:
+          'Transdutor, linhas/disparos e energia de cada área — ex.: abdômen, 9.0 mm, 400 ' +
+          'disparos a 1,2 J.',
+        obrigatoria: false,
+        ordem: 4,
+      },
+      {
+        id: 'av-usc-perimetria',
+        texto: 'Perimetria do dia (cm):',
+        tipo_campo: 'texto_longo',
+        ajuda:
+          'Sempre nos mesmos pontos de referência, senão a comparação entre sessões não vale — ' +
+          'ex.: cintura 82; abdômen inferior 90; coxa D 58 / E 57.',
+        obrigatoria: false,
+        ordem: 5,
+      },
+      {
+        id: 'av-usc-dor',
+        texto: 'Dor relatada durante a aplicação (1 = sem dor, 10 = dor máxima):',
+        tipo_campo: 'escala',
+        escalaMax: 10,
+        obrigatoria: false,
+        ordem: 6,
+      },
+      {
+        id: 'av-usc-resposta-imediata',
+        texto: 'Resposta imediata observada:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Sem alteração relevante',
+          'Eritema',
+          'Edema',
+          'Sensibilidade ao toque',
+          'Equimose',
+          'Nódulo ou endurecimento palpável',
+        ],
+        obrigatoria: false,
+        ordem: 7,
+      },
+      {
+        id: 'av-usc-intercorrencias',
+        texto: 'Intercorrências e condutas adotadas:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 8,
+      },
+      {
+        id: 'av-usc-conduta',
+        texto: 'Orientações dadas e plano para a próxima sessão:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 9,
+      },
+    ],
+  },
+  {
+    id: 'aval-drenagem',
+    nome: 'Avaliação — Drenagem Corporal (Detox c/ Manta)',
+    procedureIds: ['proc-drenagem-manta'],
+    temFotoSessao: true,
+    descricao:
+      'Regiões trabalhadas, perimetria antes e depois e resposta à sessão.',
+    perguntas: [
+      {
+        id: 'av-dren-regioes',
+        texto: 'Regiões trabalhadas:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Membros inferiores',
+          'Abdômen',
+          'Flancos',
+          'Glúteos',
+          'Braços',
+          'Dorso',
+          'Face e pescoço',
+        ],
+        obrigatoria: false,
+        ordem: 1,
+      },
+      {
+        id: 'av-dren-manta',
+        texto: 'Manta térmica nesta sessão:',
+        tipo_campo: 'unica_escolha',
+        opcoes: [
+          'Ciclo completo',
+          'Ciclo reduzido',
+          'Não utilizada',
+          'Interrompida por desconforto',
+        ],
+        obrigatoria: false,
+        ordem: 2,
+      },
+      {
+        id: 'av-dren-manta-parametros',
+        texto: 'Tempo e temperatura da manta:',
+        tipo_campo: 'texto_curto',
+        ajuda: 'Ex.: 30 min a 50 °C.',
+        obrigatoria: false,
+        ordem: 3,
+      },
+      {
+        id: 'av-dren-edema',
+        texto: 'Edema / retenção no início da sessão (1 = ausente, 10 = intenso):',
+        tipo_campo: 'escala',
+        escalaMax: 10,
+        obrigatoria: false,
+        ordem: 4,
+      },
+      {
+        id: 'av-dren-perimetria',
+        texto: 'Perimetria antes e depois (cm):',
+        tipo_campo: 'texto_longo',
+        ajuda: 'Mesmos pontos de referência a cada sessão — ex.: cintura 84 → 82; coxa D 60 → 58.',
+        obrigatoria: false,
+        ordem: 5,
+      },
+      {
+        id: 'av-dren-resposta',
+        texto: 'Resposta ao final da sessão:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Redução visível de volume',
+          'Sudorese intensa',
+          'Sensação de leveza relatada',
+          'Aumento da diurese relatado',
+          'Sem alteração perceptível',
+        ],
+        obrigatoria: false,
+        ordem: 6,
+      },
+      {
+        id: 'av-dren-intercorrencias',
+        texto: 'Intercorrências e conduta:',
+        tipo_campo: 'texto_longo',
+        ajuda: 'Tontura, hipotensão, mal-estar na manta, hipersensibilidade em alguma região.',
+        obrigatoria: false,
+        ordem: 7,
+      },
+      {
+        id: 'av-dren-conduta',
+        texto: 'Orientações dadas e próxima sessão:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 8,
+      },
+    ],
+  },
+  {
+    id: 'aval-lipedema',
+    nome: 'Avaliação — Suporte Estético para Lipedema',
+    procedureIds: ['proc-lipedema'],
+    temFotoSessao: true,
+    descricao:
+      'Dor antes e depois, fibrose, perimetria e evolução. Preenchida a cada sessão.',
+    perguntas: [
+      {
+        id: 'av-lip-dor-antes',
+        texto: 'Dor / sensibilidade ANTES da sessão (1 = sem dor, 10 = dor severa):',
+        tipo_campo: 'escala',
+        escalaMax: 10,
+        obrigatoria: false,
+        ordem: 1,
+      },
+      {
+        id: 'av-lip-dor-depois',
+        texto: 'Dor / sensibilidade AO FINAL da sessão (1 = sem dor, 10 = dor severa):',
+        tipo_campo: 'escala',
+        escalaMax: 10,
+        obrigatoria: false,
+        ordem: 2,
+      },
+      {
+        id: 'av-lip-regioes',
+        texto: 'Regiões trabalhadas:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Coxas',
+          'Joelhos',
+          'Panturrilhas',
+          'Tornozelos',
+          'Quadril / culote',
+          'Braços',
+        ],
+        obrigatoria: false,
+        ordem: 3,
+      },
+      {
+        id: 'av-lip-tecnicas',
+        texto: 'Técnicas aplicadas:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Drenagem linfática manual adaptada',
+          'Liberação tecidual / manejo de fibrose',
+          'Pressoterapia',
+          'Bandagem ou terapia compressiva',
+          'Vacuoterapia / endermologia',
+          'Outra',
+        ],
+        obrigatoria: false,
+        ordem: 4,
+      },
+      {
+        id: 'av-lip-fibrose',
+        texto: 'Fibrose e nodulações palpadas (1 = tecido livre, 10 = fibrose densa):',
+        tipo_campo: 'escala',
+        escalaMax: 10,
+        obrigatoria: false,
+        ordem: 5,
+      },
+      {
+        id: 'av-lip-perimetria',
+        texto: 'Perimetria do dia (cm):',
+        tipo_campo: 'texto_longo',
+        ajuda: 'Sempre nos mesmos pontos — ex.: coxa D 68 / E 67; panturrilha D 42 / E 41.',
+        obrigatoria: false,
+        ordem: 6,
+      },
+      {
+        id: 'av-lip-hematomas',
+        texto: 'Novos hematomas espontâneos desde a última sessão?',
+        tipo_campo: 'sim_nao',
+        obrigatoria: false,
+        ordem: 7,
+      },
+      {
+        id: 'av-lip-compressao',
+        texto: 'Vem mantendo a terapia compressiva conforme orientado?',
+        tipo_campo: 'sim_nao',
+        obrigatoria: false,
+        ordem: 8,
+      },
+      {
+        id: 'av-lip-conduta',
+        texto: 'Evolução observada e conduta para a próxima sessão:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 9,
+      },
+    ],
+  },
+  {
+    id: 'aval-ozonioterapia',
+    nome: 'Avaliação — Ozonioterapia',
+    procedureIds: ['proc-ozonioterapia'],
+    /**
+     * Sem foto da sessão: não há o que fotografar numa insuflação. O bloco de anotação em imagem
+     * só ocuparia espaço na tela de quem preenche.
+     */
+    temFotoSessao: false,
+    descricao:
+      'Via, concentração, volume e desfecho — o registro que a aplicação de ozônio exige.',
+    perguntas: [
+      {
+        id: 'av-ozo-via',
+        texto: 'Via de aplicação utilizada:',
+        tipo_campo: 'unica_escolha',
+        opcoes: [
+          'Insuflação retal',
+          'Insuflação auricular',
+          'Infiltração subcutânea / local',
+          'Bagging (bolsa de ozônio em membro)',
+          'Óleo ozonizado tópico',
+          'Outra',
+        ],
+        obrigatoria: false,
+        ordem: 1,
+      },
+      {
+        id: 'av-ozo-concentracao',
+        texto: 'Concentração de ozônio (µg/mL):',
+        tipo_campo: 'texto_curto',
+        obrigatoria: false,
+        ordem: 2,
+      },
+      {
+        id: 'av-ozo-dose',
+        texto: 'Volume aplicado ou tempo de exposição:',
+        tipo_campo: 'texto_curto',
+        ajuda: 'Ex.: 150 mL na insuflação retal; 15 min de bagging.',
+        obrigatoria: false,
+        ordem: 3,
+      },
+      {
+        id: 'av-ozo-local',
+        texto: 'Local / pontos de aplicação, quando local:',
+        tipo_campo: 'texto_curto',
+        obrigatoria: false,
+        ordem: 4,
+      },
+      {
+        id: 'av-ozo-sessao',
+        texto: 'Número da sessão dentro do ciclo:',
+        tipo_campo: 'texto_curto',
+        ajuda: 'Ex.: 3 de 10.',
+        obrigatoria: false,
+        ordem: 5,
+      },
+      {
+        id: 'av-ozo-tolerancia',
+        texto: 'Tolerância durante a aplicação:',
+        tipo_campo: 'unica_escolha',
+        opcoes: [
+          'Boa, sem queixas',
+          'Desconforto leve',
+          'Desconforto importante',
+          'Interrompida antes do fim',
+        ],
+        obrigatoria: false,
+        ordem: 6,
+      },
+      {
+        id: 'av-ozo-reacoes',
+        texto: 'Reações observadas:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Nenhuma',
+          'Cólica ou desconforto abdominal',
+          'Dor no ponto de aplicação',
+          'Tontura',
+          'Enfisema subcutâneo local',
+          'Outra',
+        ],
+        obrigatoria: false,
+        ordem: 7,
+      },
+      {
+        id: 'av-ozo-desfecho',
+        texto: 'Desfecho clínico observado e conduta para a próxima sessão:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 8,
+      },
+    ],
+  },
+  {
+    id: 'aval-soroterapia',
+    /**
+     * Duas vias na mesma ficha, e não duas fichas.
+     *
+     * O catálogo da clínica renomeou `proc-soroterapia` para "Intradermoterapia de Alta
+     * Performance" — o id ficou, o procedimento virou outro. Uma ficha só de infusão endovenosa
+     * apareceria ali perguntando gotejamento e acesso venoso numa aplicação intradérmica. Como o
+     * que muda entre as duas é a via, e o resto (fórmula, tolerância, reações, conduta) é o
+     * mesmo, a via vira a primeira pergunta e a ficha serve as duas.
+     */
+    nome: 'Avaliação — Soroterapia / Intradermoterapia',
+    procedureIds: ['proc-soroterapia'],
+    /** Sem foto da sessão: uma infusão não tem imagem a registrar. */
+    temFotoSessao: false,
+    descricao:
+      'Via, fórmula aplicada, tolerância e conduta. Preenchida a cada aplicação.',
+    perguntas: [
+      {
+        id: 'av-soro-via',
+        texto: 'Via de administração:',
+        tipo_campo: 'unica_escolha',
+        opcoes: [
+          'Endovenosa (soroterapia)',
+          'Intradérmica (intradermoterapia)',
+          'Subcutânea',
+          'Intramuscular',
+        ],
+        obrigatoria: false,
+        ordem: 1,
+      },
+      {
+        id: 'av-soro-formula',
+        texto: 'Fórmula aplicada (ativos e doses):',
+        tipo_campo: 'texto_longo',
+        ajuda:
+          'Ex.: vitamina C 10 g, complexo B 2 mL, glutationa 600 mg. É o que permite repetir ou ' +
+          'ajustar a fórmula na próxima aplicação.',
+        obrigatoria: false,
+        ordem: 2,
+      },
+      {
+        id: 'av-soro-acesso',
+        texto: 'Área tratada ou acesso utilizado:',
+        tipo_campo: 'texto_curto',
+        ajuda:
+          'Intradérmica: região e número de pontos. Endovenosa: local da punção e dispositivo — ' +
+          'ex.: MSD, veia cefálica, cateter 22G.',
+        obrigatoria: false,
+        ordem: 3,
+      },
+      {
+        id: 'av-soro-diluente',
+        texto: 'Diluente e volume total:',
+        tipo_campo: 'texto_curto',
+        ajuda: 'Ex.: 250 mL de soro fisiológico 0,9%; ou 5 mL distribuídos em 40 pontos.',
+        obrigatoria: false,
+        ordem: 4,
+      },
+      {
+        id: 'av-soro-tempo',
+        texto: 'Tempo de aplicação ou infusão:',
+        tipo_campo: 'texto_curto',
+        obrigatoria: false,
+        ordem: 5,
+      },
+      {
+        id: 'av-soro-reacoes',
+        texto: 'Reações durante a aplicação:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Nenhuma',
+          'Ardência no trajeto venoso',
+          'Gosto metálico na boca',
+          'Calor ou rubor facial',
+          'Náusea',
+          'Hipotensão / tontura',
+          'Extravasamento (infiltração)',
+          'Pápulas, edema ou equimose nos pontos',
+          'Outra',
+        ],
+        obrigatoria: false,
+        ordem: 6,
+      },
+      {
+        id: 'av-soro-conduta-reacao',
+        texto: 'Se houve reação, qual foi a conduta:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 7,
+      },
+      {
+        id: 'av-soro-estado-final',
+        texto: 'Estado ao término da aplicação:',
+        tipo_campo: 'unica_escolha',
+        opcoes: [
+          'Bem, liberada sem intercorrências',
+          'Liberada após período de observação',
+          'Necessitou de conduta adicional',
+        ],
+        obrigatoria: false,
+        ordem: 8,
+      },
+      {
+        id: 'av-soro-conduta',
+        texto: 'Próxima aplicação e ajustes na fórmula:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 9,
+      },
+    ],
+  },
+  {
+    id: 'aval-rejuvenescimento-intimo',
+    nome: 'Avaliação — Rejuvenescimento Íntimo a Laser',
+    /**
+     * Por procedimento, e não pela categoria "Estética Íntima": estas perguntas são de aplicação
+     * a laser. Um clareamento ou um preenchimento íntimo que entre no catálogo amanhã cairia
+     * nesta ficha e apareceria perguntando ponteira e densidade de disparo.
+     */
+    procedureIds: ['proc-rejuvenescimento-intimo-laser'],
+    /**
+     * Sem foto da sessão, **de propósito**. Tecnicamente seria o registro de evolução mais útil da
+     * lista; na prática é imagem íntima identificável dentro de um app que a equipe abre em pé, no
+     * atendimento. Se a clínica quiser, o campo liga num clique na ficha-modelo — mas essa é uma
+     * decisão de consentimento e guarda, não um padrão que o sistema deva assumir sozinho.
+     */
+    temFotoSessao: false,
+    descricao:
+      'Regiões, parâmetros do laser, resposta imediata e orientações do pós.',
+    perguntas: [
+      {
+        id: 'av-int-regioes',
+        texto: 'Regiões tratadas:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Grandes lábios',
+          'Pequenos lábios',
+          'Introito vaginal',
+          'Canal vaginal',
+          'Períneo',
+          'Monte de vênus',
+          'Região perianal',
+        ],
+        obrigatoria: false,
+        ordem: 1,
+      },
+      {
+        id: 'av-int-aplicador',
+        texto: 'Aplicador utilizado:',
+        tipo_campo: 'unica_escolha',
+        opcoes: ['Externo (vulvar)', 'Intravaginal', 'Externo + intravaginal'],
+        obrigatoria: false,
+        ordem: 2,
+      },
+      {
+        id: 'av-int-parametros',
+        texto: 'Parâmetros aplicados:',
+        tipo_campo: 'texto_longo',
+        ajuda:
+          'Energia (mJ/ponto), densidade, duração de pulso e número de passadas por região.',
+        obrigatoria: false,
+        ordem: 3,
+      },
+      {
+        id: 'av-int-anestesia',
+        texto: 'Anestesia utilizada:',
+        tipo_campo: 'unica_escolha',
+        opcoes: [
+          'Nenhuma',
+          'Anestésico tópico',
+          'Anestésico tópico + bloqueio local',
+          'Outra',
+        ],
+        obrigatoria: false,
+        ordem: 4,
+      },
+      {
+        id: 'av-int-dor',
+        texto: 'Dor relatada durante a aplicação (1 = sem dor, 10 = dor máxima):',
+        tipo_campo: 'escala',
+        escalaMax: 10,
+        obrigatoria: false,
+        ordem: 5,
+      },
+      {
+        id: 'av-int-resposta-imediata',
+        texto: 'Resposta imediata observada:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Sem alteração relevante',
+          'Eritema leve',
+          'Edema discreto',
+          'Retração tecidual visível',
+          'Sangramento puntiforme',
+        ],
+        obrigatoria: false,
+        ordem: 6,
+      },
+      {
+        id: 'av-int-orientacoes',
+        texto: 'Orientações do pós reforçadas:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Abstinência sexual de 5 a 7 dias',
+          'Higiene íntima conforme orientado',
+          'Evitar piscina, mar e banheira',
+          'Uso do hidratante / cicatrizante indicado',
+          'Retorno imediato se dor intensa, odor ou febre',
+        ],
+        obrigatoria: false,
+        ordem: 7,
+      },
+      {
+        id: 'av-int-conduta',
+        texto: 'Evolução desde a sessão anterior e conduta para a próxima:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 8,
+      },
+    ],
+  },
+  {
+    id: 'aval-capilar',
+    nome: 'Avaliação — Capilar (PRP e Nutrição)',
+    procedureIds: ['proc-capilar-prp-nutricao'],
+    temFotoSessao: true,
+    descricao:
+      'Regiões aplicadas, preparo e volume, teste de tração e evolução dos fios.',
+    perguntas: [
+      {
+        id: 'av-cap-regioes',
+        texto: 'Regiões aplicadas:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Linha frontal',
+          'Entradas / recessos temporais',
+          'Topo (região média)',
+          'Vértice',
+          'Coroa',
+          'Occipital',
+          'Falha localizada',
+        ],
+        obrigatoria: false,
+        ordem: 1,
+      },
+      {
+        id: 'av-cap-tecnica',
+        texto: 'Técnica da sessão:',
+        tipo_campo: 'unica_escolha',
+        opcoes: [
+          'PRP autólogo',
+          'Nutrição capilar (drug delivery)',
+          'PRP + nutrição capilar',
+          'Microagulhamento associado',
+          'Outra',
+        ],
+        obrigatoria: false,
+        ordem: 2,
+      },
+      {
+        id: 'av-cap-preparo',
+        texto: 'Preparo do PRP:',
+        tipo_campo: 'texto_curto',
+        ajuda: 'Ex.: 20 mL de sangue, centrifugação 3.000 rpm por 10 min, 4 mL de plasma obtidos.',
+        obrigatoria: false,
+        ordem: 3,
+      },
+      {
+        id: 'av-cap-volume',
+        texto: 'Volume total aplicado e número de pontos:',
+        tipo_campo: 'texto_curto',
+        obrigatoria: false,
+        ordem: 4,
+      },
+      {
+        id: 'av-cap-ativos',
+        texto: 'Ativos infundidos, quando houver:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 5,
+      },
+      {
+        id: 'av-cap-tracao',
+        texto: 'Teste de tração (pull test):',
+        tipo_campo: 'unica_escolha',
+        opcoes: ['Negativo', 'Levemente positivo', 'Positivo', 'Não realizado'],
+        obrigatoria: false,
+        ordem: 6,
+      },
+      {
+        id: 'av-cap-evolucao',
+        texto: 'Evolução desde a sessão anterior:',
+        tipo_campo: 'multipla_escolha',
+        opcoes: [
+          'Redução da queda',
+          'Surgimento de fios novos',
+          'Aumento da densidade',
+          'Melhora do aspecto do couro cabeludo',
+          'Sem mudança perceptível',
+          'Piora',
+        ],
+        obrigatoria: false,
+        ordem: 7,
+      },
+      {
+        id: 'av-cap-sessao',
+        texto: 'Número da sessão dentro do protocolo:',
+        tipo_campo: 'texto_curto',
+        ajuda: 'Ex.: 3 de 6.',
+        obrigatoria: false,
+        ordem: 8,
+      },
+      {
+        id: 'av-cap-conduta',
+        texto: 'Conduta e intervalo até a próxima sessão:',
+        tipo_campo: 'texto_longo',
+        obrigatoria: false,
+        ordem: 9,
+      },
+    ],
+  },
+];
+
+/**
  * Fichas de avaliação padrão — o que a profissional responde **depois** do atendimento.
  *
  * Nasceram de dentro de `DEFAULT_PROCEDURE_TEMPLATES`, onde eram perguntas `publicoAlvo: 'medico'`
@@ -1250,4 +2094,7 @@ export const DEFAULT_EVALUATION_TEMPLATES: EvaluationTemplate[] = [
     descricao:
       'Queixa, estratégia proposta e evolução do contorno. Preenchida a cada sessão.',
   },
+  // Os demais procedimentos do catálogo. Vêm de uma lista à parte porque clínica que já está
+  // rodando nunca passa por este seed — quem as instala lá é a migração.
+  ...FICHAS_AVALIACAO_DEMAIS_PROCEDIMENTOS,
 ];

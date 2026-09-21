@@ -43,7 +43,12 @@ import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
 import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
 import { subirImagem, subirImagemOuManter } from './imageStorage';
 import { isLaserCategory } from '../utils/templateMatching';
-import { MIGRACAO_AVALIACAO, planejarMigracao } from '../utils/evaluations';
+import {
+  MIGRACAO_AVALIACAO,
+  MIGRACAO_FICHAS_PADRAO,
+  planejarInstalacaoDeFichasPadrao,
+  planejarMigracao,
+} from '../utils/evaluations';
 import { paraArray } from '../utils/firestoreShapes';
 import {
   montarEspelhoPublico,
@@ -58,6 +63,7 @@ import {
   SAMPLE_ANAMNESIS_RECORDS,
   LASER_HEALTH_QUESTIONS,
   DEFAULT_EVALUATION_TEMPLATES,
+  FICHAS_AVALIACAO_DEMAIS_PROCEDIMENTOS,
 } from '../data/anamnesisInitialData';
 
 const PROCEDURES_COLLECTION = 'procedures';
@@ -1016,6 +1022,13 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       });
       await batch.commit();
     }
+
+    // 2c. As fichas de avaliação dos demais procedimentos do catálogo.
+    //
+    // Depois da migração, e não no lugar dela: a instalação pula o que já está coberto, e o que a
+    // migração acabou de criar (laser e glúteo, com id `aval-tpl-…`) precisa estar lá para ser
+    // visto como cobertura. Antes, as duas fichas padrão de mesmo alvo entrariam junto.
+    await instalarFichasDeAvaliacaoPadrao();
 
     // 3. Seed Patients if empty
     const pacientesVazios = await colecaoVaziaNoServidor(PATIENTS_COLLECTION);
@@ -2253,6 +2266,106 @@ async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
       );
     } else {
       console.warn('Migração das fichas de avaliação falhou; tentará de novo:', e);
+    }
+  }
+}
+
+/** Atalho local da instalação das fichas padrão, pelo mesmo motivo do atalho da migração. */
+const FICHAS_PADRAO_LOCAL_KEY = 'lavie:fichas-avaliacao-padrao:v1';
+
+/**
+ * Instala as fichas de avaliação dos demais procedimentos do catálogo — microfocado facial e
+ * corporal, drenagem, lipedema, ozonioterapia, soroterapia, íntimo e capilar.
+ *
+ * Existe porque `DEFAULT_EVALUATION_TEMPLATES` só é gravado em clínica **nova**, quando as duas
+ * coleções nascem juntas. A clínica que já está rodando chega aqui com as fichas que a migração
+ * das perguntas da profissional produziu — laser e glúteo — e mais nada: todo o resto do catálogo
+ * abriria a avaliação mostrando só o campo de observações.
+ *
+ * O que ela grava é sempre **acréscimo**: `planejarInstalacaoDeFichasPadrao` deixa de fora o id
+ * que já existe e o alvo que já tem ficha, então nada que a equipe editou na tela é sobrescrito.
+ * Mesmo assim o `set` vai sem `merge`, porque o que passa pelo filtro é, por definição, documento
+ * que ainda não existe.
+ */
+async function instalarFichasDeAvaliacaoPadrao(): Promise<void> {
+  try {
+    if (localStorage.getItem(FICHAS_PADRAO_LOCAL_KEY)) return;
+  } catch {
+    // localStorage indisponível — segue pela leitura no servidor.
+  }
+
+  const jaAplicadas = await migracoesAplicadasNaClinica();
+  if (jaAplicadas === null) return; // leitura falhou; tenta de novo no próximo boot
+  if (jaAplicadas.includes(MIGRACAO_FICHAS_PADRAO)) {
+    try {
+      localStorage.setItem(FICHAS_PADRAO_LOCAL_KEY, '1');
+    } catch {
+      // sem atalho local; a leitura acima continua resolvendo
+    }
+    return;
+  }
+
+  try {
+    const [avalSnap, procSnap] = await Promise.all([
+      getDocsFromServer(collection(db, EVALUATION_TEMPLATES_COLLECTION)),
+      getDocsFromServer(collection(db, PROCEDURES_COLLECTION)),
+    ]);
+
+    const catalogo: Procedure[] = [];
+    procSnap.forEach((d) => catalogo.push({ ...(d.data() as Procedure), id: d.id }));
+
+    // Catálogo vazio não é "clínica sem procedimentos": é leitura que não trouxe o que devia, e
+    // toda ficha padrão seria descartada por não ter alvo — de forma definitiva, porque a marca
+    // ficaria gravada. Sai sem marcar nada e tenta de novo na próxima abertura.
+    if (catalogo.length === 0) return;
+
+    const existentes: EvaluationTemplate[] = [];
+    avalSnap.forEach((d) => existentes.push({ ...(d.data() as EvaluationTemplate), id: d.id }));
+
+    const aInstalar = planejarInstalacaoDeFichasPadrao(
+      FICHAS_AVALIACAO_DEMAIS_PROCEDIMENTOS,
+      existentes,
+      catalogo
+    );
+
+    const batch = writeBatch(db);
+    aInstalar.forEach((ficha) => {
+      batch.set(
+        doc(db, EVALUATION_TEMPLATES_COLLECTION, ficha.id),
+        cleanForFirestore({ ...ficha, updatedAt: new Date().toISOString() })
+      );
+    });
+
+    batch.set(
+      doc(db, CLINIC_SETTINGS_COLLECTION, MIGRATIONS_DOC_ID),
+      {
+        aplicadas: Array.from(new Set([...jaAplicadas, MIGRACAO_FICHAS_PADRAO])),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    await batch.commit();
+    if (aInstalar.length > 0) {
+      console.log(
+        `Fichas de avaliação instaladas: ${aInstalar.map((f) => f.nome).join(', ')}.`
+      );
+    }
+
+    try {
+      localStorage.setItem(FICHAS_PADRAO_LOCAL_KEY, '1');
+    } catch {
+      // sem atalho local; a leitura do marcador continua resolvendo
+    }
+  } catch (e) {
+    if ((e as { code?: string })?.code === 'permission-denied') {
+      console.error(
+        'INSTALAÇÃO DAS FICHAS DE AVALIAÇÃO BLOQUEADA: o banco recusou a escrita em ' +
+          '"evaluation_templates". Rode `firebase deploy --only firestore:rules,storage` e ' +
+          'recarregue a página. Nada foi alterado; roda sozinha na próxima abertura.'
+      );
+    } else {
+      console.warn('Instalação das fichas de avaliação padrão falhou; tentará de novo:', e);
     }
   }
 }
