@@ -1,4 +1,10 @@
-import { AnamnesisQuestion, AnamnesisTemplate, Patient, AnamnesisRecord } from '../types';
+import {
+  AnamnesisQuestion,
+  AnamnesisTemplate,
+  Patient,
+  AnamnesisRecord,
+  EvaluationTemplate,
+} from '../types';
 
 /**
  * Perguntas Gerais padrão — herança obrigatória em toda ficha de anamnese
@@ -304,13 +310,15 @@ export const LASER_PROFESSIONAL_QUESTIONS: AnamnesisQuestion[] = [
 ];
 
 /**
- * As 27 perguntas da ficha de Depilação a Laser, na ordem em que saem na tela: primeiro o que a
- * paciente responde (1–21), depois a avaliação da profissional (22–27).
+ * As 21 perguntas que a **paciente** responde na ficha de Depilação a Laser.
+ *
+ * As seis da profissional (22–27) saíram daqui quando a avaliação virou documento por sessão —
+ * continuam exportadas acima, agora consumidas por `DEFAULT_EVALUATION_TEMPLATES` e pela migração
+ * que as move nas clínicas que já estavam rodando.
  */
 export const ALL_LASER_PROCEDURE_QUESTIONS: AnamnesisQuestion[] = [
   ...LASER_HEALTH_QUESTIONS,
   ...LASER_TECHNICAL_QUESTIONS,
-  ...LASER_PROFESSIONAL_QUESTIONS,
 ];
 
 /**
@@ -684,7 +692,8 @@ export const DEFAULT_PROCEDURE_TEMPLATES: AnamnesisTemplate[] = [
         obrigatoria: false,
         ordem: 5,
       },
-      ...PERGUNTAS_PROFISSIONAL_GLUTEO.map((q, i) => ({ ...q, ordem: 6 + i })),
+      // As perguntas da profissional saíram daqui para `DEFAULT_EVALUATION_TEMPLATES`: elas são
+      // uma por sessão, e a anamnese é uma por caso. Ver `PERGUNTAS_PROFISSIONAL_GLUTEO`.
     ],
   },
   {
@@ -1196,5 +1205,49 @@ export const SAMPLE_ANAMNESIS_RECORDS: AnamnesisRecord[] = [
     },
     observacoesFinais: 'Protocolo de descompressão linfática suave associado a pressoterapia. Orientada hidratação e continuidade no uso de meia elástica.',
     createdAt: '2026-08-28T16:10:00Z',
+  },
+];
+
+/**
+ * Fichas de avaliação padrão — o que a profissional responde **depois** do atendimento.
+ *
+ * Nasceram de dentro de `DEFAULT_PROCEDURE_TEMPLATES`, onde eram perguntas `publicoAlvo: 'medico'`
+ * da anamnese. Saíram de lá porque a cardinalidade não fechava: a anamnese é uma por caso e a
+ * avaliação é uma por sessão. Numa paciente com plano de 10 sessões de laser, a avaliação presa à
+ * anamnese obrigaria a criar dez históricos de saúde idênticos ou a sobrescrever a avaliação da
+ * sessão anterior.
+ *
+ * As mesmas perguntas alimentam a migração em `databaseService`, que faz esta mudança nas clínicas
+ * que já estavam rodando antes de a separação existir — daí os blocos continuarem exportados à
+ * parte em vez de escritos aqui dentro.
+ */
+export const DEFAULT_EVALUATION_TEMPLATES: EvaluationTemplate[] = [
+  {
+    id: 'aval-epilacao-laser',
+    nome: 'Avaliação — Depilação a Laser',
+    /**
+     * Por **categoria**, e não pelos treze procedimentos um a um: fototipo, cor e espessura do
+     * pelo não mudam de buço para axila, e é a mesma razão pela qual a anamnese do laser é uma só
+     * para as treze áreas. Área nova no catálogo herda esta ficha sem ninguém precisar lembrar.
+     */
+    categorias: ['Depilação a Laser'],
+    perguntas: LASER_PROFESSIONAL_QUESTIONS.map((q, i) => ({ ...q, ordem: i + 1 })),
+    temFotoSessao: true,
+    descricao:
+      'Avaliação de pele e pelo que define os parâmetros do disparo. Preenchida a cada sessão.',
+  },
+  {
+    id: 'aval-harmonizacao-glutea',
+    nome: 'Avaliação — Harmonização Glútea',
+    /**
+     * Por procedimento, e não por categoria: a ficha da anamnese está em "Corporal & Injetáveis",
+     * mas o procedimento no catálogo é "Corporal & Bem-Estar" — ligar pela categoria arrastaria
+     * junto drenagem, massagem e tudo o mais que mora lá.
+     */
+    procedureIds: ['proc-harmonizacao-glutea'],
+    perguntas: PERGUNTAS_PROFISSIONAL_GLUTEO.map((q, i) => ({ ...q, ordem: i + 1 })),
+    temFotoSessao: true,
+    descricao:
+      'Queixa, estratégia proposta e evolução do contorno. Preenchida a cada sessão.',
   },
 ];

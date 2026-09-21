@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   AnamnesisTemplate,
   AnamnesisQuestion,
-  QuestionAudience,
   QuestionFieldType,
   Procedure,
   ClinicProfile,
@@ -163,7 +162,6 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
   const [qAjuda, setQAjuda] = useState('');
   const [qOpcoesInput, setQOpcoesInput] = useState('');
   const [qEscalaMax, setQEscalaMax] = useState<number>(10);
-  const [qPublicoAlvo, setQPublicoAlvo] = useState<QuestionAudience>('paciente');
   const [qError, setQError] = useState('');
 
   // Draft template in editor
@@ -280,7 +278,6 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
     setQAjuda('');
     setQOpcoesInput('');
     setQEscalaMax(10);
-    setQPublicoAlvo('paciente');
     setQError('');
     setQuestionModalOpen(true);
   };
@@ -295,7 +292,6 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
     setQAjuda(q.ajuda || '');
     setQOpcoesInput(q.opcoes ? q.opcoes.join('\n') : '');
     setQEscalaMax(q.escalaMax || 10);
-    setQPublicoAlvo(q.publicoAlvo || 'paciente');
     setQError('');
     setQuestionModalOpen(true);
   };
@@ -336,7 +332,6 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
       ajuda: qAjuda.trim() || undefined,
       opcoes: parsedOpcoes,
       escalaMax: qTipo === 'escala' ? qEscalaMax : undefined,
-      publicoAlvo: qPublicoAlvo,
     };
 
     const newQuestions = [...draftTemplate.perguntasEspecificas];
@@ -1098,15 +1093,6 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                         {gidx + 1}. {gq.texto}
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <span
-                          className={`text-[9px] font-bold px-1 rounded-xs border ${
-                            (gq.publicoAlvo || 'paciente') === 'medico'
-                              ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
-                              : 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                          }`}
-                        >
-                          {(gq.publicoAlvo || 'paciente') === 'medico' ? 'Médico' : 'Paciente'}
-                        </span>
                         <span className="text-[10px] text-[#A67C52] font-mono">
                           {fieldTypeLabels[gq.tipo_campo]} {gq.obrigatoria ? '(*)' : ''}
                         </span>
@@ -1167,15 +1153,6 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                               <span className="text-xs font-semibold text-[#1A1A1A] leading-snug">
                                 {q.texto}
                               </span>
-                              {(q.publicoAlvo || 'paciente') === 'medico' ? (
-                                <span className="text-[9px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 rounded-xs font-bold">
-                                  Médico
-                                </span>
-                              ) : (
-                                <span className="text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 rounded-xs font-bold">
-                                  Paciente
-                                </span>
-                              )}
                               {q.obrigatoria && (
                                 <span className="text-[9px] text-red-600 bg-red-50 border border-red-200 px-1 rounded-xs font-bold">
                                   Obrigatória
@@ -1402,32 +1379,6 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   placeholder="Ex: Especifique se houver contraindicação relativa"
                   className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-800 mb-1">
-                  Quem Responde Esta Pergunta?
-                </label>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setQPublicoAlvo('paciente')}
-                    className={`flex-1 px-4 py-2 rounded-sm text-xs font-semibold border transition-colors ${
-                      qPublicoAlvo === 'paciente' ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-700 border-gray-200'
-                    }`}
-                  >
-                    Paciente (no link de preenchimento)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQPublicoAlvo('medico')}
-                    className={`flex-1 px-4 py-2 rounded-sm text-xs font-semibold border transition-colors ${
-                      qPublicoAlvo === 'medico' ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-700 border-gray-200'
-                    }`}
-                  >
-                    Médico (complemento na plataforma)
-                  </button>
-                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200">

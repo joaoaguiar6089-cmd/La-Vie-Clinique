@@ -34,6 +34,8 @@ import {
   QuoteStoredStatus,
   LaserBodyMap,
   ConsentTermSection,
+  EvaluationTemplate,
+  EvaluationRecord,
 } from '../types';
 import { formatQuoteNumber } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
@@ -41,6 +43,7 @@ import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
 import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
 import { subirImagem, subirImagemOuManter } from './imageStorage';
 import { isLaserCategory } from '../utils/templateMatching';
+import { MIGRACAO_AVALIACAO, planejarMigracao } from '../utils/evaluations';
 import { paraArray } from '../utils/firestoreShapes';
 import {
   montarEspelhoPublico,
@@ -54,7 +57,7 @@ import {
   SAMPLE_PATIENTS,
   SAMPLE_ANAMNESIS_RECORDS,
   LASER_HEALTH_QUESTIONS,
-  PERGUNTAS_PROFISSIONAL_GLUTEO,
+  DEFAULT_EVALUATION_TEMPLATES,
 } from '../data/anamnesisInitialData';
 
 const PROCEDURES_COLLECTION = 'procedures';
@@ -76,6 +79,20 @@ const COUNTERS_COLLECTION = 'counters';
 
 const ATTENDANCES_COLLECTION = 'attendances';
 const SESSION_PLANS_COLLECTION = 'session_plans';
+
+// Fichas de avaliação — o que a profissional responde DEPOIS do atendimento. Ao contrário de
+// `patients` e `anamnesis_records`, estas três exigem login nas regras: a paciente preenche a
+// própria anamnese sem conta, mas nunca enxerga avaliação nenhuma.
+const EVALUATION_TEMPLATES_COLLECTION = 'evaluation_templates';
+const EVALUATION_GENERAL_QUESTIONS_COLLECTION = 'evaluation_general_questions';
+// Um documento por atendimento, com o id DO atendimento — ver `EvaluationRecord`.
+const EVALUATION_RECORDS_COLLECTION = 'evaluation_records';
+
+// Marcador das migrações que valem para a clínica inteira (e não para uma ficha só, como
+// `AnamnesisTemplate.migracoesAplicadas`). Mora no banco, e não no localStorage, porque a
+// pergunta que ele responde é sobre a clínica: uma marca local faria a migração rodar de novo em
+// cada aparelho novo e ressuscitar o que a equipe tivesse apagado de propósito.
+const MIGRATIONS_DOC_ID = 'migrations';
 
 /**
  * Deeply removes undefined values so Firestore never throws 'Unsupported field value: undefined'
@@ -970,10 +987,32 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       marcarLaserSyncComoFeito();
     }
 
-    // A ficha de Harmonização Glútea das clínicas que já usavam o sistema antes do bloco de
-    // avaliação da profissional existir. Controle no próprio documento, roda uma vez só.
+    // 2b. Fichas de avaliação — o que a profissional responde depois do atendimento.
+    const avaliacoesVazias = await colecaoVaziaNoServidor(EVALUATION_TEMPLATES_COLLECTION);
+    if (avaliacoesVazias === null) return;
+    if (avaliacoesVazias && templatesVazios) {
+      // Clínica nova: as duas coleções nascem juntas, já separadas.
+      console.log('Seeding initial evaluation templates...');
+      const batch = writeBatch(db);
+      DEFAULT_EVALUATION_TEMPLATES.forEach((f) => {
+        batch.set(
+          doc(db, EVALUATION_TEMPLATES_COLLECTION, f.id),
+          cleanForFirestore({ ...f, updatedAt: new Date().toISOString() })
+        );
+      });
+      await batch.commit();
+    }
+
+    // Clínica que já rodava antes da separação: tira as perguntas da profissional de dentro das
+    // fichas de anamnese e as instala como fichas de avaliação. Roda uma vez só por clínica.
+    //
+    // Tomou o lugar de `migrarPerguntasProfissionalGluteo`, que fazia o caminho inverso —
+    // acrescentava à anamnese exatamente o bloco que esta tira de lá. As duas juntas se
+    // desfariam em loop a cada boot, então aquela foi removida. Fichas onde ela já rodou seguem
+    // com `gluteo-perguntas-profissional-v1` em `migracoesAplicadas`; o marcador não faz mal e
+    // registra que aquelas perguntas um dia estiveram ali.
     if (!templatesVazios) {
-      await migrarPerguntasProfissionalGluteo();
+      await migrarPerguntasProfissionalParaAvaliacao();
     }
 
     // 3. Seed Patients if empty
@@ -1010,75 +1049,6 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
   }
 }
 
-const GLUTEO_TEMPLATE_ID = 'tpl-harmonizacao-glutea';
-const GLUTEO_MIGRACAO = 'gluteo-perguntas-profissional-v1';
-/** Atalho local: evita a leitura de confirmação em toda abertura, depois da primeira. */
-const GLUTEO_MIGRACAO_LOCAL_KEY = 'lavie:gluteo-perguntas-profissional:v1';
-
-/**
- * Acrescenta à ficha de Harmonização Glútea o bloco de avaliação clínica respondido pela
- * profissional (queixa, estratégia, evolução e as cinco notas de 1 a 10).
- *
- * Roda uma única vez por clínica: o controle é o `migracoesAplicadas` gravado na própria ficha,
- * então apagar uma dessas perguntas na tela é definitivo — ela não volta na próxima abertura,
- * nem em outro aparelho. Só acrescenta o que falta, comparando por id, e nunca toca no que a
- * equipe já tiver editado.
- */
-async function migrarPerguntasProfissionalGluteo(): Promise<void> {
-  try {
-    if (localStorage.getItem(GLUTEO_MIGRACAO_LOCAL_KEY)) return;
-  } catch {
-    // localStorage indisponível — segue pela leitura no servidor.
-  }
-
-  try {
-    const ref = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, GLUTEO_TEMPLATE_ID);
-    // Do servidor: um cache frio devolveria a ficha sem as perguntas que a equipe acrescentou
-    // na tela, e a gravação abaixo as apagaria.
-    const snap = await getDocFromServer(ref);
-    if (!snap.exists()) return;
-
-    const ficha = snap.data() as AnamnesisTemplate;
-    if ((ficha.migracoesAplicadas || []).includes(GLUTEO_MIGRACAO)) {
-      try {
-        localStorage.setItem(GLUTEO_MIGRACAO_LOCAL_KEY, '1');
-      } catch {
-        // sem atalho local; a leitura acima continua resolvendo
-      }
-      return;
-    }
-
-    const atuais = ficha.perguntasEspecificas || [];
-    const faltando = PERGUNTAS_PROFISSIONAL_GLUTEO.filter(
-      (nova) => !atuais.some((q) => q.id === nova.id)
-    );
-
-    const perguntas = [...atuais, ...faltando].map((q, idx) => ({ ...q, ordem: idx + 1 }));
-
-    await updateDoc(ref, {
-      ...cleanForFirestore({
-        perguntasEspecificas: perguntas,
-        migracoesAplicadas: [...(ficha.migracoesAplicadas || []), GLUTEO_MIGRACAO],
-      }),
-      updatedAt: new Date().toISOString(),
-    });
-
-    try {
-      localStorage.setItem(GLUTEO_MIGRACAO_LOCAL_KEY, '1');
-    } catch {
-      // idem
-    }
-
-    if (faltando.length > 0) {
-      console.log(
-        `Ficha de Harmonização Glútea: ${faltando.length} perguntas da profissional adicionadas.`
-      );
-    }
-  } catch (err) {
-    // Sem rede, sem cota ou sem permissão: a migração fica para a próxima abertura.
-    console.warn('Migração das perguntas da profissional (Harmonização Glútea) adiada:', err);
-  }
-}
 
 /**
  * ID da ficha única de Depilação a Laser.
@@ -1874,4 +1844,399 @@ export async function deleteSessionPlan(
   });
   batch.delete(doc(db, SESSION_PLANS_COLLECTION, planId));
   await batch.commit();
+}
+
+// ==========================================
+// FICHAS DE AVALIAÇÃO
+// ==========================================
+
+/**
+ * Põe uma ficha de avaliação lida do banco numa forma em que as telas possam confiar.
+ *
+ * Mesmo cuidado de `normalizarTemplateLido`, e pela mesma razão: campo que deveria ser array
+ * volta como mapa de chaves numéricas em backup reimportado e em gravação antiga, e o TypeScript
+ * continua jurando que é array até alguém chamar `.map` e apagar a tela.
+ */
+function normalizarFichaAvaliacaoLida(f: EvaluationTemplate): EvaluationTemplate {
+  const bruto = f as unknown as Record<string, unknown>;
+  return {
+    ...f,
+    nome: f.nome || 'Ficha sem nome',
+    procedureIds: paraArray<string>(bruto.procedureIds),
+    categorias: paraArray<string>(bruto.categorias),
+    perguntas: paraArray<AnamnesisQuestion>(bruto.perguntas),
+    temFotoSessao: !!f.temFotoSessao,
+  };
+}
+
+function subscribeToEvaluationTemplatesDireto(
+  onUpdate: (data: EvaluationTemplate[]) => void,
+  onError?: (err: Error) => void
+) {
+  const colRef = collection(db, EVALUATION_TEMPLATES_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const items: EvaluationTemplate[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push(
+          normalizarFichaAvaliacaoLida({
+            ...(docSnap.data() as EvaluationTemplate),
+            id: docSnap.id,
+          })
+        );
+      });
+      items.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Evaluation templates subscription offline/cota diaria atingida.');
+      } else {
+        console.error('Evaluation templates subscription error:', error);
+      }
+      if (onError) onError(error);
+    }
+  );
+}
+
+export function subscribeToEvaluationTemplates(
+  onUpdate: (data: EvaluationTemplate[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<EvaluationTemplate[]>(
+    'evaluation_templates',
+    subscribeToEvaluationTemplatesDireto,
+    onUpdate,
+    onError
+  );
+}
+
+/**
+ * Grava a ficha-modelo, subindo ao Storage qualquer imagem que tenha chegado como data URL.
+ *
+ * Imagem nunca vai para dentro do documento: o teto é 1 MB e a cota do Firestore é por KB
+ * gravado, então um mapa anatômico em base64 estoura os dois de uma vez. `subirImagemOuManter`
+ * devolve intacta a URL que já é do Storage, o que torna salvar de novo sem mexer nas fotos uma
+ * operação sem upload nenhum.
+ */
+export async function saveEvaluationTemplate(ficha: EvaluationTemplate): Promise<void> {
+  const pasta = `avaliacoes/${ficha.id}`;
+  const [modelo, feminino, masculino] = await Promise.all([
+    subirImagemOuManter(ficha.fotoModeloUrl || '', pasta),
+    subirImagemOuManter(ficha.fotoModeloFemininoUrl || '', pasta),
+    subirImagemOuManter(ficha.fotoModeloMasculinoUrl || '', pasta),
+  ]);
+
+  const docRef = doc(db, EVALUATION_TEMPLATES_COLLECTION, ficha.id);
+  await setDoc(
+    docRef,
+    cleanForFirestore({
+      ...ficha,
+      fotoModeloUrl: modelo || undefined,
+      fotoModeloFemininoUrl: feminino || undefined,
+      fotoModeloMasculinoUrl: masculino || undefined,
+      updatedAt: new Date().toISOString(),
+    }),
+    { merge: true }
+  );
+}
+
+export async function deleteEvaluationTemplate(fichaId: string): Promise<void> {
+  await deleteDoc(doc(db, EVALUATION_TEMPLATES_COLLECTION, fichaId));
+}
+
+// ---- Perguntas gerais de avaliação (valem para todo procedimento) ----
+
+function subscribeToEvaluationGeneralQuestionsDireto(
+  onUpdate: (data: AnamnesisQuestion[]) => void,
+  onError?: (err: Error) => void
+) {
+  const q = query(collection(db, EVALUATION_GENERAL_QUESTIONS_COLLECTION), orderBy('ordem', 'asc'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items: AnamnesisQuestion[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ ...(docSnap.data() as AnamnesisQuestion), id: docSnap.id });
+      });
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Evaluation general questions subscription offline/cota diaria atingida.');
+      } else {
+        console.error('Evaluation general questions subscription error:', error);
+      }
+      if (onError) onError(error);
+    }
+  );
+}
+
+export function subscribeToEvaluationGeneralQuestions(
+  onUpdate: (data: AnamnesisQuestion[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<AnamnesisQuestion[]>(
+    'evaluation_general_questions',
+    subscribeToEvaluationGeneralQuestionsDireto,
+    onUpdate,
+    onError
+  );
+}
+
+export async function saveEvaluationGeneralQuestion(question: AnamnesisQuestion): Promise<void> {
+  const docRef = doc(db, EVALUATION_GENERAL_QUESTIONS_COLLECTION, question.id);
+  await setDoc(docRef, cleanForFirestore(question), { merge: true });
+}
+
+export async function saveAllEvaluationGeneralQuestions(
+  questions: AnamnesisQuestion[]
+): Promise<void> {
+  const batch = writeBatch(db);
+  questions.forEach((q) => {
+    batch.set(doc(db, EVALUATION_GENERAL_QUESTIONS_COLLECTION, q.id), cleanForFirestore(q), {
+      merge: true,
+    });
+  });
+  await batch.commit();
+}
+
+export async function deleteEvaluationGeneralQuestion(questionId: string): Promise<void> {
+  await deleteDoc(doc(db, EVALUATION_GENERAL_QUESTIONS_COLLECTION, questionId));
+}
+
+// ---- Avaliações preenchidas ----
+
+/**
+ * A avaliação de um atendimento, ou `null`.
+ *
+ * Leitura direta por id — o documento **é** o atendimento (ver `EvaluationRecord`), então não há
+ * query nem índice envolvido. É o que permite carregar a avaliação só quando alguém abre a ficha,
+ * mantendo o peso dela fora de `subscribeToAttendances`, que baixa a coleção inteira em toda
+ * sessão.
+ */
+export async function getEvaluationRecord(
+  atendimentoId: string
+): Promise<EvaluationRecord | null> {
+  const snap = await getDoc(doc(db, EVALUATION_RECORDS_COLLECTION, atendimentoId));
+  if (!snap.exists()) return null;
+  const bruto = snap.data() as unknown as Record<string, unknown>;
+  return {
+    ...(snap.data() as EvaluationRecord),
+    id: snap.id,
+    perguntasSnapshot: paraArray<AnamnesisQuestion>(bruto.perguntasSnapshot),
+    respostas: (bruto.respostas as Record<string, any>) || {},
+  };
+}
+
+/**
+ * Grava a avaliação e acende a marca no atendimento, no mesmo lote.
+ *
+ * O lote existe para as duas coisas não divergirem: avaliação gravada com o atendimento sem marca
+ * viraria uma ficha preenchida que continua aparecendo na fila de pendentes para sempre, e a marca
+ * sem a avaliação seria um selo de "avaliada" que abre vazio.
+ */
+export async function saveEvaluationRecord(registro: EvaluationRecord): Promise<void> {
+  const pasta = `avaliacoes/registros/${registro.atendimentoId}`;
+  const [modelo, modeloAnotada, sessao, sessaoAnotada] = await Promise.all([
+    subirImagemOuManter(registro.fotoModeloUrl || '', pasta),
+    subirImagemOuManter(registro.fotoModeloAnotadaUrl || '', pasta),
+    subirImagemOuManter(registro.fotoSessaoUrl || '', pasta),
+    subirImagemOuManter(registro.fotoSessaoAnotadaUrl || '', pasta),
+  ]);
+
+  const agora = new Date().toISOString();
+  const batch = writeBatch(db);
+
+  batch.set(
+    doc(db, EVALUATION_RECORDS_COLLECTION, registro.atendimentoId),
+    cleanForFirestore({
+      ...registro,
+      id: registro.atendimentoId,
+      fotoModeloUrl: modelo || undefined,
+      fotoModeloAnotadaUrl: modeloAnotada || undefined,
+      fotoSessaoUrl: sessao || undefined,
+      fotoSessaoAnotadaUrl: sessaoAnotada || undefined,
+      preenchidoEm: registro.preenchidoEm || agora,
+      updatedAt: agora,
+    }),
+    { merge: true }
+  );
+
+  batch.update(doc(db, ATTENDANCES_COLLECTION, registro.atendimentoId), {
+    avaliacaoPreenchidaEm: registro.preenchidoEm || agora,
+    updatedAt: agora,
+  });
+
+  await batch.commit();
+}
+
+/** Apaga a avaliação e apaga a marca no atendimento — o inverso exato de `saveEvaluationRecord`. */
+export async function deleteEvaluationRecord(atendimentoId: string): Promise<void> {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, EVALUATION_RECORDS_COLLECTION, atendimentoId));
+  batch.update(doc(db, ATTENDANCES_COLLECTION, atendimentoId), {
+    avaliacaoPreenchidaEm: deleteField(),
+    updatedAt: new Date().toISOString(),
+  });
+  await batch.commit();
+}
+
+/**
+ * Encerra a anamnese manualmente, fechando o link da paciente.
+ *
+ * A trava automática depende de haver atendimento realizado lançado no sistema; este é o caminho
+ * para a clínica que não usa o módulo de atendimentos com disciplina. Ver `anamneseFechada()`.
+ */
+export async function encerrarAnamnese(recordId: string): Promise<void> {
+  const agora = new Date().toISOString();
+  await updateDoc(doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId), {
+    encerradaEm: agora,
+    updatedAt: agora,
+  });
+}
+
+/** Reabre a ficha encerrada à mão. Não destrava o que a regra do atendimento fechou. */
+export async function reabrirAnamnese(recordId: string): Promise<void> {
+  await updateDoc(doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId), {
+    encerradaEm: deleteField(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/** Atalho local: evita a leitura de confirmação em toda abertura, depois da primeira. */
+const MIGRACAO_AVALIACAO_LOCAL_KEY = 'lavie:avaliacao-separada:v1';
+
+/** As migrações que já rodaram nesta clínica. Documento único, lido do servidor. */
+async function migracoesAplicadasNaClinica(): Promise<string[] | null> {
+  try {
+    const snap = await getDocFromServer(doc(db, CLINIC_SETTINGS_COLLECTION, MIGRATIONS_DOC_ID));
+    if (!snap.exists()) return [];
+    return paraArray<string>((snap.data() as Record<string, unknown>).aplicadas);
+  } catch (e) {
+    console.warn('Não foi possível ler o marcador de migrações:', e);
+    return null;
+  }
+}
+
+/**
+ * Tira as perguntas da profissional de dentro das fichas de anamnese e as instala como fichas de
+ * avaliação, uma vez por clínica.
+ *
+ * O que ela move, por ficha de anamnese que tenha alguma pergunta `publicoAlvo: 'medico'`:
+ * as perguntas em si, e a referência do mapa anatômico anotável (só a URL do Storage — nenhuma
+ * imagem é reenviada). O que ela **não** faz é apagar os campos `fotoModelo*` da anamnese:
+ * `BlankAnamnesisSheet` ainda os lê para imprimir ficha em branco, e apagar quebraria isso. Eles
+ * ficam como legado, ignorados no preenchimento novo.
+ *
+ * O controle mora no banco (`clinic_settings/migrations`), e não no localStorage, porque a
+ * pergunta que ele responde é sobre a clínica, não sobre o navegador: uma marca local faria tudo
+ * isto rodar de novo em cada aparelho novo e ressuscitar na anamnese perguntas que a equipe
+ * tivesse apagado de propósito.
+ *
+ * Fichas `oculta` ficam de fora. São as treze do laser por área, já aposentadas — criar treze
+ * fichas de avaliação a partir delas reconstruiria exatamente a duplicação que aposentá-las
+ * resolveu, e as perguntas delas não renderizam em preenchimento nenhum de qualquer forma.
+ */
+async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
+  try {
+    if (localStorage.getItem(MIGRACAO_AVALIACAO_LOCAL_KEY)) return;
+  } catch {
+    // localStorage indisponível — segue pela leitura no servidor.
+  }
+
+  const jaAplicadas = await migracoesAplicadasNaClinica();
+  if (jaAplicadas === null) return; // leitura falhou; tenta de novo no próximo boot
+  if (jaAplicadas.includes(MIGRACAO_AVALIACAO)) {
+    try {
+      localStorage.setItem(MIGRACAO_AVALIACAO_LOCAL_KEY, '1');
+    } catch {
+      // sem atalho local; a leitura acima continua resolvendo
+    }
+    return;
+  }
+
+  try {
+    // Do servidor nos três casos: um cache frio devolveria as fichas sem o que a equipe
+    // acrescentou na tela, e as gravações abaixo apagariam esse trabalho.
+    const [tplSnap, procSnap, gerSnap] = await Promise.all([
+      getDocsFromServer(collection(db, ANAMNESIS_TEMPLATES_COLLECTION)),
+      getDocsFromServer(collection(db, PROCEDURES_COLLECTION)),
+      getDocsFromServer(collection(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION)),
+    ]);
+
+    const catalogo: Procedure[] = [];
+    procSnap.forEach((d) => catalogo.push({ ...(d.data() as Procedure), id: d.id }));
+
+    const batch = writeBatch(db);
+    let mexeu = false;
+
+    const todas: AnamnesisTemplate[] = [];
+    tplSnap.forEach((d) => todas.push({ ...(d.data() as AnamnesisTemplate), id: d.id }));
+
+    // Todo o "o que vai para onde" mora em `planejarMigracao`, que roda sem banco e é conferido
+    // por `scripts/verificar-migracao-avaliacao.ts` e ensaiado contra backup real por
+    // `scripts/ensaiar-migracao-avaliacao.ts`. Aqui só se traduz o plano em gravações.
+    const plano = planejarMigracao(todas, catalogo);
+
+    plano.fichas.forEach((ficha) => {
+      batch.set(
+        doc(db, EVALUATION_TEMPLATES_COLLECTION, ficha.id),
+        cleanForFirestore({ ...ficha, updatedAt: new Date().toISOString() }),
+        { merge: true }
+      );
+      mexeu = true;
+    });
+
+    plano.anamneses.forEach((alvo) => {
+      const original = todas.find((t) => t.id === alvo.id);
+      batch.update(doc(db, ANAMNESIS_TEMPLATES_COLLECTION, alvo.id), {
+        perguntasEspecificas: alvo.perguntasQueFicam.map((q) => cleanForFirestore(q)),
+        migracoesAplicadas: Array.from(
+          new Set([...(paraArray<string>(original?.migracoesAplicadas) || []), MIGRACAO_AVALIACAO])
+        ),
+        updatedAt: new Date().toISOString(),
+      });
+      mexeu = true;
+    });
+
+    // Perguntas gerais marcadas como da profissional viram perguntas gerais de avaliação: valem
+    // para toda avaliação, venha de onde vier o procedimento.
+    gerSnap.forEach((d) => {
+      const q = { ...(d.data() as AnamnesisQuestion), id: d.id };
+      if ((q.publicoAlvo || 'paciente') !== 'medico') return;
+      batch.set(
+        doc(db, EVALUATION_GENERAL_QUESTIONS_COLLECTION, q.id),
+        cleanForFirestore({ ...q, publicoAlvo: undefined }),
+        { merge: true }
+      );
+      batch.delete(doc(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, q.id));
+      mexeu = true;
+    });
+
+    batch.set(
+      doc(db, CLINIC_SETTINGS_COLLECTION, MIGRATIONS_DOC_ID),
+      {
+        aplicadas: Array.from(new Set([...jaAplicadas, MIGRACAO_AVALIACAO])),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    await batch.commit();
+    if (mexeu) {
+      console.log('Perguntas da profissional migradas para fichas de avaliação.');
+    }
+
+    try {
+      localStorage.setItem(MIGRACAO_AVALIACAO_LOCAL_KEY, '1');
+    } catch {
+      // sem atalho local; a leitura do marcador continua resolvendo
+    }
+  } catch (e) {
+    // Não derruba o boot: a migração tenta de novo na próxima abertura. O app funciona com as
+    // perguntas ainda na anamnese — a tela nova simplesmente mostra menos fichas.
+    console.warn('Migração das fichas de avaliação falhou; tentará de novo:', e);
+  }
 }

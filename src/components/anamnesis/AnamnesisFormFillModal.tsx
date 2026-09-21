@@ -375,9 +375,10 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
         'gen-musica': tipoMusica.trim(),
       };
 
-      // Perguntas exclusivas do profissional já são preenchidas de uma vez só no atendimento
-      // presencial — espelha essas respostas em respostasProfissional para manter a mesma
-      // fonte de verdade usada pela ficha online + complementação.
+      // Rede de segurança para a ficha-modelo que ainda não passou pela migração que move as
+      // perguntas da profissional para a ficha de avaliação (ela roda no boot, mas pode falhar
+      // por rede ou cota). Depois da migração isto resulta sempre em `{}` — e é de propósito que
+      // continue aqui: sem ele, uma resposta dada numa máquina antes da migração se perderia.
       const respostasProfissional: Record<string, any> = {};
       extraGeneralQuestions.forEach((q) => {
         if ((q.publicoAlvo || 'paciente') === 'medico' && finalRespostasGerais[q.id] !== undefined) {
@@ -408,7 +409,12 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
         respostasGerais: finalRespostasGerais,
         respostasEspecificas,
         respostasProfissional,
-        profissionalPreenchidoEm: new Date().toISOString(),
+        // `encerradaEm` e não `profissionalPreenchidoEm`: a ficha nasce fechada para o link da
+        // paciente (ela acabou de preenchê-la na clínica, na frente da equipe), mas fechada de um
+        // jeito que a equipe consegue reabrir. `profissionalPreenchidoEm` virou marca de ficha
+        // antiga, e escrevê-la aqui faria toda ficha presencial nova parecer legado — travando
+        // inclusive o botão de reabrir.
+        encerradaEm: new Date().toISOString(),
         fotoModeloUrl: resolveTemplatePhoto(currentTemplate, patientGenderToUse),
         fotoPacienteUrl: currentTemplate.tem_foto ? fotoUrl || undefined : undefined,
         fotoPacienteAnotadaUrl: currentTemplate.tem_foto ? fotoAnotadaUrl || undefined : undefined,

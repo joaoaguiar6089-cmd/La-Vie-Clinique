@@ -14,6 +14,7 @@ import {
 } from '../../services/databaseService';
 import { OnlinePatientAnamnesisForm } from './OnlinePatientAnamnesisForm';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
+import { anamneseFechada } from '../../utils/evaluations';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
 import {
@@ -513,7 +514,12 @@ export const PublicAnamnesisEntry: React.FC = () => {
   // screen === 'form'
   if (!template) return null;
 
-  const isLocked = !!existingRecord?.profissionalPreenchidoEm;
+  /**
+   * Fechada quando houve atendimento realizado (`encerradaEm`, gravado pelo app da equipe) ou
+   * quando a profissional já havia complementado a ficha no modelo antigo — este segundo campo
+   * continua sendo honrado para nenhuma ficha travada hoje destravar.
+   */
+  const isLocked = !!existingRecord && anamneseFechada(existingRecord);
 
   // Só pedimos a confirmação de identidade quando temos um CPF salvo para conferir contra —
   // fichas antigas (criadas antes deste recurso) não têm CPF e continuam com acesso direto.
@@ -535,8 +541,8 @@ export const PublicAnamnesisEntry: React.FC = () => {
       <div className="min-h-screen bg-[#F9F8F6]">
         <div className="max-w-3xl mx-auto pt-6 sm:pt-12 px-3 sm:px-6 pb-3 text-center">
           <p className="text-[13px] text-[#4a4740] bg-white inline-block px-4 py-2 rounded-full border border-[rgba(26,26,26,.1)]">
-            Sua ficha já foi complementada pela equipe e não pode mais ser editada. Você ainda pode salvar o PDF
-            com as suas respostas.
+            Seu atendimento já foi realizado — esta ficha virou documento do seu prontuário e não
+            pode mais ser editada. Você ainda pode salvar o PDF com as suas respostas.
           </p>
         </div>
         <PrintableAnamnesisSheet

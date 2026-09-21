@@ -27,7 +27,11 @@ import {
   mapearTemplatesPorProcedimento,
 } from '../src/utils/templateMatching';
 import { paraArray } from '../src/utils/firestoreShapes';
-import { ALL_LASER_PROCEDURE_QUESTIONS as PERGUNTAS_LASER } from '../src/data/anamnesisInitialData';
+import {
+  ALL_LASER_PROCEDURE_QUESTIONS as PERGUNTAS_PACIENTE,
+  LASER_PROFESSIONAL_QUESTIONS as PERGUNTAS_PROFISSIONAL,
+  DEFAULT_EVALUATION_TEMPLATES,
+} from '../src/data/anamnesisInitialData';
 import { AnamnesisTemplate, LaserArea } from '../src/types';
 
 let falhas = 0;
@@ -318,13 +322,24 @@ ok('ficha sem nome não quebra', !tpl({ id: 'tpl-y', categoria: 'Facial' }));
 ok('nulo não quebra', !ehTemplateDeLaser(null));
 
 console.log('\n== questionário de laser (protocolo de 27 perguntas)');
-// A lista é clínica: uma pergunta que suma, mude de público ou perca alternativas altera o que a
+// A lista é clínica: uma pergunta que suma, mude de dono ou perca alternativas altera o que a
 // profissional vê antes de disparar o laser. Fixar aqui torna qualquer alteração deliberada.
-ok('são 27 perguntas', PERGUNTAS_LASER.length === 27, String(PERGUNTAS_LASER.length));
+//
+// As 27 vivem hoje em **duas** listas, e a divisão também é protegida abaixo: as 21 da paciente
+// ficam na ficha de anamnese (uma por caso) e as 6 da profissional na ficha de avaliação (uma por
+// sessão). Antes da separação, avaliar a 4ª sessão de um plano exigia criar uma anamnese nova ou
+// sobrescrever a avaliação da 3ª.
+const PERGUNTAS_LASER = [...PERGUNTAS_PACIENTE, ...PERGUNTAS_PROFISSIONAL];
+
+ok('são 27 perguntas no total', PERGUNTAS_LASER.length === 27, String(PERGUNTAS_LASER.length));
 ok(
-  '21 da paciente e 6 da profissional',
-  PERGUNTAS_LASER.filter((q) => q.publicoAlvo === 'paciente').length === 21 &&
-    PERGUNTAS_LASER.filter((q) => q.publicoAlvo === 'medico').length === 6
+  '21 na anamnese (paciente) e 6 na avaliação (profissional)',
+  PERGUNTAS_PACIENTE.length === 21 && PERGUNTAS_PROFISSIONAL.length === 6,
+  `${PERGUNTAS_PACIENTE.length} + ${PERGUNTAS_PROFISSIONAL.length}`
+);
+ok(
+  'nenhuma pergunta de profissional sobrou na ficha de anamnese',
+  PERGUNTAS_PACIENTE.every((q) => (q.publicoAlvo || 'paciente') === 'paciente')
 );
 ok('nenhum ID repetido', new Set(PERGUNTAS_LASER.map((q) => q.id)).size === 27);
 ok('ordem sequencial de 1 a 27', PERGUNTAS_LASER.every((q, i) => q.ordem === i + 1));
@@ -347,20 +362,40 @@ ok(
     JSON.stringify([17, 26])
 );
 ok(
-  'gravidez e contraindicações continuam obrigatórias e da paciente',
+  'gravidez e contraindicações continuam obrigatórias e na ficha da paciente',
   ['laser-gravidez', 'laser-anticoagulantes', 'laser-q17-roacutan'].every((id) => {
-    const q = PERGUNTAS_LASER.find((x) => x.id === id);
-    return q?.obrigatoria === true && q.publicoAlvo === 'paciente';
+    const q = PERGUNTAS_PACIENTE.find((x) => x.id === id);
+    return q?.obrigatoria === true && (q.publicoAlvo || 'paciente') === 'paciente';
   })
 );
 ok(
-  'o fototipo é da profissional, não da paciente',
-  PERGUNTAS_LASER.find((q) => q.id === 'laser-q15-fototipo')?.publicoAlvo === 'medico'
+  'o fototipo é da profissional — está na avaliação, não na anamnese',
+  PERGUNTAS_PROFISSIONAL.some((q) => q.id === 'laser-q15-fototipo') &&
+    !PERGUNTAS_PACIENTE.some((q) => q.id === 'laser-q15-fototipo')
 );
 ok(
   'a pergunta de tatuagem saiu',
   !PERGUNTAS_LASER.some((q) => q.id.includes('tatuagem'))
 );
+
+console.log('\n== ficha de avaliação do laser');
+const avalLaser = DEFAULT_EVALUATION_TEMPLATES.find((f) => f.id === 'aval-epilacao-laser');
+ok('existe a ficha de avaliação do laser', !!avalLaser);
+// Treze áreas no catálogo compartilham as mesmas 6 perguntas: fototipo, cor e espessura do pelo
+// não mudam de buço para axila. Ligar por procedimento exigiria treze cópias em sincronia — que é
+// o problema que aposentar as treze fichas de anamnese resolveu.
+ok(
+  'vale para a categoria inteira, não por área',
+  (avalLaser?.categorias || []).includes('Depilação a Laser') &&
+    (avalLaser?.procedureIds || []).length === 0,
+  JSON.stringify(avalLaser?.categorias)
+);
+ok('leva as 6 perguntas da profissional', (avalLaser?.perguntas || []).length === 6);
+ok(
+  'renumeradas de 1 a 6 dentro da ficha',
+  (avalLaser?.perguntas || []).every((q, i) => q.ordem === i + 1)
+);
+ok('pede a foto da sessão', avalLaser?.temFotoSessao === true);
 
 console.log('\n== numeração impressa cai dentro da própria mancha');
 // Na ficha em branco cada área ganha um número, e a legenda ao lado diz o nome. O centro **da

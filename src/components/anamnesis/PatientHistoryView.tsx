@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Patient, AnamnesisRecord, AnamnesisTemplate, ClinicProfile } from '../../types';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
+import { anamneseFechada } from '../../utils/evaluations';
 import {
   Search,
   Plus,
@@ -227,9 +228,15 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                         Online Paciente
                       </span>
                     )}
-                    {rec.origemPreenchimento === 'online_paciente' && !rec.profissionalPreenchidoEm && (
+                    {/*
+                      "Aguardando atendimento", e não mais "aguardando médico": o que fecha a
+                      ficha agora é a visita acontecer, não a profissional completar um bloco
+                      dentro dela. Sem esta troca, o selo ficaria aceso para sempre em toda ficha
+                      preenchida online.
+                    */}
+                    {rec.origemPreenchimento === 'online_paciente' && !anamneseFechada(rec) && (
                       <span className="px-1.5 py-0.5 rounded-xs bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold uppercase tracking-wider">
-                        Aguardando Médico
+                        Aguardando Atendimento
                       </span>
                     )}
                     {rec.fotoModeloUrl && (rec.fotoPacienteUrl || rec.fotoUrl) ? (

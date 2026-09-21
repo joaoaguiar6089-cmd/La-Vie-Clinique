@@ -3,6 +3,7 @@ import {
   Settings,
   Syringe,
   ClipboardList,
+  ClipboardCheck,
   Share2,
   LogOut,
   Receipt,
@@ -20,6 +21,7 @@ const VIEW_LABEL: Record<AppView, string> = {
   procedures: 'Procedimentos',
   patients: 'Pacientes',
   anamnesis: 'Anamneses',
+  evaluations: 'Fichas de Avaliação',
   quotes: 'Orçamentos',
 };
 
@@ -30,6 +32,12 @@ interface NavbarProps {
   onOpenSettings: () => void;
   clinic: ClinicProfile;
   proceduresCount: number;
+  /**
+   * Atendimentos que já aconteceram e ainda não foram avaliados. É o único contador do menu além
+   * do catálogo, e existe porque é trabalho represado: a ficha de avaliação só pode ser escrita
+   * depois da visita, então ninguém a preenche sem ser lembrado de que ela está aberta.
+   */
+  avaliacoesPendentesCount?: number;
   currentProfessionalName?: string;
   onLogout: () => void;
 }
@@ -41,6 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettings,
   clinic,
   proceduresCount,
+  avaliacoesPendentesCount,
   currentProfessionalName,
   onLogout,
 }) => {
@@ -103,6 +112,18 @@ export const Navbar: React.FC<NavbarProps> = ({
       count: undefined,
       onClick: () => {
         onSelectView('anamnesis');
+        scrollToTop();
+      },
+    },
+    {
+      id: 'evaluations' as const,
+      label: 'Fichas de Avaliação',
+      icon: ClipboardCheck,
+      active: currentView === 'evaluations',
+      // Zero não vira "0" no menu: um selo aceso sem nada para fazer treina a equipe a ignorá-lo.
+      count: avaliacoesPendentesCount || undefined,
+      onClick: () => {
+        onSelectView('evaluations');
         scrollToTop();
       },
     },

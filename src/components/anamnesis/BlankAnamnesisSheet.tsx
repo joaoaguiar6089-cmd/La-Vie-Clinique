@@ -5,13 +5,19 @@ import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
 import {
   isDuplicateIdentQuestion,
-  isMedicoQuestion,
   isPatientQuestion,
 } from '../../utils/anamnesisQuestions';
 import { ConsentTermView } from './ConsentTermView';
 import { LaserBodyMapView, AreaExibida } from '../laser/LaserBodyMapView';
 import { ehTemplateDeLaser } from '../../utils/templateMatching';
-import { Printer, Download, X, Loader2, Stethoscope } from 'lucide-react';
+import { Printer, Download, X, Loader2 } from 'lucide-react';
+import {
+  IdentField,
+  QuestionBlock,
+  RuledLines,
+  SectionHeading,
+  TickBox,
+} from './printableQuestionBlocks';
 
 interface BlankAnamnesisSheetProps {
   template: AnamnesisTemplate;
@@ -30,137 +36,6 @@ interface BlankAnamnesisSheetProps {
 const VAZIO: Set<string> = new Set();
 
 type VersaoFoto = 'feminino' | 'masculino' | 'unica';
-
-/** Linhas pontilhadas para escrever à caneta. */
-const RuledLines: React.FC<{ count?: number }> = ({ count = 1 }) => (
-  <div className="pt-1.5 space-y-4">
-    {Array.from({ length: count }).map((_, i) => (
-      <div key={i} className="border-b border-dotted border-gray-400" />
-    ))}
-  </div>
-);
-
-/** Caixa de marcar — redonda para escolha única, quadrada para múltipla escolha. */
-const TickBox: React.FC<{ round?: boolean }> = ({ round }) => (
-  <span
-    className={`inline-block w-3.5 h-3.5 border border-gray-500 bg-white shrink-0 ${
-      round ? 'rounded-full' : 'rounded-[2px]'
-    }`}
-  />
-);
-
-/** Campo de identificação: rótulo pequeno acima de uma linha para preencher. */
-const IdentField: React.FC<{ label: string; className?: string }> = ({ label, className = '' }) => (
-  <div className={className}>
-    <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider">{label}</span>
-    <div className="border-b border-dotted border-gray-400 h-6" />
-  </div>
-);
-
-/**
- * Área de resposta vazia correspondente ao tipo do campo. O objetivo é que quem estiver com a
- * folha na mão reconheça o mesmo formato da versão digital — as mesmas opções, na mesma ordem —
- * só que com espaço para caneta no lugar do controle.
- */
-const BlankAnswer: React.FC<{ question: AnamnesisQuestion }> = ({ question }) => {
-  const { tipo_campo, opcoes = [], escalaMax = 10 } = question;
-
-  switch (tipo_campo) {
-    case 'texto_longo':
-      return <RuledLines count={3} />;
-
-    case 'numero':
-      return (
-        <div className="pt-2">
-          <span className="inline-block w-24 border-b border-dotted border-gray-400 h-5" />
-        </div>
-      );
-
-    case 'data':
-      return (
-        <div className="pt-2 flex items-end gap-1.5 text-[10px] text-gray-400 font-mono">
-          <span className="inline-block w-9 border-b border-dotted border-gray-400 h-5" /> /
-          <span className="inline-block w-9 border-b border-dotted border-gray-400 h-5" /> /
-          <span className="inline-block w-14 border-b border-dotted border-gray-400 h-5" />
-          <span className="pb-0.5">DD / MM / AAAA</span>
-        </div>
-      );
-
-    case 'sim_nao':
-      return (
-        <div className="pt-2 flex items-center gap-6 text-[11px] text-gray-700">
-          {['Sim', 'Não'].map((opt) => (
-            <span key={opt} className="flex items-center gap-1.5">
-              <TickBox round />
-              {opt}
-            </span>
-          ))}
-        </div>
-      );
-
-    case 'unica_escolha':
-    case 'multipla_escolha':
-      return (
-        <div className="pt-2">
-          <div className="flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-gray-700">
-            {opcoes.map((opcao, idx) => (
-              <span key={idx} className="flex items-center gap-1.5">
-                <TickBox round={tipo_campo === 'unica_escolha'} />
-                {opcao}
-              </span>
-            ))}
-          </div>
-          {tipo_campo === 'multipla_escolha' && (
-            <p className="text-[9px] text-gray-400 italic mt-1.5">Pode marcar mais de uma</p>
-          )}
-        </div>
-      );
-
-    case 'escala':
-      return (
-        <div className="pt-2 flex flex-wrap items-center gap-1.5">
-          {Array.from({ length: escalaMax || 10 }, (_, i) => i + 1).map((num) => (
-            <span
-              key={num}
-              className="w-6 h-6 border border-gray-400 rounded-[3px] flex items-center justify-center text-[10px] text-gray-600 font-mono bg-white"
-            >
-              {num}
-            </span>
-          ))}
-        </div>
-      );
-
-    // 'texto_curto' e qualquer tipo novo que ainda não tenha desenho próprio: uma linha para escrever.
-    default:
-      return <RuledLines count={1} />;
-  }
-};
-
-const QuestionBlock: React.FC<{ question: AnamnesisQuestion; index: number }> = ({ question, index }) => (
-  <div className="py-2.5 border-b border-gray-100 last:border-0 page-break-inside-avoid">
-    <div className="flex items-baseline gap-1.5">
-      <span className="text-[11px] font-bold text-[#A67C52] shrink-0">{index}.</span>
-      <span className="text-[11px] font-semibold text-[#1A1A1A] leading-snug">
-        {question.texto}
-        {question.obrigatoria && <span className="text-[#A67C52] ml-1">*</span>}
-      </span>
-    </div>
-    {question.ajuda && <p className="text-[10px] text-gray-400 italic mt-0.5 ml-4">{question.ajuda}</p>}
-    <div className="ml-4">
-      <BlankAnswer question={question} />
-    </div>
-  </div>
-);
-
-const SectionHeading: React.FC<{ title: string; hint?: string }> = ({ title, hint }) => (
-  <div className="mb-2">
-    <div className="flex items-center gap-2 border-b border-[#A67C52]/40 pb-1.5">
-      <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
-      <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-[#1A1A1A]">{title}</h4>
-    </div>
-    {hint && <p className="text-[10px] text-gray-400 mt-1">{hint}</p>}
-  </div>
-);
 
 /**
  * Versão imprimível e em branco da ficha-modelo: as mesmas perguntas da ficha digital, com espaço
@@ -216,7 +91,6 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
   const mostrarMapaLaser = ehTemplateDeLaser(template) && vistasDoMapa.length > 0;
 
   const [incluirMapaCorporal, setIncluirMapaCorporal] = useState(true);
-  const [incluirPerguntasProfissional, setIncluirPerguntasProfissional] = useState(true);
   const [incluirImagemOrientativa, setIncluirImagemOrientativa] = useState(true);
   const [incluirTermoConsentimento, setIncluirTermoConsentimento] = useState(true);
   const [incluirFotoAnotacao, setIncluirFotoAnotacao] = useState(true);
@@ -246,12 +120,11 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
   const nonDuplicateGeneral = generalQuestions.filter((q) => !isDuplicateIdentQuestion(q));
   const especificas = template.perguntasEspecificas || [];
 
+  // Continua filtrando por público-alvo, e não usando a lista crua, por causa das fichas
+  // anteriores à separação: elas ainda carregam perguntas `medico` no documento, e imprimi-las
+  // aqui mandaria para o papel da paciente um bloco que agora é da ficha de avaliação.
   const patientGeneralQuestions = nonDuplicateGeneral.filter(isPatientQuestion);
   const patientSpecificQuestions = especificas.filter(isPatientQuestion);
-  const medicoQuestions = [
-    ...nonDuplicateGeneral.filter(isMedicoQuestion),
-    ...especificas.filter(isMedicoQuestion),
-  ];
 
   const handlePrint = () => window.print();
 
@@ -313,22 +186,6 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
         {/* Opções do que entra na folha */}
         <div className="px-6 py-3 bg-[#FAF9F6] border-b border-gray-200 shrink-0 print:hidden flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Incluir na folha</span>
-
-          <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
-            <input
-              type="checkbox"
-              checked={incluirPerguntasProfissional}
-              onChange={(e) => setIncluirPerguntasProfissional(e.target.checked)}
-              disabled={medicoQuestions.length === 0}
-              className="accent-[#A67C52] w-4 h-4 rounded-xs disabled:opacity-40"
-            />
-            <span className={medicoQuestions.length === 0 ? 'text-gray-400' : ''}>
-              Perguntas do profissional
-              <span className="text-gray-400 ml-1">
-                ({medicoQuestions.length === 0 ? 'nenhuma cadastrada' : medicoQuestions.length})
-              </span>
-            </span>
-          </label>
 
           {mostrarMapaLaser && (
             <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
@@ -578,23 +435,11 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
             </div>
           )}
 
-          {/* Uso exclusivo do profissional */}
-          {incluirPerguntasProfissional && medicoQuestions.length > 0 && (
-            <div className="mb-6 p-3.5 rounded-sm border border-indigo-200 bg-indigo-50/30">
-              <div className="flex items-center gap-2 border-b border-indigo-300 pb-1.5 mb-1">
-                <Stethoscope className="w-3.5 h-3.5 text-indigo-700" />
-                <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-indigo-950">
-                  Uso Exclusivo do Profissional
-                </h4>
-              </div>
-              <p className="text-[10px] text-indigo-900/60 mb-1">
-                Preenchido pela equipe clínica durante o atendimento.
-              </p>
-              {medicoQuestions.map((q, idx) => (
-                <QuestionBlock key={q.id} question={q} index={idx + 1} />
-              ))}
-            </div>
-          )}
+          {/*
+            O bloco "Uso Exclusivo do Profissional" saiu daqui: essas perguntas agora moram na
+            ficha de avaliação, que tem folha em branco própria (`BlankEvaluationSheet`) — uma por
+            atendimento, que é a cardinalidade certa para elas.
+          */}
 
           {/* Foto de referência, limpa, para marcar à caneta na folha impressa */}
           {fotoAnotacao && incluirFotoAnotacao && (

@@ -5,6 +5,7 @@ import {
   AnamnesisTemplate,
   Attendance,
   ClinicProfile,
+  EvaluationTemplate,
   Patient,
   Procedure,
   Quote,
@@ -23,6 +24,7 @@ import {
   saveAnamnesisRecord,
   deleteAnamnesisRecord,
   saveAttendance,
+  encerrarAnamnese,
   deleteAttendance,
   saveSessionPlan,
   deleteSessionPlan,
@@ -42,12 +44,17 @@ import { PatientsListView } from './PatientsListView';
 import { PatientDetailView } from './PatientDetailView';
 import { NewPatientModal } from './NewPatientModal';
 import { AttendanceFormModal, ModoDoFormulario } from './AttendanceFormModal';
+import { EvaluationFillModal } from '../evaluations/EvaluationFillModal';
+import { anamnesesAFechar } from '../../utils/evaluations';
 
 interface PatientsModuleProps {
   clinic: ClinicProfile;
   catalogProcedures: Procedure[];
   /** Assinadas no App — o catálogo e a anamnese também precisam delas. */
   templates: AnamnesisTemplate[];
+  /** Fichas de avaliação e suas perguntas gerais, assinadas no App junto com o contador do menu. */
+  fichasAvaliacao: EvaluationTemplate[];
+  avaliacaoGerais: AnamnesisQuestion[];
   /** Profissional logada, para o formulário de atendimento já vir preenchido com ela. */
   currentProfessionalId?: string;
 }
@@ -73,8 +80,12 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   clinic,
   catalogProcedures,
   templates,
+  fichasAvaliacao,
+  avaliacaoGerais,
   currentProfessionalId,
 }) => {
+  /** Visita cuja ficha de avaliação está aberta. */
+  const [avaliando, setAvaliando] = useState<Attendance | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [records, setRecords] = useState<AnamnesisRecord[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -225,6 +236,28 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
     }
     if (planoNovo) await saveSessionPlan(planoNovo);
     await saveAttendance(registro);
+    await fecharAnamnesesDaVisita(registro);
+  };
+
+  /**
+   * Visita realizada fecha o link da anamnese correspondente.
+   *
+   * A marca é gravada **no registro da anamnese**, e não deduzida na hora de exibir, porque quem
+   * precisa dela é a página pública da paciente — que não tem login e, pelas regras do Firestore,
+   * não pode ler `attendances`. Sem esta gravação, a trava simplesmente não existiria na única
+   * tela onde ela importa.
+   *
+   * Falhar aqui não derruba o salvamento do atendimento: a visita registrada é o dado essencial,
+   * e a trava volta a ser tentada no próximo atendimento da mesma paciente.
+   */
+  const fecharAnamnesesDaVisita = async (registro: Attendance) => {
+    try {
+      const aFechar = anamnesesAFechar(registro, records);
+      if (aFechar.length === 0) return;
+      await Promise.all(aFechar.map((f) => encerrarAnamnese(f.id)));
+    } catch (e) {
+      console.warn('Não foi possível encerrar a anamnese após o atendimento:', e);
+    }
   };
 
   const abrirFormulario = (estado: EstadoDoFormulario) => {
@@ -372,6 +405,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           onConfirmarAtendimento={(a) =>
             abrirFormulario({ modo: 'confirmacao', atendimento: a })
           }
+          onAvaliarAtendimento={setAvaliando}
           onFaltouAtendimento={(a) => marcarStatus(a, 'faltou')}
           onRemarcarAtendimento={handleRemarcar}
           onAdicionarSessao={(planoId) => abrirFormulario({ modo: 'novo', planoFixoId: planoId })}
@@ -397,6 +431,20 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           planoFixoId={formAtendimento?.planoFixoId}
           onSalvar={handleSalvarAtendimento}
         />
+
+        {avaliando && (
+          <EvaluationFillModal
+            isOpen
+            onClose={() => setAvaliando(null)}
+            atendimento={avaliando}
+            paciente={pacienteAberto}
+            fichas={fichasAvaliacao}
+            gerais={avaliacaoGerais}
+            catalogo={catalogProcedures}
+            professionals={clinic.professionals || []}
+            clinicProfile={clinic}
+          />
+        )}
 
         <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
       </>

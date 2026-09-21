@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AnamnesisQuestion, QuestionAudience, QuestionFieldType } from '../../types';
+import { AnamnesisQuestion, QuestionFieldType } from '../../types';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import {
   Plus,
@@ -16,11 +16,32 @@ import {
 } from 'lucide-react';
 import { DEFAULT_GENERAL_QUESTIONS } from '../../data/anamnesisInitialData';
 
+/**
+ * Serve às perguntas gerais da **anamnese** e às da **avaliação**, que têm a mesma forma e as
+ * mesmas operações — o que muda são os textos do cabeçalho e a coleção por trás dos callbacks.
+ *
+ * Deu para unificar porque o seletor "Paciente / Médico" saiu daqui: enquanto a pergunta carregava
+ * público-alvo, este componente era inerentemente da anamnese. Hoje quem responde é decidido pela
+ * coleção em que a pergunta mora, não por um campo dentro dela.
+ */
 interface GeneralQuestionsManagerProps {
   questions: AnamnesisQuestion[];
   onSaveQuestion: (question: AnamnesisQuestion) => Promise<void>;
   onSaveAllQuestions: (questions: AnamnesisQuestion[]) => Promise<void>;
   onDeleteQuestion: (questionId: string) => Promise<void>;
+  titulo?: string;
+  /** Explica em que fichas estas perguntas entram. */
+  subtitulo?: string;
+  /** Rótulo do selo ao lado do título. */
+  selo?: string;
+  /**
+   * Conjunto padrão para o botão "Restaurar Padrões". Ausente = o botão não aparece: a avaliação
+   * não tem perguntas gerais padrão, e um botão que substitui tudo por uma lista vazia seria só
+   * um jeito de apagar o trabalho da equipe sem dizer isso.
+   */
+  defaults?: AnamnesisQuestion[];
+  /** Prefixo do id de pergunta nova — mantém `gen-` na anamnese e `avg-` na avaliação. */
+  idPrefixo?: string;
 }
 
 export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = ({
@@ -28,6 +49,11 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
   onSaveQuestion,
   onSaveAllQuestions,
   onDeleteQuestion,
+  titulo = 'Perguntas Gerais Globais',
+  subtitulo = 'Este conjunto de perguntas entra automaticamente no início de toda e qualquer ficha de anamnese da La Vie, independente do procedimento clínico selecionado.',
+  selo = 'Herança Automática',
+  defaults = DEFAULT_GENERAL_QUESTIONS,
+  idPrefixo = 'gen',
 }) => {
   const [editingQuestion, setEditingQuestion] = useState<AnamnesisQuestion | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,7 +67,6 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
   const [ajuda, setAjuda] = useState('');
   const [opcoesInput, setOpcoesInput] = useState('');
   const [escalaMax, setEscalaMax] = useState<number>(10);
-  const [publicoAlvo, setPublicoAlvo] = useState<QuestionAudience>('paciente');
   const [formError, setFormError] = useState('');
 
   const openNewQuestionModal = () => {
@@ -52,7 +77,6 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
     setAjuda('');
     setOpcoesInput('');
     setEscalaMax(10);
-    setPublicoAlvo('paciente');
     setFormError('');
     setIsModalOpen(true);
   };
@@ -65,7 +89,6 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
     setAjuda(q.ajuda || '');
     setOpcoesInput(q.opcoes ? q.opcoes.join('\n') : '');
     setEscalaMax(q.escalaMax || 10);
-    setPublicoAlvo(q.publicoAlvo || 'paciente');
     setFormError('');
     setIsModalOpen(true);
   };
@@ -94,7 +117,7 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
     setIsSaving(true);
     try {
       const questionToSave: AnamnesisQuestion = {
-        id: editingQuestion ? editingQuestion.id : `gen-${Date.now()}`,
+        id: editingQuestion ? editingQuestion.id : `${idPrefixo}-${Date.now()}`,
         texto: texto.trim(),
         tipo_campo: tipoCampo,
         obrigatoria,
@@ -102,7 +125,6 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
         ajuda: ajuda.trim() || undefined,
         opcoes,
         escalaMax: tipoCampo === 'escala' ? escalaMax : undefined,
-        publicoAlvo,
       };
 
       await onSaveQuestion(questionToSave);
@@ -135,7 +157,7 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
         'As perguntas gerais atuais são substituídas pelo conjunto padrão da La Vie. Perguntas que você criou aqui se perdem; as fichas já preenchidas não mudam.',
       textoConfirmar: 'Restaurar',
       onConfirmar: () => {
-        onSaveAllQuestions(DEFAULT_GENERAL_QUESTIONS);
+        onSaveAllQuestions(defaults || []);
       },
     });
   };
@@ -159,28 +181,29 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#A67C52]" />
             <h3 className="font-serif-luxury text-xl font-medium text-[#1A1A1A]">
-              Perguntas Gerais Globais
+              {titulo}
             </h3>
             <span className="px-2 py-0.5 rounded-full bg-[#A67C52]/15 text-[#A67C52] text-[10px] uppercase font-bold tracking-widest">
-              Herança Automática
+              {selo}
             </span>
           </div>
           <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">
-            Este conjunto de perguntas entra automaticamente no início de toda e qualquer ficha de anamnese
-            da La Vie, independente do procedimento clínico selecionado.
+            {subtitulo}
           </p>
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto">
-          <button
-            type="button"
-            onClick={handleResetDefaults}
-            className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-sm border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:text-[#1A1A1A] hover:bg-gray-50 transition-colors"
-            title="Restaurar as 3 perguntas originais padrão"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Restaurar Padrões</span>
-          </button>
+          {defaults && defaults.length > 0 && (
+            <button
+              type="button"
+              onClick={handleResetDefaults}
+              className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-sm border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:text-[#1A1A1A] hover:bg-gray-50 transition-colors"
+              title="Restaurar o conjunto de perguntas padrão"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Restaurar Padrões</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={openNewQuestionModal}
@@ -220,15 +243,6 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
                     <h4 className="font-semibold text-sm text-[#1A1A1A] leading-snug">
                       {q.texto}
                     </h4>
-                    {(q.publicoAlvo || 'paciente') === 'medico' ? (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-semibold">
-                        Médico
-                      </span>
-                    ) : (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold">
-                        Paciente
-                      </span>
-                    )}
                     {q.obrigatoria ? (
                       <span className="px-1.5 py-0.5 rounded-xs bg-red-50 border border-red-200 text-red-600 text-[10px] font-semibold">
                         Obrigatória
@@ -451,31 +465,6 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-800 mb-1">
-                  Quem Responde Esta Pergunta?
-                </label>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setPublicoAlvo('paciente')}
-                    className={`flex-1 px-4 py-2 rounded-sm text-xs font-semibold border transition-colors ${
-                      publicoAlvo === 'paciente' ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-700 border-gray-200'
-                    }`}
-                  >
-                    Paciente (no link de preenchimento)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPublicoAlvo('medico')}
-                    className={`flex-1 px-4 py-2 rounded-sm text-xs font-semibold border transition-colors ${
-                      publicoAlvo === 'medico' ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white text-gray-700 border-gray-200'
-                    }`}
-                  >
-                    Médico (complemento na plataforma)
-                  </button>
-                </div>
-              </div>
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200">
                 <button

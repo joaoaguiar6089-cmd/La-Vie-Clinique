@@ -10,10 +10,22 @@ import { AnamnesisModule, AnamnesisOpenRequest } from './components/anamnesis/An
 import { PatientsModule } from './components/patients/PatientsModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
 import { QuotesPanel } from './components/quotes/QuotesPanel';
+import { EvaluationsModule } from './components/evaluations/EvaluationsModule';
+import { filaDePendentes } from './utils/evaluations';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
-import { Procedure, ClinicProfile, Professional, AppView, AnamnesisTemplate } from './types';
+import {
+  Procedure,
+  ClinicProfile,
+  Professional,
+  AppView,
+  AnamnesisTemplate,
+  AnamnesisQuestion,
+  Attendance,
+  EvaluationTemplate,
+  Patient,
+} from './types';
 import { mapearTemplatesPorProcedimento, isLaserCategory } from './utils/templateMatching';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { ClinicLogo } from './components/ClinicLogo';
@@ -30,6 +42,10 @@ import {
   publicarEspelhoPublicoSeMudou,
   replaceAllProceduresWithOfficialPdfCatalog,
   subscribeToAnamnesisTemplates,
+  subscribeToEvaluationTemplates,
+  subscribeToEvaluationGeneralQuestions,
+  subscribeToAttendances,
+  subscribeToPatients,
   isQuotaOrOfflineError,
   normalizeProcedureList,
 } from './services/databaseService';
@@ -150,6 +166,17 @@ function MainCatalogApp() {
   // assinatura subiu para cá — o módulo recebe a mesma lista por prop, sem duplicar a leitura.
   const [anamnesisTemplates, setAnamnesisTemplates] = useState<AnamnesisTemplate[]>(DEFAULT_PROCEDURE_TEMPLATES);
   const [templatesCarregando, setTemplatesCarregando] = useState(false);
+
+  /**
+   * Fichas de avaliação, atendimentos e pacientes sobem para cá — e não para dentro da tela de
+   * avaliação — porque o contador do menu lateral precisa da fila de pendentes estando o usuário
+   * em qualquer tela. As assinaturas são compartilhadas (`subscribeShared`), então quem já as
+   * consumia adiante continua sem pagar leitura nova.
+   */
+  const [evaluationTemplates, setEvaluationTemplates] = useState<EvaluationTemplate[]>([]);
+  const [evaluationGerais, setEvaluationGerais] = useState<AnamnesisQuestion[]>([]);
+  const [attendances, setAttendances] = useState<Attendance[]>([]);
+  const [allPatients, setAllPatients] = useState<Patient[]>([]);
 
   /**
    * Pedido vindo do catálogo para o módulo de anamnese. O `nonce` existe porque tocar "Anamnese"
@@ -290,6 +317,31 @@ function MainCatalogApp() {
     );
     return unsubscribe;
   }, [authUser]);
+
+  // Avaliações: fichas-modelo, perguntas gerais, atendimentos e pacientes.
+  useEffect(() => {
+    if (!authUser) return;
+    const unsubs = [
+      subscribeToEvaluationTemplates(setEvaluationTemplates, (err) => {
+        if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
+      }),
+      subscribeToEvaluationGeneralQuestions(setEvaluationGerais, (err) => {
+        if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
+      }),
+      subscribeToAttendances(setAttendances, (err) => {
+        if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
+      }),
+      subscribeToPatients(setAllPatients, (err) => {
+        if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
+      }),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, [authUser]);
+
+  const avaliacoesPendentes = useMemo(
+    () => filaDePendentes(attendances).length,
+    [attendances]
+  );
 
   const templatesPorProcedimento = useMemo(
     () => mapearTemplatesPorProcedimento(anamnesisTemplates, procedures),
@@ -604,6 +656,7 @@ function MainCatalogApp() {
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         clinic={clinic}
         proceduresCount={procedures.length}
+        avaliacoesPendentesCount={avaliacoesPendentes}
         currentProfessionalName={currentProfessional?.name}
         onLogout={logout}
       />
@@ -657,6 +710,8 @@ function MainCatalogApp() {
               clinic={clinic}
               catalogProcedures={procedures}
               templates={anamnesisTemplates}
+              fichasAvaliacao={evaluationTemplates}
+              avaliacaoGerais={evaluationGerais}
               currentProfessionalId={currentProfessional?.id}
             />
           ) : currentView === 'anamnesis' ? (
@@ -666,6 +721,16 @@ function MainCatalogApp() {
               templates={anamnesisTemplates}
               openRequest={anamnesisRequest}
               onOpenRequestHandled={() => setAnamnesisRequest(null)}
+            />
+          ) : currentView === 'evaluations' ? (
+            <EvaluationsModule
+              clinicProfile={clinic}
+              catalogProcedures={procedures}
+              fichas={evaluationTemplates}
+              atendimentos={attendances}
+              pacientes={allPatients}
+              professionals={clinic.professionals || []}
+              gerais={evaluationGerais}
             />
           ) : (
             <QuotesPanel clinic={clinic} catalogProcedures={procedures} />

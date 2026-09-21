@@ -7,10 +7,12 @@ import {
   ClipboardList,
   Eye,
   FileText,
+  Lock,
   MessageCircle,
   Plus,
   Receipt,
   Share2,
+  Unlock,
   Trash2,
 } from 'lucide-react';
 import {
@@ -40,6 +42,8 @@ import { QuotePreviewModal } from '../quotes/QuotePreviewModal';
 import { QuoteShareModal } from '../quotes/QuoteShareModal';
 import { PatientPersonalDataCard } from './PatientPersonalDataCard';
 import { AttendancesTab, contarAtendimentosRealizados } from './AttendancesTab';
+import { anamneseFechada } from '../../utils/evaluations';
+import { encerrarAnamnese, reabrirAnamnese } from '../../services/databaseService';
 
 interface PatientDetailViewProps {
   patient: Patient;
@@ -68,6 +72,8 @@ interface PatientDetailViewProps {
   onEditarAtendimento: (a: Attendance) => void;
   onExcluirAtendimento: (a: Attendance) => void;
   onConfirmarAtendimento: (a: Attendance) => void;
+  /** Abre a ficha de avaliação de uma visita já realizada. */
+  onAvaliarAtendimento: (a: Attendance) => void;
   onFaltouAtendimento: (a: Attendance) => void;
   onRemarcarAtendimento: (a: Attendance) => void;
   onAdicionarSessao: (planoId: string) => void;
@@ -127,6 +133,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   onEditarAtendimento,
   onExcluirAtendimento,
   onConfirmarAtendimento,
+  onAvaliarAtendimento,
   onFaltouAtendimento,
   onRemarcarAtendimento,
   onAdicionarSessao,
@@ -325,6 +332,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           onEditar={onEditarAtendimento}
           onExcluir={onExcluirAtendimento}
           onConfirmar={onConfirmarAtendimento}
+          onAvaliar={onAvaliarAtendimento}
           onFaltou={onFaltouAtendimento}
           onRemarcar={onRemarcarAtendimento}
           onAdicionarSessao={onAdicionarSessao}
@@ -359,9 +367,9 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                   </p>
                 </div>
 
-                {ficha.origemPreenchimento === 'online_paciente' && !ficha.profissionalPreenchidoEm && (
+                {ficha.origemPreenchimento === 'online_paciente' && !anamneseFechada(ficha) && (
                   <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-xs border bg-amber-50 text-amber-700 border-amber-200">
-                    Aguardando profissional
+                    Aguardando atendimento
                   </span>
                 )}
 
@@ -374,6 +382,69 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                     className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
                   >
                     <Eye className="w-4 h-4" />
+                  </button>
+
+                  {/*
+                    Saída manual da trava automática, que depende de haver atendimento realizado
+                    lançado no sistema. A clínica que não usa o módulo de atendimentos com
+                    disciplina deixaria o link da paciente aberto indefinidamente — este botão
+                    fecha sem depender de inferência nenhuma. Reabrir é possível, mas não
+                    destrava o que o atendimento fechou: ali o que vale é o fato da visita.
+                  */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setConfirmacao(
+                        ficha.encerradaEm
+                          ? {
+                              titulo: 'Reabrir esta ficha?',
+                              mensagem:
+                                'A paciente volta a poder editar as respostas pelo link que ' +
+                                'recebeu. Se já houver atendimento realizado deste procedimento, ' +
+                                'a ficha fecha de novo sozinha.',
+                              textoConfirmar: 'Reabrir',
+                              tom: 'neutro',
+                              onConfirmar: () => {
+                                reabrirAnamnese(ficha.id).catch((e) =>
+                                  console.warn('Não foi possível reabrir a ficha:', e)
+                                );
+                              },
+                            }
+                          : {
+                              titulo: 'Encerrar esta ficha?',
+                              mensagem:
+                                'O link da paciente fecha e as respostas param de poder ser ' +
+                                'editadas por ela. O PDF continua disponível para as duas partes.',
+                              textoConfirmar: 'Encerrar',
+                              tom: 'neutro',
+                              onConfirmar: () => {
+                                encerrarAnamnese(ficha.id).catch((e) =>
+                                  console.warn('Não foi possível encerrar a ficha:', e)
+                                );
+                              },
+                            }
+                      )
+                    }
+                    aria-label={
+                      ficha.encerradaEm
+                        ? `Reabrir a ficha de ${ficha.procedimentoNome}`
+                        : `Encerrar a ficha de ${ficha.procedimentoNome}`
+                    }
+                    title={
+                      ficha.profissionalPreenchidoEm && !ficha.encerradaEm
+                        ? 'Ficha antiga, já complementada — permanece fechada'
+                        : ficha.encerradaEm
+                          ? 'Reabrir para a paciente editar'
+                          : 'Encerrar: fecha o link da paciente'
+                    }
+                    disabled={!!ficha.profissionalPreenchidoEm && !ficha.encerradaEm}
+                    className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors disabled:opacity-40 disabled:hover:text-gray-400"
+                  >
+                    {anamneseFechada(ficha) ? (
+                      <Lock className="w-4 h-4" />
+                    ) : (
+                      <Unlock className="w-4 h-4" />
+                    )}
                   </button>
 
                   <button

@@ -6,7 +6,6 @@ import {
   ConsentTermSection,
   OrientationImage,
 } from '../../types';
-import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
 import { ConsentTermView } from './ConsentTermView';
 import { LaserBodyMapView } from '../laser/LaserBodyMapView';
@@ -24,8 +23,6 @@ import {
   X,
   ShieldCheck,
   Stethoscope,
-  Edit3,
-  Save,
   Loader2,
   PenTool,
 } from 'lucide-react';
@@ -69,14 +66,6 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [isEditingProfissional, setIsEditingProfissional] = useState(false);
-  const [isSavingProfissional, setIsSavingProfissional] = useState(false);
-  const [professionalIdDraft, setProfessionalIdDraft] = useState(
-    record.professionalId || clinicProfile.professionals?.find((p) => p.name === record.profissionalNome)?.id || ''
-  );
-  const [respostasProfissionalDraft, setRespostasProfissionalDraft] = useState<Record<string, any>>(
-    { ...(record.respostasProfissional || {}) }
-  );
   const [annotatingTarget, setAnnotatingTarget] = useState<'modelo' | 'paciente' | null>(null);
 
   const handlePrint = () => {
@@ -119,28 +108,6 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
     }
   };
 
-  const handleSaveProfissional = async () => {
-    if (!onSaveRecord) return;
-    setIsSavingProfissional(true);
-    try {
-      const selectedProfessional = clinicProfile.professionals?.find((p) => p.id === professionalIdDraft);
-      const updated: AnamnesisRecord = {
-        ...record,
-        professionalId: professionalIdDraft || record.professionalId,
-        profissionalNome: selectedProfessional?.name || record.profissionalNome,
-        respostasProfissional: respostasProfissionalDraft,
-        profissionalPreenchidoEm: record.profissionalPreenchidoEm || new Date().toISOString(),
-      };
-      await onSaveRecord(updated);
-      setIsEditingProfissional(false);
-    } catch (err) {
-      console.error('Erro ao salvar respostas do profissional:', err);
-      alert('Não foi possível salvar agora. Tente novamente.');
-    } finally {
-      setIsSavingProfissional(false);
-    }
-  };
-
   const calculateAge = (birthDateStr?: string) => {
     if (!birthDateStr) return null;
     const birth = new Date(birthDateStr);
@@ -162,13 +129,27 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
 
   const patientGeneralQuestions = nonDuplicateGeneral.filter(isPatientQuestion);
   const patientSpecificQuestions = (record.perguntasSnapshot?.especificas || []).filter(isPatientQuestion);
-  const medicoQuestions = [
+  /**
+   * Bloco **legado**, somente-leitura. As perguntas da profissional saíram da anamnese e viraram
+   * `EvaluationRecord` — uma por atendimento, que é a cardinalidade certa para elas.
+   *
+   * Sobrevive aqui porque fichas assinadas antes da separação têm respostas gravadas, e apagar a
+   * exibição apagaria dado clínico da tela. Mas só entra o que foi **respondido**: pergunta em
+   * branco que ninguém mais pode responder é só um convite a abrir chamado.
+   */
+  const medicoRespondidas = [
     ...nonDuplicateGeneral.filter(isMedicoQuestion),
     ...(record.perguntasSnapshot?.especificas || []).filter(isMedicoQuestion),
-  ];
+  ].filter((q) => {
+    const v = (record.respostasProfissional || {})[q.id];
+    if (v === undefined || v === null) return false;
+    if (typeof v === 'string') return v.trim() !== '';
+    if (Array.isArray(v)) return v.length > 0;
+    return true;
+  });
 
   const isStaff = viewerRole === 'staff';
-  const showMedicoSection = isStaff && medicoQuestions.length > 0;
+  const showMedicoSection = isStaff && medicoRespondidas.length > 0;
   const referenceImageSrc = (isStaff && record.fotoModeloAnotadaUrl) || record.fotoModeloUrl;
 
   // ---- Áreas do laser ----
@@ -499,103 +480,34 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                   <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-indigo-900">
                     Complemento do Profissional
                   </h4>
+                  <span className="print:hidden text-[9px] uppercase font-bold tracking-wider text-gray-400 border border-gray-200 rounded-xs px-1.5 py-0.5">
+                    Registro histórico
+                  </span>
                 </div>
-                {onSaveRecord && medicoQuestions.length > 0 && !isEditingProfissional && (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingProfissional(true)}
-                    className="print:hidden flex items-center gap-1.5 px-3 py-1 rounded-xs bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-semibold hover:bg-indigo-100 transition-colors"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    {record.profissionalPreenchidoEm ? 'Editar Respostas' : 'Preencher Respostas'}
-                  </button>
-                )}
               </div>
 
-              {medicoQuestions.length === 0 ? (
-                <p className="text-xs text-gray-400 italic">
-                  Esta ficha não possui perguntas exclusivas do profissional configuradas.
-                </p>
-              ) : isEditingProfissional ? (
-                <div className="space-y-4 bg-indigo-50/30 border border-indigo-200 rounded-sm p-4 print:hidden">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-800 mb-1">
-                      Profissional Responsável
-                    </label>
-                    <select
-                      value={professionalIdDraft}
-                      onChange={(e) => setProfessionalIdDraft(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-indigo-400"
-                    >
-                      <option value="">-- Selecione o profissional --</option>
-                      {clinicProfile.professionals?.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <p className="print:hidden text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-xs px-2.5 py-1.5 mb-3">
+                Estas respostas foram gravadas antes de a avaliação virar ficha própria. Ficam
+                preservadas como estão; a avaliação de cada atendimento agora é preenchida em
+                Fichas de Avaliação.
+              </p>
 
-                  <div className="space-y-3 divide-y divide-indigo-100">
-                    {medicoQuestions.map((q) => (
-                      <div key={q.id} className="pt-3 first:pt-0">
-                        <QuestionFieldRenderer
-                          question={q}
-                          value={respostasProfissionalDraft[q.id]}
-                          onChange={(val) =>
-                            setRespostasProfissionalDraft((prev) => ({ ...prev, [q.id]: val }))
-                          }
-                        />
-                      </div>
-                    ))}
+              <div className="space-y-2.5">
+                {medicoRespondidas.map((q, idx) => (
+                  <div
+                    key={q.id}
+                    className="p-2.5 rounded-xs border bg-indigo-50/20 border-indigo-100 text-xs"
+                  >
+                    <span className="font-medium text-gray-700 leading-snug block">
+                      {idx + 1}. {q.texto}
+                    </span>
+                    <div className="mt-1 font-bold text-[#1A1A1A]">
+                      Resposta:{' '}
+                      <span>{displayValue(q, (record.respostasProfissional || {})[q.id])}</span>
+                    </div>
                   </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-indigo-200">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsEditingProfissional(false);
-                        setRespostasProfissionalDraft({ ...(record.respostasProfissional || {}) });
-                      }}
-                      className="px-3 py-1.5 rounded-sm border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveProfissional}
-                      disabled={isSavingProfissional}
-                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm bg-indigo-700 text-white text-xs font-semibold uppercase tracking-wider hover:bg-indigo-800 transition-colors disabled:opacity-50"
-                    >
-                      {isSavingProfissional ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                      Salvar
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {medicoQuestions.map((q, idx) => {
-                    const val = (record.respostasProfissional || {})[q.id];
-                    return (
-                      <div key={q.id} className="p-2.5 rounded-xs border bg-indigo-50/20 border-indigo-100 text-xs">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="font-medium text-gray-700 leading-snug">
-                            {idx + 1}. {q.texto}
-                          </span>
-                        </div>
-                        <div className="mt-1 font-bold text-[#1A1A1A]">
-                          Resposta: <span>{displayValue(q, val)}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {!record.profissionalPreenchidoEm && (
-                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xs px-2.5 py-1.5">
-                      Ainda não complementada pelo profissional.
-                    </p>
-                  )}
-                </div>
-              )}
+                ))}
+              </div>
             </div>
           )}
 

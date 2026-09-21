@@ -83,6 +83,28 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // Fichas de avaliação: o que a profissional responde DEPOIS do atendimento — fototipo,
+    // estratégia proposta, evolução, o mapa anatômico rabiscado e a foto da sessão.
+    //
+    // Fechadas nos três casos, ao contrário de `anamnesis_templates` e
+    // `anamnesis_general_questions`, que são de leitura pública. A diferença não é descuido: a
+    // anamnese precisa abrir sem login porque é a paciente quem a preenche, pelo link. Avaliação
+    // ela nunca vê — nem o modelo, que denunciaria o que a clínica observa sem dizer, nem o
+    // preenchido, que é documento interno da equipe.
+    match /evaluation_templates/{templateId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /evaluation_general_questions/{questionId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Um documento por atendimento, com o ID do atendimento. O ID ser previsível (e não um
+    // randomUUID como o do orçamento) é mais uma razão para não abrir a leitura.
+    match /evaluation_records/{attendanceId} {
+      allow read, write: if request.auth != null;
+    }
+
     // Qualquer coleção não prevista acima fica fechada por padrão (nega tudo), em vez do
     // catch-all aberto anterior — reduz a superfície de dados expostos sem querer.
     match /{document=**} {

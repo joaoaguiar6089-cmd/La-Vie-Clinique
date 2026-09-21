@@ -175,7 +175,7 @@ export interface ClinicProfile {
 }
 
 /** Telas do painel autenticado — a navegação é por estado, o app não tem rotas. */
-export type AppView = 'procedures' | 'patients' | 'anamnesis' | 'quotes';
+export type AppView = 'procedures' | 'patients' | 'anamnesis' | 'evaluations' | 'quotes';
 
 export interface FilterState {
   search: string;
@@ -311,8 +311,27 @@ export interface AnamnesisRecord {
   profissionalNome?: string; // Nome do profissional no momento do registro (espelha professionalId; mantido para fichas antigas sem ID)
   respostasGerais: Record<string, any>; // questionId -> valor (perguntas gerais, ambos os públicos)
   respostasEspecificas: Record<string, any>; // questionId -> valor (perguntas específicas, ambos os públicos)
-  respostasProfissional?: Record<string, any>; // questionId -> valor, respostas exclusivas do profissional (publicoAlvo='medico')
-  profissionalPreenchidoEm?: string; // ISO timestamp da 1ª vez que o profissional salvou sua parte — presença trava a edição do paciente
+  /**
+   * Respostas exclusivas do profissional. **Legado**: as perguntas `publicoAlvo: 'medico'`
+   * mudaram para `EvaluationRecord`, uma por atendimento. Ficha nova nunca escreve aqui; ficha
+   * antiga exibe o que gravou, em modo somente-leitura — e só o que foi de fato respondido,
+   * porque pergunta em branco que ninguém mais pode responder é só um convite a abrir chamado.
+   */
+  respostasProfissional?: Record<string, any>;
+  /**
+   * ISO da 1ª vez que o profissional salvou sua parte. **Legado**, pela mesma razão acima, mas
+   * continua sendo honrado como trava: nenhuma ficha travada hoje pode destravar por causa da
+   * mudança. Em ficha nova, quem fecha é `anamneseFechada()` — ver `utils/evaluations.ts`.
+   */
+  profissionalPreenchidoEm?: string;
+  /**
+   * Encerramento manual da ficha pela equipe.
+   *
+   * A trava automática depende de existir atendimento realizado lançado no sistema. A clínica que
+   * não usa o módulo de atendimentos com disciplina deixaria o link da paciente aberto
+   * indefinidamente — este botão é a saída, e não depende de inferência nenhuma.
+   */
+  encerradaEm?: string; // ISO
   fotoModeloUrl?: string; // Foto do doutor / mapa anatômico de referência, já resolvida pelo gênero do paciente no momento da criação
   fotoModeloAnotadaUrl?: string; // Versão da foto de referência com anotações do profissional (imagem "achatada", usada no PDF)
   fotoModeloAnotacoesJson?: string; // Estado do canvas de anotação (JSON do Fabric.js) para permitir reabrir e continuar editando
@@ -539,6 +558,121 @@ export interface Attendance {
   status?: AttendanceStatus;
   /** Data e hora originais do agendamento, guardadas quando a confirmação mudou a data. */
   agendadoPara?: string; // ISO
+  /**
+   * Marca de que existe `EvaluationRecord` para esta visita — só o instante, nunca o conteúdo.
+   *
+   * Está aqui para a lista mostrar o selo de "avaliada" e para a fila de pendentes se montar sem
+   * uma leitura por linha. O peso da avaliação (respostas, snapshot, URLs de foto) fica de fora
+   * de propósito: `subscribeToAttendances` baixa esta coleção inteira em toda sessão.
+   */
+  avaliacaoPreenchidaEm?: string; // ISO
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// ==========================================
+// MÓDULO DE FICHAS DE AVALIAÇÃO — TIPOS
+// ==========================================
+
+/**
+ * Perguntas que a profissional responde **depois** do atendimento.
+ *
+ * Nasceu de dentro da anamnese, onde vivia como `publicoAlvo: 'medico'`, e saiu de lá por um
+ * motivo de cardinalidade: a anamnese é **uma por caso** e a avaliação é **uma por sessão**. Numa
+ * paciente com plano de 10 sessões de laser, deixar a avaliação presa à anamnese obrigaria a criar
+ * uma anamnese nova a cada sessão — dez fichas de histórico de saúde idênticas — ou a sobrescrever
+ * a avaliação da sessão anterior. As duas saídas perdem informação clínica.
+ *
+ * O vínculo é com o `Attendance`, e a regra de liberação está em `utils/evaluations.ts`.
+ */
+
+/**
+ * O modelo: quais perguntas a clínica faz ao avaliar determinado procedimento.
+ *
+ * O vínculo é **plural** de propósito. A depilação a laser tem treze áreas no catálogo e uma
+ * única avaliação (fototipo, cor e espessura do pelo não mudam de buço para axila): ligar por
+ * `categorias` resolve as treze de uma vez, como `mapearTemplatesPorProcedimento` já faz na
+ * anamnese. `procedureIds` cobre o caso oposto, do procedimento avulso.
+ *
+ * Quando os dois alcançam o mesmo procedimento, **o específico vence** — o contrário da ordem em
+ * `mapearTemplatesPorProcedimento`, onde a categoria vem primeiro porque as fichas por área
+ * estavam sendo aposentadas de propósito. Aqui não: quem criou ficha para uma área só quis
+ * sobrepor a da categoria. Ver `fichaDeAvaliacaoPara()`.
+ */
+export interface EvaluationTemplate {
+  id: string;
+  /** Nome exibido. Livre, porque uma ficha pode cobrir vários procedimentos e não herda nome de nenhum. */
+  nome: string;
+  /** Procedimentos ligados um a um. */
+  procedureIds?: string[];
+  /** Categorias inteiras do catálogo — todo procedimento delas herda esta ficha. */
+  categorias?: string[];
+  perguntas: AnamnesisQuestion[];
+  /** Liga o upload da foto daquela sessão (o registro de evolução), anotável como o mapa. */
+  temFotoSessao: boolean;
+  /**
+   * Mapa anatômico que a profissional rabisca. Mesmo trio da anamnese, resolvido pelo mesmo
+   * `resolveTemplatePhoto()` — o mapa do glúteo feminino não serve ao masculino, e uma imagem só
+   * faria a migração descartar metade do que a clínica já tinha cadastrado.
+   */
+  fotoModeloUrl?: string;
+  fotoModeloFemininoUrl?: string;
+  fotoModeloMasculinoUrl?: string;
+  descricao?: string;
+  /** Mesma trava de `AnamnesisTemplate.migracoesAplicadas`: mora no documento, não no navegador. */
+  migracoesAplicadas?: string[];
+  updatedAt?: string;
+}
+
+/**
+ * A avaliação de **um** atendimento.
+ *
+ * O `id` é o próprio `atendimentoId`. Isso resolve duas coisas de uma vez: a busca vira um
+ * `getDoc` direto, sem query nem índice, e "uma avaliação por atendimento" deixa de ser uma regra
+ * que alguém precisa lembrar de aplicar — passa a ser impossível de violar.
+ *
+ * Mora em coleção própria, e não dentro do `Attendance`, porque `subscribeToAttendances` assina a
+ * coleção **inteira**: respostas e URLs de foto dentro do atendimento seriam baixadas por toda a
+ * clínica em toda sessão, e cada correção de observação reescreveria o documento inteiro — a cota
+ * do Firestore aqui é por KB gravado.
+ */
+export interface EvaluationRecord {
+  /** Igual ao `Attendance.id` que esta avaliação descreve. */
+  id: string;
+  atendimentoId: string;
+  pacienteId: string;
+  /** Espelham o momento do registro, como fazem a ficha e o orçamento. */
+  pacienteNome: string;
+  pacienteGenero?: PatientGender;
+  procedureId?: string;
+  procedimentoNome: string;
+  dataAtendimento: string; // YYYY-MM-DD, copiada do atendimento
+  professionalId?: string;
+  profissionalNome?: string;
+  templateId?: string;
+  respostas: Record<string, any>; // questionId -> valor
+  /**
+   * Só as perguntas **efetivamente respondidas**, e não a ficha-modelo inteira.
+   *
+   * Congelar é o que impede uma pergunta reescrita hoje de mudar o sentido de uma avaliação de
+   * meses atrás — mesma razão do `perguntasSnapshot` da anamnese. Guardar só as respondidas é o
+   * que evita pagar KB por pergunta em branco em todo registro.
+   */
+  perguntasSnapshot: AnamnesisQuestion[];
+  fotoModeloUrl?: string;
+  fotoModeloAnotadaUrl?: string;
+  fotoModeloAnotacoesJson?: string;
+  /** Foto daquela sessão — o registro de evolução, tirado na clínica. */
+  fotoSessaoUrl?: string;
+  fotoSessaoAnotadaUrl?: string;
+  fotoSessaoAnotacoesJson?: string;
+  /**
+   * Nota clínica da avaliação. **Não** é o `Attendance.observacoes`, que é a nota da recepção
+   * escrita ao lançar a visita ("chegou atrasada, trocou de procedimento") — e que é baixada com
+   * a coleção inteira de atendimentos.
+   */
+  observacoes?: string;
+  preenchidoEm: string; // ISO do 1º salvamento
   createdAt: string;
   updatedAt?: string;
 }
