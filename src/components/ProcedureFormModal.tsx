@@ -64,6 +64,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [recoveryTime, setRecoveryTime] = useState('Sem downtime');
   /** O "antes de vir" que a confirmação do WhatsApp anexa quando a clínica liga a opção. */
   const [orientacoesPreProcedimento, setOrientacoesPreProcedimento] = useState('');
+  /** Dias entre sessões — a ficha da paciente usa para sugerir a data da próxima. */
+  const [intervaloEntreSessoesDias, setIntervaloEntreSessoesDias] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [benefits, setBenefits] = useState<string[]>([]);
@@ -144,6 +146,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setSessionsRecommended(procedureToEdit.sessionsRecommended || '');
       setRecoveryTime(procedureToEdit.recoveryTime || '');
       setOrientacoesPreProcedimento(procedureToEdit.orientacoesPreProcedimento || '');
+      setIntervaloEntreSessoesDias(
+        procedureToEdit.intervaloEntreSessoesDias ? String(procedureToEdit.intervaloEntreSessoesDias) : ''
+      );
       setImages(procedureToEdit.images || []);
       setBenefits(procedureToEdit.benefits || []);
       setAreasTreated(procedureToEdit.areasTreated || []);
@@ -403,6 +408,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       sessionsRecommended: sessionsRecommended.trim() || undefined,
       recoveryTime: recoveryTime.trim() || undefined,
       orientacoesPreProcedimento: orientacoesPreProcedimento.trim() || undefined,
+      intervaloEntreSessoesDias: Number(intervaloEntreSessoesDias) > 0
+        ? Number(intervaloEntreSessoesDias)
+        : undefined,
       images: uploadedImages,
       benefits: benefits.length > 0 ? benefits : ['Melhora estética e bem-estar'],
       areasTreated: areasTreated.length > 0 ? areasTreated : undefined,
@@ -529,6 +537,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setSessionsRecommended(proc.sessionsRecommended || '');
     setRecoveryTime(proc.recoveryTime || '');
     setOrientacoesPreProcedimento(proc.orientacoesPreProcedimento || '');
+    setIntervaloEntreSessoesDias(
+      proc.intervaloEntreSessoesDias ? String(proc.intervaloEntreSessoesDias) : ''
+    );
     setImages(proc.images || []);
     setBenefits(proc.benefits || []);
     setAreasTreated(proc.areasTreated || []);
@@ -1155,6 +1166,21 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   value={sessionsRecommended}
                   onChange={(e) => setSessionsRecommended(e.target.value)}
                   placeholder="Ex: 1 a 3 sessões anuais"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">
+                  Intervalo entre sessões (dias)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={intervaloEntreSessoesDias}
+                  onChange={(e) => setIntervaloEntreSessoesDias(e.target.value)}
+                  placeholder="30"
                   className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
                 />
               </div>

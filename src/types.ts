@@ -120,6 +120,14 @@ export interface Procedure {
   isFeatured?: boolean;
   quoteDetails?: QuoteItemDetail[]; // "Detalhes para orçamento" — pares título/resposta que pré-preenchem o item no orçamento
   /**
+   * Quantos dias entre uma sessão e a seguinte, num plano de sessões.
+   *
+   * É o que a ficha da paciente usa para sugerir a data da próxima. Ausente = o padrão de
+   * `INTERVALO_PADRAO_DIAS` (30 dias). Não bloqueia nada: é sugestão, e agendar fora do
+   * intervalo continua sendo decisão da clínica.
+   */
+  intervaloEntreSessoesDias?: number;
+  /**
    * O que a paciente precisa fazer (ou evitar) antes de vir — "não depilar com cera nos 30 dias
    * anteriores", "venha sem maquiagem". Entra na mensagem de confirmação do WhatsApp quando a
    * clínica liga `agendaConfirmacaoIncluirOrientacoes`.
