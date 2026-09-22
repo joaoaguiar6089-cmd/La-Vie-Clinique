@@ -19,6 +19,7 @@ import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { CommandPalette, AcaoRapida } from './components/common/CommandPalette';
 import { HojeView } from './components/hoje/HojeView';
+import { BottomNav, AcaoDeCriacao } from './components/BottomNav';
 import {
   Procedure,
   ClinicProfile,
@@ -234,10 +235,23 @@ function MainCatalogApp() {
     window.scrollTo({ top: 0 });
   };
 
+  /** O que "criar do zero" significa em cada caso: ir para a tela e já abrir o formulário. */
+  const criar = (acao: AcaoDeCriacao) => {
+    if (acao === 'agendamento') navegar({ view: 'agenda', criarNovo: true });
+    else if (acao === 'paciente') navegar({ view: 'patients', criarNovo: true });
+    else if (acao === 'orcamento') navegar({ view: 'quotes', criarNovo: true });
+    else {
+      // A ficha de anamnese nasce sem procedimento escolhido: quem escolhe é o formulário.
+      setAnamnesisRequest({ tipo: 'nova-ficha', nonce: Date.now() });
+      setCurrentView('anamnesis');
+      window.scrollTo({ top: 0 });
+    }
+  };
+
   const acaoRapida = (acao: AcaoRapida) => {
-    if (acao === 'novo-agendamento') navegar({ view: 'agenda', criarNovo: true });
-    else if (acao === 'nova-paciente') navegar({ view: 'patients', criarNovo: true });
-    else navegar({ view: 'quotes', criarNovo: true });
+    if (acao === 'novo-agendamento') criar('agendamento');
+    else if (acao === 'nova-paciente') criar('paciente');
+    else criar('orcamento');
   };
 
   /**
@@ -751,8 +765,28 @@ function MainCatalogApp() {
         onLogout={logout}
       />
 
-      {/* Content Column */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      {/* Navegação do celular. Fica fora da coluna de conteúdo por ser `fixed`: dentro dela,
+          o `overflow` de qualquer ancestral poderia prendê-la. */}
+      <BottomNav
+        currentView={currentView}
+        onSelectView={(view) => setCurrentView(view)}
+        onCriar={criar}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenExport={() => {
+          setSingleProcedureToExport(null);
+          setIsExportModalOpen(true);
+        }}
+        onLogout={logout}
+        agendamentosPendentesCount={agendamentosPendentes}
+        avaliacoesPendentesCount={avaliacoesPendentes}
+      />
+
+      {/* Coluna de conteúdo.
+
+          `pb-barra-inferior` reserva, no celular, a altura da barra de baixo mais a faixa do
+          gesto do iPhone. Fica aqui, depois do rodapé, e não dentro de cada tela: assim nenhuma
+          tela nova precisa lembrar disso, e o rodapé também não termina escondido. */}
+      <div className="flex-1 min-w-0 flex flex-col pb-barra-inferior sm:pb-0">
         {isQuotaExceeded && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
             <div className="flex items-start sm:items-center gap-2.5">

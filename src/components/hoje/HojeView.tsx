@@ -172,7 +172,7 @@ export const HojeView: React.FC<HojeViewProps> = ({
     .split(/\s+/)[0];
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-5 pb-barra-inferior sm:pb-10">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-5">
       {/* Cabeçalho */}
       <header>
         <p className="text-label uppercase tracking-wider font-semibold text-brand first-letter:uppercase">

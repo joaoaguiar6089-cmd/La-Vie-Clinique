@@ -38,8 +38,13 @@ import { ClipboardList, Layers } from 'lucide-react';
  * aqui e diz o que abrir. O `nonce` distingue dois toques seguidos no mesmo procedimento.
  */
 export interface AnamnesisOpenRequest {
-  tipo: 'preencher' | 'criar-ficha';
-  procedure: Procedure;
+  /**
+   * `preencher` e `criar-ficha` vêm do card do catálogo e trazem o procedimento junto.
+   * `nova-ficha` vem do "+" do celular e da busca global: abre o formulário em branco, com a
+   * escolha do procedimento dentro dele — é o único caso em que `procedure` não existe.
+   */
+  tipo: 'preencher' | 'criar-ficha' | 'nova-ficha';
+  procedure?: Procedure;
   /** Ficha-modelo já vinculada ao procedimento, quando existe. */
   templateId?: string;
   nonce: number;
@@ -136,6 +141,13 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
   useEffect(() => {
     if (!openRequest) return;
 
+    if (openRequest.tipo === 'nova-ficha') {
+      setActiveTab('records');
+      handleOpenFillModal();
+      onOpenRequestHandled?.();
+      return;
+    }
+
     if (openRequest.tipo === 'preencher') {
       setActiveTab('records');
       setFillModalPatientId(undefined);
@@ -145,10 +157,12 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
       // "Virilha Completa" e o clique em "Axilas" abririam exatamente a mesma tela vazia, e a
       // escolha que a profissional acabou de fazer no catálogo se perderia.
       setFillModalAreaInicial(
-        isLaserCategory(openRequest.procedure.category) ? openRequest.procedure.id : undefined
+        openRequest.procedure && isLaserCategory(openRequest.procedure.category)
+          ? openRequest.procedure.id
+          : undefined
       );
       setFillModalOpen(true);
-    } else {
+    } else if (openRequest.procedure) {
       setActiveTab('templates');
       setCriarFichaPara(openRequest.procedure);
     }
