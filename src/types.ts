@@ -119,6 +119,15 @@ export interface Procedure {
   idealCandidate?: string;
   isFeatured?: boolean;
   quoteDetails?: QuoteItemDetail[]; // "Detalhes para orçamento" — pares título/resposta que pré-preenchem o item no orçamento
+  /**
+   * O que a paciente precisa fazer (ou evitar) antes de vir — "não depilar com cera nos 30 dias
+   * anteriores", "venha sem maquiagem". Entra na mensagem de confirmação do WhatsApp quando a
+   * clínica liga `agendaConfirmacaoIncluirOrientacoes`.
+   *
+   * Separado de `contraindications` de propósito: contraindicação é motivo para **não** fazer o
+   * procedimento; isto é preparo para quem já vai fazer.
+   */
+  orientacoesPreProcedimento?: string;
   assignedDoctorIds?: string[]; // IDs of assigned doctors
   assignedDoctorNames?: string[]; // Names/credentials for display or custom entry
   /**
@@ -178,6 +187,8 @@ export interface ClinicProfile {
   agendaExpediente?: AgendaExpedienteDia[];
   agendaIntervaloMin?: number; // Granularidade da grade em minutos: 15, 30 ou 60 (padrão 30)
   agendaConfirmacaoTemplate?: string; // Mensagem de confirmação no WhatsApp; ver `mensagemDeConfirmacao`
+  /** Anexa `Procedure.orientacoesPreProcedimento` ao fim da mensagem de confirmação. */
+  agendaConfirmacaoIncluirOrientacoes?: boolean;
   /**
    * Mapa corporal da depilação a laser — os dois manequins sobre os quais as áreas são desenhadas.
    * Sem sexo, aproveitados para ambos os gêneros: as áreas são desenhadas uma vez só.
@@ -615,6 +626,17 @@ export interface Attendance {
   status?: AttendanceStatus;
   /** Data e hora originais do agendamento, guardadas quando a confirmação mudou a data. */
   agendadoPara?: string; // ISO
+  /**
+   * Instante em que a paciente confirmou que vem — normalmente respondendo o WhatsApp.
+   *
+   * Campo próprio, e não mais um valor em `AttendanceStatus`, porque as duas coisas são
+   * ortogonais: "confirmado" é uma promessa feita **antes** da visita e `status` é o desfecho
+   * **depois** dela. Um agendamento confirmado que virou falta precisa continuar sendo os dois,
+   * e um `status: 'confirmado'` apagaria o rastro de que a paciente havia prometido vir.
+   *
+   * Ausente = ninguém confirmou ainda. Só existe em quem nasceu agendamento.
+   */
+  confirmadoEm?: string; // ISO
   /**
    * Marca de que existe `EvaluationRecord` para esta visita — só o instante, nunca o conteúdo.
    *

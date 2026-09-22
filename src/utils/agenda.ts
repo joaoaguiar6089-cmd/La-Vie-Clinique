@@ -545,13 +545,26 @@ const primeiroNomeDe = (nome: string): string => (nome || '').trim().split(/\s+/
  * Marcador desconhecido fica como está, para um erro de digitação no template aparecer na hora em
  * vez de sumir calado; marcador conhecido e vazio vira string vazia. De todo jeito quem envia revê
  * a mensagem no WhatsApp antes de mandar.
+ *
+ * `{nome}` é o nome inteiro e `{primeiroNome}` é só o primeiro — os dois existem porque o template
+ * padrão sempre usou o primeiro nome, e trocar o significado do marcador reescreveria a mensagem
+ * de toda clínica que já personalizou a sua.
+ *
+ * Quando a clínica liga `agendaConfirmacaoIncluirOrientacoes`, o preparo do procedimento
+ * (`Procedure.orientacoesPreProcedimento`) entra ao fim, separado por uma linha em branco. Ele vem
+ * do catálogo em memória — a mensagem não faz leitura nenhuma.
  */
 export const mensagemDeConfirmacao = (
-  clinic: Pick<ClinicProfile, 'name' | 'agendaConfirmacaoTemplate'>,
-  atendimento: Attendance
+  clinic: Pick<
+    ClinicProfile,
+    'name' | 'agendaConfirmacaoTemplate' | 'agendaConfirmacaoIncluirOrientacoes'
+  >,
+  atendimento: Attendance,
+  catalogo: Procedure[] = []
 ): string => {
   const template = clinic.agendaConfirmacaoTemplate?.trim() || AGENDA_DEFAULTS.confirmacaoTemplate;
   const valores: Record<string, string> = {
+    nome: (atendimento.pacienteNome || '').trim(),
     primeiroNome: primeiroNomeDe(atendimento.pacienteNome),
     data: dataExtensa(atendimento.data),
     hora: atendimento.hora || '',
@@ -559,10 +572,58 @@ export const mensagemDeConfirmacao = (
     profissional: atendimento.profissionalNome || '',
     clinica: clinic.name || '',
   };
-  return template.replace(/\{(\w+)\}/g, (inteiro, chave: string) =>
+  const corpo = template.replace(/\{(\w+)\}/g, (inteiro, chave: string) =>
     chave in valores ? valores[chave] : inteiro
   );
+
+  if (!clinic.agendaConfirmacaoIncluirOrientacoes) return corpo;
+  const orientacoes = orientacoesDoAtendimento(atendimento, catalogo);
+  return orientacoes ? `${corpo}\n\n${orientacoes}` : corpo;
 };
+
+/** O preparo do procedimento agendado, pronto para colar na mensagem. */
+export const orientacoesDoAtendimento = (
+  atendimento: Pick<Attendance, 'procedureId'>,
+  catalogo: Procedure[]
+): string | undefined => {
+  if (!atendimento.procedureId) return undefined;
+  const texto = catalogo
+    .find((p) => p.id === atendimento.procedureId)
+    ?.orientacoesPreProcedimento?.trim();
+  return texto ? `Antes de vir:\n${texto}` : undefined;
+};
+
+// ==========================================
+// CONFIRMAÇÃO DA PACIENTE
+// ==========================================
+
+/**
+ * A paciente já disse que vem?
+ *
+ * Só faz sentido em quem nasceu agendamento e continua pendente: depois do desfecho (compareceu,
+ * faltou, remarcado) a promessa não interessa mais, e um selo verde de "confirmado" ao lado de uma
+ * falta só confundiria a recepção.
+ */
+export const ehConfirmado = (a: Attendance): boolean =>
+  !!a.confirmadoEm && a.status === 'agendado';
+
+/** Agendamento de amanhã que ninguém confirmou — o trabalho de hoje da recepção. */
+export const ehDeAmanhaSemConfirmacao = (a: Attendance, hoje: DataISO = hojeISO()): boolean =>
+  a.status === 'agendado' && !a.confirmadoEm && a.data === deslocarDias(hoje, 1);
+
+/**
+ * A lista de amanhã que falta confirmar, na ordem do dia.
+ *
+ * Amanhã, e não "os próximos dias", porque é esse o expediente da recepção: confirmar hoje o que
+ * acontece amanhã. Uma janela maior devolveria uma lista que ninguém trabalha inteira.
+ */
+export const aConfirmarAmanha = (
+  atendimentos: Attendance[],
+  hoje: DataISO = hojeISO()
+): Attendance[] =>
+  atendimentos
+    .filter((a) => ehDeAmanhaSemConfirmacao(a, hoje))
+    .sort((a, b) => instanteNoDia(a) - instanteNoDia(b));
 
 /** O telefone que a confirmação usa. Paciente sem cadastro não tem contato — o botão desliga. */
 export const contatoDoAtendimento = (

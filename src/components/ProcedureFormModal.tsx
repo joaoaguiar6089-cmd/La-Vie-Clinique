@@ -60,6 +60,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [duration, setDuration] = useState('45 a 60 min');
   const [sessionsRecommended, setSessionsRecommended] = useState('1 a 3 sessões');
   const [recoveryTime, setRecoveryTime] = useState('Sem downtime');
+  /** O "antes de vir" que a confirmação do WhatsApp anexa quando a clínica liga a opção. */
+  const [orientacoesPreProcedimento, setOrientacoesPreProcedimento] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [benefits, setBenefits] = useState<string[]>([]);
@@ -138,6 +140,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setDuration(procedureToEdit.duration || '');
       setSessionsRecommended(procedureToEdit.sessionsRecommended || '');
       setRecoveryTime(procedureToEdit.recoveryTime || '');
+      setOrientacoesPreProcedimento(procedureToEdit.orientacoesPreProcedimento || '');
       setImages(procedureToEdit.images || []);
       setBenefits(procedureToEdit.benefits || []);
       setAreasTreated(procedureToEdit.areasTreated || []);
@@ -396,6 +399,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       duration: duration.trim() || undefined,
       sessionsRecommended: sessionsRecommended.trim() || undefined,
       recoveryTime: recoveryTime.trim() || undefined,
+      orientacoesPreProcedimento: orientacoesPreProcedimento.trim() || undefined,
       images: uploadedImages,
       benefits: benefits.length > 0 ? benefits : ['Melhora estética e bem-estar'],
       areasTreated: areasTreated.length > 0 ? areasTreated : undefined,
@@ -519,6 +523,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setDuration(proc.duration || '');
     setSessionsRecommended(proc.sessionsRecommended || '');
     setRecoveryTime(proc.recoveryTime || '');
+    setOrientacoesPreProcedimento(proc.orientacoesPreProcedimento || '');
     setImages(proc.images || []);
     setBenefits(proc.benefits || []);
     setAreasTreated(proc.areasTreated || []);
@@ -1127,6 +1132,25 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
                 />
               </div>
+            </div>
+
+            {/* Preparo da paciente. Diferente de "Contraindicações": aquilo é motivo para não
+                fazer; isto é o que fazer antes de quem já vai. */}
+            <div>
+              <label className="block text-body font-medium text-ink mb-1">
+                Orientações de preparo (antes de vir)
+              </label>
+              <textarea
+                rows={2}
+                value={orientacoesPreProcedimento}
+                onChange={(e) => setOrientacoesPreProcedimento(e.target.value)}
+                placeholder="Ex: Não depile com cera nos 30 dias anteriores. Venha sem maquiagem na área."
+                className="w-full px-3.5 py-2 rounded-sm bg-card border border-line text-body font-medium text-ink focus:outline-hidden focus:border-brand"
+              />
+              <p className="mt-1 text-label text-muted">
+                Vai junto na confirmação pelo WhatsApp, quando essa opção estiver ligada nas
+                Configurações.
+              </p>
             </div>
 
             <div>

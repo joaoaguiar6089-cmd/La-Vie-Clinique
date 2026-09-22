@@ -92,7 +92,15 @@ interface AttendanceFormModalProps {
   modo: ModoDoFormulario;
   /** "+ adicionar sessão" de dentro de um plano: o registro nasce amarrado a ele. */
   planoFixoId?: string;
-  onSalvar: (attendance: Attendance, planoNovo?: SessionPlan) => Promise<void>;
+  /**
+   * `limparConfirmacao` é verdadeiro quando a edição mexeu na data ou na hora: a paciente tinha
+   * confirmado **aquele** horário, e manter o selo verde no novo faria a agenda de amanhã mentir.
+   */
+  onSalvar: (
+    attendance: Attendance,
+    planoNovo?: SessionPlan,
+    opcoes?: { limparConfirmacao?: boolean }
+  ) => Promise<void>;
 }
 
 const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
@@ -381,7 +389,13 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         createdAt: modo === 'novo' ? agora : atendimento?.createdAt || agora,
       };
 
-      await onSalvar(registro, planoNovo);
+      const horarioMudou =
+        modo === 'edicao' &&
+        (registro.data !== atendimento?.data || (registro.hora || '') !== (atendimento?.hora || ''));
+
+      await onSalvar(registro, planoNovo, {
+        limparConfirmacao: !!atendimento?.confirmadoEm && horarioMudou,
+      });
       onClose();
     } catch (e) {
       setErroGeral(`Não foi possível salvar: ${(e as Error).message}`);

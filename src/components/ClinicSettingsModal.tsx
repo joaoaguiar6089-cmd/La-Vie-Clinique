@@ -1327,19 +1327,38 @@ const SecaoAgendaDaClinica: React.FC<{
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-ink mb-1">
+        <label className="block text-body font-medium text-ink mb-1">
           Mensagem de confirmação no WhatsApp
         </label>
         <textarea
           rows={3}
           value={formData.agendaConfirmacaoTemplate ?? AGENDA_DEFAULTS.confirmacaoTemplate}
           onChange={(e) => onChange('agendaConfirmacaoTemplate', e.target.value)}
-          className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
+          className="w-full px-3.5 py-2 rounded-sm bg-card border border-line text-body font-medium text-ink"
         />
-        <p className="mt-1 text-body text-gray-400">
-          Marcadores: {'{primeiroNome}'} {'{data}'} {'{hora}'} {'{procedimento}'}{' '}
+        <p className="mt-1 text-label text-muted">
+          Marcadores: {'{nome}'} {'{primeiroNome}'} {'{data}'} {'{hora}'} {'{procedimento}'}{' '}
           {'{profissional}'} {'{clinica}'}
         </p>
+
+        {/* O preparo é texto do procedimento, cadastrado no catálogo — aqui só se decide se ele
+            viaja junto. Procedimento sem preparo cadastrado não acrescenta nada à mensagem. */}
+        <label className="mt-3 flex items-start gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!formData.agendaConfirmacaoIncluirOrientacoes}
+            onChange={(e) => onChange('agendaConfirmacaoIncluirOrientacoes', e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-[#A67C52] shrink-0"
+          />
+          <span className="min-w-0">
+            <span className="block text-body font-medium text-ink">
+              Enviar também as orientações de preparo
+            </span>
+            <span className="block text-label text-muted">
+              O texto "Antes de vir" cadastrado em cada procedimento entra ao fim da mensagem.
+            </span>
+          </span>
+        </label>
       </div>
     </div>
   );

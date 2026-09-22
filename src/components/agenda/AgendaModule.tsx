@@ -12,6 +12,7 @@ import {
 } from '../../types';
 import {
   deleteAttendance,
+  marcarConfirmacao,
   remarcarAtendimento,
   saveAttendance,
   subscribeToQuotes,
@@ -21,6 +22,7 @@ import { salvarAtendimento } from '../../services/attendanceWorkflow';
 import {
   AgendaVisao,
   AGENDA_VISAO_STORAGE_KEY,
+  aConfirmarAmanha,
   agendamentosAtrasados,
   dataCurta,
   deslocarDias,
@@ -36,6 +38,7 @@ import { AgendaToolbar } from './AgendaToolbar';
 import { AgendaGradeView } from './AgendaGradeView';
 import { AgendaMesView } from './AgendaMesView';
 import { AgendaPendencias } from './AgendaPendencias';
+import { AgendaAConfirmar } from './AgendaAConfirmar';
 import { AgendaDetalheModal } from './AgendaDetalheModal';
 import { SkeletonAgenda } from '../common/Skeleton';
 
@@ -186,6 +189,22 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
 
   const pendentes = useMemo(() => agendamentosAtrasados(visiveis), [visiveis]);
 
+  /**
+   * A confirmar amanhã. Sai de `atendimentos` (a clínica inteira) e não de `visiveis`, que é o
+   * recorte da visão atual: quem está olhando a semana passada continua precisando saber o que
+   * falta confirmar para amanhã. O filtro por profissional, esse sim, é respeitado — quem filtrou
+   * a grade está trabalhando a agenda de uma pessoa só.
+   */
+  const aConfirmar = useMemo(
+    () =>
+      aConfirmarAmanha(
+        filtroProfissionalId
+          ? atendimentos.filter((a) => a.professionalId === filtroProfissionalId)
+          : atendimentos
+      ),
+    [atendimentos, filtroProfissionalId]
+  );
+
   // ==========================================
   // NAVEGAÇÃO
   // ==========================================
@@ -333,6 +352,28 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
     });
   };
 
+  /**
+   * Liga/desliga o "confirmado". Sem confirmação em diálogo: é reversível no mesmo botão, e a
+   * recepção faz isto com a paciente na linha — um "tem certeza?" aqui só atrasaria.
+   */
+  const alternarConfirmacao = async (a: Attendance, confirmado: boolean) => {
+    // Otimista na tela do detalhe, para o selo virar no toque; a lista real vem da assinatura.
+    setDetalhe((atual) =>
+      atual && atual.id === a.id
+        ? { ...atual, confirmadoEm: confirmado ? new Date().toISOString() : undefined }
+        : atual
+    );
+    try {
+      setErro(null);
+      await marcarConfirmacao(a.id, confirmado);
+    } catch (e) {
+      setDetalhe((atual) =>
+        atual && atual.id === a.id ? { ...atual, confirmadoEm: a.confirmadoEm } : atual
+      );
+      setErro(`Não foi possível ${confirmado ? 'confirmar' : 'desmarcar'}: ${(e as Error).message}`);
+    }
+  };
+
   const pedirExclusao = (a: Attendance) => {
     setDetalhe(null);
     setConfirmacao({
@@ -355,11 +396,16 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
    * anamneses, nesta ordem. As fichas não são passadas: agendamento futuro não fecha ficha nenhuma,
    * e nos outros casos o workflow busca só as da paciente em questão.
    */
-  const handleSalvar = async (registro: Attendance, planoNovo?: SessionPlan) => {
+  const handleSalvar = async (
+    registro: Attendance,
+    planoNovo?: SessionPlan,
+    opcoes?: { limparConfirmacao?: boolean }
+  ) => {
     await salvarAtendimento({
       registro,
       planoNovo,
       pacienteACriar: cadastroSeraCriado ? pacienteDoForm || undefined : undefined,
+      limparConfirmacao: opcoes?.limparConfirmacao,
     });
   };
 
@@ -391,6 +437,15 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         onCompareceu={abrirConfirmacao}
         onFaltou={(a) => marcarStatus(a, 'faltou')}
         onRemarcar={abrirRemarcacao}
+      />
+
+      <AgendaAConfirmar
+        aConfirmar={aConfirmar}
+        clinic={clinic}
+        catalogo={catalogProcedures}
+        pacientes={pacientes}
+        onAbrirAtendimento={setDetalhe}
+        onConfirmar={(a) => alternarConfirmacao(a, true)}
       />
 
       {carregando ? (
@@ -440,6 +495,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
           onFaltou={(a) => marcarStatus(a, 'faltou')}
           onRemarcar={abrirRemarcacao}
           onExcluir={pedirExclusao}
+          onAlternarConfirmacao={alternarConfirmacao}
         />
       )}
 

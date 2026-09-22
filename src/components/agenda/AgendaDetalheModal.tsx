@@ -2,6 +2,7 @@ import React from 'react';
 import {
   CalendarClock,
   Check,
+  CheckCheck,
   MessageCircle,
   Pencil,
   Stethoscope,
@@ -14,6 +15,7 @@ import {
   contatoDoAtendimento,
   dataExtensa,
   duracaoDoAtendimento,
+  ehConfirmado,
   hhmmDeMinutos,
   mensagemDeConfirmacao,
   minutosDoHHMM,
@@ -41,6 +43,8 @@ interface AgendaDetalheModalProps {
   onFaltou: (a: Attendance) => void;
   onRemarcar: (a: Attendance) => void;
   onExcluir: (a: Attendance) => void;
+  /** Liga/desliga o "confirmado" — o toque que a recepção dá depois de a paciente responder. */
+  onAlternarConfirmacao: (a: Attendance, confirmado: boolean) => void;
 }
 
 const acaoBase =
@@ -58,12 +62,17 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
   onFaltou,
   onRemarcar,
   onExcluir,
+  onAlternarConfirmacao,
 }) => {
   const inicioMin = minutosDoHHMM(atendimento.hora);
   const duracao = duracaoDoAtendimento(atendimento, catalogo);
   const contato = contatoDoAtendimento(atendimento, pacientes);
-  const linkWhatsApp = buildWhatsAppUrl(contato, mensagemDeConfirmacao(clinic, atendimento));
+  const linkWhatsApp = buildWhatsAppUrl(
+    contato,
+    mensagemDeConfirmacao(clinic, atendimento, catalogo)
+  );
   const pendente = ehPendente(atendimento);
+  const confirmado = ehConfirmado(atendimento);
 
   return (
     <div
@@ -126,24 +135,45 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
             </p>
           )}
 
-          {/* Confirmação por WhatsApp: abre a conversa com a mensagem pronta e **não grava nada** —
-              mesma escolha do "Falar com a clínica" do orçamento. */}
-          {pendente &&
-            (linkWhatsApp ? (
-              <a
-                href={linkWhatsApp}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${acaoBase} w-full bg-ink text-white hover:bg-black`}
+          {/* Confirmação, em dois passos separados de propósito.
+
+              O botão de WhatsApp **não grava nada**: ele só abre a conversa com a mensagem
+              pronta. Quem confirma é a paciente, respondendo; então a recepção volta aqui e
+              marca. Gravar "confirmado" no momento do envio seria registrar uma pergunta como
+              se fosse resposta, e a agenda de amanhã passaria a mentir. */}
+          {pendente && (
+            <div className="space-y-2">
+              {linkWhatsApp ? (
+                <a
+                  href={linkWhatsApp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${acaoBase} w-full bg-whatsapp text-white`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Confirmar pelo WhatsApp
+                </a>
+              ) : (
+                <p className="px-3 py-2.5 rounded-sm bg-surface-2 border border-line text-body text-muted text-center">
+                  Sem telefone no cadastro — não dá para confirmar pelo WhatsApp.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => onAlternarConfirmacao(atendimento, !confirmado)}
+                aria-pressed={confirmado}
+                className={`${acaoBase} w-full border ${
+                  confirmado
+                    ? 'bg-ok-bg text-ok border-ok-line hover:bg-ok-bg/70'
+                    : 'bg-card text-ink border-line hover:border-brand'
+                }`}
               >
-                <MessageCircle className="w-4 h-4" />
-                Confirmar no WhatsApp
-              </a>
-            ) : (
-              <p className="px-3 py-2.5 rounded-sm bg-white/60 border border-white/80 text-body text-gray-400 text-center">
-                Sem telefone no cadastro — não dá para confirmar pelo WhatsApp.
-              </p>
-            ))}
+                <CheckCheck className="w-4 h-4" />
+                {confirmado ? 'Confirmado — desmarcar' : 'Marcar como confirmado'}
+              </button>
+            </div>
+          )}
 
           {/* Os três desfechos, só enquanto houver o que resolver. */}
           {pendente && (

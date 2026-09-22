@@ -1,9 +1,10 @@
 import React from 'react';
-import { AlertTriangle, Check, Clock, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckCheck, Clock, X } from 'lucide-react';
 import { Attendance, Procedure, Professional } from '../../types';
 import {
   corDaProfissional,
   duracaoDoAtendimento,
+  ehConfirmado,
   hhmmDeMinutos,
   minutosDoHHMM,
   nomeCurtoDaProfissional,
@@ -20,25 +21,42 @@ import { ehPendenteAtrasado } from '../../utils/attendances';
 
 export type SituacaoDoCartao =
   | 'agendado'
+  | 'confirmado'
   | 'atrasado'
   | 'compareceu'
   | 'faltou'
   | 'realizado';
 
+/**
+ * `atrasado` vence `confirmado`: um agendamento que a paciente confirmou e cuja data já passou
+ * sem desfecho continua sendo trabalho represado da recepção, e pintá-lo de verde o esconderia
+ * justamente da fila que existe para pegá-lo.
+ */
 export const situacaoDoCartao = (a: Attendance): SituacaoDoCartao => {
   if (ehPendenteAtrasado(a)) return 'atrasado';
-  if (a.status === 'agendado') return 'agendado';
+  if (a.status === 'agendado') return ehConfirmado(a) ? 'confirmado' : 'agendado';
   if (a.status === 'compareceu') return 'compareceu';
   if (a.status === 'faltou') return 'faltou';
   return 'realizado';
 };
 
-const ESTILO: Record<SituacaoDoCartao, string> = {
-  agendado: 'bg-white border-brand/45 text-ink hover:border-brand',
-  atrasado: 'bg-amber-50 border-amber-300 text-amber-900 hover:border-amber-400',
-  compareceu: 'bg-emerald-50/80 border-emerald-200/80 text-emerald-900 hover:border-emerald-300',
-  faltou: 'bg-red-50/60 border-red-200/70 text-red-800/75 hover:border-red-300',
+/** O que a recepção varre de longe: bronze = a confirmar, verde = confirmado. */
+export const ESTILO_DA_SITUACAO: Record<SituacaoDoCartao, string> = {
+  agendado: 'bg-card border-brand/45 text-ink hover:border-brand',
+  confirmado: 'bg-ok-bg border-ok-line text-ok hover:border-ok',
+  atrasado: 'bg-warn-bg border-warn-line text-warn hover:border-warn',
+  compareceu: 'bg-ok-bg/60 border-ok-line/70 text-ok hover:border-ok-line',
+  faltou: 'bg-danger-bg/70 border-danger-line text-danger hover:border-danger',
   realizado: 'bg-surface-2 border-line text-ink hover:border-brand/40',
+};
+
+export const ROTULO_DA_SITUACAO: Record<SituacaoDoCartao, string> = {
+  agendado: 'A confirmar',
+  confirmado: 'Confirmado',
+  atrasado: 'Sem desfecho',
+  compareceu: 'Compareceu',
+  faltou: 'Faltou',
+  realizado: 'Realizado',
 };
 
 interface AgendaCardProps {
@@ -121,7 +139,7 @@ export const AgendaCard: React.FC<AgendaCardProps> = ({
       style={style}
       title={`${faixa} · ${atendimento.pacienteNome} · ${atendimento.procedimentoNome}`}
       className={`group relative overflow-hidden rounded-sm border text-left transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-brand/50 ${
-        ESTILO[situacao]
+        ESTILO_DA_SITUACAO[situacao]
       } ${arrastavel ? 'active:cursor-grabbing' : ''} ${apertado ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
     >
       {/* A tarja da profissional. Cinza quando ninguém foi atribuído — a ausência também informa. */}
@@ -163,8 +181,10 @@ export const AgendaCard: React.FC<AgendaCardProps> = ({
       {/* Selo de situação — o que o preenchimento já diz, dito também em símbolo, para quem não
           distingue as cores e para quando o cartão é pequeno demais para o texto. */}
       {situacao !== 'agendado' && situacao !== 'realizado' && (
-        <span className="absolute top-0.5 right-0.5 opacity-70">
-          {situacao === 'compareceu' ? (
+        <span className="absolute top-0.5 right-0.5 opacity-70" title={ROTULO_DA_SITUACAO[situacao]}>
+          {situacao === 'confirmado' ? (
+            <CheckCheck className="w-3 h-3" />
+          ) : situacao === 'compareceu' ? (
             <Check className="w-3 h-3" />
           ) : situacao === 'faltou' ? (
             <X className="w-3 h-3" />

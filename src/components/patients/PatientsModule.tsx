@@ -247,13 +247,18 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
    * lança atendimento, e duas cópias dela acabariam divergindo. As fichas já estão aqui em memória,
    * então vão junto e poupam a leitura que o workflow faria sozinho.
    */
-  const handleSalvarAtendimento = async (registro: Attendance, planoNovo?: SessionPlan) => {
+  const handleSalvarAtendimento = async (
+    registro: Attendance,
+    planoNovo?: SessionPlan,
+    opcoes?: { limparConfirmacao?: boolean }
+  ) => {
     await salvarAtendimento({
       registro,
       planoNovo,
       pacienteACriar:
         pacienteAberto && !idsCadastrados.has(pacienteAberto.id) ? pacienteAberto : undefined,
       anamneses: records,
+      limparConfirmacao: opcoes?.limparConfirmacao,
     });
   };
 

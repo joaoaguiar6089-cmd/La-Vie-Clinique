@@ -28,6 +28,8 @@ export interface SalvamentoDeAtendimento {
    * Ausente: busca só se for preciso — ver `fecharAnamnesesDaVisita`.
    */
   anamneses?: AnamnesisRecord[];
+  /** A edição mudou a data ou a hora — a confirmação da paciente não vale mais. */
+  limparConfirmacao?: boolean;
 }
 
 /**
@@ -70,9 +72,10 @@ export const salvarAtendimento = async ({
   planoNovo,
   pacienteACriar,
   anamneses,
+  limparConfirmacao,
 }: SalvamentoDeAtendimento): Promise<void> => {
   if (pacienteACriar) await savePatient(pacienteACriar);
   if (planoNovo) await saveSessionPlan(planoNovo);
-  await saveAttendance(registro);
+  await saveAttendance(registro, { limparConfirmacao });
   await fecharAnamnesesDaVisita(registro, anamneses);
 };

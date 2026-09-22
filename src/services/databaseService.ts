@@ -1780,12 +1780,24 @@ export function subscribeToAttendances(
   );
 }
 
-export async function saveAttendance(attendance: Attendance): Promise<void> {
+export async function saveAttendance(
+  attendance: Attendance,
+  opcoes?: { limparConfirmacao?: boolean }
+): Promise<void> {
   const docRef = doc(db, ATTENDANCES_COLLECTION, attendance.id);
-  const dataToSave = cleanForFirestore({
+  const dataToSave: Record<string, unknown> = cleanForFirestore({
     ...attendance,
     updatedAt: new Date().toISOString(),
   });
+  /**
+   * Mudar a data ou a hora de um agendamento confirmado derruba a confirmação: a paciente disse
+   * que vinha **naquele** horário.
+   *
+   * Precisa ser explícito porque a gravação é `merge: true` e `cleanForFirestore` descarta
+   * `undefined` — sem o sentinela, o campo simplesmente sobreviveria. E o sentinela entra depois
+   * da limpeza: ele é um objeto, e passar por lá o transformaria num `{}` que o Firestore recusa.
+   */
+  if (opcoes?.limparConfirmacao) dataToSave.confirmadoEm = deleteField();
   // Com confirmação do servidor por causa da agenda: uma gravação barrada pela cota fica na fila
   // local e a promise nunca resolve, então a tela mostraria o horário reservado sem que nada
   // tivesse chegado ao banco — e a recepção marcaria outra paciente em cima.
@@ -1794,6 +1806,29 @@ export async function saveAttendance(attendance: Attendance): Promise<void> {
 
 export async function deleteAttendance(attendanceId: string): Promise<void> {
   await deleteDoc(doc(db, ATTENDANCES_COLLECTION, attendanceId));
+}
+
+/**
+ * Liga e desliga o "confirmado" de um agendamento.
+ *
+ * Escreve dois campos e nada mais — não passa por `saveAttendance` porque não há motivo para
+ * reenviar o documento inteiro (observações, plano, duração) só para marcar uma promessa. A
+ * recepção faz isto dezenas de vezes por dia, muitas com a paciente na linha.
+ *
+ * `deleteField()` e não string vazia: a ausência é o que significa "ninguém confirmou", e um
+ * `confirmadoEm: ''` gravado passaria por confirmado em qualquer checagem por presença.
+ */
+export async function marcarConfirmacao(
+  attendanceId: string,
+  confirmado: boolean
+): Promise<void> {
+  await comConfirmacaoDoServidor(
+    updateDoc(doc(db, ATTENDANCES_COLLECTION, attendanceId), {
+      confirmadoEm: confirmado ? new Date().toISOString() : deleteField(),
+      updatedAt: new Date().toISOString(),
+    }),
+    'da confirmação'
+  );
 }
 
 function subscribeToSessionPlansDireto(
@@ -1854,9 +1889,11 @@ export async function remarcarAtendimento(
     data: destino.data,
     hora: destino.hora,
     status: 'agendado',
-    // O desfecho e a avaliação pertencem à visita que não aconteceu, não à remarcação.
+    // O desfecho, a avaliação e a confirmação pertencem à visita que não aconteceu. A paciente
+    // confirmou o horário antigo; o novo nasce a confirmar, como qualquer agendamento.
     agendadoPara: undefined,
     avaliacaoPreenchidaEm: undefined,
+    confirmadoEm: undefined,
     createdAt: agora,
     updatedAt: agora,
   };
