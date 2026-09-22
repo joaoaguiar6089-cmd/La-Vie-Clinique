@@ -15,6 +15,7 @@ import {
   Syringe,
   UserPlus,
   Users,
+  Wallet,
 } from 'lucide-react';
 import { AppView } from '../types';
 import { BottomSheet, ItemDaFolha } from './common/BottomSheet';
@@ -50,6 +51,8 @@ interface BottomNavProps {
   agendamentosPendentesCount?: number;
   /** Avaliações a preencher — o selo de Mais, porque a tela mora lá dentro. */
   avaliacoesPendentesCount?: number;
+  /** O Financeiro só entra no sheet para administradoras. */
+  ehAdmin?: boolean;
 }
 
 /**
@@ -97,6 +100,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onLogout,
   agendamentosPendentesCount,
   avaliacoesPendentesCount,
+  ehAdmin,
 }) => {
   const [criarAberto, setCriarAberto] = useState(false);
   const [maisAberto, setMaisAberto] = useState(false);
@@ -106,7 +110,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     currentView === 'procedures' ||
     currentView === 'anamnesis' ||
     currentView === 'evaluations' ||
-    currentView === 'quotes';
+    currentView === 'quotes' ||
+    currentView === 'financeiro';
 
   const ir = (view: AppView) => {
     onSelectView(view);
@@ -220,6 +225,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           onClick={() => ir('evaluations')}
         />
         <ItemDaFolha icone={Receipt} rotulo="Orçamentos" onClick={() => ir('quotes')} />
+        {ehAdmin && (
+          <ItemDaFolha
+            icone={Wallet}
+            rotulo="Financeiro"
+            descricao="Faturamento, ticket médio e conversão"
+            onClick={() => ir('financeiro')}
+          />
+        )}
 
         <div className="my-1.5 mx-3 border-t border-line" />
 

@@ -241,6 +241,7 @@ export type AppView =
   | 'anamnesis'
   | 'evaluations'
   | 'quotes'
+  | 'financeiro'
   | 'settings';
 
 /**

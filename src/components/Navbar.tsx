@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Home,
   Search,
+  Wallet,
 } from 'lucide-react';
 import { ClinicProfile, AppView } from '../types';
 import { ClinicLogo } from './ClinicLogo';
@@ -26,6 +27,7 @@ const VIEW_LABEL: Record<AppView, string> = {
   anamnesis: 'Anamneses',
   evaluations: 'Fichas de Avaliação',
   quotes: 'Orçamentos',
+  financeiro: 'Financeiro',
   settings: 'Configurações',
 };
 
@@ -47,6 +49,8 @@ interface NavbarProps {
    * trabalho represado que não aparece sozinho — e some quando é zero, pela mesma razão.
    */
   agendamentosPendentesCount?: number;
+  /** O Financeiro só aparece no menu para administradoras. */
+  ehAdmin?: boolean;
   currentProfessionalName?: string;
   /** Abre a busca global. No desktop o atalho é Cmd/Ctrl+K; aqui é o caminho para o dedo. */
   onOpenBusca: () => void;
@@ -62,6 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   proceduresCount,
   avaliacoesPendentesCount,
   agendamentosPendentesCount,
+  ehAdmin,
   currentProfessionalName,
   onOpenBusca,
   onLogout,
@@ -172,6 +177,21 @@ export const Navbar: React.FC<NavbarProps> = ({
         scrollToTop();
       },
     },
+    ...(ehAdmin
+      ? [
+          {
+            id: 'financeiro' as const,
+            label: 'Financeiro',
+            icon: Wallet,
+            active: currentView === 'financeiro',
+            count: undefined,
+            onClick: () => {
+              onSelectView('financeiro');
+              scrollToTop();
+            },
+          },
+        ]
+      : []),
     {
       id: 'export' as const,
       label: 'Exportar catálogo',

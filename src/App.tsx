@@ -20,6 +20,7 @@ import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { CommandPalette, AcaoRapida } from './components/common/CommandPalette';
 import { HojeView } from './components/hoje/HojeView';
 import { BottomNav, AcaoDeCriacao } from './components/BottomNav';
+import { FinanceiroView } from './components/financeiro/FinanceiroView';
 import {
   Procedure,
   ClinicProfile,
@@ -218,12 +219,15 @@ function MainCatalogApp() {
   const [anamnesisRequest, setAnamnesisRequest] = useState<AnamnesisOpenRequest | null>(null);
 
   /**
-   * A tela anterior a Configurações. Ela é a única que se entra "de passagem" — de qualquer
-   * outra —, e voltar sempre para a Hoje tiraria da agenda quem só foi ajustar o expediente.
+   * A tela anterior a Configurações e ao Financeiro. São as duas em que se entra "de passagem",
+   * de qualquer outra, e voltar sempre para a Hoje tiraria da agenda quem só foi ajustar o
+   * expediente ou conferir o mês.
    */
   const viewAnteriorRef = useRef<AppView>('hoje');
   useEffect(() => {
-    if (currentView !== 'settings') viewAnteriorRef.current = currentView;
+    if (currentView !== 'settings' && currentView !== 'financeiro') {
+      viewAnteriorRef.current = currentView;
+    }
   }, [currentView]);
 
   /** Busca global (Cmd/Ctrl+K no desktop, campo da tela Hoje no celular). */
@@ -768,6 +772,7 @@ function MainCatalogApp() {
         proceduresCount={procedures.length}
         avaliacoesPendentesCount={avaliacoesPendentes}
         agendamentosPendentesCount={agendamentosPendentes}
+        ehAdmin={isAdminUser}
         currentProfessionalName={currentProfessional?.name}
         onOpenBusca={() => setBuscaAberta(true)}
         onLogout={logout}
@@ -787,6 +792,7 @@ function MainCatalogApp() {
         onLogout={logout}
         agendamentosPendentesCount={agendamentosPendentes}
         avaliacoesPendentesCount={avaliacoesPendentes}
+        ehAdmin={isAdminUser}
       />
 
       {/* Coluna de conteúdo.
@@ -834,6 +840,14 @@ function MainCatalogApp() {
                   showToast(`Não foi possível confirmar: ${(e as Error).message}`, 'erro')
                 )
               }
+            />
+          ) : currentView === 'financeiro' ? (
+            <FinanceiroView
+              quotes={quotes}
+              professionals={clinic.professionals || []}
+              ehAdmin={isAdminUser}
+              carregando={atendimentosCarregando}
+              onVoltar={() => setCurrentView(viewAnteriorRef.current)}
             />
           ) : currentView === 'settings' ? (
             <ClinicSettingsModal

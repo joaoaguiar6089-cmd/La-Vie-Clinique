@@ -210,6 +210,174 @@ export const faturamentoPorProcedimento = (
 };
 
 // ==========================================
+// PERÍODO DO PAINEL FINANCEIRO
+// ==========================================
+
+export interface Periodo {
+  /** ISO inclusivo. */
+  de: DataISO;
+  /** ISO inclusivo. */
+  ate: DataISO;
+  rotulo: string;
+}
+
+/** O mês inteiro, de 01 ao último dia. */
+export const periodoDoMes = (mes: MesISO): Periodo => {
+  const [ano, m] = mes.split('-').map(Number);
+  const ultimo = new Date(ano, m, 0).getDate();
+  return {
+    de: `${mes}-01`,
+    ate: `${mes}-${String(ultimo).padStart(2, '0')}`,
+    rotulo: nomeDoMes(mes),
+  };
+};
+
+/** Os últimos N dias, terminando hoje. */
+export const periodoDeDias = (dias: number, hoje: DataISO = hojeISO()): Periodo => ({
+  de: diasAntesDeHoje(dias - 1, hoje),
+  ate: hoje,
+  rotulo: `Últimos ${dias} dias`,
+});
+
+/** O ano inteiro. */
+export const periodoDoAno = (ano: number): Periodo => ({
+  de: `${ano}-01-01`,
+  ate: `${ano}-12-31`,
+  rotulo: String(ano),
+});
+
+/** O mesmo comprimento de período, imediatamente antes — a base da comparação. */
+export const periodoAnterior = (periodo: Periodo): Periodo => {
+  const de = new Date(`${periodo.de}T12:00:00`);
+  const ate = new Date(`${periodo.ate}T12:00:00`);
+  const dias = Math.round((ate.getTime() - de.getTime()) / 86400000) + 1;
+  const novoAte = new Date(de);
+  novoAte.setDate(novoAte.getDate() - 1);
+  const novoDe = new Date(novoAte);
+  novoDe.setDate(novoDe.getDate() - (dias - 1));
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate()
+    ).padStart(2, '0')}`;
+  return { de: iso(novoDe), ate: iso(novoAte), rotulo: 'Período anterior' };
+};
+
+/**
+ * Os orçamentos aceitos dentro do período, opcionalmente de uma profissional só.
+ *
+ * O filtro por profissional olha os **itens**: cada procedimento do orçamento tem a sua
+ * (`QuoteItem.professionalId`), porque nem sempre é a mesma pessoa que faz tudo. Um orçamento
+ * com dois itens de profissionais diferentes aparece nos dois filtros — e é por isso que a soma
+ * dos filtros pode passar do total, o que o painel diz em letra pequena em vez de esconder.
+ */
+export const aceitosNoPeriodo = (
+  quotes: Quote[],
+  periodo: Periodo,
+  professionalId?: string
+): Quote[] =>
+  orcamentosAceitos(quotes).filter((q) => {
+    const data = dataDeAceite(q).slice(0, 10);
+    if (data < periodo.de || data > periodo.ate) return false;
+    if (!professionalId) return true;
+    return (q.itens || []).some((i) => i.professionalId === professionalId);
+  });
+
+export interface ResumoFinanceiro {
+  faturamento: number;
+  /** Faturamento do período anterior de mesmo comprimento. */
+  faturamentoAnterior: number;
+  /** Variação percentual arredondada. `null` quando o anterior foi zero — não há divisão. */
+  variacao: number | null;
+  ticket: TicketMedio;
+  conversao: Conversao;
+  porProcedimento: FaturamentoPorProcedimento[];
+  /** Faturamento de cada mês do período, para o gráfico. */
+  porMes: { mes: MesISO; valor: number }[];
+}
+
+/**
+ * Tudo o que o painel financeiro mostra, num cálculo só.
+ *
+ * **Fonte do dinheiro: o orçamento aceito.** É a única no sistema com valor fechado e data — o
+ * atendimento não guarda preço nenhum e o catálogo guarda só o preço de hoje, o que faria o
+ * faturamento de março mudar sozinho num reajuste de abril.
+ */
+export const resumoFinanceiro = (
+  quotes: Quote[],
+  periodo: Periodo,
+  professionalId?: string,
+  hoje: DataISO = hojeISO()
+): ResumoFinanceiro => {
+  const aceitos = aceitosNoPeriodo(quotes, periodo, professionalId);
+  const anteriores = aceitosNoPeriodo(quotes, periodoAnterior(periodo), professionalId);
+
+  const faturamento = aceitos.reduce((s, q) => s + valorDoOrcamento(q), 0);
+  const faturamentoAnterior = anteriores.reduce((s, q) => s + valorDoOrcamento(q), 0);
+
+  /**
+   * Os meses que o período toca, na ordem.
+   *
+   * Anda **do dia 1 de cada mês**, e não da data inicial: partindo de 24/06, um `setMonth(+1)`
+   * chega a 24/09 e para antes de 22/09 — e setembro, o mês que interessa, sumia do gráfico.
+   * O limite é o mês final, não o dia final, pela mesma razão.
+   */
+  const meses: MesISO[] = [];
+  const inicio = new Date(`${periodo.de}T12:00:00`);
+  const fimMes = mesDe(periodo.ate);
+  for (
+    let cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1, 12);
+    meses.length < 24;
+    cursor.setMonth(cursor.getMonth() + 1)
+  ) {
+    const mes = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+    meses.push(mes);
+    if (mes >= fimMes) break;
+  }
+
+  return {
+    faturamento,
+    faturamentoAnterior,
+    variacao:
+      faturamentoAnterior === 0
+        ? null
+        : Math.round(((faturamento - faturamentoAnterior) / faturamentoAnterior) * 100),
+    ticket:
+      aceitos.length === 0
+        ? { valor: 0, base: 0 }
+        : { valor: faturamento / aceitos.length, base: aceitos.length },
+    conversao: conversaoNoPeriodo(quotes, periodo, professionalId),
+    porProcedimento: faturamentoPorProcedimento(aceitos, 6),
+    porMes: meses.map((mes) => ({
+      mes,
+      valor: aceitos
+        .filter((q) => mesDe(dataDeAceite(q)) === mes)
+        .reduce((s, q) => s + valorDoOrcamento(q), 0),
+    })),
+  };
+};
+
+/** Conversão dos orçamentos **emitidos** dentro do período. Ver `conversaoDeOrcamentos`. */
+export const conversaoNoPeriodo = (
+  quotes: Quote[],
+  periodo: Periodo,
+  professionalId?: string
+): Conversao => {
+  const naJanela = quotes.filter((q) => {
+    if (q.status === 'rascunho' || q.status === 'cancelado') return false;
+    const data = (q.dataEmissao || '').slice(0, 10);
+    if (data < periodo.de || data > periodo.ate) return false;
+    if (!professionalId) return true;
+    return (q.itens || []).some((i) => i.professionalId === professionalId);
+  });
+  const aceitos = naJanela.filter((q) => q.status === 'aceito').length;
+  return {
+    enviados: naJanela.length,
+    aceitos,
+    percentual: naJanela.length === 0 ? null : Math.round((aceitos / naJanela.length) * 100),
+  };
+};
+
+// ==========================================
 // O DIA
 // ==========================================
 
