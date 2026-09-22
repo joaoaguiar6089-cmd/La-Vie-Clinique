@@ -34,11 +34,11 @@ export const situacaoDoCartao = (a: Attendance): SituacaoDoCartao => {
 };
 
 const ESTILO: Record<SituacaoDoCartao, string> = {
-  agendado: 'bg-white border-[#A67C52]/45 text-[#1A1A1A] hover:border-[#A67C52]',
+  agendado: 'bg-white border-brand/45 text-ink hover:border-brand',
   atrasado: 'bg-amber-50 border-amber-300 text-amber-900 hover:border-amber-400',
   compareceu: 'bg-emerald-50/80 border-emerald-200/80 text-emerald-900 hover:border-emerald-300',
   faltou: 'bg-red-50/60 border-red-200/70 text-red-800/75 hover:border-red-300',
-  realizado: 'bg-[#F2F0EC] border-[#DCD6CC] text-[#1A1A1A] hover:border-[#A67C52]/40',
+  realizado: 'bg-surface-2 border-line text-ink hover:border-brand/40',
 };
 
 interface AgendaCardProps {
@@ -120,7 +120,7 @@ export const AgendaCard: React.FC<AgendaCardProps> = ({
       }}
       style={style}
       title={`${faixa} · ${atendimento.pacienteNome} · ${atendimento.procedimentoNome}`}
-      className={`group relative overflow-hidden rounded-sm border text-left transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-[#A67C52]/50 ${
+      className={`group relative overflow-hidden rounded-sm border text-left transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-brand/50 ${
         ESTILO[situacao]
       } ${arrastavel ? 'active:cursor-grabbing' : ''} ${apertado ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
     >
@@ -134,14 +134,14 @@ export const AgendaCard: React.FC<AgendaCardProps> = ({
       <div className={apertado ? 'pl-1.5 flex items-center gap-1.5 min-w-0' : 'pl-1.5'}>
         <span
           className={`shrink-0 tabular-nums font-semibold ${
-            apertado ? 'text-[10px]' : 'text-[10px] block'
+            apertado ? 'text-label' : 'text-label block'
           } ${situacao === 'faltou' ? 'line-through' : ''}`}
         >
           {atendimento.hora || '—'}
         </span>
 
         <span
-          className={`font-medium truncate ${apertado ? 'text-[11px] min-w-0' : 'text-xs block'} ${
+          className={`font-medium truncate ${apertado ? 'text-body min-w-0' : 'text-xs block'} ${
             situacao === 'faltou' ? 'line-through' : ''
           }`}
         >
@@ -149,14 +149,14 @@ export const AgendaCard: React.FC<AgendaCardProps> = ({
         </span>
 
         {!apertado && (
-          <span className="text-[11px] opacity-70 truncate block">
+          <span className="text-body opacity-70 truncate block">
             {atendimento.procedimentoNome}
             {rotuloDoPlano ? ` · ${rotuloDoPlano}` : ''}
           </span>
         )}
 
         {cabeProfissional && profissional && (
-          <span className="text-[10px] opacity-55 truncate block">{profissional}</span>
+          <span className="text-label opacity-55 truncate block">{profissional}</span>
         )}
       </div>
 

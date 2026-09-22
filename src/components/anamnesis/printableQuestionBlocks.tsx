@@ -119,10 +119,10 @@ export const BlankAnswer: React.FC<{ question: AnamnesisQuestion }> = ({ questio
 export const QuestionBlock: React.FC<{ question: AnamnesisQuestion; index: number }> = ({ question, index }) => (
   <div className="py-2.5 border-b border-gray-100 last:border-0 page-break-inside-avoid">
     <div className="flex items-baseline gap-1.5">
-      <span className="text-[11px] font-bold text-[#A67C52] shrink-0">{index}.</span>
-      <span className="text-[11px] font-semibold text-[#1A1A1A] leading-snug">
+      <span className="text-[11px] font-bold text-brand shrink-0">{index}.</span>
+      <span className="text-[11px] font-semibold text-ink leading-snug">
         {question.texto}
-        {question.obrigatoria && <span className="text-[#A67C52] ml-1">*</span>}
+        {question.obrigatoria && <span className="text-brand ml-1">*</span>}
       </span>
     </div>
     {question.ajuda && <p className="text-[10px] text-gray-400 italic mt-0.5 ml-4">{question.ajuda}</p>}
@@ -134,9 +134,9 @@ export const QuestionBlock: React.FC<{ question: AnamnesisQuestion; index: numbe
 
 export const SectionHeading: React.FC<{ title: string; hint?: string }> = ({ title, hint }) => (
   <div className="mb-2">
-    <div className="flex items-center gap-2 border-b border-[#A67C52]/40 pb-1.5">
-      <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
-      <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-[#1A1A1A]">{title}</h4>
+    <div className="flex items-center gap-2 border-b border-brand/40 pb-1.5">
+      <span className="w-2 h-2 rounded-full bg-brand" />
+      <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-ink">{title}</h4>
     </div>
     {hint && <p className="text-[10px] text-gray-400 mt-1">{hint}</p>}
   </div>

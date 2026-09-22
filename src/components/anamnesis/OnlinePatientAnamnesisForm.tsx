@@ -413,9 +413,9 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
             <ClinicLogo
               clinic={clinicProfile}
               className="w-14 h-14 rounded-2xl mx-auto mb-4"
-              monogramClassName="bg-black/20 border border-[rgba(232,205,172,.35)] text-[#C49B74] font-serif-luxury text-2xl font-semibold"
+              monogramClassName="bg-black/20 border border-[rgba(232,205,172,.35)] text-brand-light font-serif-luxury text-2xl font-semibold"
             />
-            <h1 className="font-serif-luxury text-[26px] font-medium text-[#F6EFE4]">
+            <h1 className="font-serif-luxury text-[26px] font-medium text-cream">
               {clinicProfile.name || 'La Vie Clinique'}
             </h1>
             <p className="text-[14px] text-[rgba(246,239,228,.6)] mt-2">
@@ -426,11 +426,11 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
 
         <div className="bg-white rounded-3xl -mt-6 relative shadow-[0_6px_22px_rgba(0,0,0,.06)] p-6 sm:p-7 space-y-5">
           <div>
-            <span className="text-[13px] font-semibold text-[#A67C52]">Procedimento</span>
-            <h2 className="font-serif-luxury text-[24px] font-semibold text-[#1A1A1A] leading-tight mt-0.5">
+            <span className="text-[13px] font-semibold text-brand">Procedimento</span>
+            <h2 className="font-serif-luxury text-[24px] font-semibold text-ink leading-tight mt-0.5">
               {template.procedimentoNome}
             </h2>
-            {template.categoria && <p className="text-[14px] text-[#8a8578] mt-1">{template.categoria}</p>}
+            {template.categoria && <p className="text-[14px] text-muted mt-1">{template.categoria}</p>}
           </div>
 
           <ol className="space-y-3">
@@ -440,27 +440,27 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
               { n: 3, label: 'Confirmação', desc: 'Revise e envie sua ficha.' },
             ].map((s) => (
               <li key={s.n} className="flex items-start gap-3">
-                <span className="w-7 h-7 rounded-full bg-[#F9F8F6] border border-[rgba(26,26,26,.1)] flex items-center justify-center text-[13px] font-bold text-[#A67C52] shrink-0">
+                <span className="w-7 h-7 rounded-full bg-surface border border-[rgba(26,26,26,.1)] flex items-center justify-center text-[13px] font-bold text-brand shrink-0">
                   {s.n}
                 </span>
                 <div>
-                  <p className="text-[15px] font-semibold text-[#1A1A1A] leading-tight">{s.label}</p>
-                  <p className="text-[13px] text-[#8a8578]">{s.desc}</p>
+                  <p className="text-[15px] font-semibold text-ink leading-tight">{s.label}</p>
+                  <p className="text-[13px] text-muted">{s.desc}</p>
                 </div>
               </li>
             ))}
           </ol>
-          <p className="text-[13px] text-[#A67C52] font-medium pl-10 -mt-2">Leva cerca de 5 minutos</p>
+          <p className="text-[13px] text-brand font-medium pl-10 -mt-2">Leva cerca de 5 minutos</p>
 
-          <div className="flex items-start gap-2.5 text-[13px] text-[#8a8578] bg-[#F9F8F6] p-3.5 rounded-2xl">
-            <ShieldCheck className="w-4 h-4 text-[#A67C52] shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2.5 text-[13px] text-muted bg-surface p-3.5 rounded-2xl">
+            <ShieldCheck className="w-4 h-4 text-brand shrink-0 mt-0.5" />
             <span>Suas respostas são usadas exclusivamente pela equipe clínica para planejar seu atendimento com segurança.</span>
           </div>
 
           <button
             type="button"
             onClick={() => goToStep(1)}
-            className="w-full h-[54px] rounded-2xl bg-[#A67C52] text-white text-[16px] font-semibold flex items-center justify-center gap-2 hover:bg-[#8E653D] active:scale-97 transition-all"
+            className="w-full h-[54px] rounded-2xl bg-brand text-white text-[16px] font-semibold flex items-center justify-center gap-2 hover:bg-brand-hover active:scale-97 transition-all"
           >
             Começar
             <ArrowRight className="w-[18px] h-[18px]" />
@@ -487,10 +487,10 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
         {[1, 2, 3].map((n) => (
           <span
             key={n}
-            className={`flex-1 h-1 rounded-full ${n <= stepIndex ? 'bg-[#A67C52]' : 'bg-[rgba(26,26,26,.1)]'}`}
+            className={`flex-1 h-1 rounded-full ${n <= stepIndex ? 'bg-brand' : 'bg-[rgba(26,26,26,.1)]'}`}
           />
         ))}
-        <span className="text-[13px] text-[#8a8578] font-medium ml-1 shrink-0">{stepIndex} de 3</span>
+        <span className="text-[13px] text-muted font-medium ml-1 shrink-0">{stepIndex} de 3</span>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -498,19 +498,19 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
         {stepIndex === 1 && (
           <div className="space-y-4">
             <div>
-              <h2 className="font-serif-luxury text-[26px] font-medium text-[#1A1A1A]">Seus dados</h2>
+              <h2 className="font-serif-luxury text-[26px] font-medium text-ink">Seus dados</h2>
               {resolvedProfessionalName && (
-                <p className="text-[13px] text-[#8a8578] mt-1">
-                  Profissional responsável: <span className="font-semibold text-[#1A1A1A]">{resolvedProfessionalName}</span>
+                <p className="text-[13px] text-muted mt-1">
+                  Profissional responsável: <span className="font-semibold text-ink">{resolvedProfessionalName}</span>
                 </p>
               )}
             </div>
 
             <div className="bg-white rounded-2xl p-5 space-y-4 shadow-[0_3px_14px_rgba(0,0,0,.04)]">
               <div>
-                <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1.5">Nome completo *</label>
+                <label className="block text-[15px] font-semibold text-ink mb-1.5">Nome completo *</label>
                 <div className="relative">
-                  <User className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+                  <User className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
                   <input
                     type="text"
                     value={nome}
@@ -520,46 +520,46 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                     }}
                     placeholder="Seu nome completo"
                     className={`w-full h-[52px] pl-11 pr-4 text-[15px] rounded-[13px] bg-white border transition-colors ${
-                      errors['nome'] ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
-                    } text-[#1A1A1A] focus:outline-hidden`}
+                      errors['nome'] ? 'border-danger' : 'border-[rgba(26,26,26,.12)] focus:border-brand'
+                    } text-ink focus:outline-hidden`}
                   />
                 </div>
-                {errors['nome'] && <p className="text-[13px] text-[#E11D48] font-medium mt-1">{errors['nome']}</p>}
+                {errors['nome'] && <p className="text-[13px] text-danger font-medium mt-1">{errors['nome']}</p>}
               </div>
 
               <div>
-                <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1.5">WhatsApp / celular</label>
+                <label className="block text-[15px] font-semibold text-ink mb-1.5">WhatsApp / celular</label>
                 <div className="relative">
-                  <Phone className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+                  <Phone className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
                   <input
                     type="text"
                     value={contato}
                     onChange={(e) => setContato(e.target.value)}
                     placeholder="(DDD) 99999-9999"
-                    className="w-full h-[52px] pl-11 pr-4 text-[15px] rounded-[13px] bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-[52px] pl-11 pr-4 text-[15px] rounded-[13px] bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1.5">Data de nascimento</label>
+                <label className="block text-[15px] font-semibold text-ink mb-1.5">Data de nascimento</label>
                 <div className="relative">
-                  <Calendar className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+                  <Calendar className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
                   <input
                     type="date"
                     value={dataNascimento}
                     onChange={(e) => setDataNascimento(e.target.value)}
-                    className="w-full h-[52px] pl-11 pr-4 text-[15px] rounded-[13px] bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-[52px] pl-11 pr-4 text-[15px] rounded-[13px] bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1.5">
-                  CPF * <span className="text-[13px] text-[#8a8578] font-normal">— usado para você acessar sua ficha depois</span>
+                <label className="block text-[15px] font-semibold text-ink mb-1.5">
+                  CPF * <span className="text-[13px] text-muted font-normal">— usado para você acessar sua ficha depois</span>
                 </label>
                 <div className="relative">
-                  <IdCard className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+                  <IdCard className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
                   <input
                     type="text"
                     inputMode="numeric"
@@ -570,30 +570,30 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                     }}
                     placeholder="000.000.000-00"
                     className={`w-full h-[52px] pl-11 pr-4 text-[15px] rounded-[13px] bg-white border transition-colors ${
-                      errors['cpf'] ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
-                    } text-[#1A1A1A] focus:outline-hidden`}
+                      errors['cpf'] ? 'border-danger' : 'border-[rgba(26,26,26,.12)] focus:border-brand'
+                    } text-ink focus:outline-hidden`}
                   />
                 </div>
-                {errors['cpf'] && <p className="text-[13px] text-[#E11D48] font-medium mt-1">{errors['cpf']}</p>}
+                {errors['cpf'] && <p className="text-[13px] text-danger font-medium mt-1">{errors['cpf']}</p>}
               </div>
 
               <div>
-                <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1.5">E-mail</label>
+                <label className="block text-[15px] font-semibold text-ink mb-1.5">E-mail</label>
                 <div className="relative">
-                  <Mail className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+                  <Mail className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="seu.email@exemplo.com"
-                    className="w-full h-[52px] pl-11 pr-4 text-[15px] rounded-[13px] bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-[52px] pl-11 pr-4 text-[15px] rounded-[13px] bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1.5">
-                  Gênero * <span className="text-[13px] text-[#8a8578] font-normal">— define a foto de referência usada na sua ficha</span>
+                <label className="block text-[15px] font-semibold text-ink mb-1.5">
+                  Gênero * <span className="text-[13px] text-muted font-normal">— define a foto de referência usada na sua ficha</span>
                 </label>
                 <div className="flex items-center gap-2.5">
                   <button
@@ -604,8 +604,8 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                     }}
                     className={`flex-1 h-[52px] rounded-[13px] text-[15px] font-semibold transition-colors border flex items-center justify-center gap-2 ${
                       genero === 'feminino'
-                        ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                        : `bg-white text-[#4a4740] ${errors['genero'] ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)]'}`
+                        ? 'bg-ink text-white border-ink'
+                        : `bg-white text-ink-soft ${errors['genero'] ? 'border-danger' : 'border-[rgba(26,26,26,.12)]'}`
                     }`}
                   >
                     {genero === 'feminino' && <CheckCircle2 className="w-4 h-4" />}
@@ -619,20 +619,20 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                     }}
                     className={`flex-1 h-[52px] rounded-[13px] text-[15px] font-semibold transition-colors border flex items-center justify-center gap-2 ${
                       genero === 'masculino'
-                        ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                        : `bg-white text-[#4a4740] ${errors['genero'] ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)]'}`
+                        ? 'bg-ink text-white border-ink'
+                        : `bg-white text-ink-soft ${errors['genero'] ? 'border-danger' : 'border-[rgba(26,26,26,.12)]'}`
                     }`}
                   >
                     {genero === 'masculino' && <CheckCircle2 className="w-4 h-4" />}
                     Masculino
                   </button>
                 </div>
-                {errors['genero'] && <p className="text-[13px] text-[#E11D48] font-medium mt-1">{errors['genero']}</p>}
+                {errors['genero'] && <p className="text-[13px] text-danger font-medium mt-1">{errors['genero']}</p>}
               </div>
 
               <div>
-                <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1.5 flex items-center gap-1.5">
-                  <Music className="w-4 h-4 text-[#A67C52]" />
+                <label className="block text-[15px] font-semibold text-ink mb-1.5 flex items-center gap-1.5">
+                  <Music className="w-4 h-4 text-brand" />
                   Tipo de música
                 </label>
                 <input
@@ -640,7 +640,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                   value={tipoMusica}
                   onChange={(e) => setTipoMusica(e.target.value)}
                   placeholder="Ex: MPB, Jazz, Pop, Lounge, Clássica, Instrumental..."
-                  className="w-full h-[52px] px-4 text-[15px] rounded-[13px] bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full h-[52px] px-4 text-[15px] rounded-[13px] bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
 
@@ -669,11 +669,11 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
         {stepIndex === 2 && (
           <div className="space-y-4">
             <div>
-              <span className="text-[13px] font-semibold text-[#A67C52]">Avaliação do procedimento</span>
-              <h2 className="font-serif-luxury text-[28px] font-medium text-[#1A1A1A] leading-tight mt-0.5">
+              <span className="text-[13px] font-semibold text-brand">Avaliação do procedimento</span>
+              <h2 className="font-serif-luxury text-[28px] font-medium text-ink leading-tight mt-0.5">
                 {template.procedimentoNome}
               </h2>
-              {template.descricao && <p className="text-[14px] text-[#8a8578] mt-1">{template.descricao}</p>}
+              {template.descricao && <p className="text-[14px] text-muted mt-1">{template.descricao}</p>}
             </div>
 
             {orientationImage && <OrientationImageCard image={orientationImage} />}
@@ -685,10 +685,10 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
             */}
             {ehFichaDeLaser && (
               <div className="bg-white rounded-2xl p-5 shadow-[0_3px_14px_rgba(0,0,0,.04)]">
-                <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1">
+                <label className="block text-[15px] font-semibold text-ink mb-1">
                   Quais áreas você quer tratar?
                 </label>
-                <p className="text-[13px] text-[#8a8578] mb-3">
+                <p className="text-[13px] text-muted mb-3">
                   Toque nas regiões do corpo, ou nos botões. Pode escolher quantas quiser — nada
                   aqui é compromisso de compra.
                 </p>
@@ -702,7 +702,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                 />
 
                 {areasSelecionadas.size > 0 && (
-                  <p className="text-[13px] text-[#1A1A1A] mt-3 bg-[#FCE4EF] border border-[#F3C6DC] rounded-xl px-3 py-2 leading-snug">
+                  <p className="text-[13px] text-ink mt-3 bg-[#FCE4EF] border border-[#F3C6DC] rounded-xl px-3 py-2 leading-snug">
                     <strong>{areasSelecionadas.size}</strong>{' '}
                     {areasSelecionadas.size === 1 ? 'área escolhida' : 'áreas escolhidas'}:{' '}
                     {nomesDasAreasSelecionadas}
@@ -729,12 +729,12 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
 
             {/* Patient photo upload */}
             <div className="bg-white rounded-2xl p-5 shadow-[0_3px_14px_rgba(0,0,0,.04)]">
-              <label className="block text-[15px] font-semibold text-[#1A1A1A] mb-1">Foto do paciente</label>
-              <p className="text-[13px] text-[#8a8578] mb-3">Opcional. Frontal, com boa iluminação.</p>
+              <label className="block text-[15px] font-semibold text-ink mb-1">Foto do paciente</label>
+              <p className="text-[13px] text-muted mb-3">Opcional. Frontal, com boa iluminação.</p>
 
               {fotoPacienteUrl ? (
                 <div className="space-y-3">
-                  <div className="relative w-full h-[220px] rounded-2xl border border-[rgba(26,26,26,.1)] overflow-hidden bg-[#F9F8F6]">
+                  <div className="relative w-full h-[220px] rounded-2xl border border-[rgba(26,26,26,.1)] overflow-hidden bg-surface">
                     <img src={fotoPacienteUrl} alt="Foto enviada pelo paciente" className="w-full h-full object-contain" />
                     <button
                       type="button"
@@ -750,7 +750,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                       <CheckCircle2 className="w-4 h-4" />
                       Sua foto foi anexada
                     </span>
-                    <label className="cursor-pointer text-[13px] font-semibold text-[#A67C52] hover:underline">
+                    <label className="cursor-pointer text-[13px] font-semibold text-brand hover:underline">
                       Trocar foto
                       <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
                     </label>
@@ -761,10 +761,10 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                   className="flex flex-col items-center justify-center h-32 rounded-2xl cursor-pointer text-center transition-colors"
                   style={{ border: '1.5px dashed rgba(166,124,82,.5)' }}
                 >
-                  <span className="w-12 h-12 rounded-full bg-[#A67C52] text-white flex items-center justify-center mb-2">
+                  <span className="w-12 h-12 rounded-full bg-brand text-white flex items-center justify-center mb-2">
                     <Camera className="w-5 h-5" />
                   </span>
-                  <span className="text-[15px] font-semibold text-[#8E653D]">
+                  <span className="text-[15px] font-semibold text-brand-hover">
                     {isProcessingPhoto ? 'Processando imagem...' : 'Tirar foto ou escolher da galeria'}
                   </span>
                   <input
@@ -783,38 +783,38 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
         {/* ============ STEP 3 — Confirmação ============ */}
         {stepIndex === 3 && (
           <div className="space-y-4">
-            <h2 className="font-serif-luxury text-[26px] font-medium text-[#1A1A1A]">Confirmação</h2>
+            <h2 className="font-serif-luxury text-[26px] font-medium text-ink">Confirmação</h2>
 
             <div className="bg-white rounded-2xl divide-y divide-[rgba(26,26,26,.07)] shadow-[0_3px_14px_rgba(0,0,0,.04)]">
               <div className="flex items-center justify-between px-5 py-3.5">
-                <span className="text-[14px] text-[#8a8578]">Nome</span>
-                <span className="text-[14px] font-semibold text-[#1A1A1A]">{nome || '—'}</span>
+                <span className="text-[14px] text-muted">Nome</span>
+                <span className="text-[14px] font-semibold text-ink">{nome || '—'}</span>
               </div>
               <div className="flex items-center justify-between px-5 py-3.5">
-                <span className="text-[14px] text-[#8a8578]">Procedimento</span>
-                <span className="text-[14px] font-semibold text-[#1A1A1A] text-right">{template.procedimentoNome}</span>
+                <span className="text-[14px] text-muted">Procedimento</span>
+                <span className="text-[14px] font-semibold text-ink text-right">{template.procedimentoNome}</span>
               </div>
               {totalQuestions > 0 && (
                 <div className="flex items-center justify-between px-5 py-3.5">
-                  <span className="text-[14px] text-[#8a8578]">Respostas</span>
-                  <span className="text-[14px] font-semibold text-[#1A1A1A]">
+                  <span className="text-[14px] text-muted">Respostas</span>
+                  <span className="text-[14px] font-semibold text-ink">
                     {answeredQuestions} de {totalQuestions} preenchidas
                   </span>
                 </div>
               )}
               <div className="flex items-center justify-between px-5 py-3.5">
-                <span className="text-[14px] text-[#8a8578]">Foto</span>
-                <span className="text-[14px] font-semibold text-[#1A1A1A]">{fotoPacienteUrl ? 'Anexada' : 'Não enviada'}</span>
+                <span className="text-[14px] text-muted">Foto</span>
+                <span className="text-[14px] font-semibold text-ink">{fotoPacienteUrl ? 'Anexada' : 'Não enviada'}</span>
               </div>
             </div>
 
             <div className="bg-white rounded-2xl p-5 space-y-3 shadow-[0_3px_14px_rgba(0,0,0,.04)]">
-              <div className="flex items-center gap-2 text-[15px] font-semibold text-[#1A1A1A]">
-                <ShieldCheck className="w-[18px] h-[18px] text-[#A67C52]" />
+              <div className="flex items-center gap-2 text-[15px] font-semibold text-ink">
+                <ShieldCheck className="w-[18px] h-[18px] text-brand" />
                 Declaração de Veracidade e Consentimento
               </div>
 
-              <p className="text-[13px] text-[#4a4740] leading-relaxed">
+              <p className="text-[13px] text-ink-soft leading-relaxed">
                 Declaro que todas as informações prestadas nesta ficha de anamnese são verdadeiras e completas, não
                 tendo omitido nenhum dado relevante sobre histórico de saúde, uso de medicamentos, alergias ou
                 procedimentos anteriores. Autorizo a clínica a utilizar essas informações estritamente para fins de
@@ -823,13 +823,13 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
 
               <label
                 ref={termoRef}
-                className={`flex items-start gap-3 p-3.5 rounded-2xl bg-[#F9F8F6] border cursor-pointer transition-colors ${
-                  errors['termo'] ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.1)]'
+                className={`flex items-start gap-3 p-3.5 rounded-2xl bg-surface border cursor-pointer transition-colors ${
+                  errors['termo'] ? 'border-danger' : 'border-[rgba(26,26,26,.1)]'
                 }`}
               >
                 <span
                   className={`w-[26px] h-[26px] rounded-lg border-[1.5px] flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
-                    termoAceito ? 'bg-[#A67C52] border-[#A67C52] text-white' : 'border-[#A67C52] bg-white'
+                    termoAceito ? 'bg-brand border-brand text-white' : 'border-brand bg-white'
                   }`}
                 >
                   {termoAceito && <CheckCircle2 className="w-4 h-4" />}
@@ -843,13 +843,13 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                   }}
                   className="sr-only"
                 />
-                <span className="text-[14px] font-medium text-[#1A1A1A] leading-snug">
+                <span className="text-[14px] font-medium text-ink leading-snug">
                   {consentSections
                     ? 'Li e concordo com o termo de consentimento do procedimento e com a declaração acima.'
                     : 'Li e concordo com a declaração acima.'}
                 </span>
               </label>
-              {errors['termo'] && <p className="text-[13px] text-[#E11D48] font-medium">{errors['termo']}</p>}
+              {errors['termo'] && <p className="text-[13px] text-danger font-medium">{errors['termo']}</p>}
             </div>
 
             {Object.keys(errors).length > 0 && (
@@ -868,7 +868,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
               <button
                 type="button"
                 onClick={() => goToStep((stepIndex - 1) as Step)}
-                className="w-[54px] h-[54px] rounded-2xl bg-white border border-[rgba(26,26,26,.1)] text-[#1A1A1A] flex items-center justify-center shadow-lg active:scale-97 transition-all shrink-0"
+                className="w-[54px] h-[54px] rounded-2xl bg-white border border-[rgba(26,26,26,.1)] text-ink flex items-center justify-center shadow-lg active:scale-97 transition-all shrink-0"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -878,7 +878,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
               <button
                 type="button"
                 onClick={handleContinueFromStep1}
-                className="flex-1 h-[54px] rounded-2xl bg-[#A67C52] text-white text-[16px] font-semibold flex items-center justify-center gap-2 shadow-lg active:scale-97 transition-all"
+                className="flex-1 h-[54px] rounded-2xl bg-brand text-white text-[16px] font-semibold flex items-center justify-center gap-2 shadow-lg active:scale-97 transition-all"
               >
                 Continuar
                 <ArrowRight className="w-[18px] h-[18px]" />
@@ -889,7 +889,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
               <button
                 type="button"
                 onClick={handleContinueFromStep2}
-                className="flex-1 h-[54px] rounded-2xl bg-[#A67C52] text-white text-[16px] font-semibold flex items-center justify-center gap-2 shadow-lg active:scale-97 transition-all"
+                className="flex-1 h-[54px] rounded-2xl bg-brand text-white text-[16px] font-semibold flex items-center justify-center gap-2 shadow-lg active:scale-97 transition-all"
               >
                 Continuar
                 <ArrowRight className="w-[18px] h-[18px]" />
@@ -900,7 +900,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 h-[54px] rounded-2xl bg-[#1A1A1A] text-[#C49B74] text-[16px] font-semibold flex items-center justify-center gap-2 shadow-lg active:scale-97 transition-all disabled:opacity-50"
+                className="flex-1 h-[54px] rounded-2xl bg-ink text-brand-light text-[16px] font-semibold flex items-center justify-center gap-2 shadow-lg active:scale-97 transition-all disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <span>{isEditing ? 'Salvando...' : 'Enviando...'}</span>

@@ -56,8 +56,8 @@ const MarcaDeAgora: React.FC<{ faixa: { inicioMin: number; fimMin: number } }> =
       className="absolute left-0 right-0 z-30 pointer-events-none"
       style={{ top: (minutos - faixa.inicioMin) * PX_POR_MIN }}
     >
-      <div className="h-px bg-[#C0392B]/70" />
-      <div className="absolute -left-[3px] -top-[3px] w-[7px] h-[7px] rounded-full bg-[#C0392B]/70" />
+      <div className="h-px bg-danger/70" />
+      <div className="absolute -left-[3px] -top-[3px] w-[7px] h-[7px] rounded-full bg-danger/70" />
     </div>
   );
 };
@@ -138,19 +138,19 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
                 <div
                   key={dia}
                   className={`flex-1 min-w-0 px-2 py-2 text-center border-l border-[rgba(26,26,28,.06)] ${
-                    ehHoje ? 'bg-[#A67C52]/10' : ''
+                    ehHoje ? 'bg-brand/10' : ''
                   }`}
                 >
                   <p
-                    className={`text-[10px] font-semibold uppercase tracking-wider ${
-                      ehHoje ? 'text-[#A67C52]' : fechado ? 'text-gray-300' : 'text-gray-400'
+                    className={`text-label font-semibold uppercase tracking-wider ${
+                      ehHoje ? 'text-brand' : fechado ? 'text-gray-300' : 'text-gray-400'
                     }`}
                   >
                     {nomeCurtoDoDia(dia)}
                   </p>
                   <p
                     className={`text-sm tabular-nums ${
-                      ehHoje ? 'font-semibold text-[#1A1A1A]' : 'text-gray-600'
+                      ehHoje ? 'font-semibold text-ink' : 'text-gray-600'
                     }`}
                   >
                     {dataCurta(dia)}
@@ -163,9 +163,9 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
           {/* Visitas sem horário: lançamento retroativo não tem hora obrigatória, e inventar uma
               para encaixá-la na grade seria criar dado que ninguém informou. */}
           {temSemHorario && (
-            <div className="flex border-b border-[rgba(26,26,28,.07)] bg-[#F9F8F6]">
+            <div className="flex border-b border-[rgba(26,26,28,.07)] bg-surface">
               <div
-                className="shrink-0 px-2 py-1.5 text-[9px] uppercase tracking-wider text-gray-400 text-right"
+                className="shrink-0 px-2 py-1.5 text-label uppercase tracking-wider text-gray-400 text-right"
                 style={{ width: LARGURA_CALHA }}
               >
                 s/ hora
@@ -196,7 +196,7 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
               {horas.map((m) => (
                 <span
                   key={m}
-                  className="absolute right-2 text-[10px] tabular-nums text-gray-400"
+                  className="absolute right-2 text-label tabular-nums text-gray-400"
                   style={{
                     top: (m - faixa.inicioMin) * PX_POR_MIN,
                     // Centrado na linha, menos o primeiro: o cartão esconde o que transborda e
@@ -247,12 +247,12 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
                   {/* Fora do expediente: cinza, e ainda assim clicável — encaixe é decisão da
                       clínica, então a grade desencoraja sem impedir. */}
                   {!expediente ? (
-                    <div className="absolute inset-0 bg-[#E9E5DD]/70" />
+                    <div className="absolute inset-0 bg-line/70" />
                   ) : (
                     <>
                       {expediente.abreMin > faixa.inicioMin && (
                         <div
-                          className="absolute left-0 right-0 bg-[#E9E5DD]/70"
+                          className="absolute left-0 right-0 bg-line/70"
                           style={{
                             top: 0,
                             height: (expediente.abreMin - faixa.inicioMin) * PX_POR_MIN,
@@ -261,7 +261,7 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
                       )}
                       {expediente.fechaMin < faixa.fimMin && (
                         <div
-                          className="absolute left-0 right-0 bg-[#E9E5DD]/70"
+                          className="absolute left-0 right-0 bg-line/70"
                           style={{
                             top: (expediente.fechaMin - faixa.inicioMin) * PX_POR_MIN,
                             height: (faixa.fimMin - expediente.fechaMin) * PX_POR_MIN,

@@ -97,10 +97,10 @@ const STATUS_LABEL: Record<QuoteStatus, string> = {
 
 const STATUS_CLASS: Record<QuoteStatus, string> = {
   rascunho: 'bg-gray-100 text-gray-500 border-gray-200',
-  enviado: 'bg-[#A67C52]/10 text-[#8E653D] border-[#A67C52]/25',
+  enviado: 'bg-brand/10 text-brand-hover border-brand/25',
   aceito: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   expirado: 'bg-amber-50 text-amber-700 border-amber-200',
-  cancelado: 'bg-[#1A1A1A] text-[#C49B74] border-[#1A1A1A]',
+  cancelado: 'bg-ink text-brand-light border-ink',
 };
 
 /** A data de atendimento pode estar em "YYYY-MM-DD" ou em ISO completo, conforme a origem da ficha. */
@@ -198,7 +198,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
       <button
         type="button"
         onClick={onVoltar}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-[#A67C52] transition-colors mb-4"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-brand transition-colors mb-4"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
         Todos os pacientes
@@ -207,7 +207,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div className="min-w-0">
-          <h1 className="font-serif-luxury text-3xl sm:text-4xl text-[#1A1A1A] break-words">
+          <h1 className="font-serif-luxury text-3xl sm:text-4xl text-ink break-words">
             {patient.nome}
           </h1>
           <p className="text-xs text-gray-500 mt-1">
@@ -238,7 +238,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
               onClick={() => setMenuNovoAberto((a) => !a)}
               aria-haspopup="menu"
               aria-expanded={menuNovoAberto}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#8E653D] transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover transition-colors"
             >
               <Plus className="w-4 h-4" />
               Novo
@@ -262,9 +262,9 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                     type="button"
                     role="menuitem"
                     onClick={() => criarNovo(tipo)}
-                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-xs text-[#1A1A1A] hover:bg-[#FAF9F5] transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-xs text-ink hover:bg-surface transition-colors"
                   >
-                    <Icone className="w-4 h-4 text-[#A67C52]" />
+                    <Icone className="w-4 h-4 text-brand" />
                     {rotulo}
                   </button>
                 ))}
@@ -303,15 +303,15 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
               onClick={() => setAba(filtro.id)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-sm border text-xs font-semibold uppercase tracking-wider transition-colors ${
                 ativo
-                  ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+                  ? 'bg-ink text-white border-ink'
                   : 'bg-white/60 text-gray-600 border-white/80 hover:bg-white/80'
               }`}
             >
               <Icone className="w-4 h-4" />
               {filtro.rotulo}
               <span
-                className={`px-1.5 py-0.5 rounded-xs text-[10px] tabular-nums ${
-                  ativo ? 'bg-white/15 text-[#C49B74]' : 'bg-gray-100 text-gray-500'
+                className={`px-1.5 py-0.5 rounded-xs text-label tabular-nums ${
+                  ativo ? 'bg-white/15 text-brand-light' : 'bg-gray-100 text-gray-500'
                 }`}
               >
                 {filtro.total}
@@ -359,8 +359,8 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                 className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
               >
                 <div className="flex-1 min-w-[160px]">
-                  <p className="text-sm text-[#1A1A1A] truncate">{ficha.procedimentoNome}</p>
-                  <p className="flex items-center gap-1.5 text-[11px] text-gray-400 truncate">
+                  <p className="text-sm text-ink truncate">{ficha.procedimentoNome}</p>
+                  <p className="flex items-center gap-1.5 text-body text-gray-400 truncate">
                     <Calendar className="w-3 h-3 shrink-0" />
                     {formatarDataAtendimento(ficha.dataAtendimento)}
                     {ficha.profissionalNome && ` · ${ficha.profissionalNome}`}
@@ -368,7 +368,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                 </div>
 
                 {ficha.origemPreenchimento === 'online_paciente' && !anamneseFechada(ficha) && (
-                  <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-xs border bg-amber-50 text-amber-700 border-amber-200">
+                  <span className="px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border bg-amber-50 text-amber-700 border-amber-200">
                     Aguardando atendimento
                   </span>
                 )}
@@ -379,7 +379,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                     onClick={() => setFichaAberta(ficha)}
                     aria-label={`Abrir a ficha de ${ficha.procedimentoNome}`}
                     title="Ver ficha e imprimir"
-                    className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                    className="p-2 text-gray-400 hover:text-brand transition-colors"
                   >
                     <Eye className="w-4 h-4" />
                   </button>
@@ -438,7 +438,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                           : 'Encerrar: fecha o link da paciente'
                     }
                     disabled={!!ficha.profissionalPreenchidoEm && !ficha.encerradaEm}
-                    className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors disabled:opacity-40 disabled:hover:text-gray-400"
+                    className="p-2 text-gray-400 hover:text-brand transition-colors disabled:opacity-40 disabled:hover:text-gray-400"
                   >
                     {anamneseFechada(ficha) ? (
                       <Lock className="w-4 h-4" />
@@ -488,17 +488,17 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                   className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
                 >
                   <div className="min-w-[110px]">
-                    <p className="font-serif-luxury text-lg text-[#1A1A1A] tabular-nums">
+                    <p className="font-serif-luxury text-lg text-ink tabular-nums">
                       {orcamento.numero}
                     </p>
-                    <p className="text-[11px] text-gray-400">{formatDate(orcamento.dataEmissao)}</p>
+                    <p className="text-body text-gray-400">{formatDate(orcamento.dataEmissao)}</p>
                   </div>
 
                   <div className="flex-1 min-w-[140px]">
-                    <p className="text-sm font-semibold text-[#1A1A1A] tabular-nums">
+                    <p className="text-sm font-semibold text-ink tabular-nums">
                       {formatBRL(orcamento.total)}
                     </p>
-                    <p className="text-[11px] text-gray-400 truncate">
+                    <p className="text-body text-gray-400 truncate">
                       {orcamento.itens.length} procedimento
                       {orcamento.itens.length === 1 ? '' : 's'} · válido até{' '}
                       {formatDate(orcamento.dataValidade)}
@@ -506,7 +506,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                   </div>
 
                   <span
-                    className={`px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-xs border ${STATUS_CLASS[status]}`}
+                    className={`px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border ${STATUS_CLASS[status]}`}
                   >
                     {STATUS_LABEL[status]}
                   </span>
@@ -517,7 +517,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                       onClick={() => setOrcamentoParaCompartilhar(orcamento)}
                       aria-label={`Compartilhar ${orcamento.numero}`}
                       title="Compartilhar link com a cliente"
-                      className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                      className="p-2 text-gray-400 hover:text-brand transition-colors"
                     >
                       <Share2 className="w-4 h-4" />
                     </button>
@@ -527,7 +527,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                       onClick={() => setOrcamentoNaPrevia(orcamento)}
                       aria-label={`Visualizar ${orcamento.numero}`}
                       title="Visualizar — o botão de salvar PDF fica dentro da prévia"
-                      className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                      className="p-2 text-gray-400 hover:text-brand transition-colors"
                     >
                       <Eye className="w-4 h-4" />
                     </button>

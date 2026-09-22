@@ -159,10 +159,10 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
     <div className="px-5 sm:px-6 lg:px-8 py-5 sm:py-6 pb-24 sm:pb-8">
       {/* Content header */}
       <div className="mb-4">
-        <h2 className="font-serif-luxury text-[22px] sm:text-[24px] font-medium text-[#1A1A1A] leading-tight">
+        <h2 className="font-serif-luxury text-[22px] sm:text-[24px] font-medium text-ink leading-tight">
           Procedimentos
         </h2>
-        <p className="text-[13px] text-[#8a8578] mt-0.5">
+        <p className="text-[13px] text-muted mt-0.5">
           {procedures.length} procedimentos · {categoriesCount} categorias
           {featuredCount > 0 && <> · {featuredCount} em destaque</>}
         </p>
@@ -171,19 +171,19 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
       {/* Search + action bar */}
       <div className="flex items-center gap-2.5 mb-3.5">
         <div className="relative flex-1 lg:flex-none lg:w-[360px]">
-          <Search className="w-[18px] h-[18px] text-[#a8a29a] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-[18px] h-[18px] text-muted-light absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar procedimento..."
-            className="w-full h-11 pl-11 pr-4 rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-[15px] text-[#1A1A1A] placeholder-[#a8a29a] focus:outline-hidden focus:border-[#A67C52] transition-colors"
+            className="w-full h-11 pl-11 pr-4 rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-[15px] text-ink placeholder-muted-light focus:outline-hidden focus:border-brand transition-colors"
           />
         </div>
 
         <button
           onClick={onOpenNewProcedure}
-          className="hidden sm:flex items-center gap-2 h-11 px-5 rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all shrink-0 ml-auto"
+          className="hidden sm:flex items-center gap-2 h-11 px-5 rounded-xl bg-brand text-white text-[15px] font-semibold hover:bg-brand-hover active:scale-97 transition-all shrink-0 ml-auto"
         >
           <Plus className="w-[18px] h-[18px]" />
           <span className="hidden lg:inline">Novo procedimento</span>
@@ -208,16 +208,16 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
               onClick={() => setSelectedCategory(cat)}
               className={`h-[32px] sm:h-[34px] px-3 sm:px-3.5 rounded-full text-[12.5px] sm:text-[13px] font-medium border inline-flex items-center gap-1.5 transition-all duration-150 active:scale-95 ${
                 isSelected
-                  ? 'bg-[#1A1A1A] text-[#F6EFE4] border-[#1A1A1A] shadow-xs'
-                  : 'bg-white text-[#4A4740] border-[rgba(26,26,26,.12)] hover:border-[#A67C52] hover:text-[#1A1A1A] hover:bg-[#FAF8F5]'
+                  ? 'bg-ink text-cream border-ink shadow-xs'
+                  : 'bg-white text-ink-soft border-[rgba(26,26,26,.12)] hover:border-brand hover:text-ink hover:bg-surface'
               }`}
             >
               <span>{cat}</span>
               <span
-                className={`px-1.5 py-0.5 rounded-full text-[10.5px] sm:text-[11px] font-semibold leading-none ${
+                className={`px-1.5 py-0.5 rounded-full text-[10.5px] sm:text-body font-semibold leading-none ${
                   isSelected
-                    ? 'bg-white/20 text-[#F6EFE4]'
-                    : 'bg-black/5 text-[#736E65]'
+                    ? 'bg-white/20 text-cream'
+                    : 'bg-black/5 text-muted'
                 }`}
               >
                 {count}
@@ -229,7 +229,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
 
       {/* Cards grid */}
       {filteredProcedures.length === 0 ? (
-        <div className="text-center py-16 text-[#8a8578] text-[15px] bg-white/50 rounded-2xl border border-white/70">
+        <div className="text-center py-16 text-muted text-[15px] bg-white/50 rounded-2xl border border-white/70">
           <p>Nenhum procedimento encontrado com os filtros selecionados.</p>
           {(selectedCategory !== 'Todos' || searchTerm.trim() !== '') && (
             <button
@@ -238,7 +238,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                 setSelectedCategory('Todos');
                 setSearchTerm('');
               }}
-              className="mt-3.5 px-4 py-2 rounded-xl bg-[#A67C52] text-white text-[13px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all inline-flex items-center gap-1.5"
+              className="mt-3.5 px-4 py-2 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover active:scale-97 transition-all inline-flex items-center gap-1.5"
             >
               Limpar filtros
             </button>
@@ -258,7 +258,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
               >
                 {/* Photo — faixa reduzida. Categoria e destaque moram no corpo, não sobre a foto:
                     a foto encolheu para ser um sinal rápido, cobri-la com pílulas desfaz o ganho. */}
-                <div className="h-[128px] sm:h-[136px] bg-[#EFEDE7] shrink-0">
+                <div className="h-[128px] sm:h-[136px] bg-line-soft shrink-0">
                   {img ? (
                     <img
                       src={img}
@@ -267,7 +267,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                       referrerPolicy="no-referrer"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[#a8a29a]">
+                    <div className="w-full h-full flex items-center justify-center text-muted-light">
                       <ImageIcon className="w-5 h-5" />
                     </div>
                   )}
@@ -277,16 +277,16 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                 <div className="p-4 flex flex-col flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A67C52] truncate">
+                      <p className="text-label font-semibold uppercase tracking-wider text-brand truncate">
                         {proc.category}
                       </p>
                       <h3
                         onClick={() => onViewDetails(proc)}
-                        className="font-serif-luxury text-[18px] font-semibold text-[#1A1A1A] leading-tight cursor-pointer hover:text-[#A67C52] transition-colors mt-0.5"
+                        className="font-serif-luxury text-[18px] font-semibold text-ink leading-tight cursor-pointer hover:text-brand transition-colors mt-0.5"
                       >
                         {proc.isFeatured && (
                           <Star
-                            className="inline-block w-3.5 h-3.5 fill-[#E8CDAC] text-[#C49B74] mr-1 -mt-0.5"
+                            className="inline-block w-3.5 h-3.5 fill-[#E8CDAC] text-brand-light mr-1 -mt-0.5"
                             aria-label="Em destaque"
                           />
                         )}
@@ -295,33 +295,33 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                     </div>
                     <button
                       onClick={(e) => openMenu(proc.id, e)}
-                      className="shrink-0 w-9 h-9 -mr-1.5 -mt-1 rounded-full flex items-center justify-center text-[#8a8578] hover:bg-[#F9F8F6] hover:text-[#1A1A1A] active:scale-95 transition-all"
+                      className="shrink-0 w-9 h-9 -mr-1.5 -mt-1 rounded-full flex items-center justify-center text-muted hover:bg-surface hover:text-ink active:scale-95 transition-all"
                       title="Mais ações"
                     >
                       <MoreHorizontal className="w-5 h-5" />
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap text-[13px] text-[#4a4740] mt-2 mb-3.5">
+                  <div className="flex items-center gap-2 flex-wrap text-[13px] text-ink-soft mt-2 mb-3.5">
                     {proc.duration && (
                       <>
                         <span className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-[#A67C52]" />
+                          <Clock className="w-3.5 h-3.5 text-brand" />
                           {proc.duration}
                         </span>
-                        <span className="text-[#d6d3cc]">·</span>
+                        <span className="text-line">·</span>
                       </>
                     )}
                     <span className="flex items-baseline gap-1.5">
                       {proc.isStartingPrice && (
-                        <span className="text-[12px] text-[#8a8578]">a partir de</span>
+                        <span className="text-[12px] text-muted">a partir de</span>
                       )}
                       {hasDiscount && (
-                        <span className="text-[12px] text-[#a8a29a] line-through">
+                        <span className="text-[12px] text-muted-light line-through">
                           {formatBRL(proc.price)}
                         </span>
                       )}
-                      <span className="font-semibold text-[#8E653D]">
+                      <span className="font-semibold text-brand-hover">
                         {formatBRL(hasDiscount ? proc.promotionalPrice : proc.price)}
                       </span>
                     </span>
@@ -330,13 +330,13 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                   <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-auto">
                     <button
                       onClick={() => onViewDetails(proc)}
-                      className="h-10 rounded-lg border border-[rgba(26,26,26,.15)] text-[#4a4740] text-[12px] sm:text-[13px] font-semibold hover:border-[#A67C52] hover:text-[#A67C52] active:scale-97 transition-all"
+                      className="h-10 rounded-lg border border-[rgba(26,26,26,.15)] text-ink-soft text-[12px] sm:text-[13px] font-semibold hover:border-brand hover:text-brand active:scale-97 transition-all"
                     >
                       Detalhes
                     </button>
                     <button
                       onClick={() => onEditProcedure(proc)}
-                      className="h-10 rounded-lg border border-[rgba(26,26,26,.15)] text-[#4a4740] text-[12px] sm:text-[13px] font-semibold hover:border-[#A67C52] hover:text-[#A67C52] active:scale-97 transition-all"
+                      className="h-10 rounded-lg border border-[rgba(26,26,26,.15)] text-ink-soft text-[12px] sm:text-[13px] font-semibold hover:border-brand hover:text-brand active:scale-97 transition-all"
                     >
                       Editar
                     </button>
@@ -350,8 +350,8 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                       }
                       className={`h-10 rounded-lg text-[12px] sm:text-[13px] font-semibold transition-all ${
                         comFicha
-                          ? 'bg-[#A67C52] text-white hover:bg-[#8E653D] active:scale-97'
-                          : 'bg-[#EFEDE7] text-[#a8a29a] cursor-not-allowed'
+                          ? 'bg-brand text-white hover:bg-brand-hover active:scale-97'
+                          : 'bg-line-soft text-muted-light cursor-not-allowed'
                       }`}
                     >
                       Anamnese
@@ -374,7 +374,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
           {/* Mobile bottom sheet */}
           <div className="sm:hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[22px] shadow-2xl pb-[max(16px,env(safe-area-inset-bottom))] animate-fadeIn">
             <div className="w-11 h-1 bg-[rgba(26,26,26,.15)] rounded-full mx-auto mt-3 mb-1" />
-            <p className="px-5 pt-2 pb-1 text-[13px] text-[#8a8578] font-medium truncate">
+            <p className="px-5 pt-2 pb-1 text-[13px] text-muted font-medium truncate">
               {menuProcedure.title}
             </p>
             <div className="py-1">
@@ -389,8 +389,8 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                     }}
                     className={`w-full flex items-center gap-3 h-[52px] px-5 text-[15px] font-medium transition-colors ${
                       action.danger
-                        ? 'text-[#E11D48] hover:bg-[#E11D48]/5'
-                        : 'text-[#1A1A1A] hover:bg-[#F9F8F6]'
+                        ? 'text-danger hover:bg-danger/5'
+                        : 'text-ink hover:bg-surface'
                     }`}
                   >
                     <Icon className="w-[18px] h-[18px]" />
@@ -418,8 +418,8 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                     }}
                     className={`w-full flex items-center gap-3 h-[46px] px-4 text-[14px] font-medium transition-colors ${
                       action.danger
-                        ? 'text-[#E11D48] hover:bg-[#E11D48]/5'
-                        : 'text-[#1A1A1A] hover:bg-[#F9F8F6]'
+                        ? 'text-danger hover:bg-danger/5'
+                        : 'text-ink hover:bg-surface'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -436,7 +436,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
           tela. "Exportar catálogo" saiu daqui — já existe no menu de navegação. */}
       <button
         onClick={onOpenNewProcedure}
-        className={`sm:hidden fixed right-5 bottom-[max(20px,env(safe-area-inset-bottom))] z-30 w-14 h-14 rounded-full bg-[#A67C52] text-white flex items-center justify-center shadow-lg active:scale-95 transition-all duration-200 ${
+        className={`sm:hidden fixed right-5 bottom-[max(20px,env(safe-area-inset-bottom))] z-30 w-14 h-14 rounded-full bg-brand text-white flex items-center justify-center shadow-lg active:scale-95 transition-all duration-200 ${
           fabVisivel ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5 pointer-events-none'
         }`}
         aria-label="Novo procedimento"

@@ -430,14 +430,14 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div className="relative w-full max-w-2xl bg-[#F9F8F6]/95 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl border border-white/60 my-6 transition-all">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+      <div className="relative w-full max-w-2xl bg-surface rounded-sm overflow-hidden shadow-2xl border border-white/60 my-6 transition-all">
         {/* Header */}
-        <div className="bg-[#1A1A1A] text-[#E5E4E0] px-6 py-4 flex items-center justify-between border-b border-white/10">
+        <div className="bg-ink text-line-soft px-6 py-4 flex items-center justify-between border-b border-white/10">
           <div className="flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-[#C49B74]" />
+            <Building2 className="w-5 h-5 text-brand-light" />
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-[#C49B74]">
+              <span className="text-label font-semibold uppercase tracking-widest text-brand-light">
                 Configurações & Corpo Clínico
               </span>
               <h2 className="font-serif-luxury text-xl font-medium text-white leading-none mt-0.5">
@@ -457,44 +457,44 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 max-h-[80vh] overflow-y-auto">
           {/* Clinic & Brand */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <Building2 className="w-3.5 h-3.5" />
               Identidade da Clínica
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Nome da Clínica / Consultório *
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Slogan / Subtítulo da Marca
                 </label>
                 <input
                   type="text"
                   value={formData.tagline}
                   onChange={(e) => handleChange('tagline', e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
             </div>
 
             {/* Logo — substitui o monograma "LV" no painel e na capa do catálogo em PDF */}
             <div>
-              <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+              <label className="block text-xs font-medium text-ink mb-1">
                 Logo da Clínica
               </label>
-              <div className="p-3 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 space-y-3">
+              <div className="p-3 rounded-sm bg-card border border-white/80 space-y-3">
                 <div className="flex items-center gap-3">
                   {/* A marca aparece sobre fundo claro (página inicial, capa do PDF) e sobre fundo
                       escuro (menu lateral, rodapé) — as duas prévias mostram os dois casos. */}
@@ -504,22 +504,22 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                         <ClinicLogo
                           clinic={formData}
                           className="w-full h-full"
-                          monogramClassName="bg-[#1A1A1A] text-[#C49B74] font-serif-luxury text-base font-semibold rounded-xs"
+                          monogramClassName="bg-ink text-brand-light font-serif-luxury text-base font-semibold rounded-xs"
                         />
                       </div>
-                      <span className="block text-[9px] uppercase tracking-wider text-gray-400 mt-1">
+                      <span className="block text-label uppercase tracking-wider text-gray-400 mt-1">
                         Claro
                       </span>
                     </div>
                     <div className="text-center">
-                      <div className="w-14 h-14 rounded-sm bg-[#1A1A1A] border border-[#1A1A1A] flex items-center justify-center p-1.5">
+                      <div className="w-14 h-14 rounded-sm bg-ink border border-ink flex items-center justify-center p-1.5">
                         <ClinicLogo
                           clinic={formData}
                           className="w-full h-full"
-                          monogramClassName="text-[#C49B74] font-serif-luxury text-base font-semibold"
+                          monogramClassName="text-brand-light font-serif-luxury text-base font-semibold"
                         />
                       </div>
-                      <span className="block text-[9px] uppercase tracking-wider text-gray-400 mt-1">
+                      <span className="block text-label uppercase tracking-wider text-gray-400 mt-1">
                         Escuro
                       </span>
                     </div>
@@ -527,7 +527,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] cursor-pointer transition-colors flex items-center gap-1">
+                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand cursor-pointer transition-colors flex items-center gap-1">
                         <ImageIcon className="w-3 h-3" />
                         {resolveClinicLogoUrl(formData.logoUrl) ? 'Trocar logo' : 'Enviar logo'}
                         <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
@@ -537,7 +537,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setLogoCropSource(formData.logoUrl || null)}
-                            className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] transition-colors flex items-center gap-1"
+                            className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand transition-colors flex items-center gap-1"
                           >
                             <Crop className="w-3 h-3" />
                             Ajustar enquadramento
@@ -545,14 +545,14 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                           <button
                             type="button"
                             onClick={() => handleChange('logoUrl', '')}
-                            className="text-[11px] text-red-500 hover:text-red-700 font-medium"
+                            className="text-body text-red-500 hover:text-red-700 font-medium"
                           >
                             Remover
                           </button>
                         </>
                       )}
                     </div>
-                    <p className="text-[10px] text-gray-500 leading-relaxed mt-2">
+                    <p className="text-label text-gray-500 leading-relaxed mt-2">
                       Usada na capa do catálogo em PDF e no topo da página inicial, no lugar do
                       monograma <strong>{clinicMonogram(formData.name)}</strong>. Prefira PNG com
                       fundo transparente — o arquivo é gravado junto do perfil, então mantenha-o leve.
@@ -566,7 +566,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           {/* Clinical Team / Registered Doctors */}
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-1 border-b border-white/60">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
                 <Stethoscope className="w-3.5 h-3.5" />
                 Corpo Clínico & Médicas Cadastradas ({formData.professionals.length})
               </h3>
@@ -574,7 +574,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={handleStartAddDoctor}
-                  className="px-2.5 py-1 rounded-xs bg-[#A67C52] text-white text-[10px] uppercase tracking-wider font-semibold hover:bg-[#8e6945] flex items-center gap-1 transition-all"
+                  className="px-2.5 py-1 rounded-xs bg-brand text-white text-label uppercase tracking-wider font-semibold hover:bg-brand-hover flex items-center gap-1 transition-all"
                 >
                   <Plus className="w-3 h-3" />
                   Adicionar Médica / Dra.
@@ -584,9 +584,9 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 
             {/* Doctor Add/Edit Form Box */}
             {showDoctorForm && (
-              <div className="p-4 rounded-sm bg-white/80 backdrop-blur-md border border-[#A67C52]/40 shadow-xs space-y-3 animate-fadeIn">
+              <div className="p-4 rounded-sm bg-card border border-brand/40 shadow-xs space-y-3 animate-fadeIn">
                 <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-                  <span className="text-xs font-bold text-[#1A1A1A] uppercase tracking-wider">
+                  <span className="text-xs font-bold text-ink uppercase tracking-wider">
                     {editingDocId ? 'Editar Dados da Médica' : 'Cadastrar Nova Médica / Dra.'}
                   </span>
                   <button
@@ -610,11 +610,11 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                     )}
                   </div>
                   <div className="flex-1">
-                    <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                    <label className="block text-body font-medium text-gray-700 mb-1">
                       Foto da Médica (usada na capa do catálogo em PDF)
                     </label>
                     <div className="flex flex-wrap items-center gap-2">
-                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] cursor-pointer transition-colors">
+                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand cursor-pointer transition-colors">
                         Escolher Arquivo
                         <input type="file" accept="image/*" onChange={handleDoctorPhotoUpload} className="hidden" />
                       </label>
@@ -622,7 +622,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setPhotoCropSource(docPhotoUrl)}
-                          className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] transition-colors flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand transition-colors flex items-center gap-1"
                         >
                           <Crop className="w-3 h-3" />
                           Ajustar enquadramento
@@ -632,7 +632,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setDocPhotoUrl('')}
-                          className="text-[11px] text-red-500 hover:text-red-700 font-medium"
+                          className="text-body text-red-500 hover:text-red-700 font-medium"
                         >
                           Remover
                         </button>
@@ -643,7 +643,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                    <label className="block text-body font-medium text-gray-700 mb-1">
                       Nome da Profissional (Ex: Dra. Marcella Ribeiro) *
                     </label>
                     <input
@@ -651,13 +651,13 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       value={docName}
                       onChange={(e) => setDocName(e.target.value)}
                       placeholder="Dra. Nome Completo"
-                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                    <label className="block text-body font-medium text-gray-700 mb-1">
                       Registro Profissional (CRM / CRBM / COREN)
                     </label>
                     <input
@@ -665,12 +665,12 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       value={docRegistry}
                       onChange={(e) => setDocRegistry(e.target.value)}
                       placeholder="CRBM 28.450 ou CRM 184.920"
-                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                     />
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                    <label className="block text-body font-medium text-gray-700 mb-1">
                       Título / Especialidade
                     </label>
                     <input
@@ -678,12 +678,12 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       value={docTitle}
                       onChange={(e) => setDocTitle(e.target.value)}
                       placeholder="Ex: Biomédica Esteta / Dermatologista / Harmonização Facial"
-                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                     />
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    <label className="block text-body font-medium text-gray-700 mb-1 flex items-center gap-1">
                       <Mail className="w-3 h-3" />
                       E-mail de login (usado para criar o acesso ao painel)
                     </label>
@@ -692,7 +692,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       value={docEmail}
                       onChange={(e) => setDocEmail(e.target.value)}
                       placeholder="profissional@lavieclinique.com"
-                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                     />
                   </div>
                 </div>
@@ -708,7 +708,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   <button
                     type="button"
                     onClick={handleSaveDoctor}
-                    className="px-4 py-1.5 rounded-xs bg-[#1A1A1A] text-white text-xs font-medium uppercase tracking-wider hover:bg-[#333333]"
+                    className="px-4 py-1.5 rounded-xs bg-ink text-white text-xs font-medium uppercase tracking-wider hover:bg-ink"
                   >
                     {editingDocId ? 'Atualizar Médica' : 'Salvar Médica'}
                   </button>
@@ -734,13 +734,13 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
               {formData.professionals.map((doc, idx) => (
                 <div
                   key={doc.id || idx}
-                  className="flex items-center justify-between p-3 rounded-xs bg-white/60 backdrop-blur-xs border border-white/80 hover:border-[#A67C52]/30 transition-all"
+                  className="flex items-center justify-between p-3 rounded-xs bg-card border border-white/80 hover:border-brand/30 transition-all"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <button
                       type="button"
                       onClick={() => handleStartEditDoctor(doc)}
-                      className="relative group w-9 h-9 rounded-full bg-[#1A1A1A] text-[#C49B74] flex items-center justify-center text-xs font-bold font-serif-luxury shadow-xs overflow-hidden shrink-0 border border-[#A67C52]/30 hover:border-[#A67C52] transition-colors"
+                      className="relative group w-9 h-9 rounded-full bg-ink text-brand-light flex items-center justify-center text-xs font-bold font-serif-luxury shadow-xs overflow-hidden shrink-0 border border-brand/30 hover:border-brand transition-colors"
                       title="Clique para editar ou trocar foto"
                     >
                       {doc.photoUrl ? (
@@ -754,47 +754,47 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                     </button>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-xs font-semibold text-[#1A1A1A]">{doc.name}</p>
+                        <p className="text-xs font-semibold text-ink">{doc.name}</p>
                         {doc.registryNumber && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded-xs bg-[#A67C52]/15 text-[#A67C52] font-semibold">
+                          <span className="text-label px-1.5 py-0.2 rounded-xs bg-brand/15 text-brand font-semibold">
                             {doc.registryNumber}
                           </span>
                         )}
                         {doc.isAdmin && (
-                          <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.2 rounded-xs bg-[#1A1A1A] text-[#C49B74] font-semibold">
+                          <span className="flex items-center gap-0.5 text-label px-1.5 py-0.2 rounded-xs bg-ink text-brand-light font-semibold">
                             <ShieldCheck className="w-2.5 h-2.5" /> Admin
                           </span>
                         )}
                         {doc.uid ? (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded-xs bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
+                          <span className="text-label px-1.5 py-0.2 rounded-xs bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
                             Login ativo
                           </span>
                         ) : (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded-xs bg-gray-100 text-gray-500 font-medium">
+                          <span className="text-label px-1.5 py-0.2 rounded-xs bg-gray-100 text-gray-500 font-medium">
                             Sem login
                           </span>
                         )}
                       </div>
                       {doc.title && (
-                        <p className="text-[11px] text-gray-500 font-light line-clamp-1">{doc.title}</p>
+                        <p className="text-body text-gray-500 font-light line-clamp-1">{doc.title}</p>
                       )}
                     </div>
                   </div>
 
                   {deletingDocId === doc.id ? (
                     <div className="flex items-center gap-1.5 animate-fadeIn shrink-0">
-                      <span className="text-[11px] text-red-600 font-medium mr-1">Excluir?</span>
+                      <span className="text-body text-red-600 font-medium mr-1">Excluir?</span>
                       <button
                         type="button"
                         onClick={() => handleDeleteDoctor(doc.id)}
-                        className="px-2 py-1 bg-red-600 text-white rounded-xs text-[10px] font-bold uppercase tracking-wider hover:bg-red-700 shadow-xs"
+                        className="px-2 py-1 bg-red-600 text-white rounded-xs text-label font-bold uppercase tracking-wider hover:bg-red-700 shadow-xs"
                       >
                         Sim
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeletingDocId(null)}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded-xs text-[10px] font-medium hover:bg-gray-300"
+                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded-xs text-label font-medium hover:bg-gray-300"
                       >
                         Não
                       </button>
@@ -806,7 +806,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                           type="button"
                           disabled={creatingLoginForId === doc.id}
                           onClick={() => handleCreateLogin(doc)}
-                          className="p-1.5 rounded-xs text-gray-400 hover:text-[#A67C52] hover:bg-white transition-colors disabled:opacity-50"
+                          className="p-1.5 rounded-xs text-gray-400 hover:text-brand hover:bg-white transition-colors disabled:opacity-50"
                           title="Criar login para esta profissional"
                         >
                           {creatingLoginForId === doc.id ? (
@@ -822,8 +822,8 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                           onClick={() => handleToggleAdmin(doc)}
                           className={`p-1.5 rounded-xs transition-colors ${
                             doc.isAdmin
-                              ? 'text-[#A67C52] hover:text-gray-400 hover:bg-white'
-                              : 'text-gray-400 hover:text-[#A67C52] hover:bg-white'
+                              ? 'text-brand hover:text-gray-400 hover:bg-white'
+                              : 'text-gray-400 hover:text-brand hover:bg-white'
                           }`}
                           title={doc.isAdmin ? 'Remover admin' : 'Tornar admin'}
                         >
@@ -833,7 +833,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleStartEditDoctor(doc)}
-                        className="p-1.5 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-white transition-colors"
+                        className="p-1.5 rounded-xs text-gray-400 hover:text-ink hover:bg-white transition-colors"
                         title="Editar Médica"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
@@ -853,21 +853,21 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-gray-500 italic">
+            <p className="text-body text-gray-500 italic">
               * Ao cadastrar um procedimento, você poderá selecionar qual ou quais médicas são responsáveis pelo atendimento.
             </p>
           </div>
 
           {/* Contact & Location (Editable for Footer & PDF) */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <Phone className="w-3.5 h-3.5" />
               Canais de Contato & Localização (Exibidos no Rodapé e PDF)
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   WhatsApp / Telefone para Agendamentos *
                 </label>
                 <input
@@ -875,13 +875,13 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   value={formData.phone}
                   onChange={(e) => handleChange('phone', e.target.value)}
                   placeholder="(19) 99876-5432"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Instagram (@perfil)
                 </label>
                 <input
@@ -889,12 +889,12 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   value={formData.instagram}
                   onChange={(e) => handleChange('instagram', e.target.value)}
                   placeholder="@lavieclinique.indaiatuba"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Endereço do Consultório
                 </label>
                 <input
@@ -902,12 +902,12 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   value={formData.address}
                   onChange={(e) => handleChange('address', e.target.value)}
                   placeholder="Av. Pres. Vargas, 1400 - Sala 82, Jardim Vitória"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Cidade / UF
                 </label>
                 <input
@@ -915,12 +915,12 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   value={formData.cityState}
                   onChange={(e) => handleChange('cityState', e.target.value)}
                   placeholder="Indaiatuba - SP"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Endereço público do sistema
                 </label>
                 <input
@@ -928,9 +928,9 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   value={formData.publicBaseUrl || ''}
                   onChange={(e) => handleChange('publicBaseUrl', e.target.value)}
                   placeholder="https://catalogo.lavieclinique.com.br"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
-                <p className="text-[11px] text-gray-500 mt-1.5 leading-snug">
+                <p className="text-body text-gray-500 mt-1.5 leading-snug">
                   Base dos links enviados à paciente — ficha de anamnese, orçamento e QR Code do
                   catálogo. Preencha com o endereço que abre <strong>sem pedir login</strong>. Em
                   branco, o link usa o endereço da janela em que você estiver: se o painel foi
@@ -943,32 +943,32 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 
           {/* Catalog notes */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <Sparkles className="w-3.5 h-3.5" />
               Mensagens do Catálogo & PDF
             </h3>
 
             <div>
-              <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+              <label className="block text-xs font-medium text-ink mb-1">
                 Mensagem de Boas-Vindas no Topo do Catálogo
               </label>
               <textarea
                 rows={2}
                 value={formData.catalogWelcomeNote || ''}
                 onChange={(e) => handleChange('catalogWelcomeNote', e.target.value)}
-                className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A]"
+                className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+              <label className="block text-xs font-medium text-ink mb-1">
                 Nota de Rodapé (Condições / Aviso de Avaliação)
               </label>
               <input
                 type="text"
                 value={formData.consultationNote || ''}
                 onChange={(e) => handleChange('consultationNote', e.target.value)}
-                className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A]"
+                className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
               />
             </div>
           </div>
@@ -977,12 +977,12 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 
           {/* Mapa corporal da depilação a laser */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <Scan className="w-3.5 h-3.5" />
               Depilação a Laser — Mapa Corporal
             </h3>
 
-            <p className="text-[11px] text-gray-500 leading-relaxed">
+            <p className="text-body text-gray-500 leading-relaxed">
               Os dois manequins sobre os quais as áreas de aplicação são desenhadas. Servem para
               ambos os gêneros — as áreas são desenhadas uma vez só. Envie de preferência em PNG
               com fundo transparente, e use a mesma silhueta nas duas vistas.
@@ -996,20 +996,20 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                     key={campo}
                     className="bg-white/70 border border-white/80 rounded-sm p-3 flex flex-col items-center gap-2"
                   >
-                    <span className="text-[11px] font-semibold text-[#1A1A1A] uppercase tracking-wider">
+                    <span className="text-label font-semibold text-ink uppercase tracking-wider">
                       {rotulo}
                     </span>
 
-                    <div className="h-40 flex items-center justify-center w-full bg-[#F9F8F6] rounded-xs border border-dashed border-[#d8d2c8] overflow-hidden">
+                    <div className="h-40 flex items-center justify-center w-full bg-surface rounded-xs border border-dashed border-line overflow-hidden">
                       {url ? (
                         <img src={url} alt={rotulo} className="h-full w-auto object-contain" />
                       ) : (
-                        <span className="text-[10px] text-gray-400">Nenhuma imagem enviada</span>
+                        <span className="text-label text-gray-400">Nenhuma imagem enviada</span>
                       )}
                     </div>
 
                     <div className="flex flex-wrap items-center justify-center gap-2">
-                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] cursor-pointer transition-colors flex items-center gap-1">
+                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand cursor-pointer transition-colors flex items-center gap-1">
                         <ImageIcon className="w-3 h-3" />
                         {url ? 'Trocar' : 'Enviar'}
                         <input
@@ -1023,7 +1023,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleChange(campo, '')}
-                          className="text-[11px] text-red-500 hover:text-red-700 font-medium"
+                          className="text-body text-red-500 hover:text-red-700 font-medium"
                         >
                           Remover
                         </button>
@@ -1035,14 +1035,14 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
             </div>
 
             {avisoManequim && (
-              <p className="text-[11px] text-[#8E5B1A] bg-[#FDF6E7] border border-[#F0DCB4] rounded-sm px-3 py-2 leading-relaxed">
+              <p className="text-body text-warn bg-warn-bg border border-[#F0DCB4] rounded-sm px-3 py-2 leading-relaxed">
                 {avisoManequim}
               </p>
             )}
 
             {onAbrirMapaDeAreas && (
               <div className="flex items-start justify-between gap-3 flex-wrap bg-white/70 border border-white/80 rounded-sm px-3 py-2.5">
-                <p className="text-[11px] text-gray-500 leading-relaxed flex-1 min-w-[200px]">
+                <p className="text-body text-gray-500 leading-relaxed flex-1 min-w-[200px]">
                   As áreas são desenhadas no cadastro de cada procedimento. Aqui você vê o mapa
                   inteiro de uma vez — para conferir encavalamentos, reposicionar botões ou remover
                   uma área.
@@ -1050,7 +1050,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={onAbrirMapaDeAreas}
-                  className="px-3.5 py-2 rounded-xs bg-white border border-gray-200 text-[12px] font-medium text-[#1A1A1A] hover:border-[#A67C52] transition-colors flex items-center gap-1.5 shrink-0"
+                  className="px-3.5 py-2 rounded-xs bg-white border border-gray-200 text-[12px] font-medium text-ink hover:border-brand transition-colors flex items-center gap-1.5 shrink-0"
                 >
                   <Scan className="w-3.5 h-3.5" />
                   Configurar áreas
@@ -1068,10 +1068,10 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
             */}
             <div className="pt-1 space-y-3">
               <div>
-                <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[#A67C52]">
+                <h4 className="text-label font-semibold uppercase tracking-wider text-brand">
                   Padrões da categoria
                 </h4>
-                <p className="text-[11px] text-gray-500 leading-relaxed mt-0.5">
+                <p className="text-body text-gray-500 leading-relaxed mt-0.5">
                   Valem para toda área de laser que deixar o campo em branco no cadastro. Corrigir
                   aqui corrige em todas de uma vez.
                 </p>
@@ -1079,7 +1079,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 
               {LASER_PADROES_CAMPOS.map(({ campo, rotulo, dica, linhas }) => (
                 <div key={campo}>
-                  <label className="block text-xs font-medium text-[#1A1A1A] mb-1">{rotulo}</label>
+                  <label className="block text-xs font-medium text-ink mb-1">{rotulo}</label>
                   <textarea
                     rows={linhas}
                     value={formData.laserPadroes?.[campo] || ''}
@@ -1090,7 +1090,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       })
                     }
                     placeholder={dica}
-                    className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                   />
                 </div>
               ))}
@@ -1098,7 +1098,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           </div>
 
           {/* Footer actions */}
-          <div className="pt-4 border-t border-white/60 flex items-center justify-end gap-3 sticky bottom-0 bg-[#F9F8F6]/95 backdrop-blur-md py-2">
+          <div className="pt-4 border-t border-white/60 flex items-center justify-end gap-3 sticky bottom-0 bg-surface py-2">
             <button
               type="button"
               onClick={onClose}
@@ -1108,7 +1108,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-1.5"
+              className="px-6 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-brand-hover active:scale-95 transition-all flex items-center gap-1.5"
             >
               <Check className="w-4 h-4" />
               Salvar Informações
@@ -1241,13 +1241,13 @@ const SecaoAgendaDaClinica: React.FC<{
 
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
         <CalendarDays className="w-3.5 h-3.5" />
         Agenda
       </h3>
 
       <div>
-        <p className="text-[11px] text-gray-500 leading-relaxed mb-2">
+        <p className="text-body text-gray-500 leading-relaxed mb-2">
           Horário de funcionamento. O que fica fora dele aparece em cinza na agenda — mas continua
           clicável, para encaixe.
         </p>
@@ -1275,9 +1275,9 @@ const SecaoAgendaDaClinica: React.FC<{
                             { abre: '', fecha: '' }
                       )
                     }
-                    className="w-4 h-4 accent-[#A67C52]"
+                    className="w-4 h-4 accent-brand"
                   />
-                  <span className="text-xs font-medium text-[#1A1A1A]">{rotulo}</span>
+                  <span className="text-xs font-medium text-ink">{rotulo}</span>
                 </label>
 
                 {aberto ? (
@@ -1288,20 +1288,20 @@ const SecaoAgendaDaClinica: React.FC<{
                       value={dia.abre || ''}
                       onChange={(e) => atualizar(i, { abre: mascararHora(e.target.value) })}
                       placeholder="hh:mm"
-                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-xs text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-xs text-ink tabular-nums focus:outline-hidden"
                     />
-                    <span className="text-[11px] text-gray-400">às</span>
+                    <span className="text-body text-gray-400">às</span>
                     <input
                       type="text"
                       inputMode="numeric"
                       value={dia.fecha || ''}
                       onChange={(e) => atualizar(i, { fecha: mascararHora(e.target.value) })}
                       placeholder="hh:mm"
-                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-xs text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-xs text-ink tabular-nums focus:outline-hidden"
                     />
                   </div>
                 ) : (
-                  <span className="text-[11px] text-gray-400">Fechado</span>
+                  <span className="text-body text-gray-400">Fechado</span>
                 )}
               </div>
             );
@@ -1310,13 +1310,13 @@ const SecaoAgendaDaClinica: React.FC<{
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+        <label className="block text-xs font-medium text-ink mb-1">
           Divisão da grade
         </label>
         <select
           value={formData.agendaIntervaloMin || AGENDA_DEFAULTS.intervaloMin}
           onChange={(e) => onChange('agendaIntervaloMin', Number(e.target.value))}
-          className="glass-input px-3 py-2 rounded-sm text-xs text-[#1A1A1A] focus:outline-hidden"
+          className="glass-input px-3 py-2 rounded-sm text-xs text-ink focus:outline-hidden"
         >
           {INTERVALOS_DISPONIVEIS.map((m) => (
             <option key={m} value={m}>
@@ -1327,16 +1327,16 @@ const SecaoAgendaDaClinica: React.FC<{
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+        <label className="block text-xs font-medium text-ink mb-1">
           Mensagem de confirmação no WhatsApp
         </label>
         <textarea
           rows={3}
           value={formData.agendaConfirmacaoTemplate ?? AGENDA_DEFAULTS.confirmacaoTemplate}
           onChange={(e) => onChange('agendaConfirmacaoTemplate', e.target.value)}
-          className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A]"
+          className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
         />
-        <p className="mt-1 text-[11px] text-gray-400">
+        <p className="mt-1 text-body text-gray-400">
           Marcadores: {'{primeiroNome}'} {'{data}'} {'{hora}'} {'{procedimento}'}{' '}
           {'{profissional}'} {'{clinica}'}
         </p>

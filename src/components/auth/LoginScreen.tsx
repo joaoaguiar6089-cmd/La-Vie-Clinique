@@ -51,14 +51,14 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-surface flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-[#1A1A1A] flex items-center justify-center text-[#C49B74] font-serif-luxury text-2xl font-semibold mx-auto mb-4">
+          <div className="w-14 h-14 rounded-2xl bg-ink flex items-center justify-center text-brand-light font-serif-luxury text-2xl font-semibold mx-auto mb-4">
             LV
           </div>
-          <h1 className="font-serif-luxury text-[26px] font-medium text-[#1A1A1A]">La Vie Clinique</h1>
-          <p className="text-[13px] text-[#8a8578] mt-1">Painel administrativo — acesso restrito à equipe</p>
+          <h1 className="font-serif-luxury text-[26px] font-medium text-ink">La Vie Clinique</h1>
+          <p className="text-[13px] text-muted mt-1">Painel administrativo — acesso restrito à equipe</p>
         </div>
 
         <form
@@ -66,9 +66,9 @@ export const LoginScreen: React.FC = () => {
           className="bg-white rounded-3xl shadow-[0_6px_22px_rgba(0,0,0,.06)] p-6 space-y-4"
         >
           <div>
-            <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">E-mail</label>
+            <label className="block text-[13px] font-semibold text-ink mb-1.5">E-mail</label>
             <div className="relative">
-              <Mail className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+              <Mail className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
               <input
                 type="email"
                 value={email}
@@ -76,15 +76,15 @@ export const LoginScreen: React.FC = () => {
                 placeholder="seu.email@lavieclinique.com"
                 autoComplete="username"
                 required
-                className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">Senha</label>
+            <label className="block text-[13px] font-semibold text-ink mb-1.5">Senha</label>
             <div className="relative">
-              <Lock className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+              <Lock className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
               <input
                 type="password"
                 value={password}
@@ -92,7 +92,7 @@ export const LoginScreen: React.FC = () => {
                 placeholder="••••••••"
                 autoComplete="current-password"
                 required
-                className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
               />
             </div>
           </div>
@@ -114,7 +114,7 @@ export const LoginScreen: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full h-[50px] rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold flex items-center justify-center gap-2 hover:bg-[#8E653D] active:scale-97 transition-all disabled:opacity-60"
+            className="w-full h-[50px] rounded-xl bg-brand text-white text-[15px] font-semibold flex items-center justify-center gap-2 hover:bg-brand-hover active:scale-97 transition-all disabled:opacity-60"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {isSubmitting ? 'Entrando...' : 'Entrar'}
@@ -123,7 +123,7 @@ export const LoginScreen: React.FC = () => {
           <button
             type="button"
             onClick={handleForgotPassword}
-            className="w-full text-center text-[13px] text-[#8a8578] hover:text-[#1A1A1A] font-medium transition-colors"
+            className="w-full text-center text-[13px] text-muted hover:text-ink font-medium transition-colors"
           >
             Esqueci minha senha
           </button>

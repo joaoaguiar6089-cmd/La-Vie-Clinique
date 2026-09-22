@@ -28,9 +28,9 @@ export const ConsentTermView: React.FC<ConsentTermViewProps> = ({
   if (variant === 'documento') {
     return (
       <div className={`page-break-inside-avoid ${className}`}>
-        <div className="flex items-center gap-2 border-b border-[#A67C52]/40 pb-1.5 mb-3">
-          <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
-          <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-[#1A1A1A]">
+        <div className="flex items-center gap-2 border-b border-brand/40 pb-1.5 mb-3">
+          <span className="w-2 h-2 rounded-full bg-brand" />
+          <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-ink">
             {CONSENT_TERM_HEADING}
           </h4>
         </div>
@@ -39,7 +39,7 @@ export const ConsentTermView: React.FC<ConsentTermViewProps> = ({
           {sections.map((s) => (
             <div key={s.id} className="page-break-inside-avoid">
               {s.titulo && (
-                <h5 className="font-serif-luxury text-[13px] font-bold text-[#1A1A1A] leading-tight">
+                <h5 className="font-serif-luxury text-[13px] font-bold text-ink leading-tight">
                   {s.titulo}
                 </h5>
               )}
@@ -58,12 +58,12 @@ export const ConsentTermView: React.FC<ConsentTermViewProps> = ({
   return (
     <div className={`bg-white rounded-2xl p-5 shadow-[0_3px_14px_rgba(0,0,0,.04)] ${className}`}>
       <div className="flex items-start gap-2.5 mb-4">
-        <span className="shrink-0 w-8 h-8 rounded-full bg-[#A67C52]/10 text-[#A67C52] flex items-center justify-center">
+        <span className="shrink-0 w-8 h-8 rounded-full bg-brand/10 text-brand flex items-center justify-center">
           <ScrollText className="w-[18px] h-[18px]" />
         </span>
         <div className="min-w-0">
-          <p className="text-[15px] font-semibold text-[#1A1A1A] leading-tight">{CONSENT_TERM_HEADING}</p>
-          <p className="text-[13px] text-[#8a8578] mt-0.5">
+          <p className="text-[15px] font-semibold text-ink leading-tight">{CONSENT_TERM_HEADING}</p>
+          <p className="text-[13px] text-muted mt-0.5">
             Leia com atenção antes de concluir a ficha.
           </p>
         </div>
@@ -73,12 +73,12 @@ export const ConsentTermView: React.FC<ConsentTermViewProps> = ({
         {sections.map((s) => (
           <div key={s.id} className="pt-4 first:pt-0">
             {s.titulo && (
-              <h4 className="font-serif-luxury text-[17px] font-semibold text-[#A67C52] leading-tight">
+              <h4 className="font-serif-luxury text-[17px] font-semibold text-brand leading-tight">
                 {s.titulo}
               </h4>
             )}
             {s.texto && (
-              <p className="text-[14px] text-[#4a4740] leading-relaxed whitespace-pre-line mt-1.5">
+              <p className="text-[14px] text-ink-soft leading-relaxed whitespace-pre-line mt-1.5">
                 {s.texto}
               </p>
             )}

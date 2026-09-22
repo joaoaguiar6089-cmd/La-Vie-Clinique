@@ -716,12 +716,12 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
   const placeholderSize = computeDisplaySize();
 
   const sliderThumbClass =
-    '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#A67C52] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[#A67C52]';
+    '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-brand';
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-xs flex flex-col animate-fadeIn">
+    <div className="fixed inset-0 z-[80] bg-black/85 flex flex-col animate-fadeIn">
       {/* ============ Header ============ */}
-      <div className="relative px-4 sm:px-6 h-14 sm:h-auto sm:py-3.5 bg-[#1A1A1A] text-white flex items-center justify-between gap-3 shrink-0 shadow-lg">
+      <div className="relative px-4 sm:px-6 h-14 sm:h-auto sm:py-3.5 bg-ink text-white flex items-center justify-between gap-3 shrink-0 shadow-lg">
         {/* Mobile: close (44px) + centered title + Salvar */}
         <button
           type="button"
@@ -737,7 +737,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
           type="button"
           onClick={handleSave}
           disabled={isSaving || !isReady}
-          className="sm:hidden flex items-center gap-1.5 h-10 px-4 rounded-xl bg-[#A67C52] text-white text-[14px] font-semibold disabled:opacity-60"
+          className="sm:hidden flex items-center gap-1.5 h-10 px-4 rounded-xl bg-brand text-white text-[14px] font-semibold disabled:opacity-60"
         >
           {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
           {isSaving ? 'Salvando' : 'Salvar'}
@@ -745,7 +745,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
 
         {/* Tablet/desktop: bronze dot + title + patient name, Cancelar / Salvar anotações */}
         <div className="hidden sm:flex items-center gap-2.5 min-w-0">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74] shrink-0" />
+          <span className="w-2.5 h-2.5 rounded-full bg-brand-light shrink-0" />
           <span className="font-serif-luxury text-[21px] tracking-wide truncate">
             {title || 'Anotar foto'}
           </span>
@@ -762,7 +762,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
             type="button"
             onClick={handleSave}
             disabled={isSaving || !isReady}
-            className="flex items-center gap-2 h-11 px-5 rounded-xl bg-[#A67C52] text-white text-[14px] font-semibold hover:bg-[#8E653D] transition-all disabled:opacity-60 whitespace-nowrap"
+            className="flex items-center gap-2 h-11 px-5 rounded-xl bg-brand text-white text-[14px] font-semibold hover:bg-brand-hover transition-all disabled:opacity-60 whitespace-nowrap"
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Save className="w-4 h-4 shrink-0" />}
             {isSaving ? 'Salvando...' : 'Salvar anotações'}
@@ -771,7 +771,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
       </div>
 
       {/* ============ Toolbar — tablet/desktop (sm+) ============ */}
-      <div className="hidden sm:flex px-4 sm:px-6 py-2.5 bg-[#232323] border-b border-white/10 items-center gap-3 sm:gap-4 flex-wrap shrink-0">
+      <div className="hidden sm:flex px-4 sm:px-6 py-2.5 bg-ink border-b border-white/10 items-center gap-3 sm:gap-4 flex-wrap shrink-0">
         <div className="flex items-center gap-1 bg-black/35 p-1 rounded-xl">
           {tabletToolOrder.map((id) => (
             <button
@@ -780,7 +780,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
               title={toolMeta[id].label}
               onClick={() => setTool(id)}
               className={`flex items-center gap-1.5 h-11 px-3 rounded-lg text-[13px] font-medium transition-all ${
-                tool === id ? 'bg-[#A67C52] text-white' : 'text-gray-300 hover:bg-white/10'
+                tool === id ? 'bg-brand text-white' : 'text-gray-300 hover:bg-white/10'
               }`}
             >
               {toolMeta[id].icon}
@@ -815,7 +815,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
               title={c}
               onClick={() => applyColor(c)}
               className={`w-[30px] h-[30px] rounded-full border-2 transition-all ${
-                color === c ? 'border-[#C49B74] scale-110' : 'border-white/30'
+                color === c ? 'border-brand-light scale-110' : 'border-white/30'
               }`}
               style={{ backgroundColor: c }}
             />
@@ -837,7 +837,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
             max={40}
             value={strokeWidth}
             onChange={(e) => applyStrokeWidth(Number(e.target.value))}
-            className={`w-20 h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
+            className={`w-20 h-1.5 rounded-full bg-white/20 accent-brand ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
           />
           <span style={{ fontFamily: 'ui-monospace, Menlo, monospace' }} className="w-6">{strokeWidth}</span>
         </div>
@@ -850,7 +850,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
             max={200}
             value={fontSize}
             onChange={(e) => applyFontSize(Number(e.target.value))}
-            className={`w-20 h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
+            className={`w-20 h-1.5 rounded-full bg-white/20 accent-brand ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
           />
           <span style={{ fontFamily: 'ui-monospace, Menlo, monospace' }} className="w-8">{fontSize}</span>
         </div>
@@ -862,14 +862,14 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
           <button type="button" title="Refazer" onClick={handleRedo} disabled={!historyState.canRedo} className="p-2.5 rounded-lg text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
             <Redo2 className="w-4 h-4" />
           </button>
-          <button type="button" title="Excluir selecionado (ou tecla Delete)" onClick={deleteSelected} disabled={!hasSelection} className="p-2.5 rounded-lg text-[#E11D48] hover:bg-[#E11D48]/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
+          <button type="button" title="Excluir selecionado (ou tecla Delete)" onClick={deleteSelected} disabled={!hasSelection} className="p-2.5 rounded-lg text-danger hover:bg-danger/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {/* ============ Canvas area ============ */}
-      <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center p-4 sm:p-8 bg-[#111] sm:bg-[#0f0f0f] touch-none relative">
+      <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center p-4 sm:p-8 bg-[#111] sm:bg-ink touch-none relative">
         <div className="relative bg-white rounded-sm shadow-2xl overflow-hidden">
           {/* Fabric.js creates/owns its <canvas> element(s) inside this div directly via the DOM —
               never render one here as JSX (see canvasHostRef above for why). */}
@@ -879,7 +879,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
               className="absolute inset-0 flex items-center justify-center bg-white"
               style={{ width: placeholderSize.width, height: placeholderSize.height }}
             >
-              <Loader2 className="w-8 h-8 text-[#A67C52] animate-spin" />
+              <Loader2 className="w-8 h-8 text-brand animate-spin" />
             </div>
           )}
         </div>
@@ -891,8 +891,8 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
             parâmetros do próprio objeto já carregados para edição. */}
         {selectionInfo && (
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 w-[calc(100%-1.5rem)] max-w-2xl">
-            <div className="bg-[rgba(26,26,26,.93)] backdrop-blur-md rounded-2xl shadow-2xl border border-white/10 px-3 py-2.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2.5">
-              <span className="text-[11px] font-semibold text-[#C49B74] uppercase tracking-wider whitespace-nowrap">
+            <div className="bg-[rgba(26,26,26,.93)] rounded-2xl shadow-2xl border border-white/10 px-3 py-2.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2.5">
+              <span className="text-label font-semibold text-brand-light uppercase tracking-wider whitespace-nowrap">
                 {selectionInfo.count > 1
                   ? `${selectionInfo.count} itens`
                   : selectionInfo.isText
@@ -911,7 +911,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
                     title={`Mudar a cor para ${c}`}
                     onClick={() => applyColor(c)}
                     className={`w-7 h-7 rounded-full border-2 transition-all ${
-                      color === c ? 'border-[#C49B74] scale-110' : 'border-white/30'
+                      color === c ? 'border-brand-light scale-110' : 'border-white/30'
                     }`}
                     style={{ backgroundColor: c }}
                   />
@@ -922,7 +922,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
 
               {/* Parâmetro do tipo selecionado */}
               {selectionInfo.isText ? (
-                <div className="flex items-center gap-2 text-gray-300 text-[11px]">
+                <div className="flex items-center gap-2 text-gray-300 text-body">
                   <span className="whitespace-nowrap">Tamanho</span>
                   <input
                     type="range"
@@ -930,14 +930,14 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
                     max={200}
                     value={fontSize}
                     onChange={(e) => applyFontSize(Number(e.target.value))}
-                    className={`w-24 h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
+                    className={`w-24 h-1.5 rounded-full bg-white/20 accent-brand ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
                   />
                   <span style={{ fontFamily: 'ui-monospace, Menlo, monospace' }} className="w-7">
                     {fontSize}
                   </span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-gray-300 text-[11px]">
+                <div className="flex items-center gap-2 text-gray-300 text-body">
                   <span className="whitespace-nowrap">Espessura</span>
                   <input
                     type="range"
@@ -945,7 +945,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
                     max={40}
                     value={strokeWidth}
                     onChange={(e) => applyStrokeWidth(Number(e.target.value))}
-                    className={`w-24 h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
+                    className={`w-24 h-1.5 rounded-full bg-white/20 accent-brand ${sliderThumbClass} [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6`}
                   />
                   <span style={{ fontFamily: 'ui-monospace, Menlo, monospace' }} className="w-6">
                     {strokeWidth}
@@ -981,7 +981,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
                   type="button"
                   onClick={deleteSelected}
                   title="Excluir seleção (ou tecla Delete)"
-                  className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-[#E11D48]/15 text-[#FF8095] hover:bg-[#E11D48]/30 text-[12px] font-semibold transition-colors"
+                  className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-danger/15 text-danger-line hover:bg-danger/30 text-[12px] font-semibold transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                   Excluir
@@ -992,14 +992,14 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
         )}
 
         {/* Mobile floating controls */}
-        <div className="sm:hidden absolute top-3 right-3 flex items-center gap-1 bg-[rgba(0,0,0,.55)] backdrop-blur-md rounded-full px-1 py-1">
+        <div className="sm:hidden absolute top-3 right-3 flex items-center gap-1 bg-[rgba(0,0,0,.55)] rounded-full px-1 py-1">
           <button type="button" onClick={handleZoomOut} className="w-9 h-9 rounded-full flex items-center justify-center text-white/90">
             <ZoomOut className="w-4 h-4" />
           </button>
           <button
             type="button"
             onClick={handleZoomFit}
-            className="px-1.5 text-[11px] text-white/90 font-semibold min-w-[2.75rem] text-center"
+            className="px-1.5 text-body text-white/90 font-semibold min-w-[2.75rem] text-center"
             style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
           >
             {zoomPercent}%
@@ -1008,7 +1008,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
             <ZoomIn className="w-4 h-4" />
           </button>
         </div>
-        <div className="sm:hidden absolute top-3 left-3 flex items-center gap-1 bg-[rgba(0,0,0,.55)] backdrop-blur-md rounded-full px-1 py-1">
+        <div className="sm:hidden absolute top-3 left-3 flex items-center gap-1 bg-[rgba(0,0,0,.55)] rounded-full px-1 py-1">
           <button type="button" onClick={handleUndo} disabled={!historyState.canUndo} className="w-9 h-9 rounded-full flex items-center justify-center text-white/90 disabled:opacity-30">
             <Undo2 className="w-4 h-4" />
           </button>
@@ -1017,14 +1017,14 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
           </button>
         </div>
         {!selectionInfo && (
-          <p className="sm:hidden absolute bottom-3 left-1/2 -translate-x-1/2 text-[12px] text-white/70 bg-[rgba(0,0,0,.55)] backdrop-blur-md px-3 py-1.5 rounded-full whitespace-nowrap">
+          <p className="sm:hidden absolute bottom-3 left-1/2 -translate-x-1/2 text-[12px] text-white/70 bg-[rgba(0,0,0,.55)] px-3 py-1.5 rounded-full whitespace-nowrap">
             Pinça para dar zoom · dois dedos para mover
           </p>
         )}
       </div>
 
       {/* ============ Toolbar — mobile (<640px) ============ */}
-      <div className="sm:hidden bg-[#1A1A1A] shrink-0">
+      <div className="sm:hidden bg-ink shrink-0">
         <div className="flex items-center justify-center gap-2.5 py-2.5 border-b border-white/10">
           {COLORS.map((c) => (
             <button
@@ -1032,7 +1032,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
               type="button"
               onClick={() => applyColor(c)}
               className={`w-9 h-9 rounded-full border-2 transition-all ${
-                color === c ? 'border-[#C49B74] scale-110' : 'border-white/25'
+                color === c ? 'border-brand-light scale-110' : 'border-white/25'
               }`}
               style={{ backgroundColor: c }}
             />
@@ -1044,8 +1044,8 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
               key={id}
               type="button"
               onClick={() => setTool(id)}
-              className={`h-[60px] flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
-                tool === id ? 'text-[#A67C52]' : 'text-gray-300'
+              className={`h-[60px] flex flex-col items-center justify-center gap-1 text-body font-medium transition-colors ${
+                tool === id ? 'text-brand' : 'text-gray-300'
               }`}
             >
               {toolMeta[id].icon}
@@ -1055,7 +1055,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
           <button
             type="button"
             onClick={() => setIsAdjustOpen(true)}
-            className="h-[60px] flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-gray-300"
+            className="h-[60px] flex flex-col items-center justify-center gap-1 text-body font-medium text-gray-300"
           >
             <SlidersHorizontal className="w-[18px] h-[18px]" />
             Ajustes
@@ -1067,13 +1067,13 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
       {isAdjustOpen && (
         <>
           <div className="sm:hidden fixed inset-0 z-10 bg-black/40" onClick={() => setIsAdjustOpen(false)} />
-          <div className="sm:hidden fixed left-0 right-0 bottom-0 z-20 bg-[#1A1A1A] rounded-t-[22px] pb-[max(20px,env(safe-area-inset-bottom))]">
+          <div className="sm:hidden fixed left-0 right-0 bottom-0 z-20 bg-ink rounded-t-[22px] pb-[max(20px,env(safe-area-inset-bottom))]">
             <div className="w-11 h-1 bg-white/20 rounded-full mx-auto mt-3 mb-4" />
             <div className="px-5 space-y-5">
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[14px] font-semibold text-white">Espessura</span>
-                  <span className="text-[14px] text-[#C49B74]" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{strokeWidth}</span>
+                  <span className="text-[14px] text-brand-light" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{strokeWidth}</span>
                 </div>
                 <input
                   type="range"
@@ -1081,14 +1081,14 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
                   max={40}
                   value={strokeWidth}
                   onChange={(e) => applyStrokeWidth(Number(e.target.value))}
-                  className={`w-full h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-[34px] [&::-webkit-slider-thumb]:h-[34px] [&::-moz-range-thumb]:w-[34px] [&::-moz-range-thumb]:h-[34px]`}
+                  className={`w-full h-1.5 rounded-full bg-white/20 accent-brand ${sliderThumbClass} [&::-webkit-slider-thumb]:w-[34px] [&::-webkit-slider-thumb]:h-[34px] [&::-moz-range-thumb]:w-[34px] [&::-moz-range-thumb]:h-[34px]`}
                   style={{ padding: '10px 0' }}
                 />
               </div>
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[14px] font-semibold text-white">Tamanho do texto</span>
-                  <span className="text-[14px] text-[#C49B74]" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{fontSize}</span>
+                  <span className="text-[14px] text-brand-light" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{fontSize}</span>
                 </div>
                 <input
                   type="range"
@@ -1096,7 +1096,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
                   max={200}
                   value={fontSize}
                   onChange={(e) => applyFontSize(Number(e.target.value))}
-                  className={`w-full h-1.5 rounded-full bg-white/20 accent-[#A67C52] ${sliderThumbClass} [&::-webkit-slider-thumb]:w-[34px] [&::-webkit-slider-thumb]:h-[34px] [&::-moz-range-thumb]:w-[34px] [&::-moz-range-thumb]:h-[34px]`}
+                  className={`w-full h-1.5 rounded-full bg-white/20 accent-brand ${sliderThumbClass} [&::-webkit-slider-thumb]:w-[34px] [&::-webkit-slider-thumb]:h-[34px] [&::-moz-range-thumb]:w-[34px] [&::-moz-range-thumb]:h-[34px]`}
                   style={{ padding: '10px 0' }}
                 />
               </div>
@@ -1107,7 +1107,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
                   setIsAdjustOpen(false);
                 }}
                 disabled={!hasSelection}
-                className="w-full h-12 rounded-xl bg-[#E11D48]/10 text-[#E11D48] text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-30"
+                className="w-full h-12 rounded-xl bg-danger/10 text-danger text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-30"
               >
                 <Trash2 className="w-4 h-4" />
                 Excluir seleção
@@ -1115,7 +1115,7 @@ export const PhotoAnnotationEditor: React.FC<PhotoAnnotationEditorProps> = ({
               <button
                 type="button"
                 onClick={() => setIsAdjustOpen(false)}
-                className="w-full h-[52px] rounded-2xl bg-[#A67C52] text-white text-[16px] font-semibold"
+                className="w-full h-[52px] rounded-2xl bg-brand text-white text-[16px] font-semibold"
               >
                 Pronto
               </button>

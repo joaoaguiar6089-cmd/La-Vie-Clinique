@@ -33,7 +33,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ pedido, onFechar }
 
   return (
     <div
-      className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+      className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4 animate-fadeIn"
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-titulo"
@@ -41,12 +41,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ pedido, onFechar }
         if (e.target === e.currentTarget) onFechar();
       }}
     >
-      <div className="w-full max-w-sm bg-[#F9F8F6] rounded-sm overflow-hidden shadow-2xl border border-white/60">
+      <div className="w-full max-w-sm bg-surface rounded-sm overflow-hidden shadow-2xl border border-white/60">
         <div className="px-6 pt-6 pb-5">
           <div className="flex items-start gap-3">
             <div
               className={`w-9 h-9 rounded-sm flex items-center justify-center shrink-0 ${
-                perigo ? 'bg-red-50 text-red-600' : 'bg-[#A67C52]/10 text-[#A67C52]'
+                perigo ? 'bg-red-50 text-red-600' : 'bg-brand/10 text-brand'
               }`}
             >
               <AlertTriangle className="w-4 h-4" />
@@ -54,7 +54,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ pedido, onFechar }
             <div className="min-w-0">
               <h2
                 id="confirm-dialog-titulo"
-                className="font-serif-luxury text-xl text-[#1A1A1A] leading-tight"
+                className="font-serif-luxury text-xl text-ink leading-tight"
               >
                 {pedido.titulo}
               </h2>
@@ -86,7 +86,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ pedido, onFechar }
             autoFocus
             onClick={confirmar}
             className={`px-5 py-2.5 text-white text-xs font-semibold uppercase tracking-widest rounded-sm transition-colors ${
-              perigo ? 'bg-red-600 hover:bg-red-700' : 'bg-[#A67C52] hover:bg-[#8E653D]'
+              perigo ? 'bg-red-600 hover:bg-red-700' : 'bg-brand hover:bg-brand-hover'
             }`}
           >
             {pedido.textoConfirmar}

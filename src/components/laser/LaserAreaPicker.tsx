@@ -69,7 +69,7 @@ export const LaserAreaPicker: React.FC<LaserAreaPickerProps> = ({
 
   if (semMapa) {
     return (
-      <p className="text-[13px] text-[#8a8578] bg-[#F9F8F6] border border-dashed border-[#d8d2c8] rounded-2xl px-4 py-5 text-center leading-relaxed">
+      <p className="text-[13px] text-muted bg-surface border border-dashed border-line rounded-2xl px-4 py-5 text-center leading-relaxed">
         {vazioMensagem || 'O mapa de áreas ainda não foi configurado pela clínica.'}
       </p>
     );
@@ -91,7 +91,7 @@ export const LaserAreaPicker: React.FC<LaserAreaPickerProps> = ({
    */
   if (vistasDisponiveis.length === 0) {
     return (
-      <p className="text-[13px] text-[#8a8578] bg-[#F9F8F6] border border-dashed border-[#d8d2c8] rounded-2xl px-4 py-5 text-center leading-relaxed">
+      <p className="text-[13px] text-muted bg-surface border border-dashed border-line rounded-2xl px-4 py-5 text-center leading-relaxed">
         As imagens do manequim ainda não foram enviadas pela clínica, então as áreas não têm onde
         ser mostradas. Você pode seguir normalmente e combinar as regiões no atendimento.
       </p>
@@ -103,7 +103,7 @@ export const LaserAreaPicker: React.FC<LaserAreaPickerProps> = ({
   return (
     <div>
       {vistasDisponiveis.length > 1 && (
-        <div className="flex items-center gap-1 bg-[#F1EDE7] rounded-full p-1 w-fit mx-auto mb-3">
+        <div className="flex items-center gap-1 bg-line-soft rounded-full p-1 w-fit mx-auto mb-3">
           {vistasDisponiveis.map((v) => {
             const marcadas = contar(v);
             return (
@@ -112,7 +112,7 @@ export const LaserAreaPicker: React.FC<LaserAreaPickerProps> = ({
                 type="button"
                 onClick={() => setVista(v)}
                 className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition-colors ${
-                  vistaAtiva === v ? 'bg-white text-[#1A1A1A] shadow-xs' : 'text-[#8a8578]'
+                  vistaAtiva === v ? 'bg-white text-ink shadow-xs' : 'text-muted'
                 }`}
               >
                 {v === 'frente' ? 'Frente' : 'Costas'}

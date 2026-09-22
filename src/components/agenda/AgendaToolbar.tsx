@@ -40,7 +40,7 @@ export const AgendaToolbar: React.FC<AgendaToolbarProps> = ({
   <div className="flex flex-col gap-3">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="font-serif-luxury text-3xl sm:text-4xl text-[#1A1A1A]">Agenda</h1>
+        <h1 className="font-serif-luxury text-3xl sm:text-4xl text-ink">Agenda</h1>
         <p className="text-xs text-gray-500 mt-1 first-letter:uppercase">
           {rotuloDoPeriodo(visao, dataFoco)}
         </p>
@@ -49,7 +49,7 @@ export const AgendaToolbar: React.FC<AgendaToolbarProps> = ({
       <button
         type="button"
         onClick={onNovo}
-        className="px-5 py-2.5 bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-[#8E653D] transition-colors flex items-center gap-2"
+        className="px-5 py-2.5 bg-brand text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-brand-hover transition-colors flex items-center gap-2"
       >
         <CalendarPlus className="w-4 h-4" />
         Novo agendamento
@@ -62,14 +62,14 @@ export const AgendaToolbar: React.FC<AgendaToolbarProps> = ({
           type="button"
           onClick={onAnterior}
           aria-label="Período anterior"
-          className="p-2 rounded-sm text-gray-500 hover:text-[#1A1A1A] hover:bg-white/70 transition-colors"
+          className="p-2 rounded-sm text-gray-500 hover:text-ink hover:bg-white/70 transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
         <button
           type="button"
           onClick={onHoje}
-          className="px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-semibold text-[#1A1A1A] hover:border-[#A67C52]/40 transition-colors"
+          className="px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-semibold text-ink hover:border-brand/40 transition-colors"
         >
           Hoje
         </button>
@@ -77,7 +77,7 @@ export const AgendaToolbar: React.FC<AgendaToolbarProps> = ({
           type="button"
           onClick={onProximo}
           aria-label="Próximo período"
-          className="p-2 rounded-sm text-gray-500 hover:text-[#1A1A1A] hover:bg-white/70 transition-colors"
+          className="p-2 rounded-sm text-gray-500 hover:text-ink hover:bg-white/70 transition-colors"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
@@ -92,7 +92,7 @@ export const AgendaToolbar: React.FC<AgendaToolbarProps> = ({
             onClick={() => onTrocarVisao(v.id)}
             aria-pressed={visao === v.id}
             className={`px-3 py-1.5 rounded-xs text-xs font-semibold transition-colors ${
-              visao === v.id ? 'bg-[#1A1A1A] text-white' : 'text-gray-500 hover:text-[#1A1A1A]'
+              visao === v.id ? 'bg-ink text-white' : 'text-gray-500 hover:text-ink'
             }`}
           >
             {v.rotulo}
@@ -105,7 +105,7 @@ export const AgendaToolbar: React.FC<AgendaToolbarProps> = ({
           value={filtroProfissionalId}
           onChange={(e) => onFiltrarProfissional(e.target.value)}
           aria-label="Filtrar por profissional"
-          className="glass-input px-3 py-2 rounded-sm text-xs text-[#1A1A1A] focus:outline-hidden"
+          className="glass-input px-3 py-2 rounded-sm text-xs text-ink focus:outline-hidden"
         >
           <option value="">Todas as profissionais</option>
           {professionals.map((p) => (

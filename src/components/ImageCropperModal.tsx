@@ -418,24 +418,24 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
   const displayH = work ? work.h * baseScale * view.zoom : 0;
 
   return (
-    <div className="fixed inset-0 z-70 overflow-y-auto bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div className="w-full max-w-lg bg-[#F9F8F6] rounded-sm border border-white/60 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-70 overflow-y-auto bg-black/70 flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+      <div className="w-full max-w-lg bg-surface rounded-sm border border-white/60 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-black/5 bg-white/70">
           <div className="min-w-0">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-[#1A1A1A]">{title}</h3>
-            {description && <p className="text-[11px] text-gray-500 mt-0.5">{description}</p>}
+            <h3 className="text-xs font-bold uppercase tracking-widest text-ink">{title}</h3>
+            {description && <p className="text-body text-gray-500 mt-0.5">{description}</p>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {progressLabel && (
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A67C52] bg-[#A67C52]/10 px-2 py-1 rounded-xs">
+              <span className="text-label font-semibold uppercase tracking-wider text-brand bg-brand/10 px-2 py-1 rounded-xs">
                 {progressLabel}
               </span>
             )}
             <button
               type="button"
               onClick={onCancel}
-              className="p-1.5 rounded-xs text-gray-400 hover:text-[#1A1A1A] hover:bg-black/5 transition-colors"
+              className="p-1.5 rounded-xs text-gray-400 hover:text-ink hover:bg-black/5 transition-colors"
               aria-label="Fechar"
             >
               <X className="w-4 h-4" />
@@ -448,7 +448,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
           <div ref={wrapRef} className="w-full flex justify-center">
             {isLoading || !work ? (
               <div
-                className="w-full flex flex-col items-center justify-center gap-2 bg-[#EFEDE7] rounded-xs text-gray-500"
+                className="w-full flex flex-col items-center justify-center gap-2 bg-line-soft rounded-xs text-gray-500"
                 style={{ height: Math.min(maxFrameHeight, 280) }}
               >
                 {errorMessage ? (
@@ -474,7 +474,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
                 onKeyDown={handleKeyDown}
-                className="relative overflow-hidden rounded-xs bg-[#1A1A1A] cursor-grab active:cursor-grabbing select-none outline-hidden focus-visible:ring-2 focus-visible:ring-[#A67C52]"
+                className="relative overflow-hidden rounded-xs bg-ink cursor-grab active:cursor-grabbing select-none outline-hidden focus-visible:ring-2 focus-visible:ring-brand"
                 style={{ width: frame.w, height: frame.h, touchAction: 'none' }}
               >
                 <img
@@ -516,7 +516,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
                   type="button"
                   onClick={() => zoomTo(view.zoom / 1.2)}
                   disabled={view.zoom <= 1}
-                  className="p-1.5 rounded-xs bg-white border border-gray-200 text-[#1A1A1A] hover:border-[#A67C52] disabled:opacity-40 transition-colors"
+                  className="p-1.5 rounded-xs bg-white border border-gray-200 text-ink hover:border-brand disabled:opacity-40 transition-colors"
                   aria-label="Diminuir zoom"
                 >
                   <ZoomOut className="w-4 h-4" />
@@ -528,14 +528,14 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
                   step={0.01}
                   value={view.zoom}
                   onChange={(e) => zoomTo(parseFloat(e.target.value))}
-                  className="flex-1 accent-[#A67C52]"
+                  className="flex-1 accent-brand"
                   aria-label="Zoom"
                 />
                 <button
                   type="button"
                   onClick={() => zoomTo(view.zoom * 1.2)}
                   disabled={view.zoom >= MAX_ZOOM}
-                  className="p-1.5 rounded-xs bg-white border border-gray-200 text-[#1A1A1A] hover:border-[#A67C52] disabled:opacity-40 transition-colors"
+                  className="p-1.5 rounded-xs bg-white border border-gray-200 text-ink hover:border-brand disabled:opacity-40 transition-colors"
                   aria-label="Aumentar zoom"
                 >
                   <ZoomIn className="w-4 h-4" />
@@ -543,7 +543,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
                 <button
                   type="button"
                   onClick={handleRotate}
-                  className="p-1.5 rounded-xs bg-white border border-gray-200 text-[#1A1A1A] hover:border-[#A67C52] transition-colors"
+                  className="p-1.5 rounded-xs bg-white border border-gray-200 text-ink hover:border-brand transition-colors"
                   aria-label="Girar 90 graus"
                   title="Girar 90°"
                 >
@@ -552,7 +552,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setView({ zoom: 1, x: 0, y: 0 })}
-                  className="p-1.5 rounded-xs bg-white border border-gray-200 text-[#1A1A1A] hover:border-[#A67C52] transition-colors"
+                  className="p-1.5 rounded-xs bg-white border border-gray-200 text-ink hover:border-brand transition-colors"
                   aria-label="Reiniciar enquadramento"
                   title="Reiniciar enquadramento"
                 >
@@ -562,7 +562,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
 
               {options.length > 1 && (
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mr-0.5">
+                  <span className="text-label font-semibold uppercase tracking-wider text-gray-400 mr-0.5">
                     Formato
                   </span>
                   {options.map((option) => (
@@ -573,10 +573,10 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
                         setAspectId(option.id);
                         setView({ zoom: 1, x: 0, y: 0 });
                       }}
-                      className={`px-2.5 py-1 rounded-xs text-[11px] font-medium border transition-colors ${
+                      className={`px-2.5 py-1 rounded-xs text-body font-medium border transition-colors ${
                         option.id === aspectId
-                          ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                          : 'bg-white text-[#1A1A1A] border-gray-200 hover:border-[#A67C52]'
+                          ? 'bg-ink text-white border-ink'
+                          : 'bg-white text-ink border-gray-200 hover:border-brand'
                       }`}
                     >
                       {option.label}
@@ -585,19 +585,19 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
                 </div>
               )}
 
-              <p className="flex items-center gap-1.5 text-[11px] text-gray-500">
+              <p className="flex items-center gap-1.5 text-body text-gray-500">
                 <Move className="w-3.5 h-3.5 shrink-0 text-gray-400" />
                 Arraste a foto para posicionar · role o mouse (ou use dois dedos) para dar zoom.
               </p>
 
               {errorMessage && (
-                <p className="flex items-start gap-1.5 text-[11px] text-red-600">
+                <p className="flex items-start gap-1.5 text-body text-red-600">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
                   {errorMessage}
                 </p>
               )}
               {isTainted && !errorMessage && (
-                <p className="flex items-start gap-1.5 text-[11px] text-amber-700">
+                <p className="flex items-start gap-1.5 text-body text-amber-700">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
                   Esta foto vem de um link externo que não libera edição. Para recortar, baixe o arquivo e envie por upload.
                 </p>
@@ -611,7 +611,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 rounded-sm border border-gray-200 bg-white text-[11px] font-semibold uppercase tracking-wider text-gray-600 hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 rounded-sm border border-gray-200 bg-white text-label font-semibold uppercase tracking-wider text-gray-600 hover:bg-gray-50 transition-colors"
           >
             Cancelar
           </button>
@@ -619,7 +619,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
             type="button"
             onClick={handleConfirm}
             disabled={!work || isTainted}
-            className="px-5 py-2 rounded-sm bg-[#A67C52] text-white text-[11px] font-semibold uppercase tracking-wider shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            className="px-5 py-2 rounded-sm bg-brand text-white text-label font-semibold uppercase tracking-wider shadow-xs hover:bg-brand-hover active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
           >
             <Check className="w-3.5 h-3.5" />
             {confirmLabel}

@@ -337,12 +337,12 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
             className={`px-2 py-1.5 rounded-xs text-[11.5px] leading-tight text-left transition-colors border flex items-baseline justify-between gap-1.5 ${
               ativa
                 ? 'bg-[#FCE4EF] border-[#D6317F] text-[#8E1A54] font-semibold'
-                : 'bg-white border-gray-200 text-[#1A1A1A]'
+                : 'bg-white border-gray-200 text-ink'
             }`}
           >
             <span className="truncate">{a.nomeCurto}</span>
             {mostrarPreco && typeof a.preco === 'number' && (
-              <span className="text-[10px] text-gray-400 tabular-nums shrink-0">
+              <span className="text-label text-gray-400 tabular-nums shrink-0">
                 {formatBRL(a.preco)}
               </span>
             )}
@@ -376,10 +376,10 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
             />
           ) : (
             <div
-              className="h-full flex items-center justify-center px-8 text-center bg-[#F9F8F6] border border-dashed border-[#d8d2c8] rounded-sm"
+              className="h-full flex items-center justify-center px-8 text-center bg-surface border border-dashed border-line rounded-sm"
               style={{ width: alturaManequim * 0.42 }}
             >
-              <p className="text-[13px] text-[#8a8578]">
+              <p className="text-[13px] text-muted">
                 {vazioMensagem || 'Manequim ainda não enviado.'}
               </p>
             </div>
@@ -600,7 +600,7 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
               className={`absolute z-10 px-2.5 py-1.5 rounded-sm border text-[12px] leading-tight max-w-[150px] transition-colors shadow-[0_1px_4px_rgba(0,0,0,.06)] ${onMoverBotao ? 'cursor-grab active:cursor-grabbing touch-none' : ''} ${
                 ativa
                   ? 'bg-[#FCE4EF] border-[#D6317F] text-[#8E1A54] font-semibold'
-                  : 'bg-white border-gray-200 text-[#1A1A1A] hover:border-[#C0392B]'
+                  : 'bg-white border-gray-200 text-ink hover:border-danger'
               }`}
               style={{
                 left: `${p.x * 100}%`,
@@ -610,7 +610,7 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
             >
               {info.nomeCurto}
               {mostrarPreco && typeof info.preco === 'number' && (
-                <span className="block text-[10px] text-gray-400 tabular-nums">
+                <span className="block text-label text-gray-400 tabular-nums">
                   {formatBRL(info.preco)}
                 </span>
               )}

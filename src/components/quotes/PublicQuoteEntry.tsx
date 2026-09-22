@@ -73,18 +73,18 @@ export const PublicQuoteEntry: React.FC = () => {
 
   if (carregando) {
     return (
-      <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#A67C52] animate-spin" />
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
       </div>
     );
   }
 
   if (erro || !quote) {
     return (
-      <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center p-6">
+      <div className="min-h-screen bg-surface flex items-center justify-center p-6">
         <div className="glass-card rounded-sm p-8 max-w-sm text-center">
-          <AlertCircle className="w-8 h-8 text-[#A67C52] mx-auto mb-3" />
-          <p className="text-sm text-[#1A1A1A]">{erro}</p>
+          <AlertCircle className="w-8 h-8 text-brand mx-auto mb-3" />
+          <p className="text-sm text-ink">{erro}</p>
         </div>
       </div>
     );
@@ -97,17 +97,17 @@ export const PublicQuoteEntry: React.FC = () => {
   const mensagemWhatsApp = `Olá! Quero falar sobre o orçamento ${quote.numero}: ${window.location.href}`;
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] pb-28">
+    <div className="min-h-screen bg-surface text-ink pb-28">
       <div className="max-w-2xl mx-auto px-5 py-8 sm:py-12">
         {/* Cabeçalho */}
         <div className="flex items-start gap-3 mb-6">
-          <div className="w-10 h-10 bg-[#1A1A1A] text-[#A67C52] font-serif-luxury text-sm flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 bg-ink text-brand font-serif-luxury text-sm flex items-center justify-center shrink-0">
             LV
           </div>
           <div className="min-w-0">
             <h1 className="font-serif-luxury text-xl leading-tight">{clinica.name}</h1>
             {(clinica.tagline || clinica.cityState) && (
-              <p className="text-[10px] uppercase tracking-[.14em] text-[#6B6862] mt-0.5">
+              <p className="text-label uppercase tracking-[.14em] text-ink-soft mt-0.5">
                 {[clinica.tagline, clinica.cityState].filter(Boolean).join(' · ')}
               </p>
             )}
@@ -116,8 +116,8 @@ export const PublicQuoteEntry: React.FC = () => {
 
         {/* Avisos de estado — cancelado tem prioridade sobre os demais */}
         {status === 'cancelado' && (
-          <div className="mb-5 px-4 py-3 rounded-sm bg-[#1A1A1A] text-[#F9F8F6] text-xs flex items-start gap-2">
-            <Ban className="w-4 h-4 shrink-0 mt-px text-[#C49B74]" />
+          <div className="mb-5 px-4 py-3 rounded-sm bg-ink text-surface text-xs flex items-start gap-2">
+            <Ban className="w-4 h-4 shrink-0 mt-px text-brand-light" />
             <span>
               Este orçamento foi <strong>cancelado</strong> pela clínica e não está mais válido.
               Fale com a gente para receber um novo.
@@ -126,7 +126,7 @@ export const PublicQuoteEntry: React.FC = () => {
         )}
 
         {quote.substituidoPor && status !== 'cancelado' && (
-          <div className="mb-5 px-4 py-3 rounded-sm bg-[#A67C52]/10 border border-[#A67C52]/25 text-xs text-[#8E653D] flex items-start gap-2">
+          <div className="mb-5 px-4 py-3 rounded-sm bg-brand/10 border border-brand/25 text-xs text-brand-hover flex items-start gap-2">
             <RefreshCw className="w-4 h-4 shrink-0 mt-px" />
             <span>
               Este orçamento foi substituído pelo <strong>{quote.substituidoPor.numero}</strong>.
@@ -146,26 +146,26 @@ export const PublicQuoteEntry: React.FC = () => {
         )}
 
         {/* Identificação */}
-        <div className="border-t border-[#E2DFD8] pt-5">
-          <p className="text-[10px] uppercase tracking-[.16em] text-[#A67C52]">Orçamento</p>
+        <div className="border-t border-line pt-5">
+          <p className="text-label uppercase tracking-[.16em] text-brand">Orçamento</p>
           <p className="font-serif-luxury text-2xl tabular-nums">Nº {quote.numero}</p>
-          <p className="text-xs text-[#6B6862] mt-1 tabular-nums">
+          <p className="text-xs text-ink-soft mt-1 tabular-nums">
             Emitido em {dataCurta(quote.dataEmissao)} · Válido até {dataCurta(quote.dataValidade)}
           </p>
         </div>
 
-        <div className="border-t border-[#E2DFD8] mt-5 pt-5">
-          <p className="text-[10px] uppercase tracking-[.16em] text-[#A67C52]">Preparado para</p>
+        <div className="border-t border-line mt-5 pt-5">
+          <p className="text-label uppercase tracking-[.16em] text-brand">Preparado para</p>
           <p className="font-serif-luxury text-2xl leading-tight mt-1">{quote.pacienteNome}</p>
           {quote.jaTeveAvaliacao && quote.dataAvaliacao && (
-            <p className="text-xs text-[#6B6862] mt-1">
+            <p className="text-xs text-ink-soft mt-1">
               avaliação em {dataCurta(quote.dataAvaliacao)}
             </p>
           )}
         </div>
 
         {quote.textoApresentacao && (
-          <p className="text-sm leading-relaxed text-[#3A3833] mt-6">{quote.textoApresentacao}</p>
+          <p className="text-sm leading-relaxed text-ink-soft mt-6">{quote.textoApresentacao}</p>
         )}
 
         {/* Procedimentos */}
@@ -180,18 +180,18 @@ export const PublicQuoteEntry: React.FC = () => {
             ].filter(Boolean);
 
             return (
-              <div key={item.id} className="border-t border-[#E2DFD8] py-5">
-                <p className="text-[10px] uppercase tracking-[.16em] text-[#A67C52]">
+              <div key={item.id} className="border-t border-line py-5">
+                <p className="text-label uppercase tracking-[.16em] text-brand">
                   {item.categoria}
                 </p>
                 <h2 className="font-serif-luxury text-xl leading-tight mt-0.5">{item.titulo}</h2>
                 {item.profissionalNome && (
-                  <p className="text-xs text-[#6B6862] mt-0.5">com {item.profissionalNome}</p>
+                  <p className="text-xs text-ink-soft mt-0.5">com {item.profissionalNome}</p>
                 )}
 
                 <div className="flex items-baseline gap-2 mt-2">
                   {comDesconto && (
-                    <span className="text-sm text-[#8A857C] line-through tabular-nums">
+                    <span className="text-sm text-muted line-through tabular-nums">
                       {formatBRL(item.valorTabela)}
                     </span>
                   )}
@@ -200,17 +200,17 @@ export const PublicQuoteEntry: React.FC = () => {
                   </span>
                 </div>
                 {notas.length > 0 && (
-                  <p className="text-[11px] text-[#8A857C] mt-0.5">{notas.join(' · ')}</p>
+                  <p className="text-body text-muted mt-0.5">{notas.join(' · ')}</p>
                 )}
 
                 {item.detalhes.length > 0 && (
                   <div className="grid grid-cols-2 gap-x-5 gap-y-3 mt-4">
                     {item.detalhes.map((d) => (
                       <div key={d.id}>
-                        <p className="text-[9px] uppercase tracking-[.14em] text-[#A67C52]">
+                        <p className="text-label uppercase tracking-[.14em] text-brand">
                           {d.titulo}
                         </p>
-                        <p className="text-xs text-[#3A3833] mt-0.5 leading-snug">{d.valor}</p>
+                        <p className="text-xs text-ink-soft mt-0.5 leading-snug">{d.valor}</p>
                       </div>
                     ))}
                   </div>
@@ -221,7 +221,7 @@ export const PublicQuoteEntry: React.FC = () => {
         </div>
 
         {/* Totais */}
-        <div className="bg-[#1A1A1A] text-[#F9F8F6] p-5 rounded-sm">
+        <div className="bg-ink text-surface p-5 rounded-sm">
           <div className="flex justify-between text-xs mb-2 tabular-nums">
             <span>Subtotal</span>
             <span>{formatBRL(totais.subtotal)}</span>
@@ -233,7 +233,7 @@ export const PublicQuoteEntry: React.FC = () => {
             </div>
           )}
           <div className="h-px bg-[rgba(196,155,116,.35)] my-3" />
-          <p className="text-[10px] uppercase tracking-[.16em] text-[#A67C52]">Total</p>
+          <p className="text-label uppercase tracking-[.16em] text-brand">Total</p>
           <p className="font-serif-luxury text-3xl text-right tabular-nums">
             {formatBRL(totais.total)}
           </p>
@@ -241,7 +241,7 @@ export const PublicQuoteEntry: React.FC = () => {
 
         {/* Pagamento */}
         <div className="mt-6">
-          <p className="text-[10px] uppercase tracking-[.16em] text-[#A67C52] mb-2">
+          <p className="text-label uppercase tracking-[.16em] text-brand mb-2">
             Forma de pagamento
           </p>
 
@@ -263,12 +263,12 @@ export const PublicQuoteEntry: React.FC = () => {
             return (
               <div
                 key={resultado.id}
-                className={`flex justify-between text-sm gap-3 ${i === 0 ? '' : 'mt-2 pt-2 border-t border-[#E2DFD8]'}`}
+                className={`flex justify-between text-sm gap-3 ${i === 0 ? '' : 'mt-2 pt-2 border-t border-line'}`}
               >
                 <span>
                   {rotulo}
                   {notas.length > 0 && (
-                    <span className="block text-[11px] text-[#8A857C] mt-0.5">
+                    <span className="block text-body text-muted mt-0.5">
                       {notas.join(' · ')}
                     </span>
                   )}
@@ -283,32 +283,32 @@ export const PublicQuoteEntry: React.FC = () => {
           })}
 
           {quote.pagamento.negociacao && (
-            <p className="text-xs text-[#6B6862] mt-3 leading-relaxed">
+            <p className="text-xs text-ink-soft mt-3 leading-relaxed">
               {quote.pagamento.negociacao}
             </p>
           )}
           {quote.observacoes && (
-            <p className="text-xs text-[#8A857C] mt-3 leading-relaxed">{quote.observacoes}</p>
+            <p className="text-xs text-muted mt-3 leading-relaxed">{quote.observacoes}</p>
           )}
         </div>
 
         {/* Rodapé */}
-        <div className="mt-8 pt-5 border-t border-[#E2DFD8]">
-          <p className="text-[11px] text-[#8A857C] leading-relaxed">{clinica.legalNotice}</p>
-          <p className="text-[11px] text-[#6B6862] mt-3">
+        <div className="mt-8 pt-5 border-t border-line">
+          <p className="text-body text-muted leading-relaxed">{clinica.legalNotice}</p>
+          <p className="text-body text-ink-soft mt-3">
             {[clinica.phone, clinica.instagram, clinica.email].filter(Boolean).join(' · ')}
           </p>
         </div>
       </div>
 
       {/* Ações fixas */}
-      <div className="fixed bottom-0 inset-x-0 bg-[#F9F8F6]/95 backdrop-blur-xl border-t border-[#E2DFD8] px-5 py-3">
+      <div className="fixed bottom-0 inset-x-0 bg-surface border-t border-line px-5 py-3">
         <div className="max-w-2xl mx-auto flex items-center gap-3">
           <a
             href={linkWhatsApp(clinica.phone, mensagemWhatsApp)}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 px-5 py-3 bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-[#8E653D] transition-colors flex items-center justify-center gap-2"
+            className="flex-1 px-5 py-3 bg-brand text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-brand-hover transition-colors flex items-center justify-center gap-2"
           >
             <MessageCircle className="w-4 h-4" />
             Falar com a clínica
@@ -317,7 +317,7 @@ export const PublicQuoteEntry: React.FC = () => {
             type="button"
             onClick={() => setMostrarPdf(true)}
             aria-label="Ver versão em PDF"
-            className="px-4 py-3 bg-white/70 border border-[#E2DFD8] text-[#1A1A1A] rounded-sm hover:bg-white transition-colors"
+            className="px-4 py-3 bg-white/70 border border-line text-ink rounded-sm hover:bg-white transition-colors"
           >
             <Download className="w-4 h-4" />
           </button>

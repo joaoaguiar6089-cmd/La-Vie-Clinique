@@ -398,7 +398,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         />
       )}
 
-      <p className="text-[11px] text-gray-400 text-center">
+      <p className="text-body text-gray-400 text-center">
         Clique num horário vazio para agendar. Arraste um agendamento para remarcá-lo.
       </p>
 

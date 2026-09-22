@@ -623,8 +623,8 @@ function MainCatalogApp() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#A67C52] animate-spin" />
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
       </div>
     );
   }
@@ -634,20 +634,20 @@ function MainCatalogApp() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] sm:flex selection:bg-[#A67C52]/25 selection:text-[#1A1A1A]">
+    <div className="min-h-screen bg-surface text-ink sm:flex selection:bg-brand/25 selection:text-ink">
       {/* Toast Notification */}
       {toastMessage && (
         <div
-          className={`fixed bottom-6 right-6 z-50 max-w-sm backdrop-blur-xl text-white px-5 py-3 rounded-lg shadow-2xl border flex items-start gap-3 text-xs font-medium ${
+          className={`fixed bottom-6 right-6 z-50 max-w-sm text-white px-5 py-3 rounded-lg shadow-2xl border flex items-start gap-3 text-xs font-medium ${
             toastTone === 'erro'
               ? 'bg-[#7F1D1D]/95 border-red-300/40'
-              : 'bg-[#1A1A1A]/90 border-white/20 animate-bounce'
+              : 'bg-ink/90 border-white/20 animate-bounce'
           }`}
         >
           {toastTone === 'erro' ? (
             <AlertTriangle className="w-4 h-4 text-red-200 shrink-0 mt-px" />
           ) : (
-            <Check className="w-4 h-4 text-[#C49B74] shrink-0 mt-px" />
+            <Check className="w-4 h-4 text-brand-light shrink-0 mt-px" />
           )}
           <span className="leading-relaxed">{toastMessage}</span>
         </div>
@@ -756,7 +756,7 @@ function MainCatalogApp() {
         </main>
 
         {/* Frosted Luxury Footer */}
-        <footer className="bg-[#1A1A1A] text-[#E5E4E0] border-t border-white/10 mt-16 transition-all">
+        <footer className="bg-ink text-line-soft border-t border-white/10 mt-16 transition-all">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 pb-8 border-b border-white/10">
               {/* Col 1: Brand */}
@@ -765,7 +765,7 @@ function MainCatalogApp() {
                   <ClinicLogo
                     clinic={clinic}
                     className="w-8 h-8 rounded-sm shrink-0"
-                    monogramClassName="bg-[#A67C52] text-white font-serif-luxury text-sm font-bold shadow-sm"
+                    monogramClassName="bg-brand text-white font-serif-luxury text-sm font-bold shadow-sm"
                   />
                   <h3 className="font-serif-luxury text-xl font-medium tracking-tight text-white">
                     {clinic.name}
@@ -777,13 +777,13 @@ function MainCatalogApp() {
                 {clinic.professionals && clinic.professionals.length > 0 ? (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {clinic.professionals.map((doc, dIdx) => (
-                      <span key={dIdx} className="text-[11px] text-[#C49B74] tracking-wider uppercase font-medium bg-white/5 px-2.5 py-1 rounded-xs border border-white/10">
+                      <span key={dIdx} className="text-label text-brand-light tracking-wider uppercase font-medium bg-white/5 px-2.5 py-1 rounded-xs border border-white/10">
                         {doc.name} {doc.specialty || doc.title ? `• ${doc.specialty || doc.title}` : ''}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[11px] text-[#A67C52] tracking-wider uppercase font-medium">
+                  <p className="text-label text-brand tracking-wider uppercase font-medium">
                     {clinic.professionalName} {clinic.professionalTitle ? `• ${clinic.professionalTitle}` : ''}
                   </p>
                 )}
@@ -791,7 +791,7 @@ function MainCatalogApp() {
 
               {/* Col 2: Fast Navigation */}
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] mb-3">
+                <h4 className="text-xs font-semibold uppercase tracking-widest text-brand mb-3">
                   Navegação
                 </h4>
                 <ul className="space-y-2 text-xs text-gray-400">
@@ -818,7 +818,7 @@ function MainCatalogApp() {
 
               {/* Col 3: Contact & Demo Actions */}
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] mb-3">
+                <h4 className="text-xs font-semibold uppercase tracking-widest text-brand mb-3">
                   Atendimento
                 </h4>
                 <p className="text-xs text-gray-400 mb-1">📱 {clinic.phone}</p>
@@ -826,7 +826,7 @@ function MainCatalogApp() {
                 <p className="text-xs text-gray-400 mb-3">{clinic.cityState}</p>
                 <button
                   onClick={handleResetToDefaultSamples}
-                  className="text-[10px] text-gray-500 hover:text-[#A67C52] flex items-center gap-1 transition-colors uppercase tracking-wider"
+                  className="text-label text-gray-500 hover:text-brand flex items-center gap-1 transition-colors uppercase tracking-wider"
                   title="Restaurar dados de exemplo"
                 >
                   <RefreshCw className="w-3 h-3" /> Restaurar demonstração
@@ -836,9 +836,9 @@ function MainCatalogApp() {
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
               <p>© {new Date().getFullYear()} {clinic.name}. Todos os direitos reservados.</p>
-              <div className="flex items-center space-x-2 text-[#A67C52]">
-                <div className="w-8 h-[1px] bg-[#A67C52]/40"></div>
-                <span className="text-[10px] tracking-widest uppercase font-medium">Design Frosted Glass</span>
+              <div className="flex items-center space-x-2 text-brand">
+                <div className="w-8 h-[1px] bg-brand/40"></div>
+                <span className="text-label tracking-widest uppercase font-medium">Design Frosted Glass</span>
               </div>
             </div>
           </div>

@@ -55,10 +55,10 @@ const STATUS_LABEL: Record<QuoteStatus, string> = {
 
 const STATUS_CLASS: Record<QuoteStatus, string> = {
   rascunho: 'bg-gray-100 text-gray-500 border-gray-200',
-  enviado: 'bg-[#A67C52]/10 text-[#8E653D] border-[#A67C52]/25',
+  enviado: 'bg-brand/10 text-brand-hover border-brand/25',
   aceito: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   expirado: 'bg-amber-50 text-amber-700 border-amber-200',
-  cancelado: 'bg-[#1A1A1A] text-[#C49B74] border-[#1A1A1A]',
+  cancelado: 'bg-ink text-brand-light border-ink',
 };
 
 export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedures }) => {
@@ -189,7 +189,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
-          <h1 className="font-serif-luxury text-3xl sm:text-4xl text-[#1A1A1A]">Orçamentos</h1>
+          <h1 className="font-serif-luxury text-3xl sm:text-4xl text-ink">Orçamentos</h1>
           <p className="text-xs text-gray-500 mt-1">
             {quotes.length} orçamento{quotes.length === 1 ? '' : 's'}
             {listaFiltrada.length !== quotes.length && ` · ${listaFiltrada.length} no filtro`}
@@ -199,7 +199,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
         <button
           type="button"
           onClick={abrirNovo}
-          className="px-5 py-2.5 bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-[#8E653D] transition-colors flex items-center gap-2"
+          className="px-5 py-2.5 bg-brand text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-brand-hover transition-colors flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
           Novo orçamento
@@ -238,7 +238,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar por cliente, número ou profissional"
-            className="w-full glass-input pl-9 pr-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+            className="w-full glass-input pl-9 pr-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
           />
         </div>
 
@@ -250,7 +250,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
               onClick={() => setFiltroStatus(s)}
               className={`px-3 py-1.5 text-xs font-medium rounded-sm border transition-colors ${
                 filtroStatus === s
-                  ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+                  ? 'bg-ink text-white border-ink'
                   : 'bg-white/60 text-gray-600 border-white/80 hover:bg-white/80'
               }`}
             >
@@ -283,15 +283,15 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                 className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
               >
                 <div className="min-w-[110px]">
-                  <p className="font-serif-luxury text-lg text-[#1A1A1A] tabular-nums">
+                  <p className="font-serif-luxury text-lg text-ink tabular-nums">
                     {quote.numero}
                   </p>
-                  <p className="text-[11px] text-gray-400">{formatDate(quote.dataEmissao)}</p>
+                  <p className="text-body text-gray-400">{formatDate(quote.dataEmissao)}</p>
                 </div>
 
                 <div className="flex-1 min-w-[160px]">
-                  <p className="text-sm text-[#1A1A1A] truncate">{quote.pacienteNome}</p>
-                  <p className="text-[11px] text-gray-400 truncate">
+                  <p className="text-sm text-ink truncate">{quote.pacienteNome}</p>
+                  <p className="text-body text-gray-400 truncate">
                     {quote.itens.length} procedimento{quote.itens.length === 1 ? '' : 's'}
                     {(() => {
                       const nomes = Array.from(
@@ -303,22 +303,22 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                 </div>
 
                 <div className="text-right min-w-[110px]">
-                  <p className="text-sm font-semibold text-[#1A1A1A] tabular-nums">
+                  <p className="text-sm font-semibold text-ink tabular-nums">
                     {formatBRL(quote.total)}
                   </p>
-                  <p className="text-[11px] text-gray-400">
+                  <p className="text-body text-gray-400">
                     válido até {formatDate(quote.dataValidade)}
                   </p>
                 </div>
 
                 <div className="flex flex-col items-start gap-1">
                   <span
-                    className={`px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-xs border ${STATUS_CLASS[status]}`}
+                    className={`px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border ${STATUS_CLASS[status]}`}
                   >
                     {STATUS_LABEL[status]}
                   </span>
                   {substituido && (
-                    <span className="text-[10px] text-gray-400">
+                    <span className="text-label text-gray-400">
                       substituído por {quote.substituidoPor?.numero}
                     </span>
                   )}
@@ -330,7 +330,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                     onClick={() => setQuoteParaCompartilhar(quote)}
                     aria-label={`Compartilhar ${quote.numero}`}
                     title="Compartilhar link com a cliente"
-                    className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                    className="p-2 text-gray-400 hover:text-brand transition-colors"
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
@@ -340,7 +340,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                     onClick={() => setQuoteNaPrevia(quote)}
                     aria-label={`Visualizar ${quote.numero}`}
                     title="Visualizar — o botão de salvar PDF fica dentro da prévia"
-                    className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                    className="p-2 text-gray-400 hover:text-brand transition-colors"
                   >
                     <Eye className="w-4 h-4" />
                   </button>
@@ -351,7 +351,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                       onClick={() => abrirEdicao(quote)}
                       aria-label={`Editar ${quote.numero}`}
                       title="Editar rascunho"
-                      className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                      className="p-2 text-gray-400 hover:text-brand transition-colors"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -363,7 +363,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                       onClick={() => abrirSubstituicao(quote)}
                       aria-label={`Substituir ${quote.numero}`}
                       title="Substituir — cria um novo com número próprio"
-                      className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                      className="p-2 text-gray-400 hover:text-brand transition-colors"
                     >
                       <RefreshCw className="w-4 h-4" />
                     </button>
@@ -374,7 +374,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
                     onClick={() => abrirDuplicacao(quote)}
                     aria-label={`Duplicar ${quote.numero}`}
                     title="Duplicar para outra cliente"
-                    className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+                    className="p-2 text-gray-400 hover:text-brand transition-colors"
                   >
                     <Copy className="w-4 h-4" />
                   </button>

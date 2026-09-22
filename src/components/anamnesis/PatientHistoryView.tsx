@@ -88,14 +88,14 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner & Quick Actions */}
-      <div className="bg-white/60 backdrop-blur-md rounded-sm border border-white/80 p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-card rounded-sm border border-white/80 p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#A67C52]" />
-            <h3 className="font-serif-luxury text-xl font-medium text-[#1A1A1A]">
+            <span className="w-2.5 h-2.5 rounded-full bg-brand" />
+            <h3 className="font-serif-luxury text-xl font-medium text-ink">
               Anamneses Preenchidas & Enviadas
             </h3>
-            <span className="px-2 py-0.5 rounded-full bg-[#A67C52]/15 text-[#A67C52] text-[10px] font-mono font-bold">
+            <span className="px-2 py-0.5 rounded-full bg-brand/15 text-brand text-label font-mono font-bold">
               {patients.length} pacientes · {records.length} fichas
             </span>
           </div>
@@ -110,7 +110,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
             type="button"
             onClick={() => abrirEnvioDeLink()}
             disabled={templates.length === 0}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-white border border-[#A67C52]/40 text-[#A67C52] text-xs font-semibold uppercase tracking-wider hover:bg-[#A67C52] hover:text-white shadow-xs active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-[#A67C52]"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-white border border-brand/40 text-brand text-xs font-semibold uppercase tracking-wider hover:bg-brand hover:text-white shadow-xs active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand"
             title={
               templates.length === 0
                 ? 'Cadastre um modelo de ficha antes de enviar o link'
@@ -124,7 +124,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
           <button
             type="button"
             onClick={() => onOpenFillModal()}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-[#1A1A1A] text-[#C49B74] text-xs font-semibold uppercase tracking-wider hover:bg-black shadow-xs active:scale-95 transition-all"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-ink text-brand-light text-xs font-semibold uppercase tracking-wider hover:bg-black shadow-xs active:scale-95 transition-all"
           >
             <Plus className="w-4 h-4" />
             Preencher Nova Ficha
@@ -142,7 +142,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por paciente, procedimento ou telefone..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-sm bg-white/80 border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] focus:bg-white"
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-sm bg-white/80 border border-gray-200 text-ink focus:outline-hidden focus:border-brand focus:bg-white"
           />
         </div>
 
@@ -152,7 +152,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
           <select
             value={selectedPatientFilter}
             onChange={(e) => setSelectedPatientFilter(e.target.value)}
-            className="px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-gray-700 focus:outline-hidden focus:border-[#A67C52]"
+            className="px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-gray-700 focus:outline-hidden focus:border-brand"
           >
             <option value="all">Todos os Pacientes ({patients.length})</option>
             {patients.map((p) => (
@@ -169,7 +169,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
               onClick={() => setViewTab('records')}
               className={`px-3 py-1.5 rounded-2xs text-xs font-medium transition-all ${
                 viewTab === 'records'
-                  ? 'bg-[#1A1A1A] text-white shadow-2xs'
+                  ? 'bg-ink text-white shadow-2xs'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -180,7 +180,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
               onClick={() => setViewTab('patients')}
               className={`px-3 py-1.5 rounded-2xs text-xs font-medium transition-all ${
                 viewTab === 'patients'
-                  ? 'bg-[#1A1A1A] text-white shadow-2xs'
+                  ? 'bg-ink text-white shadow-2xs'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -196,13 +196,13 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
           {filteredRecords.map((rec) => (
             <div
               key={rec.id}
-              className="bg-white/80 backdrop-blur-md rounded-sm border border-white/90 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-[#A67C52]/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+              className="bg-card rounded-sm border border-white/90 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-brand/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
             >
               {/* Left Column: Patient & Procedure info */}
               <div className="flex items-start gap-3.5 flex-1 min-w-0">
                 {/* Photo or Icon badge */}
                 {(rec.fotoPacienteUrl || rec.fotoUrl || rec.fotoModeloUrl) ? (
-                  <div className="relative w-12 h-12 rounded-sm overflow-hidden border border-gray-200 shadow-2xs shrink-0 group-hover:border-[#A67C52] transition-colors">
+                  <div className="relative w-12 h-12 rounded-sm overflow-hidden border border-gray-200 shadow-2xs shrink-0 group-hover:border-brand transition-colors">
                     <img
                       src={rec.fotoPacienteUrl || rec.fotoUrl || rec.fotoModeloUrl}
                       alt={rec.pacienteNome}
@@ -213,18 +213,18 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                     </span>
                   </div>
                 ) : (
-                  <div className="w-12 h-12 rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#A67C52] flex items-center justify-center shrink-0">
+                  <div className="w-12 h-12 rounded-sm bg-surface border border-gray-200 text-brand flex items-center justify-center shrink-0">
                     <FileText className="w-5 h-5 stroke-1" />
                   </div>
                 )}
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-serif-luxury text-base font-bold text-[#1A1A1A] group-hover:text-[#A67C52] transition-colors">
+                    <h4 className="font-serif-luxury text-base font-bold text-ink group-hover:text-brand transition-colors">
                       {rec.pacienteNome}
                     </h4>
                     {rec.origemPreenchimento === 'online_paciente' && (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold uppercase tracking-wider">
+                      <span className="px-1.5 py-0.5 rounded-xs bg-emerald-50 text-emerald-700 border border-emerald-200 text-label font-bold uppercase tracking-wider">
                         Online Paciente
                       </span>
                     )}
@@ -235,32 +235,32 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                       preenchida online.
                     */}
                     {rec.origemPreenchimento === 'online_paciente' && !anamneseFechada(rec) && (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold uppercase tracking-wider">
+                      <span className="px-1.5 py-0.5 rounded-xs bg-amber-50 text-amber-700 border border-amber-200 text-label font-bold uppercase tracking-wider">
                         Aguardando Atendimento
                       </span>
                     )}
                     {rec.fotoModeloUrl && (rec.fotoPacienteUrl || rec.fotoUrl) ? (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-semibold">
+                      <span className="px-1.5 py-0.5 rounded-xs bg-purple-50 text-purple-700 border border-purple-200 text-label font-semibold">
                         Foto Doutor + Paciente
                       </span>
                     ) : rec.fotoModeloUrl ? (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-semibold">
+                      <span className="px-1.5 py-0.5 rounded-xs bg-purple-50 text-purple-700 border border-purple-200 text-label font-semibold">
                         Foto Doutor
                       </span>
                     ) : (rec.fotoPacienteUrl || rec.fotoUrl) ? (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-semibold">
+                      <span className="px-1.5 py-0.5 rounded-xs bg-emerald-50 text-emerald-700 border border-emerald-200 text-label font-semibold">
                         Foto Paciente
                       </span>
                     ) : null}
                     {rec.pacienteContato && (
-                      <span className="text-[11px] text-gray-400 font-mono">
+                      <span className="text-body text-gray-400 font-mono">
                         {rec.pacienteContato}
                       </span>
                     )}
                   </div>
 
                   <div className="flex items-center gap-3 mt-1 text-xs text-gray-600 flex-wrap">
-                    <span className="font-semibold text-[#A67C52]">
+                    <span className="font-semibold text-brand">
                       {rec.procedimentoNome}
                     </span>
                     <span className="text-gray-300">•</span>
@@ -271,7 +271,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                     {rec.profissionalNome && (
                       <>
                         <span className="text-gray-300">•</span>
-                        <span className="text-gray-500 text-[11px]">
+                        <span className="text-gray-500 text-body">
                           Resp: {rec.profissionalNome}
                         </span>
                       </>
@@ -279,7 +279,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                   </div>
 
                   {rec.observacoesFinais && (
-                    <p className="text-[11px] text-gray-500 mt-1 line-clamp-1 italic">
+                    <p className="text-body text-gray-500 mt-1 line-clamp-1 italic">
                       "{rec.observacoesFinais}"
                     </p>
                   )}
@@ -291,7 +291,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onOpenRecordDetail(rec)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:text-[#1A1A1A] hover:border-[#A67C52] transition-colors shadow-2xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:text-ink hover:border-brand transition-colors shadow-2xs"
                 >
                   <Eye className="w-3.5 h-3.5 text-gray-400" />
                   Ver Ficha
@@ -300,7 +300,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onOpenRecordDetail(rec)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-[#1A1A1A] text-[#C49B74] text-xs font-semibold uppercase tracking-wider hover:bg-black transition-colors shadow-2xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-ink text-brand-light text-xs font-semibold uppercase tracking-wider hover:bg-black transition-colors shadow-2xs"
                   title="Imprimir ou salvar PDF oficial"
                 >
                   <Printer className="w-3.5 h-3.5" />
@@ -348,19 +348,19 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
             return (
               <div
                 key={pat.id}
-                className="bg-white/80 backdrop-blur-md rounded-sm border border-white/90 p-5 shadow-xs flex flex-col justify-between hover:border-[#A67C52]/40 transition-all"
+                className="bg-card rounded-sm border border-white/90 p-5 shadow-xs flex flex-col justify-between hover:border-brand/40 transition-all"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
-                    <div className="w-8 h-8 rounded-full bg-[#A67C52]/10 text-[#A67C52] flex items-center justify-center font-bold text-xs">
+                    <div className="w-8 h-8 rounded-full bg-brand/10 text-brand flex items-center justify-center font-bold text-xs">
                       {pat.nome.charAt(0)}
                     </div>
-                    <span className="px-2 py-0.5 rounded-xs bg-gray-100 text-gray-600 text-[10px] font-mono font-bold">
+                    <span className="px-2 py-0.5 rounded-xs bg-gray-100 text-gray-600 text-label font-mono font-bold">
                       {count} {count === 1 ? 'ficha' : 'fichas'}
                     </span>
                   </div>
 
-                  <h4 className="font-serif-luxury text-base font-bold text-[#1A1A1A] mt-3">
+                  <h4 className="font-serif-luxury text-base font-bold text-ink mt-3">
                     {pat.nome}
                   </h4>
 
@@ -387,7 +387,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                       setSelectedPatientFilter(pat.id);
                       setViewTab('records');
                     }}
-                    className="text-xs font-semibold text-[#A67C52] hover:underline"
+                    className="text-xs font-semibold text-brand hover:underline"
                   >
                     Ver Histórico ({count})
                   </button>
@@ -397,7 +397,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                       type="button"
                       onClick={() => abrirEnvioDeLink(pat.id)}
                       disabled={templates.length === 0}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-xs bg-white border border-[#A67C52]/40 text-[#A67C52] text-[11px] font-semibold hover:bg-[#A67C52] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-[#A67C52]"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-xs bg-white border border-brand/40 text-brand text-body font-semibold hover:bg-brand hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand"
                       title="Enviar o link de preenchimento para esta paciente"
                     >
                       <Share2 className="w-3 h-3" />
@@ -406,7 +406,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onOpenFillModal(pat.id)}
-                      className="px-2.5 py-1 rounded-xs bg-[#1A1A1A] text-white text-[11px] font-semibold hover:bg-black transition-colors"
+                      className="px-2.5 py-1 rounded-xs bg-ink text-white text-body font-semibold hover:bg-black transition-colors"
                     >
                       + Nova Ficha
                     </button>

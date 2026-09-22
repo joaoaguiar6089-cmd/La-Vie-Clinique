@@ -79,7 +79,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 animate-fadeIn"
       role="dialog"
       aria-modal="true"
       aria-labelledby="novo-paciente-titulo"
@@ -87,10 +87,10 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
         if (e.target === e.currentTarget && !salvando) onClose();
       }}
     >
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-[#F9F8F6] rounded-sm shadow-2xl border border-white/60">
-        <div className="bg-[#1A1A1A] px-6 py-4 flex items-start justify-between gap-3 sticky top-0 z-10">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-surface rounded-sm shadow-2xl border border-white/60">
+        <div className="bg-ink px-6 py-4 flex items-start justify-between gap-3 sticky top-0 z-10">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52]">
+            <p className="text-label font-semibold uppercase tracking-widest text-brand">
               Cadastro
             </p>
             <h2 id="novo-paciente-titulo" className="text-lg text-white font-serif-luxury">
@@ -144,7 +144,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
             type="button"
             onClick={salvar}
             disabled={salvando}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest hover:bg-[#8E653D] transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest hover:bg-brand-hover transition-colors disabled:opacity-60"
           >
             <UserPlus className="w-4 h-4" />
             {salvando ? 'Cadastrando...' : 'Cadastrar paciente'}

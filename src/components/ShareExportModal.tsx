@@ -174,7 +174,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   // Campo de desconto geral — reaproveitado nas abas de catálogo e de card individual.
   const discountControl = (
     <div>
-      <label className="block text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
+      <label className="block text-label font-semibold uppercase tracking-widest text-gray-400 mb-1">
         Desconto Promocional
       </label>
       <div className="flex items-center gap-1.5">
@@ -187,9 +187,9 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             value={discountInput}
             onChange={(e) => setDiscountInput(e.target.value)}
             placeholder="0"
-            className="w-[70px] pl-2.5 pr-6 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-[#1A1A1A]"
+            className="w-[70px] pl-2.5 pr-6 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-ink"
           />
-          <Percent className="w-3 h-3 text-[#A67C52] absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Percent className="w-3 h-3 text-brand absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
         {[10, 15, 20, 30].map((preset) => (
@@ -197,10 +197,10 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             key={preset}
             type="button"
             onClick={() => setDiscountInput(discountPercent === preset ? '' : String(preset))}
-            className={`px-2 py-1.5 rounded-sm text-[11px] font-semibold border transition-all ${
+            className={`px-2 py-1.5 rounded-sm text-body font-semibold border transition-all ${
               discountPercent === preset
-                ? 'bg-[#A67C52] text-white border-[#A67C52]'
-                : 'bg-white/70 text-gray-600 border-white/80 hover:border-[#A67C52]'
+                ? 'bg-brand text-white border-brand'
+                : 'bg-white/70 text-gray-600 border-white/80 hover:border-brand'
             }`}
           >
             {preset}%
@@ -212,7 +212,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             type="button"
             onClick={() => setDiscountInput('')}
             title="Remover desconto promocional"
-            className="p-1.5 rounded-sm bg-white/70 border border-white/80 text-gray-500 hover:text-[#1A1A1A] transition-colors"
+            className="p-1.5 rounded-sm bg-white/70 border border-white/80 text-gray-500 hover:text-ink transition-colors"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -222,7 +222,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   );
 
   const discountHint = discountPercent > 0 && (
-    <p className="w-full flex items-center gap-2 text-[11px] text-[#8e6945] bg-[#A67C52]/10 border border-[#A67C52]/30 rounded-sm px-3 py-2">
+    <p className="w-full flex items-center gap-2 text-body text-brand-hover bg-brand/10 border border-brand/30 rounded-sm px-3 py-2">
       <Tag className="w-3.5 h-3.5 shrink-0" />
       <span>
         <strong>{formatDiscountPercent(discountPercent)}% de desconto</strong> aplicado aos{' '}
@@ -236,16 +236,16 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div className="relative w-full max-w-5xl bg-[#F9F8F6]/95 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl border border-white/60 my-4 transition-all">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+      <div className="relative w-full max-w-5xl bg-surface rounded-sm overflow-hidden shadow-2xl border border-white/60 my-4 transition-all">
         {/* Header */}
-        <div className="bg-[#1A1A1A] text-[#E5E4E0] px-6 py-4 flex items-center justify-between border-b border-white/10">
+        <div className="bg-ink text-line-soft px-6 py-4 flex items-center justify-between border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-xs bg-white/10 text-[#C49B74]">
+            <div className="p-1.5 rounded-xs bg-white/10 text-brand-light">
               {isSingleCardMode ? <Layers className="w-5 h-5" /> : <Share2 className="w-5 h-5" />}
             </div>
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-[#C49B74]">
+              <span className="text-label font-semibold uppercase tracking-widest text-brand-light">
                 {isSingleCardMode ? 'Card Individual · PDF' : 'Exportação & Compartilhamento'}
               </span>
               <h2 className="font-serif-luxury text-xl sm:text-2xl font-medium text-white leading-none mt-0.5">
@@ -265,17 +265,17 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
         {/* Tab Selector — escondido quando o modal foi aberto só para um card */}
         <div
-          className={`${isSingleCardMode ? 'hidden' : 'flex'} border-b border-white/60 bg-white/40 backdrop-blur-md px-4 sm:px-6 pt-3 gap-1 sm:gap-2 overflow-x-auto`}
+          className={`${isSingleCardMode ? 'hidden' : 'flex'} border-b border-white/60 bg-card px-4 sm:px-6 pt-3 gap-1 sm:gap-2 overflow-x-auto`}
         >
           <button
             onClick={() => setActiveTab('pdf')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-t-sm text-xs font-semibold uppercase tracking-wider border-t border-x transition-all ${
               activeTab === 'pdf'
-                ? 'bg-[#F9F8F6] text-[#1A1A1A] border-white/80 border-b-transparent shadow-xs'
-                : 'text-gray-500 border-transparent hover:text-[#1A1A1A]'
+                ? 'bg-surface text-ink border-white/80 border-b-transparent shadow-xs'
+                : 'text-gray-500 border-transparent hover:text-ink'
             }`}
           >
-            <FileDown className="w-4 h-4 text-[#A67C52]" />
+            <FileDown className="w-4 h-4 text-brand" />
             PDF (A4)
           </button>
 
@@ -283,11 +283,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             onClick={() => setActiveTab('image')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-t-sm text-xs font-semibold uppercase tracking-wider border-t border-x transition-all ${
               activeTab === 'image'
-                ? 'bg-[#F9F8F6] text-[#1A1A1A] border-white/80 border-b-transparent shadow-xs'
-                : 'text-gray-500 border-transparent hover:text-[#1A1A1A]'
+                ? 'bg-surface text-ink border-white/80 border-b-transparent shadow-xs'
+                : 'text-gray-500 border-transparent hover:text-ink'
             }`}
           >
-            <ImageIcon className="w-4 h-4 text-[#A67C52]" />
+            <ImageIcon className="w-4 h-4 text-brand" />
             Catálogo (PNG)
           </button>
 
@@ -295,11 +295,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             onClick={() => setActiveTab('single-card')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-t-sm text-xs font-semibold uppercase tracking-wider border-t border-x transition-all ${
               activeTab === 'single-card'
-                ? 'bg-[#F9F8F6] text-[#1A1A1A] border-white/80 border-b-transparent shadow-xs'
-                : 'text-gray-500 border-transparent hover:text-[#1A1A1A]'
+                ? 'bg-surface text-ink border-white/80 border-b-transparent shadow-xs'
+                : 'text-gray-500 border-transparent hover:text-ink'
             }`}
           >
-            <Layers className="w-4 h-4 text-[#A67C52]" />
+            <Layers className="w-4 h-4 text-brand" />
             Card Individual
           </button>
 
@@ -307,11 +307,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             onClick={() => setActiveTab('whatsapp')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-t-sm text-xs font-semibold uppercase tracking-wider border-t border-x transition-all ${
               activeTab === 'whatsapp'
-                ? 'bg-[#F9F8F6] text-[#1A1A1A] border-white/80 border-b-transparent shadow-xs'
-                : 'text-gray-500 border-transparent hover:text-[#1A1A1A]'
+                ? 'bg-surface text-ink border-white/80 border-b-transparent shadow-xs'
+                : 'text-gray-500 border-transparent hover:text-ink'
             }`}
           >
-            <MessageCircle className="w-4 h-4 text-[#25D366]" />
+            <MessageCircle className="w-4 h-4 text-whatsapp" />
             WhatsApp
           </button>
 
@@ -319,11 +319,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             onClick={() => setActiveTab('qrcode')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-t-sm text-xs font-semibold uppercase tracking-wider border-t border-x transition-all ${
               activeTab === 'qrcode'
-                ? 'bg-[#F9F8F6] text-[#1A1A1A] border-white/80 border-b-transparent shadow-xs'
-                : 'text-gray-500 border-transparent hover:text-[#1A1A1A]'
+                ? 'bg-surface text-ink border-white/80 border-b-transparent shadow-xs'
+                : 'text-gray-500 border-transparent hover:text-ink'
             }`}
           >
-            <QrCode className="w-4 h-4 text-[#A67C52]" />
+            <QrCode className="w-4 h-4 text-brand" />
             QR Code
           </button>
         </div>
@@ -332,10 +332,10 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
         <div className="p-6 sm:p-8 max-h-[75vh] overflow-y-auto">
           {/* Controls Bar for PDF & Image */}
           {(activeTab === 'pdf' || activeTab === 'image') && (
-            <div className="bg-white/50 backdrop-blur-md p-4 rounded-sm border border-white/60 mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="bg-card p-4 rounded-sm border border-white/60 mb-6 flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-col sm:flex-row flex-wrap sm:items-end gap-3 sm:gap-4 w-full sm:w-auto">
                 <div className="w-full sm:w-auto">
-                  <label className="block text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
+                  <label className="block text-label font-semibold uppercase tracking-widest text-gray-400 mb-1">
                     Filtrar por Categoria
                   </label>
                   <select
@@ -343,7 +343,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                     onChange={(e) => setSelectedCategory(e.target.value)}
                     disabled={selectedProcedureIds.length > 0}
                     title={selectedProcedureIds.length > 0 ? 'Desative a seleção específica de procedimentos para usar o filtro por categoria' : undefined}
-                    className="w-full sm:w-auto px-3 py-2 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-[#1A1A1A] disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto px-3 py-2 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-ink disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {categories.map((cat, idx) => (
                       <option key={idx} value={cat}>{cat}</option>
@@ -368,7 +368,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                       type="checkbox"
                       checked={showPrices}
                       onChange={(e) => setShowPrices(e.target.checked)}
-                      className="w-4 h-4 text-[#A67C52] rounded-xs border-gray-300"
+                      className="w-4 h-4 text-brand rounded-xs border-gray-300"
                     />
                     Exibir valores monetários
                   </label>
@@ -381,7 +381,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   <button
                     onClick={handleExportPDF}
                     disabled={isExporting}
-                    className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-brand-hover active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {isExporting ? (
                       <>
@@ -399,7 +399,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   <button
                     onClick={handleExportImage}
                     disabled={isExporting}
-                    className="px-6 py-2.5 rounded-sm bg-[#1A1A1A] hover:bg-[#2A2A2E] text-white text-xs font-semibold uppercase tracking-widest shadow-xs active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-sm bg-ink hover:bg-ink text-white text-xs font-semibold uppercase tracking-widest shadow-xs active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {isExporting ? (
                       <>
@@ -408,7 +408,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                       </>
                     ) : (
                       <>
-                        <ImageIcon className="w-4 h-4 text-[#C49B74]" />
+                        <ImageIcon className="w-4 h-4 text-brand-light" />
                         Baixar Imagem PNG (HD)
                       </>
                     )}
@@ -422,15 +422,15 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
           {/* SINGLE CARD TAB CONTROLS */}
           {activeTab === 'single-card' && (
-            <div className="bg-white/50 backdrop-blur-md p-4 rounded-sm border border-white/60 mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div className="bg-card p-4 rounded-sm border border-white/60 mb-6 flex flex-wrap items-end justify-between gap-4">
               <div className="flex-1 min-w-[220px] max-w-sm">
-                <label className="block text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
+                <label className="block text-label font-semibold uppercase tracking-widest text-gray-400 mb-1">
                   Procedimento do Card
                 </label>
                 <select
                   value={selectedSingleProcedureId}
                   onChange={(e) => setSelectedSingleProcedureId(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-[#1A1A1A]"
+                  className="w-full px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-ink"
                 >
                   {procedures.map((p) => (
                     <option key={p.id} value={p.id}>{p.title}</option>
@@ -444,7 +444,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 <button
                   onClick={handleExportSingleCardPDF}
                   disabled={isExporting}
-                  className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-brand-hover active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
                 >
                   {isExporting ? (
                     <>
@@ -463,15 +463,15 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   onClick={handleExportSingleCard}
                   disabled={isExporting}
                   title="Mesmo card, em imagem — para postar ou enviar direto na conversa"
-                  className="px-4 py-2.5 rounded-sm bg-[#1A1A1A] hover:bg-[#2A2A2E] text-white text-xs font-semibold uppercase tracking-widest shadow-xs active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-sm bg-ink hover:bg-ink text-white text-xs font-semibold uppercase tracking-widest shadow-xs active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
                 >
-                  <ImageIcon className="w-4 h-4 text-[#C49B74]" />
+                  <ImageIcon className="w-4 h-4 text-brand-light" />
                   PNG
                 </button>
               </div>
 
               {discountPercent > 0 && (
-                <p className="w-full flex items-center gap-2 text-[11px] text-[#8e6945] bg-[#A67C52]/10 border border-[#A67C52]/30 rounded-sm px-3 py-2">
+                <p className="w-full flex items-center gap-2 text-body text-brand-hover bg-brand/10 border border-brand/30 rounded-sm px-3 py-2">
                   <Tag className="w-3.5 h-3.5 shrink-0" />
                   <span>
                     <strong>{formatDiscountPercent(discountPercent)}% de desconto</strong> aplicado a este
@@ -490,7 +490,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 <span>Pré-visualização do Documento:</span>
                 <span>Formato: A4 / 2x Retina</span>
               </div>
-              <div className="border border-white/60 rounded-sm shadow-inner bg-white/30 backdrop-blur-xs p-2 sm:p-4 max-h-[500px] overflow-auto">
+              <div className="border border-white/60 rounded-sm shadow-inner bg-card p-2 sm:p-4 max-h-[500px] overflow-auto">
                 <PrintableCatalog
                   procedures={exportProcedures}
                   clinic={clinic}
@@ -509,7 +509,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 <span>Pré-visualização do card (mesmo layout da tela de detalhes):</span>
                 <span>Formato: A4 / 2x Retina</span>
               </div>
-              <div className="border border-white/60 rounded-sm shadow-inner bg-[#E5E3DD] p-2 sm:p-4 max-h-[520px] overflow-auto flex justify-start sm:justify-center">
+              <div className="border border-white/60 rounded-sm shadow-inner bg-line p-2 sm:p-4 max-h-[520px] overflow-auto flex justify-start sm:justify-center">
                 <PrintableProcedureCard
                   procedure={activeSingleProcedure}
                   clinic={clinic}
@@ -522,13 +522,13 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           {/* WHATSAPP SHARING TAB */}
           {activeTab === 'whatsapp' && (
             <div className="space-y-6 max-w-2xl mx-auto">
-              <div className="bg-white/50 backdrop-blur-md p-6 rounded-sm border border-white/60 shadow-xs space-y-4">
+              <div className="bg-card p-6 rounded-sm border border-white/60 shadow-xs space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#25D366]/10 text-[#25D366] flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full bg-whatsapp/10 text-whatsapp flex items-center justify-center">
                     <MessageCircle className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-serif-luxury text-lg font-medium text-[#1A1A1A]">
+                    <h3 className="font-serif-luxury text-lg font-medium text-ink">
                       Envio Rápido para Clientes no WhatsApp
                     </h3>
                     <p className="text-xs text-gray-500">
@@ -537,7 +537,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   </div>
                 </div>
 
-                <p className="text-[11px] text-[#A67C52] font-medium">
+                <p className="text-body text-brand font-medium">
                   {exportProcedures.length} procedimento{exportProcedures.length !== 1 ? 's' : ''} será
                   {exportProcedures.length !== 1 ? 'ão' : ''} incluído{exportProcedures.length !== 1 ? 's' : ''} na mensagem
                   {selectedProcedureIds.length === 0 && selectedCategory !== 'Todos' ? ` (categoria "${selectedCategory}")` : ''}.
@@ -550,7 +550,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                     href={buildWhatsAppCatalogShareUrl(exportProcedures, clinic, discountPercent)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 py-2.5 px-4 rounded-sm bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-semibold uppercase tracking-wider text-center shadow-xs transition-all flex items-center justify-center gap-2"
+                    className="flex-1 py-2.5 px-4 rounded-sm bg-whatsapp hover:bg-whatsapp text-white text-xs font-semibold uppercase tracking-wider text-center shadow-xs transition-all flex items-center justify-center gap-2"
                   >
                     <MessageCircle className="w-4 h-4" />
                     Abrir no WhatsApp
@@ -558,11 +558,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
                   <button
                     onClick={handleCopyWhatsAppText}
-                    className="py-2.5 px-5 rounded-sm bg-[#1A1A1A] hover:bg-[#2A2A2E] text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5"
+                    className="py-2.5 px-5 rounded-sm bg-ink hover:bg-ink text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5"
                   >
                     {copiedText ? (
                       <>
-                        <Check className="w-4 h-4 text-[#25D366]" />
+                        <Check className="w-4 h-4 text-whatsapp" />
                         Copiado!
                       </>
                     ) : (
@@ -580,7 +580,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           {/* QR CODE SHARING TAB */}
           {activeTab === 'qrcode' && (
             <div className="space-y-6 max-w-lg mx-auto text-center">
-              <div className="bg-white/50 backdrop-blur-md p-8 rounded-sm border border-white/60 shadow-xs flex flex-col items-center space-y-4">
+              <div className="bg-card p-8 rounded-sm border border-white/60 shadow-xs flex flex-col items-center space-y-4">
                 <div className="p-4 bg-white rounded-sm border border-white/80 shadow-xs">
                   <QRCodeSVG
                     value={shareCatalogUrl}
@@ -593,7 +593,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 </div>
 
                 <div>
-                  <h3 className="font-serif-luxury text-xl font-medium text-[#1A1A1A]">
+                  <h3 className="font-serif-luxury text-xl font-medium text-ink">
                     QR Code do Catálogo
                   </h3>
                   <p className="text-xs text-gray-500 max-w-xs mx-auto mt-1">
@@ -602,7 +602,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 </div>
 
                 <div className="w-full pt-4 border-t border-white/60 flex items-center justify-between text-xs text-gray-600">
-                  <span className="font-mono text-[11px] truncate max-w-[240px]">{shareCatalogUrl}</span>
+                  <span className="font-mono text-body truncate max-w-[240px]">{shareCatalogUrl}</span>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(shareCatalogUrl);
@@ -610,7 +610,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                       triggerConfetti();
                       setTimeout(() => setCopiedText(false), 3000);
                     }}
-                    className="px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 hover:bg-white text-[#1A1A1A] font-semibold text-xs uppercase tracking-wider flex items-center gap-1"
+                    className="px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 hover:bg-white text-ink font-semibold text-xs uppercase tracking-wider flex items-center gap-1"
                   >
                     {copiedText ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                     Copiar Link

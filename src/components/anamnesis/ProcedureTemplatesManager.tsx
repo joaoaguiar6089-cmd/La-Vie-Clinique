@@ -64,11 +64,11 @@ const GenderPhotoSlot: React.FC<GenderPhotoSlotProps> = ({
   onUrlChange,
   onRemove,
 }) => (
-  <div className="p-3 bg-[#FAF9F6] rounded-sm border border-gray-200 space-y-2">
+  <div className="p-3 bg-surface rounded-sm border border-gray-200 space-y-2">
     <div className="flex items-center justify-between">
-      <span className="text-[11px] font-bold text-[#1A1A1A] uppercase tracking-wider">{label}</span>
+      <span className="text-label font-bold text-ink uppercase tracking-wider">{label}</span>
       {url && (
-        <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-xs font-semibold border border-emerald-200">
+        <span className="text-label text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-xs font-semibold border border-emerald-200">
           Anexada
         </span>
       )}
@@ -80,14 +80,14 @@ const GenderPhotoSlot: React.FC<GenderPhotoSlotProps> = ({
           <img src={url} alt={`Foto de referência — ${label}`} className="w-full h-full object-contain" />
         </div>
         <div className="flex items-center gap-2">
-          <label className="cursor-pointer flex-1 text-center px-2 py-1.5 rounded-xs bg-white border border-gray-200 hover:border-[#A67C52] text-gray-700 text-[11px] font-medium transition-colors shadow-2xs">
+          <label className="cursor-pointer flex-1 text-center px-2 py-1.5 rounded-xs bg-white border border-gray-200 hover:border-brand text-gray-700 text-body font-medium transition-colors shadow-2xs">
             {isUploading ? 'Processando...' : 'Substituir'}
             <input type="file" accept="image/*" onChange={onUpload} disabled={isUploading} className="hidden" />
           </label>
           <button
             type="button"
             onClick={onRemove}
-            className="px-2 py-1.5 rounded-xs text-red-600 hover:bg-red-50 text-[11px] font-medium transition-colors"
+            className="px-2 py-1.5 rounded-xs text-red-600 hover:bg-red-50 text-body font-medium transition-colors"
           >
             Remover
           </button>
@@ -95,12 +95,12 @@ const GenderPhotoSlot: React.FC<GenderPhotoSlotProps> = ({
       </div>
     ) : (
       <div className="space-y-2">
-        <label className="cursor-pointer flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 hover:border-[#A67C52] rounded-sm bg-white hover:bg-white transition-all text-center group h-40">
-          <Upload className="w-5 h-5 text-[#A67C52] group-hover:scale-105 transition-transform mb-1.5" />
-          <span className="text-[11px] font-bold text-[#1A1A1A] group-hover:text-[#A67C52] transition-colors">
+        <label className="cursor-pointer flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 hover:border-brand rounded-sm bg-white hover:bg-white transition-all text-center group h-40">
+          <Upload className="w-5 h-5 text-brand group-hover:scale-105 transition-transform mb-1.5" />
+          <span className="text-body font-bold text-ink group-hover:text-brand transition-colors">
             {isUploading ? 'Processando...' : `Upload foto ${label.toLowerCase()}`}
           </span>
-          <span className="text-[10px] text-gray-400 mt-0.5">JPG, PNG ou WebP</span>
+          <span className="text-label text-gray-400 mt-0.5">JPG, PNG ou WebP</span>
           <input type="file" accept="image/*" onChange={onUpload} disabled={isUploading} className="hidden" />
         </label>
         <input
@@ -108,7 +108,7 @@ const GenderPhotoSlot: React.FC<GenderPhotoSlotProps> = ({
           placeholder="Ou cole o link direto de uma imagem..."
           value={url || ''}
           onChange={(e) => onUrlChange(e.target.value)}
-          className="w-full px-2.5 py-1.5 text-[11px] rounded-sm bg-white border border-gray-200 text-gray-700 focus:outline-hidden focus:border-[#A67C52]"
+          className="w-full px-2.5 py-1.5 text-body rounded-sm bg-white border border-gray-200 text-gray-700 focus:outline-hidden focus:border-brand"
         />
       </div>
     )}
@@ -505,14 +505,14 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
   return (
     <div className="space-y-6">
       {/* Top Banner & Actions */}
-      <div className="bg-white/60 backdrop-blur-md rounded-sm border border-white/80 p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-card rounded-sm border border-white/80 p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#1A1A1A]" />
-            <h3 className="font-serif-luxury text-xl font-medium text-[#1A1A1A]">
+            <span className="w-2.5 h-2.5 rounded-full bg-ink" />
+            <h3 className="font-serif-luxury text-xl font-medium text-ink">
               Anamneses dos Procedimentos
             </h3>
-            <span className="px-2 py-0.5 rounded-full bg-[#1A1A1A] text-[#C49B74] text-[10px] font-mono font-bold">
+            <span className="px-2 py-0.5 rounded-full bg-ink text-brand-light text-label font-mono font-bold">
               {templates.length} Modelos
             </span>
           </div>
@@ -525,7 +525,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
         <button
           type="button"
           onClick={handleOpenNewTemplate}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-sm bg-[#1A1A1A] text-[#C49B74] text-xs font-semibold uppercase tracking-wider hover:bg-black shadow-xs active:scale-95 transition-all"
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-sm bg-ink text-brand-light text-xs font-semibold uppercase tracking-wider hover:bg-black shadow-xs active:scale-95 transition-all"
         >
           <Plus className="w-4 h-4" />
           Novo Modelo de Procedimento
@@ -541,7 +541,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por procedimento ou objetivo..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-sm bg-white/80 border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] focus:bg-white"
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-sm bg-white/80 border border-gray-200 text-ink focus:outline-hidden focus:border-brand focus:bg-white"
           />
         </div>
 
@@ -553,7 +553,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             aria-label="Filtrar por categoria"
-            className="w-full appearance-none pl-9 pr-9 py-2 text-xs rounded-sm bg-white/80 border border-gray-200 text-[#1A1A1A] font-medium cursor-pointer focus:outline-hidden focus:border-[#A67C52] focus:bg-white"
+            className="w-full appearance-none pl-9 pr-9 py-2 text-xs rounded-sm bg-white/80 border border-gray-200 text-ink font-medium cursor-pointer focus:outline-hidden focus:border-brand focus:bg-white"
           >
             {categories.map((cat) => (
               <option key={cat} value={cat}>
@@ -570,16 +570,16 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
         {filteredTemplates.map((tpl) => (
           <div
             key={tpl.id}
-            className="bg-white/70 backdrop-blur-md rounded-sm border border-white/90 p-5 shadow-xs hover:shadow-md hover:border-[#A67C52]/40 transition-all flex flex-col justify-between group"
+            className="bg-card rounded-sm border border-white/90 p-5 shadow-xs hover:shadow-md hover:border-brand/40 transition-all flex flex-col justify-between group"
           >
             <div>
               <div className="flex items-start justify-between gap-2">
-                <span className="px-2 py-0.5 rounded-xs bg-[#A67C52]/10 text-[#A67C52] font-semibold text-[10px] uppercase tracking-wider">
+                <span className="px-2 py-0.5 rounded-xs bg-brand/10 text-brand font-semibold text-label uppercase tracking-wider">
                   {tpl.categoria || 'Geral'}
                 </span>
                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
                   {(tpl.fotoModeloUrl || tpl.fotoModeloFemininoUrl || tpl.fotoModeloMasculinoUrl) ? (
-                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-xs bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-semibold">
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-xs bg-purple-50 text-purple-700 border border-purple-200 text-label font-semibold">
                       <Camera className="w-3 h-3" />
                       {tpl.fotoModeloFemininoUrl && tpl.fotoModeloMasculinoUrl
                         ? 'Foto Fem. + Masc.'
@@ -591,23 +591,23 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                     </span>
                   ) : null}
                   {tpl.tem_foto ? (
-                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-xs bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-xs bg-emerald-50 text-emerald-700 border border-emerald-200 text-label font-semibold">
                       <Camera className="w-3 h-3" />
                       Foto Paciente
                     </span>
                   ) : (
-                    <span className="text-[10px] text-gray-400">Sem Foto</span>
+                    <span className="text-label text-gray-400">Sem Foto</span>
                   )}
                 </div>
               </div>
 
-              <h4 className="font-serif-luxury text-base font-semibold text-[#1A1A1A] mt-2 group-hover:text-[#A67C52] transition-colors">
+              <h4 className="font-serif-luxury text-base font-semibold text-ink mt-2 group-hover:text-brand transition-colors">
                 {tpl.procedimentoNome}
               </h4>
 
               {catalogProcedures.length > 0 && !procedimentoDoTemplate(tpl) && (
                 <span
-                  className="inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 rounded-xs bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold"
+                  className="inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 rounded-xs bg-amber-50 text-amber-700 border border-amber-200 text-label font-semibold"
                   title="Nenhum procedimento com este nome no catálogo. Abra 'Configurar' e vincule ao procedimento correto."
                 >
                   <AlertCircle className="w-3 h-3" />
@@ -624,10 +624,10 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
               {/* Composition badge */}
               <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-600">
                 <span className="flex items-center gap-1">
-                  <span className="font-bold text-[#1A1A1A]">{generalQuestions.length}</span> Gerais +{' '}
-                  <span className="font-bold text-[#A67C52]">{tpl.perguntasEspecificas.length}</span> Específicas
+                  <span className="font-bold text-ink">{generalQuestions.length}</span> Gerais +{' '}
+                  <span className="font-bold text-brand">{tpl.perguntasEspecificas.length}</span> Específicas
                 </span>
-                <span className="text-[11px] text-gray-400 font-mono">
+                <span className="text-body text-gray-400 font-mono">
                   {tpl.perguntasEspecificas.length + generalQuestions.length} questões
                 </span>
               </div>
@@ -637,7 +637,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
               <button
                 type="button"
                 onClick={() => setBlankSheetTemplate(tpl)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:text-[#1A1A1A] hover:border-[#A67C52] transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:text-ink hover:border-brand transition-colors"
                 title="Ver e salvar o PDF desta ficha em branco, para imprimir e responder à caneta"
               >
                 <Printer className="w-3.5 h-3.5" />
@@ -649,7 +649,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   setShareTemplateId(tpl.id);
                   setShareModalOpen(true);
                 }}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xs bg-[#FAF9F6] border border-[#A67C52]/30 text-xs font-semibold text-[#A67C52] hover:bg-[#A67C52] hover:text-white transition-all shadow-2xs"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xs bg-surface border border-brand/30 text-xs font-semibold text-brand hover:bg-brand hover:text-white transition-all shadow-2xs"
                 title="Compartilhar link da ficha para preenchimento online do cliente"
               >
                 <Share2 className="w-3.5 h-3.5" />
@@ -658,7 +658,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
               <button
                 type="button"
                 onClick={() => handleOpenEditTemplate(tpl)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:text-[#1A1A1A] hover:border-[#A67C52] transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:text-ink hover:border-brand transition-colors"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 Configurar
@@ -693,17 +693,17 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
 
       {/* TEMPLATE EDITOR MODAL */}
       {isEditorOpen && draftTemplate && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-          <div className="relative w-full max-w-3xl bg-[#FAF9F6] rounded-sm border border-white/80 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+          <div className="relative w-full max-w-3xl bg-surface rounded-sm border border-white/80 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
             {/* Header */}
-            <div className="px-6 py-4 bg-[#1A1A1A] text-white flex items-center justify-between shrink-0">
+            <div className="px-6 py-4 bg-ink text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74]" />
+                <span className="w-2.5 h-2.5 rounded-full bg-brand-light" />
                 <div>
                   <h3 className="font-serif-luxury text-lg font-medium tracking-tight">
                     {draftTemplate.procedimentoNome ? draftTemplate.procedimentoNome : 'Novo Modelo de Procedimento'}
                   </h3>
-                  <p className="text-[11px] text-gray-400">
+                  <p className="text-body text-gray-400">
                     Configuração da estrutura da ficha clínica de anamnese
                   </p>
                 </div>
@@ -726,7 +726,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
               {/* Basic Info */}
               <div className="bg-white p-4 sm:p-5 rounded-sm border border-gray-200/80 shadow-2xs space-y-4">
                 <h4 className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-[#A67C52]" />
+                  <Layers className="w-3.5 h-3.5 text-brand" />
                   Dados do Procedimento
                 </h4>
 
@@ -741,7 +741,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                     <select
                       value={vinculoSelecionado}
                       onChange={(e) => handleSelecionarProcedimentoDoCatalogo(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] font-medium"
+                      className="w-full px-3 py-2 text-xs rounded-sm bg-surface border border-gray-200 text-ink focus:outline-hidden focus:border-brand font-medium"
                     >
                       <option value="">-- Não vinculado (nome livre) --</option>
                       {catalogProcedures.map((proc) => (
@@ -751,7 +751,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                         </option>
                       ))}
                     </select>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                    <p className="text-label text-gray-500 mt-1 leading-relaxed">
                       {vinculoSelecionado
                         ? 'Vinculado ao catálogo: o nome acompanha o procedimento cadastrado.'
                         : 'Sem vínculo, esta ficha não conta como cobertura do procedimento no catálogo e aparece marcada como "Fora do catálogo".'}
@@ -771,7 +771,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                         setDraftTemplate({ ...draftTemplate, procedimentoNome: e.target.value })
                       }
                       placeholder="Ex: Botox (Toxina Botulínica)"
-                      className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] font-medium"
+                      className="w-full px-3 py-2 text-xs rounded-sm bg-surface border border-gray-200 text-ink focus:outline-hidden focus:border-brand font-medium"
                       required
                     />
                   </div>
@@ -787,7 +787,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                         setDraftTemplate({ ...draftTemplate, categoria: e.target.value })
                       }
                       placeholder="Ex: Injetáveis & Face"
-                      className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      className="w-full px-3 py-2 text-xs rounded-sm bg-surface border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
                     />
                   </div>
                 </div>
@@ -803,20 +803,20 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                       setDraftTemplate({ ...draftTemplate, descricao: e.target.value })
                     }
                     placeholder="Breve resumo clínico para orientação da equipe..."
-                    className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full px-3 py-2 text-xs rounded-sm bg-surface border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
                   />
                 </div>
 
                 {/* FOTOS DE REFERÊNCIA / MAPA ANATÔMICO — UMA PARA CADA GÊNERO */}
                 <div className="pt-3 border-t border-gray-100 space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
-                    <label className="text-xs font-bold text-[#1A1A1A]">
+                    <span className="w-2 h-2 rounded-full bg-brand" />
+                    <label className="text-xs font-bold text-ink">
                       Fotos de Referência / Mapa Anatômico (Feminino e Masculino)
                     </label>
                   </div>
 
-                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                  <p className="text-body text-gray-500 leading-relaxed">
                     Ao gerar a ficha, o sistema escolhe automaticamente a foto de acordo com o gênero informado pelo
                     paciente. Ela aparece no <strong>início do formulário online</strong> e é a tela usada pelo
                     profissional para <strong>anotar doses, vetores e unidades</strong> depois. Envie em boa
@@ -824,7 +824,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   </p>
 
                   {draftTemplate.fotoModeloUrl && !draftTemplate.fotoModeloFemininoUrl && !draftTemplate.fotoModeloMasculinoUrl && (
-                    <div className="flex items-center gap-2 p-2.5 rounded-xs bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+                    <div className="flex items-center gap-2 p-2.5 rounded-xs bg-amber-50 border border-amber-200 text-body text-amber-800">
                       <span>
                         Este modelo ainda usa a foto única antiga (legado). Ela continua valendo como fallback até
                         você enviar as versões feminina e masculina abaixo.
@@ -855,11 +855,11 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                 {/* IMAGEM ORIENTATIVA — MATERIAL DIDÁTICO MOSTRADO AO PACIENTE */}
                 <div className="pt-3 border-t border-gray-100 space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
-                    <label className="text-xs font-bold text-[#1A1A1A]">Imagem Orientativa para o Paciente</label>
+                    <span className="w-2 h-2 rounded-full bg-brand" />
+                    <label className="text-xs font-bold text-ink">Imagem Orientativa para o Paciente</label>
                   </div>
 
-                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                  <p className="text-body text-gray-500 leading-relaxed">
                     Imagem que a clínica produz para <strong>explicar ao paciente</strong> a anatomia da região
                     tratada, os pontos de aplicação ou os cuidados do procedimento. Ela aparece para o paciente
                     <strong> enquanto ele preenche a ficha</strong> (com opção de ampliar) e é reproduzida no
@@ -868,12 +868,12 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   </p>
 
                   {draftTemplate.imagemOrientativaUrl ? (
-                    <div className="p-3 bg-[#FAF9F6] rounded-sm border border-gray-200 space-y-2.5">
+                    <div className="p-3 bg-surface rounded-sm border border-gray-200 space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-[#1A1A1A] uppercase tracking-wider">
+                        <span className="text-label font-bold text-ink uppercase tracking-wider">
                           Pré-visualização
                         </span>
-                        <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-xs font-semibold border border-emerald-200">
+                        <span className="text-label text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-xs font-semibold border border-emerald-200">
                           Anexada
                         </span>
                       </div>
@@ -887,7 +887,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <label className="cursor-pointer flex-1 text-center px-2 py-1.5 rounded-xs bg-white border border-gray-200 hover:border-[#A67C52] text-gray-700 text-[11px] font-medium transition-colors shadow-2xs">
+                        <label className="cursor-pointer flex-1 text-center px-2 py-1.5 rounded-xs bg-white border border-gray-200 hover:border-brand text-gray-700 text-body font-medium transition-colors shadow-2xs">
                           {isUploadingImagemOrientativa ? 'Processando...' : 'Substituir imagem'}
                           <input
                             type="file"
@@ -902,7 +902,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                           onClick={() =>
                             setDraftTemplate({ ...draftTemplate, imagemOrientativaUrl: undefined })
                           }
-                          className="px-2 py-1.5 rounded-xs text-red-600 hover:bg-red-50 text-[11px] font-medium transition-colors"
+                          className="px-2 py-1.5 rounded-xs text-red-600 hover:bg-red-50 text-body font-medium transition-colors"
                         >
                           Remover
                         </button>
@@ -910,12 +910,12 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <label className="cursor-pointer flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 hover:border-[#A67C52] rounded-sm bg-white transition-all text-center group h-32">
-                        <ImageIcon className="w-5 h-5 text-[#A67C52] group-hover:scale-105 transition-transform mb-1.5" />
-                        <span className="text-[11px] font-bold text-[#1A1A1A] group-hover:text-[#A67C52] transition-colors">
+                      <label className="cursor-pointer flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 hover:border-brand rounded-sm bg-white transition-all text-center group h-32">
+                        <ImageIcon className="w-5 h-5 text-brand group-hover:scale-105 transition-transform mb-1.5" />
+                        <span className="text-body font-bold text-ink group-hover:text-brand transition-colors">
                           {isUploadingImagemOrientativa ? 'Processando...' : 'Upload da imagem orientativa'}
                         </span>
-                        <span className="text-[10px] text-gray-400 mt-0.5">JPG, PNG ou WebP</span>
+                        <span className="text-label text-gray-400 mt-0.5">JPG, PNG ou WebP</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -931,14 +931,14 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                         onChange={(e) =>
                           setDraftTemplate({ ...draftTemplate, imagemOrientativaUrl: e.target.value })
                         }
-                        className="w-full px-2.5 py-1.5 text-[11px] rounded-sm bg-white border border-gray-200 text-gray-700 focus:outline-hidden focus:border-[#A67C52]"
+                        className="w-full px-2.5 py-1.5 text-body rounded-sm bg-white border border-gray-200 text-gray-700 focus:outline-hidden focus:border-brand"
                       />
                     </div>
                   )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-semibold text-gray-800 mb-1">
+                      <label className="block text-body font-semibold text-gray-800 mb-1">
                         Título exibido acima da imagem
                       </label>
                       <input
@@ -948,11 +948,11 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                           setDraftTemplate({ ...draftTemplate, imagemOrientativaTitulo: e.target.value })
                         }
                         placeholder="Ex: Áreas de aplicação do Botox"
-                        className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                        className="w-full px-3 py-2 text-xs rounded-sm bg-surface border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-gray-800 mb-1">
+                      <label className="block text-body font-semibold text-gray-800 mb-1">
                         Legenda / orientação (opcional)
                       </label>
                       <input
@@ -962,7 +962,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                           setDraftTemplate({ ...draftTemplate, imagemOrientativaDescricao: e.target.value })
                         }
                         placeholder="Ex: Observe os pontos marcados antes de responder..."
-                        className="w-full px-3 py-2 text-xs rounded-sm bg-[#FAF9F6] border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                        className="w-full px-3 py-2 text-xs rounded-sm bg-surface border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
                       />
                     </div>
                   </div>
@@ -970,23 +970,23 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
 
                 {/* TEM FOTO TOGGLE */}
                 <div className="pt-2 border-t border-gray-100">
-                  <label className="flex items-start gap-3 p-3 rounded-sm bg-[#A67C52]/5 border border-[#A67C52]/20 cursor-pointer hover:bg-[#A67C52]/10 transition-colors">
+                  <label className="flex items-start gap-3 p-3 rounded-sm bg-brand/5 border border-brand/20 cursor-pointer hover:bg-brand/10 transition-colors">
                     <input
                       type="checkbox"
                       checked={draftTemplate.tem_foto}
                       onChange={(e) =>
                         setDraftTemplate({ ...draftTemplate, tem_foto: e.target.checked })
                       }
-                      className="accent-[#A67C52] w-4 h-4 mt-0.5 rounded-xs"
+                      className="accent-brand w-4 h-4 mt-0.5 rounded-xs"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <Camera className="w-4 h-4 text-[#A67C52]" />
-                        <span className="text-xs font-bold text-[#1A1A1A]">
+                        <Camera className="w-4 h-4 text-brand" />
+                        <span className="text-xs font-bold text-ink">
                           Habilitar Envio de Foto do Paciente (tem_foto)
                         </span>
                       </div>
-                      <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                      <p className="text-body text-gray-500 mt-0.5 leading-snug">
                         Quando ativado, o formulário online exibirá logo abaixo ou ao lado da foto de referência a
                         opção para o <strong>cliente fazer o envio opcional de uma foto dele</strong> (combinado previamente via WhatsApp).
                         Ambas as fotos saem na folha para anotações manuais na consulta.
@@ -997,21 +997,21 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
 
                 {/* TERMO DE CONSENTIMENTO E RESPONSABILIDADE */}
                 <div className="pt-3 border-t border-gray-100 space-y-3">
-                  <label className="flex items-start gap-3 p-3 rounded-sm bg-[#A67C52]/5 border border-[#A67C52]/20 cursor-pointer hover:bg-[#A67C52]/10 transition-colors">
+                  <label className="flex items-start gap-3 p-3 rounded-sm bg-brand/5 border border-brand/20 cursor-pointer hover:bg-brand/10 transition-colors">
                     <input
                       type="checkbox"
                       checked={!!draftTemplate.termoConsentimentoAtivo}
                       onChange={(e) => handleToggleTermoConsentimento(e.target.checked)}
-                      className="accent-[#A67C52] w-4 h-4 mt-0.5 rounded-xs"
+                      className="accent-brand w-4 h-4 mt-0.5 rounded-xs"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <ScrollText className="w-4 h-4 text-[#A67C52]" />
-                        <span className="text-xs font-bold text-[#1A1A1A]">
+                        <ScrollText className="w-4 h-4 text-brand" />
+                        <span className="text-xs font-bold text-ink">
                           Incluir {CONSENT_TERM_HEADING}
                         </span>
                       </div>
-                      <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                      <p className="text-body text-gray-500 mt-0.5 leading-snug">
                         O termo aparece para o paciente <strong>antes de ele enviar a ficha online</strong> e sai no
                         <strong> PDF da ficha</strong> e na <strong>ficha em branco</strong> para impressão. Ao ativar,
                         os quatro blocos padrão já vêm prontos para você escrever o conteúdo.
@@ -1024,16 +1024,16 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                       {(draftTemplate.termoConsentimentoSecoes || []).map((secao, idx) => (
                         <div
                           key={secao.id}
-                          className="p-3 bg-[#FAF9F6] rounded-sm border border-gray-200 space-y-2"
+                          className="p-3 bg-surface rounded-sm border border-gray-200 space-y-2"
                         >
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-[#A67C52] shrink-0">{idx + 1}.</span>
+                            <span className="text-label font-bold text-brand shrink-0">{idx + 1}.</span>
                             <input
                               type="text"
                               value={secao.titulo}
                               onChange={(e) => handleUpdateSecaoTermo(secao.id, 'titulo', e.target.value)}
                               placeholder="Título do bloco (ex: Contra indicação)"
-                              className="flex-1 px-3 py-2 text-xs font-semibold rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                              className="flex-1 px-3 py-2 text-xs font-semibold rounded-sm bg-white border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
                             />
                             <button
                               type="button"
@@ -1050,7 +1050,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                             value={secao.texto}
                             onChange={(e) => handleUpdateSecaoTermo(secao.id, 'texto', e.target.value)}
                             placeholder="Escreva o conteúdo deste bloco. Cada linha que você digitar aqui sai como uma linha na ficha."
-                            className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] leading-relaxed resize-y"
+                            className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-ink focus:outline-hidden focus:border-brand leading-relaxed resize-y"
                           />
                         </div>
                       ))}
@@ -1058,14 +1058,14 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                       <button
                         type="button"
                         onClick={handleAdicionarSecaoTermo}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xs bg-white border border-dashed border-gray-300 hover:border-[#A67C52] text-[11px] font-semibold text-gray-700 hover:text-[#A67C52] transition-colors w-full justify-center"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xs bg-white border border-dashed border-gray-300 hover:border-brand text-body font-semibold text-gray-700 hover:text-brand transition-colors w-full justify-center"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Acrescentar bloco ao termo
                       </button>
 
                       {(draftTemplate.termoConsentimentoSecoes || []).length === 0 && (
-                        <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xs px-2.5 py-1.5">
+                        <p className="text-body text-amber-800 bg-amber-50 border border-amber-200 rounded-xs px-2.5 py-1.5">
                           Sem nenhum bloco, o termo não aparece na ficha. Acrescente ao menos um.
                         </p>
                       )}
@@ -1078,10 +1078,10 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
               <div className="bg-white/80 p-4 sm:p-5 rounded-sm border border-gray-200/70 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-[#A67C52]" />
+                    <Sparkles className="w-3.5 h-3.5 text-brand" />
                     Perguntas Gerais Herdadas ({generalQuestions.length})
                   </h4>
-                  <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-xs font-medium">
+                  <span className="text-label text-gray-400 bg-gray-100 px-2 py-0.5 rounded-xs font-medium">
                     Configuradas na aba Perguntas Gerais
                   </span>
                 </div>
@@ -1093,7 +1093,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                         {gidx + 1}. {gq.texto}
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-[#A67C52] font-mono">
+                        <span className="text-label text-brand font-mono">
                           {fieldTypeLabels[gq.tipo_campo]} {gq.obrigatoria ? '(*)' : ''}
                         </span>
                       </span>
@@ -1106,11 +1106,11 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
               <div className="bg-white p-4 sm:p-5 rounded-sm border border-gray-200/80 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-semibold uppercase tracking-widest text-[#1A1A1A] flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-[#A67C52]" />
+                    <h4 className="text-xs font-semibold uppercase tracking-widest text-ink flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-brand" />
                       Perguntas Específicas deste Procedimento ({draftTemplate.perguntasEspecificas.length})
                     </h4>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
+                    <p className="text-body text-gray-400 mt-0.5">
                       Perguntas direcionadas exclusivamente a este tratamento
                     </p>
                   </div>
@@ -1118,7 +1118,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   <button
                     type="button"
                     onClick={handleOpenAddQuestion}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#8e6945] transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Adicionar Pergunta
@@ -1131,7 +1131,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                     <button
                       type="button"
                       onClick={handleOpenAddQuestion}
-                      className="mt-2 text-xs font-semibold text-[#A67C52] hover:underline"
+                      className="mt-2 text-xs font-semibold text-brand hover:underline"
                     >
                       + Cadastrar primeira pergunta específica
                     </button>
@@ -1141,27 +1141,27 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                     {draftTemplate.perguntasEspecificas.map((q, idx) => (
                       <div
                         key={q.id}
-                        className="p-3 bg-[#FAF9F6] border border-gray-200/70 rounded-sm flex items-start justify-between gap-3 hover:border-gray-300 transition-colors"
+                        className="p-3 bg-surface border border-gray-200/70 rounded-sm flex items-start justify-between gap-3 hover:border-gray-300 transition-colors"
                       >
                         <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                          <span className="w-5 h-5 rounded-xs bg-gray-200 text-gray-700 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                          <span className="w-5 h-5 rounded-xs bg-gray-200 text-gray-700 font-mono text-label font-bold flex items-center justify-center shrink-0">
                             {idx + 1}
                           </span>
 
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-semibold text-[#1A1A1A] leading-snug">
+                              <span className="text-xs font-semibold text-ink leading-snug">
                                 {q.texto}
                               </span>
                               {q.obrigatoria && (
-                                <span className="text-[9px] text-red-600 bg-red-50 border border-red-200 px-1 rounded-xs font-bold">
+                                <span className="text-label text-red-600 bg-red-50 border border-red-200 px-1 rounded-xs font-bold">
                                   Obrigatória
                                 </span>
                               )}
                             </div>
 
-                            <div className="flex items-center gap-2.5 mt-1 text-[11px] text-gray-500">
-                              <span className="px-1.5 py-0.5 rounded-xs bg-white border border-gray-200 text-[#A67C52] font-medium">
+                            <div className="flex items-center gap-2.5 mt-1 text-body text-gray-500">
+                              <span className="px-1.5 py-0.5 rounded-xs bg-white border border-gray-200 text-brand font-medium">
                                 {fieldTypeLabels[q.tipo_campo]}
                               </span>
                               {q.opcoes && (
@@ -1200,7 +1200,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                           <button
                             type="button"
                             onClick={() => handleOpenEditQuestion(idx)}
-                            className="p-1 text-gray-500 hover:text-[#1A1A1A]"
+                            className="p-1 text-gray-500 hover:text-ink"
                             title="Editar"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -1234,7 +1234,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2 rounded-sm bg-[#1A1A1A] text-white text-xs font-semibold uppercase tracking-wider hover:bg-black transition-colors disabled:opacity-50"
+                  className="px-5 py-2 rounded-sm bg-ink text-white text-xs font-semibold uppercase tracking-wider hover:bg-black transition-colors disabled:opacity-50"
                 >
                   {isSaving ? 'Salvando Modelo...' : 'Salvar Modelo de Ficha'}
                 </button>
@@ -1247,13 +1247,13 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
       {/* SUB-QUESTION MODAL */}
       {questionModalOpen && (
         <div
-          className="fixed inset-0 z-60 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn"
+          className="fixed inset-0 z-60 bg-black/70 flex items-center justify-center p-3 sm:p-6 animate-fadeIn"
           onClick={(e) => {
             if (e.target === e.currentTarget) setQuestionModalOpen(false);
           }}
         >
-          <div className="relative w-full max-w-lg bg-[#FAF9F6] rounded-2xl border border-white/80 shadow-2xl overflow-hidden max-h-[92dvh] sm:max-h-[90vh] flex flex-col">
-            <div className="px-5 sm:px-6 py-3.5 sm:py-4 bg-[#1A1A1A] text-white flex items-center justify-between shrink-0">
+          <div className="relative w-full max-w-lg bg-surface rounded-2xl border border-white/80 shadow-2xl overflow-hidden max-h-[92dvh] sm:max-h-[90vh] flex flex-col">
+            <div className="px-5 sm:px-6 py-3.5 sm:py-4 bg-ink text-white flex items-center justify-between shrink-0">
               <h4 className="font-serif-luxury text-base font-medium">
                 {editingQuestionIndex !== null ? 'Editar Pergunta Específica' : 'Nova Pergunta Específica'}
               </h4>
@@ -1283,7 +1283,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   value={qTexto}
                   onChange={(e) => setQTexto(e.target.value)}
                   placeholder="Ex: Já realizou aplicação prévia na mesma região?"
-                  className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
                   required
                 />
               </div>
@@ -1296,7 +1296,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   <select
                     value={qTipo}
                     onChange={(e) => setQTipo(e.target.value as QuestionFieldType)}
-                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
                   >
                     <option value="sim_nao">Sim / Não</option>
                     <option value="texto_curto">Texto Curto</option>
@@ -1318,7 +1318,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                       type="checkbox"
                       checked={qObrigatoria}
                       onChange={(e) => setQObrigatoria(e.target.checked)}
-                      className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                      className="accent-brand w-4 h-4 rounded-xs"
                     />
                     <span className="text-xs text-gray-700 font-medium">Resposta Obrigatória</span>
                   </label>
@@ -1335,7 +1335,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                     value={qOpcoesInput}
                     onChange={(e) => setQOpcoesInput(e.target.value)}
                     placeholder="Opção A&#10;Opção B&#10;Opção C"
-                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] font-mono"
+                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-ink focus:outline-hidden focus:border-brand font-mono"
                   />
                 </div>
               )}
@@ -1350,7 +1350,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                       type="button"
                       onClick={() => setQEscalaMax(5)}
                       className={`px-4 py-2 rounded-sm text-xs font-semibold border ${
-                        qEscalaMax === 5 ? 'bg-[#1A1A1A] text-white' : 'bg-white text-gray-700'
+                        qEscalaMax === 5 ? 'bg-ink text-white' : 'bg-white text-gray-700'
                       }`}
                     >
                       1 a 5
@@ -1359,7 +1359,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                       type="button"
                       onClick={() => setQEscalaMax(10)}
                       className={`px-4 py-2 rounded-sm text-xs font-semibold border ${
-                        qEscalaMax === 10 ? 'bg-[#1A1A1A] text-white' : 'bg-white text-gray-700'
+                        qEscalaMax === 10 ? 'bg-ink text-white' : 'bg-white text-gray-700'
                       }`}
                     >
                       1 a 10
@@ -1377,7 +1377,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   value={qAjuda}
                   onChange={(e) => setQAjuda(e.target.value)}
                   placeholder="Ex: Especifique se houver contraindicação relativa"
-                  className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
 
@@ -1391,7 +1391,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-sm bg-[#1A1A1A] text-white text-xs font-semibold uppercase tracking-wider hover:bg-black"
+                  className="px-5 py-2 rounded-sm bg-ink text-white text-xs font-semibold uppercase tracking-wider hover:bg-black"
                 >
                   Concluir Pergunta
                 </button>

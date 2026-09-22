@@ -82,12 +82,12 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 flex items-center justify-center p-2 sm:p-4 md:p-6">
       <div className="relative w-full max-w-4xl bg-white rounded-sm shadow-2xl overflow-hidden max-h-[96vh] flex flex-col">
         {/* Controles — não saem na impressão nem no PDF */}
-        <div className="px-6 py-3.5 bg-[#1A1A1A] text-white flex items-center justify-between shrink-0 print:hidden gap-3">
+        <div className="px-6 py-3.5 bg-ink text-white flex items-center justify-between shrink-0 print:hidden gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74] shrink-0" />
+            <span className="w-2.5 h-2.5 rounded-full bg-brand-light shrink-0" />
             <span className="font-serif-luxury text-sm tracking-wide truncate">
               {emBranco ? 'Avaliação em Branco' : 'Ficha de Avaliação'} — {titulo}
             </span>
@@ -106,7 +106,7 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
               type="button"
               onClick={handleSavePdf}
               disabled={gerandoPdf}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#8e6945] transition-all shadow-xs disabled:opacity-60"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover transition-all shadow-xs disabled:opacity-60"
             >
               {gerandoPdf ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -128,12 +128,12 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
 
         {/* Documento */}
         <div ref={contentRef} className="overflow-y-auto bg-white px-7 sm:px-10 py-8">
-          <div className="flex items-start justify-between gap-6 mb-6 pb-4 border-b-2 border-[#1A1A1A]">
+          <div className="flex items-start justify-between gap-6 mb-6 pb-4 border-b-2 border-ink">
             <div>
-              <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-[#1A1A1A] leading-tight">
+              <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-ink leading-tight">
                 Avaliação - {titulo} - La Vie Clinique
               </h2>
-              <p className="text-xs font-semibold text-[#1A1A1A] mt-1.5">
+              <p className="text-xs font-semibold text-ink mt-1.5">
                 {clinicProfile.name || 'La Vie Clinique'}
               </p>
               <p className="text-xs text-gray-500 italic mt-0.5">
@@ -145,7 +145,7 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
             </div>
 
             <div className="text-right shrink-0">
-              <span className="inline-block px-3 py-1 bg-gray-100 border border-gray-200 text-[10px] font-mono font-bold uppercase tracking-wider text-[#1A1A1A] rounded-xs">
+              <span className="inline-block px-3 py-1 bg-gray-100 border border-gray-200 text-[10px] font-mono font-bold uppercase tracking-wider text-ink rounded-xs">
                 {emBranco ? 'Folha para preenchimento' : 'Preenchida pela equipe'}
               </span>
               {!emBranco && registro && (
@@ -171,13 +171,13 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
                 <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider block">
                   Paciente
                 </span>
-                <span className="font-semibold text-[#1A1A1A]">{registro?.pacienteNome}</span>
+                <span className="font-semibold text-ink">{registro?.pacienteNome}</span>
               </div>
               <div>
                 <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider block">
                   Data do atendimento
                 </span>
-                <span className="font-semibold text-[#1A1A1A]">
+                <span className="font-semibold text-ink">
                   {formatDateOnly(registro!.dataAtendimento)}
                 </span>
               </div>
@@ -185,7 +185,7 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
                 <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider block">
                   Procedimento
                 </span>
-                <span className="font-semibold text-[#1A1A1A]">
+                <span className="font-semibold text-ink">
                   {registro?.procedimentoNome}
                 </span>
               </div>
@@ -193,7 +193,7 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
                 <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider block">
                   Profissional responsável
                 </span>
-                <span className="font-semibold text-[#1A1A1A]">
+                <span className="font-semibold text-ink">
                   {registro?.profissionalNome || '—'}
                 </span>
               </div>
@@ -262,7 +262,7 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
             {emBranco ? (
               <RuledLines count={5} />
             ) : registro?.observacoes ? (
-              <p className="text-[11px] text-[#1A1A1A] whitespace-pre-wrap leading-relaxed pt-1.5">
+              <p className="text-[11px] text-ink whitespace-pre-wrap leading-relaxed pt-1.5">
                 {registro.observacoes}
               </p>
             ) : (

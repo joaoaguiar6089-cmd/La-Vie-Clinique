@@ -127,14 +127,14 @@ export const LaserAreasManagerModal: React.FC<LaserAreasManagerModalProps> = ({
   const semManequim = !manequins[vista];
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6">
+    <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-3 sm:p-6">
       {/* Largo o bastante para o anel de botões engajar: o manequim precisa de 760px, e com a
           lista de 300px ao lado um modal menor empurraria a tela para a grade de chips — onde não
           há botão no anel para arrastar, que é metade do motivo desta tela existir. */}
-      <div className="relative w-full max-w-[1280px] max-h-[92vh] bg-[#F9F8F6] rounded-sm overflow-hidden shadow-2xl border border-white/60 flex flex-col">
-        <div className="bg-[#1A1A1A] text-[#E5E4E0] px-5 py-3.5 flex items-center justify-between shrink-0">
+      <div className="relative w-full max-w-[1280px] max-h-[92vh] bg-surface rounded-sm overflow-hidden shadow-2xl border border-white/60 flex flex-col">
+        <div className="bg-ink text-line-soft px-5 py-3.5 flex items-center justify-between shrink-0">
           <div>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#C49B74]">
+            <span className="text-label font-semibold uppercase tracking-widest text-brand-light">
               Depilação a Laser
             </span>
             <h3 className="font-serif-luxury text-lg font-medium text-white">
@@ -159,7 +159,7 @@ export const LaserAreasManagerModal: React.FC<LaserAreasManagerModalProps> = ({
                   type="button"
                   onClick={() => setVista(v)}
                   className={`px-3.5 py-1.5 rounded-xs text-[12px] font-semibold transition-colors ${
-                    vista === v ? 'bg-[#A67C52] text-white' : 'text-[#1A1A1A] hover:bg-gray-50'
+                    vista === v ? 'bg-brand text-white' : 'text-ink hover:bg-gray-50'
                   }`}
                 >
                   {v === 'frente' ? 'Frente' : 'Costas'}
@@ -170,14 +170,14 @@ export const LaserAreasManagerModal: React.FC<LaserAreasManagerModalProps> = ({
               ))}
             </div>
 
-            <label className="flex items-center gap-2 text-[12px] text-[#1A1A1A] cursor-pointer bg-white border border-gray-200 rounded-sm px-3 py-1.5">
+            <label className="flex items-center gap-2 text-[12px] text-ink cursor-pointer bg-white border border-gray-200 rounded-sm px-3 py-1.5">
               <input
                 type="checkbox"
                 checked={modoAjuste}
                 onChange={(e) => setModoAjuste(e.target.checked)}
-                className="w-3.5 h-3.5 accent-[#A67C52]"
+                className="w-3.5 h-3.5 accent-brand"
               />
-              <Move className="w-3.5 h-3.5 text-[#A67C52]" />
+              <Move className="w-3.5 h-3.5 text-brand" />
               Arrastar botões para reposicionar
             </label>
           </div>
@@ -192,14 +192,14 @@ export const LaserAreasManagerModal: React.FC<LaserAreasManagerModalProps> = ({
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0">
               {semManequim ? (
-                <div className="py-12 text-center bg-white border border-dashed border-[#d8d2c8] rounded-sm">
-                  <p className="text-[12px] text-[#8a8578]">
+                <div className="py-12 text-center bg-white border border-dashed border-line rounded-sm">
+                  <p className="text-[12px] text-muted">
                     O manequim de {vista === 'frente' ? 'frente' : 'costas'} ainda não foi enviado.
                   </p>
                 </div>
               ) : areasNaTela.length === 0 ? (
-                <div className="py-12 text-center bg-white border border-dashed border-[#d8d2c8] rounded-sm">
-                  <p className="text-[12px] text-[#8a8578]">
+                <div className="py-12 text-center bg-white border border-dashed border-line rounded-sm">
+                  <p className="text-[12px] text-muted">
                     Nenhuma área desenhada nesta vista ainda.
                   </p>
                 </div>
@@ -213,7 +213,7 @@ export const LaserAreasManagerModal: React.FC<LaserAreasManagerModalProps> = ({
                     alturaManequim={520}
                     onMoverBotao={modoAjuste ? moverBotao : undefined}
                   />
-                  <p className="text-[11px] text-[#8a8578] text-center mt-2">
+                  <p className="text-body text-muted text-center mt-2">
                     {modoAjuste
                       ? 'Arraste um botão para onde ele deve ficar. A posição grava sozinha.'
                       : 'Clique numa área para destacá-la na lista ao lado.'}
@@ -224,11 +224,11 @@ export const LaserAreasManagerModal: React.FC<LaserAreasManagerModalProps> = ({
 
             <div className="w-[300px] shrink-0 space-y-3">
               <div className="bg-white border border-gray-200 rounded-sm">
-                <p className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-[#A67C52] border-b border-gray-100">
+                <p className="px-3 py-2 text-label uppercase tracking-wider font-semibold text-brand border-b border-gray-100">
                   Áreas nesta vista ({doCatalogo.length})
                 </p>
                 {doCatalogo.length === 0 ? (
-                  <p className="px-3 py-3 text-[11px] text-[#8a8578]">Nenhuma.</p>
+                  <p className="px-3 py-3 text-body text-muted">Nenhuma.</p>
                 ) : (
                   <div className="max-h-[360px] overflow-y-auto divide-y divide-gray-100">
                     {doCatalogo.map((a) => (
@@ -243,10 +243,10 @@ export const LaserAreasManagerModal: React.FC<LaserAreasManagerModalProps> = ({
                         }`}
                       >
                         <div className="min-w-0">
-                          <span className="block text-[12px] text-[#1A1A1A] truncate">
+                          <span className="block text-[12px] text-ink truncate">
                             {a.nomeCurto}
                           </span>
-                          <span className="block text-[10px] text-gray-400">
+                          <span className="block text-label text-gray-400">
                             {a.area.formas.length}{' '}
                             {a.area.formas.length === 1 ? 'forma' : 'formas'}
                             {a.area.botao ? ' · botão ajustado' : ''}
@@ -255,14 +255,14 @@ export const LaserAreasManagerModal: React.FC<LaserAreasManagerModalProps> = ({
 
                         <div className="flex items-center gap-1 shrink-0">
                           {salvando === a.procedureId && (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#A67C52]" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-brand" />
                           )}
                           {a.area.botao && (
                             <button
                               type="button"
                               title="Voltar o botão à posição automática"
                               onClick={() => voltarBotaoAoAutomatico(a.procedureId)}
-                              className="p-1 rounded-xs text-gray-400 hover:text-[#A67C52] hover:bg-gray-50"
+                              className="p-1 rounded-xs text-gray-400 hover:text-brand hover:bg-gray-50"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
                             </button>
@@ -284,10 +284,10 @@ export const LaserAreasManagerModal: React.FC<LaserAreasManagerModalProps> = ({
 
               {pendentes.length > 0 && (
                 <div className="bg-white border border-gray-200 rounded-sm px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-wider font-semibold text-[#A67C52] mb-1">
+                  <p className="text-label uppercase tracking-wider font-semibold text-brand mb-1">
                     Sem área no mapa ({pendentes.length})
                   </p>
-                  <p className="text-[11px] text-[#8a8578] leading-snug">
+                  <p className="text-body text-muted leading-snug">
                     Estes procedimentos de laser existem no catálogo mas não aparecem no manequim.
                     Desenhe a área abrindo o cadastro de cada um.
                   </p>
@@ -298,13 +298,13 @@ export const LaserAreasManagerModal: React.FC<LaserAreasManagerModalProps> = ({
         </div>
 
         <div className="shrink-0 border-t border-[rgba(26,26,26,.1)] bg-white px-5 py-3 flex items-center justify-between gap-4">
-          <p className="text-[11px] text-[#8a8578] leading-snug">
+          <p className="text-body text-muted leading-snug">
             Remover a área tira o procedimento do manequim, não do catálogo.
           </p>
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 rounded-sm bg-[#1A1A1A] text-white text-xs font-semibold uppercase tracking-widest hover:bg-black transition-colors"
+            className="px-5 py-2.5 rounded-sm bg-ink text-white text-xs font-semibold uppercase tracking-widest hover:bg-black transition-colors"
           >
             Fechar
           </button>

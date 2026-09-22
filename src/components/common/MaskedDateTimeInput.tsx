@@ -21,7 +21,7 @@ import React from 'react';
  */
 
 const inputBase =
-  'w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden';
+  'w-full glass-input px-3 py-2 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden';
 
 /** "17092026" -> "17/09/2026". Só insere separador, não valida nada. */
 export const mascararData = (bruto: string): string => {
@@ -98,7 +98,7 @@ const Campo: React.FC<CampoProps & { placeholder: string; mascara: (v: string) =
 }) => (
   <div>
     <label
-      className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1"
+      className="block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1"
       htmlFor={id}
     >
       {label}
@@ -118,9 +118,9 @@ const Campo: React.FC<CampoProps & { placeholder: string; mascara: (v: string) =
       className={`${inputBase} ${erro ? 'border-red-300' : ''}`}
     />
     {erro ? (
-      <p className="mt-1 text-[11px] text-red-600">{erro}</p>
+      <p className="mt-1 text-body text-red-600">{erro}</p>
     ) : ajuda ? (
-      <p className="mt-1 text-[11px] text-gray-400">{ajuda}</p>
+      <p className="mt-1 text-body text-gray-400">{ajuda}</p>
     ) : null}
   </div>
 );

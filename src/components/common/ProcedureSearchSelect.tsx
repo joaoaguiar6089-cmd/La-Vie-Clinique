@@ -59,7 +59,7 @@ export const ProcedureSearchSelect: React.FC<ProcedureSearchSelectProps> = ({
   return (
     <div ref={containerRef} className="relative">
       <label
-        className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1"
+        className="block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1"
         htmlFor="atendimento-procedimento"
       >
         Procedimento *
@@ -80,7 +80,7 @@ export const ProcedureSearchSelect: React.FC<ProcedureSearchSelectProps> = ({
           onFocus={() => setIsOpen(true)}
           placeholder="Buscar no catálogo ou digitar"
           aria-invalid={!!erro}
-          className={`w-full glass-input pl-8 pr-8 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden ${
+          className={`w-full glass-input pl-8 pr-8 py-2 rounded-sm text-sm text-ink focus:outline-hidden ${
             erro ? 'border-red-300' : ''
           }`}
         />
@@ -100,14 +100,14 @@ export const ProcedureSearchSelect: React.FC<ProcedureSearchSelectProps> = ({
       </div>
 
       {erro ? (
-        <p className="mt-1 text-[11px] text-red-600">{erro}</p>
+        <p className="mt-1 text-body text-red-600">{erro}</p>
       ) : selecionado ? (
-        <p className="mt-1 text-[11px] text-[#A67C52] flex items-center gap-1">
+        <p className="mt-1 text-body text-brand flex items-center gap-1">
           <Check className="w-3 h-3" />
           {selecionado.category}
         </p>
       ) : nome.trim() ? (
-        <p className="mt-1 text-[11px] text-gray-400">Fora do catálogo — registrado como digitado</p>
+        <p className="mt-1 text-body text-gray-400">Fora do catálogo — registrado como digitado</p>
       ) : null}
 
       {isOpen && (
@@ -126,10 +126,10 @@ export const ProcedureSearchSelect: React.FC<ProcedureSearchSelectProps> = ({
                     onSelect({ procedureId: p.id, procedimentoNome: p.title });
                     setIsOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 hover:bg-[#FAF9F5] transition-colors flex items-center justify-between gap-3"
+                  className="w-full text-left px-3 py-2 hover:bg-surface transition-colors flex items-center justify-between gap-3"
                 >
-                  <span className="text-xs text-[#1A1A1A] truncate">{p.title}</span>
-                  <span className="text-[10px] text-gray-400 shrink-0 truncate max-w-[40%]">
+                  <span className="text-xs text-ink truncate">{p.title}</span>
+                  <span className="text-label text-gray-400 shrink-0 truncate max-w-[40%]">
                     {p.category}
                   </span>
                 </button>

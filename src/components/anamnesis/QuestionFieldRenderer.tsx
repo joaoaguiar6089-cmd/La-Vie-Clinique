@@ -39,10 +39,10 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
     return (
       <div className="py-2.5 border-b border-[rgba(26,26,26,.07)] last:border-0">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[14px] font-medium text-[#4a4740]">{texto}</span>
-          {!hideMandatoryAsterisk && obrigatoria && <span className="text-[13px] text-[#A67C52] font-semibold">*</span>}
+          <span className="text-[14px] font-medium text-ink-soft">{texto}</span>
+          {!hideMandatoryAsterisk && obrigatoria && <span className="text-[13px] text-brand font-semibold">*</span>}
         </div>
-        <div className="mt-1.5 text-[14px] text-[#1A1A1A] font-semibold bg-[#F9F8F6] px-3.5 py-2 rounded-xl border border-[rgba(26,26,26,.07)]">
+        <div className="mt-1.5 text-[14px] text-ink font-semibold bg-surface px-3.5 py-2 rounded-xl border border-[rgba(26,26,26,.07)]">
           {displayVal}
         </div>
       </div>
@@ -53,18 +53,18 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
   return (
     <div className="space-y-2 py-1">
       <div className="flex items-baseline justify-between gap-2">
-        <label htmlFor={`input-${id}`} className="block text-[15px] font-semibold text-[#1A1A1A]">
+        <label htmlFor={`input-${id}`} className="block text-[15px] font-semibold text-ink">
           {texto}
-          {!hideMandatoryAsterisk && obrigatoria && <span className="text-[#E11D48] ml-1 font-bold">*</span>}
+          {!hideMandatoryAsterisk && obrigatoria && <span className="text-danger ml-1 font-bold">*</span>}
         </label>
         {tipo_campo === 'escala' && (
-          <span className="text-[13px] text-[#8a8578]" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
+          <span className="text-[13px] text-muted" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
             1 a {escalaMax}
           </span>
         )}
       </div>
 
-      {ajuda && <p className="text-[13px] text-[#8a8578] leading-snug">{ajuda}</p>}
+      {ajuda && <p className="text-[13px] text-muted leading-snug">{ajuda}</p>}
 
       {/* 1. TEXTO CURTO */}
       {tipo_campo === 'texto_curto' && (
@@ -75,8 +75,8 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
           onChange={(e) => onChange?.(e.target.value)}
           placeholder="Digite sua resposta..."
           className={`w-full h-[52px] px-4 text-[15px] rounded-[13px] bg-white border transition-colors ${
-            error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
-          } text-[#1A1A1A] focus:outline-hidden`}
+            error ? 'border-danger' : 'border-[rgba(26,26,26,.12)] focus:border-brand'
+          } text-ink focus:outline-hidden`}
         />
       )}
 
@@ -89,8 +89,8 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
           onChange={(e) => onChange?.(e.target.value)}
           placeholder="Descreva detalhadamente..."
           className={`w-full min-h-[120px] px-4 py-3 text-[15px] rounded-2xl bg-white border transition-colors ${
-            error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
-          } text-[#1A1A1A] focus:outline-hidden resize-y`}
+            error ? 'border-danger' : 'border-[rgba(26,26,26,.12)] focus:border-brand'
+          } text-ink focus:outline-hidden resize-y`}
         />
       )}
 
@@ -103,8 +103,8 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
           onChange={(e) => onChange?.(e.target.value === '' ? '' : Number(e.target.value))}
           placeholder="0"
           className={`w-full max-w-[180px] h-[52px] px-4 text-[15px] rounded-[13px] bg-white border transition-colors ${
-            error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
-          } text-[#1A1A1A] focus:outline-hidden`}
+            error ? 'border-danger' : 'border-[rgba(26,26,26,.12)] focus:border-brand'
+          } text-ink focus:outline-hidden`}
           style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
         />
       )}
@@ -117,8 +117,8 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
           value={value || ''}
           onChange={(e) => onChange?.(e.target.value)}
           className={`w-full max-w-[220px] h-[52px] px-4 text-[15px] rounded-[13px] bg-white border transition-colors ${
-            error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)] focus:border-[#A67C52]'
-          } text-[#1A1A1A] focus:outline-hidden`}
+            error ? 'border-danger' : 'border-[rgba(26,26,26,.12)] focus:border-brand'
+          } text-ink focus:outline-hidden`}
         />
       )}
 
@@ -133,17 +133,17 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
                 type="button"
                 onClick={() => onChange?.(opcao)}
                 className={`w-full flex items-center gap-3 h-[52px] px-4 text-left rounded-[13px] text-[15px] transition-colors border ${
-                  isSelected ? 'border-[#A67C52] border-[1.5px] bg-[#A67C52]/5' : 'border-[rgba(26,26,26,.12)] bg-white hover:border-[#A67C52]/40'
+                  isSelected ? 'border-brand border-[1.5px] bg-brand/5' : 'border-[rgba(26,26,26,.12)] bg-white hover:border-brand/40'
                 }`}
               >
                 <span
                   className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 ${
-                    isSelected ? 'border-[#A67C52] bg-[#A67C52]' : 'border-[rgba(26,26,26,.2)] bg-white'
+                    isSelected ? 'border-brand bg-brand' : 'border-[rgba(26,26,26,.2)] bg-white'
                   }`}
                 >
                   {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
                 </span>
-                <span className={`leading-tight ${isSelected ? 'font-semibold text-[#1A1A1A]' : 'text-[#4a4740]'}`}>
+                <span className={`leading-tight ${isSelected ? 'font-semibold text-ink' : 'text-ink-soft'}`}>
                   {opcao}
                 </span>
               </button>
@@ -173,23 +173,23 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
                 type="button"
                 onClick={handleToggle}
                 className={`w-full flex items-center gap-3 h-[52px] px-4 text-left rounded-[13px] text-[15px] transition-colors border ${
-                  isChecked ? 'border-[#A67C52] border-[1.5px] bg-[#A67C52]/5' : 'border-[rgba(26,26,26,.12)] bg-white hover:border-[#A67C52]/40'
+                  isChecked ? 'border-brand border-[1.5px] bg-brand/5' : 'border-[rgba(26,26,26,.12)] bg-white hover:border-brand/40'
                 }`}
               >
                 <span
                   className={`w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 ${
-                    isChecked ? 'bg-[#A67C52] border-[#A67C52] text-white' : 'border-[rgba(26,26,26,.2)] bg-white'
+                    isChecked ? 'bg-brand border-brand text-white' : 'border-[rgba(26,26,26,.2)] bg-white'
                   }`}
                 >
                   {isChecked && <Check className="w-4 h-4 stroke-[3]" />}
                 </span>
-                <span className={`leading-tight ${isChecked ? 'font-semibold text-[#1A1A1A]' : 'text-[#4a4740]'}`}>
+                <span className={`leading-tight ${isChecked ? 'font-semibold text-ink' : 'text-ink-soft'}`}>
                   {opcao}
                 </span>
               </button>
             );
           })}
-          <p className="text-[13px] text-[#8a8578] pt-0.5">Pode marcar mais de uma</p>
+          <p className="text-[13px] text-muted pt-0.5">Pode marcar mais de uma</p>
         </div>
       )}
 
@@ -206,8 +206,8 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
                   onClick={() => onChange?.(num)}
                   className={`flex-1 min-w-[44px] h-12 rounded-xl transition-colors border ${
                     isSelected
-                      ? 'border-[#A67C52] border-[1.5px] bg-[#A67C52]/5 text-[#A67C52] text-[17px] font-bold'
-                      : 'border-[rgba(26,26,26,.12)] bg-white text-[#4a4740] text-[15px] font-medium hover:border-[#A67C52]/40'
+                      ? 'border-brand border-[1.5px] bg-brand/5 text-brand text-[17px] font-bold'
+                      : 'border-[rgba(26,26,26,.12)] bg-white text-ink-soft text-[15px] font-medium hover:border-brand/40'
                   }`}
                   style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
                 >
@@ -217,8 +217,8 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
             })}
           </div>
           {value !== undefined && value !== '' && (
-            <p className="text-[13px] text-[#8a8578] mt-2">
-              Selecionado: <span className="font-bold text-[#A67C52]">{value}</span> de {escalaMax || 10}
+            <p className="text-[13px] text-muted mt-2">
+              Selecionado: <span className="font-bold text-brand">{value}</span> de {escalaMax || 10}
             </p>
           )}
         </div>
@@ -236,8 +236,8 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
                 onClick={() => onChange?.(opt)}
                 className={`flex-1 h-[52px] flex items-center justify-center gap-2 rounded-[13px] text-[15px] font-semibold transition-colors border ${
                   isSelected
-                    ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                    : 'bg-white text-[#4a4740] border-[rgba(26,26,26,.12)] hover:border-[#A67C52]/40'
+                    ? 'bg-ink text-white border-ink'
+                    : 'bg-white text-ink-soft border-[rgba(26,26,26,.12)] hover:border-brand/40'
                 }`}
               >
                 {isSelected && <Check className="w-4 h-4" />}
@@ -248,7 +248,7 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
         </div>
       )}
 
-      {error && <p className="text-[13px] text-[#E11D48] font-medium">{error}</p>}
+      {error && <p className="text-[13px] text-danger font-medium">{error}</p>}
     </div>
   );
 };

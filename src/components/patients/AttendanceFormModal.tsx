@@ -95,7 +95,7 @@ interface AttendanceFormModalProps {
   onSalvar: (attendance: Attendance, planoNovo?: SessionPlan) => Promise<void>;
 }
 
-const labelClass = 'block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1';
+const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
 
 const TITULO: Record<ModoDoFormulario, string> = {
   novo: 'Novo atendimento',
@@ -392,7 +392,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 animate-fadeIn"
       role="dialog"
       aria-modal="true"
       aria-labelledby="atendimento-titulo"
@@ -400,10 +400,10 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         if (e.target === e.currentTarget && !salvando) onClose();
       }}
     >
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-[#F9F8F6] rounded-sm shadow-2xl border border-white/60">
-        <div className="bg-[#1A1A1A] px-6 py-4 flex items-start justify-between gap-3 sticky top-0 z-10">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-surface rounded-sm shadow-2xl border border-white/60">
+        <div className="bg-ink px-6 py-4 flex items-start justify-between gap-3 sticky top-0 z-10">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52]">
+            <p className="text-label font-semibold uppercase tracking-widest text-brand">
               {patient?.nome || 'Escolha a paciente'}
             </p>
             <h2 id="atendimento-titulo" className="text-lg text-white font-serif-luxury">
@@ -432,7 +432,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
           {/* Quem só existe como nome num orçamento ganha o cadastro aqui, sem parar a recepção
               para preencher formulário com a cliente na frente. */}
           {cadastroSeraCriado && (
-            <div className="px-3 py-2 rounded-sm bg-[#A67C52]/10 border border-[#A67C52]/25 text-xs text-[#8E653D] flex items-start gap-2">
+            <div className="px-3 py-2 rounded-sm bg-brand/10 border border-brand/25 text-xs text-brand-hover flex items-start gap-2">
               <UserPlus className="w-3.5 h-3.5 shrink-0 mt-px" />
               <span>O cadastro de {patient?.nome} será criado ao salvar este atendimento.</span>
             </div>
@@ -448,7 +448,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                 onSelect={selecaoDePaciente.onSelecionar}
               />
               {erros.paciente && (
-                <p className="mt-1 text-[11px] text-red-600">{erros.paciente}</p>
+                <p className="mt-1 text-body text-red-600">{erros.paciente}</p>
               )}
             </div>
           )}
@@ -498,16 +498,16 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                     setDuracao(e.target.value.replace(/\D/g, '').slice(0, 3));
                   }}
                   placeholder={String(AGENDA_DEFAULTS.duracaoMin)}
-                  className="w-full glass-input pl-3 pr-9 py-2 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                  className="w-full glass-input pl-3 pr-9 py-2 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
                 />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 pointer-events-none">
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-body text-gray-400 pointer-events-none">
                   min
                 </span>
               </div>
               {erros.duracao ? (
-                <p className="mt-1 text-[11px] text-red-600">{erros.duracao}</p>
+                <p className="mt-1 text-body text-red-600">{erros.duracao}</p>
               ) : (
-                terminaAs && <p className="mt-1 text-[11px] text-gray-400">até {terminaAs}</p>
+                terminaAs && <p className="mt-1 text-body text-gray-400">até {terminaAs}</p>
               )}
             </div>
           </div>
@@ -538,12 +538,12 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               total novo enquanto existe plano aberto não teria significado claro (criaria um
               segundo plano paralelo ou mexeria nas outras sessões sem avisar). */}
           {planoVinculado ? (
-            <div className="px-3 py-2.5 rounded-sm bg-white/70 border border-[#A67C52]/25 flex items-center justify-between gap-3">
+            <div className="px-3 py-2.5 rounded-sm bg-white/70 border border-brand/25 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#A67C52]">
+                <p className="text-label font-semibold uppercase tracking-wider text-brand">
                   Plano em andamento
                 </p>
-                <p className="text-xs text-[#1A1A1A] truncate">
+                <p className="text-xs text-ink truncate">
                   {planoVinculado.procedimentoNome} —{' '}
                   <strong className="tabular-nums">
                     {posicaoNoPlano?.numero}ª de {posicaoNoPlano?.total}
@@ -553,7 +553,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               <button
                 type="button"
                 onClick={() => setDesvinculado(true)}
-                className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-[11px] font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-body font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
               >
                 <Link2Off className="w-3.5 h-3.5" />
                 Desvincular
@@ -566,13 +566,13 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                   type="checkbox"
                   checked={criarPlano}
                   onChange={(e) => ligarPlano(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-[#A67C52]"
+                  className="mt-0.5 w-4 h-4 accent-brand"
                 />
                 <span className="min-w-0">
-                  <span className="block text-xs font-medium text-[#1A1A1A]">
+                  <span className="block text-xs font-medium text-ink">
                     Plano de sessões
                   </span>
-                  <span className="block text-[11px] text-gray-400">
+                  <span className="block text-body text-gray-400">
                     Para pacotes contínuos — as sessões seguintes entram neste plano sozinhas.
                   </span>
                 </span>
@@ -590,11 +590,11 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                     value={totalSessoes}
                     onChange={(e) => setTotalSessoes(e.target.value.replace(/\D/g, '').slice(0, 3))}
                     placeholder="10"
-                    className="w-24 glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                    className="w-24 glass-input px-3 py-2 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
                   />
-                  {erros.plano && <p className="mt-1 text-[11px] text-red-600">{erros.plano}</p>}
+                  {erros.plano && <p className="mt-1 text-body text-red-600">{erros.plano}</p>}
                   {!erros.plano && sugestaoDeSessoes && (
-                    <p className="mt-1 text-[11px] text-gray-400">
+                    <p className="mt-1 text-body text-gray-400">
                       Sugerido pelo orçamento aceito desta cliente.
                     </p>
                   )}
@@ -618,8 +618,8 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                     onClick={() => setProfessionalId(professionalId === p.id ? '' : p.id)}
                     className={`px-3 py-2 rounded-sm text-xs font-medium border transition-colors ${
                       professionalId === p.id
-                        ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                        : 'bg-white/70 text-gray-600 border-gray-200 hover:border-[#A67C52]/40'
+                        ? 'bg-ink text-white border-ink'
+                        : 'bg-white/70 text-gray-600 border-gray-200 hover:border-brand/40'
                     }`}
                   >
                     {p.name}
@@ -639,7 +639,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               onChange={(e) => setObservacoes(e.target.value)}
               rows={3}
               placeholder="Parâmetros usados, reação da paciente, o que combinar para a próxima"
-              className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] resize-y focus:outline-hidden"
+              className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink resize-y focus:outline-hidden"
             />
           </div>
         </div>
@@ -657,7 +657,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
             type="button"
             onClick={salvar}
             disabled={salvando || !patient}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest hover:bg-[#8E653D] transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest hover:bg-brand-hover transition-colors disabled:opacity-60"
           >
             <Check className="w-4 h-4" />
             {salvando ? 'Salvando...' : seraAgendamento ? 'Agendar' : 'Salvar'}

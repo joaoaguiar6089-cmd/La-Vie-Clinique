@@ -60,8 +60,8 @@ export const formToPatient = (form: PatientFormValues, base?: Patient | null): P
 });
 
 const inputClass =
-  'w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden';
-const labelClass = 'block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1';
+  'w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden';
+const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
 
 interface PatientFieldsProps {
   values: PatientFormValues;
@@ -164,8 +164,8 @@ export const PatientFields: React.FC<PatientFieldsProps> = ({
             onClick={() => onChange({ genero: values.genero === opcao ? '' : opcao })}
             className={`px-4 py-2 rounded-sm text-xs font-medium border transition-colors ${
               values.genero === opcao
-                ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                : 'bg-white/70 text-gray-600 border-gray-200 hover:border-[#A67C52]/40'
+                ? 'bg-ink text-white border-ink'
+                : 'bg-white/70 text-gray-600 border-gray-200 hover:border-brand/40'
             }`}
           >
             {opcao === 'feminino' ? 'Feminino' : 'Masculino'}

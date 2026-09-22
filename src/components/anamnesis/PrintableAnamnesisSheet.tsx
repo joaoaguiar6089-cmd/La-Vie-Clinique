@@ -181,13 +181,13 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   const hasProfessional = !!professionalName;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fadeIn">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fadeIn">
       {/* Container */}
       <div className="relative w-full max-w-4xl bg-white rounded-sm shadow-2xl overflow-hidden max-h-[96vh] flex flex-col">
         {/* Screen Controls Header (hidden in print) */}
-        <div className="px-6 py-3.5 bg-[#1A1A1A] text-white flex items-center justify-between shrink-0 print:hidden gap-3">
+        <div className="px-6 py-3.5 bg-ink text-white flex items-center justify-between shrink-0 print:hidden gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74] shrink-0" />
+            <span className="w-2.5 h-2.5 rounded-full bg-brand-light shrink-0" />
             <span className="font-serif-luxury text-sm tracking-wide truncate">
               Ficha Clínica {isStaff ? 'Oficial' : ''} de Anamnese — {record.pacienteNome}
             </span>
@@ -209,7 +209,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
               type="button"
               onClick={handleSavePdf}
               disabled={isGeneratingPdf}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#8e6945] transition-all shadow-xs disabled:opacity-60"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover transition-all shadow-xs disabled:opacity-60"
             >
               {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               {isGeneratingPdf ? 'Gerando...' : 'Salvar PDF'}
@@ -227,10 +227,10 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
         {/* PRINTABLE DOCUMENT CONTENT */}
         <div
           ref={contentRef}
-          className="flex-1 overflow-y-auto p-6 sm:p-10 text-[#1A1A1A] font-sans bg-white print:p-0 print:overflow-visible"
+          className="flex-1 overflow-y-auto p-6 sm:p-10 text-ink font-sans bg-white print:p-0 print:overflow-visible"
         >
           {/* Clinic Header */}
-          <div className="border-b-2 border-[#1A1A1A] pb-5 mb-6 flex items-start justify-between gap-4">
+          <div className="border-b-2 border-ink pb-5 mb-6 flex items-start justify-between gap-4">
             <div>
               {/* O documento se apresenta pelo que ele é. Antes o topo trazia só o nome da
                   clínica, e uma folha impressa não dizia de qual procedimento era sem que
@@ -240,10 +240,10 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                   "La Vie Clinique" é a marca, e vai literal: o nome cadastrado no perfil é a
                   razão social por extenso, longa demais para um título — ela continua logo
                   abaixo, que é onde identifica a clínica. */}
-              <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-[#1A1A1A] leading-tight">
+              <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-ink leading-tight">
                 Anamnese - {record.procedimentoNome} - La Vie Clinique
               </h2>
-              <p className="text-xs font-semibold text-[#1A1A1A] mt-1.5">
+              <p className="text-xs font-semibold text-ink mt-1.5">
                 {clinicProfile.name || 'La Vie Clinique'}
               </p>
               <p className="text-xs text-gray-500 italic mt-0.5">
@@ -255,12 +255,12 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
             </div>
 
             <div className="text-right">
-              <span className="inline-block px-3 py-1 bg-gray-100 border border-gray-200 text-xs font-mono font-bold text-[#1A1A1A] rounded-xs">
+              <span className="inline-block px-3 py-1 bg-gray-100 border border-gray-200 text-xs font-mono font-bold text-ink rounded-xs">
                 FICHA Nº {record.id.slice(-6).toUpperCase()}
               </span>
               <p className="text-[11px] text-gray-500 mt-1 font-medium">
                 Data do Atendimento:{' '}
-                <span className="font-bold text-[#1A1A1A]">
+                <span className="font-bold text-ink">
                   {new Date(record.dataAtendimento + 'T12:00:00Z').toLocaleDateString('pt-BR')}
                 </span>
               </p>
@@ -268,10 +268,10 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
           </div>
 
           {/* Patient Info Box */}
-          <div className="bg-[#FAF9F6] border border-gray-200 rounded-sm p-4 mb-6 grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+          <div className="bg-surface border border-gray-200 rounded-sm p-4 mb-6 grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
             <div className="sm:col-span-2">
               <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Paciente</span>
-              <span className="text-sm font-bold text-[#1A1A1A] block mt-0.5">{record.pacienteNome}</span>
+              <span className="text-sm font-bold text-ink block mt-0.5">{record.pacienteNome}</span>
             </div>
 
             <div>
@@ -309,7 +309,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
               <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">
                 Procedimento Realizado
               </span>
-              <span className="font-serif-luxury text-sm font-bold text-[#A67C52] block mt-0.5">
+              <span className="font-serif-luxury text-sm font-bold text-brand block mt-0.5">
                 {record.procedimentoNome}
               </span>
             </div>
@@ -335,7 +335,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
           */}
           {temAreasDeLaser && (
             <div className="mb-6">
-              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-[#A67C52] border-b border-[rgba(26,26,26,.12)] pb-1 mb-3">
+              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-brand border-b border-[rgba(26,26,26,.12)] pb-1 mb-3">
                 Áreas de depilação a laser
               </h3>
 
@@ -343,10 +343,10 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                 <div className="space-y-2.5">
                   {areasSolicitadas.length > 0 && (
                     <div>
-                      <span className="block text-[10px] uppercase tracking-wider text-[#8a8578]">
+                      <span className="block text-[10px] uppercase tracking-wider text-muted">
                         Solicitadas pela paciente
                       </span>
-                      <span className="text-[13px] text-[#1A1A1A]">
+                      <span className="text-[13px] text-ink">
                         {listarNomesDeAreas(areasSolicitadas)}
                       </span>
                     </div>
@@ -354,17 +354,17 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
 
                   {areasConfirmadas.length > 0 && (
                     <div>
-                      <span className="block text-[10px] uppercase tracking-wider text-[#8a8578]">
+                      <span className="block text-[10px] uppercase tracking-wider text-muted">
                         Confirmadas para tratamento
                       </span>
-                      <span className="text-[13px] font-semibold text-[#1A1A1A]">
+                      <span className="text-[13px] font-semibold text-ink">
                         {listarNomesDeAreas(areasConfirmadas)}
                       </span>
                     </div>
                   )}
 
                   {areasDivergem && (
-                    <p className="text-[11px] text-[#8E5B1A] bg-[#FDF6E7] border border-[#F0DCB4] rounded-sm px-2.5 py-1.5 leading-snug">
+                    <p className="text-[11px] text-warn bg-warn-bg border border-[#F0DCB4] rounded-sm px-2.5 py-1.5 leading-snug">
                       A conduta difere do que a paciente pediu pelo link. As duas listas ficam
                       registradas.
                     </p>
@@ -396,7 +396,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                             alturaManequim={210}
                             ocultarBotoes
                           />
-                          <span className="block text-[9px] uppercase tracking-wider text-[#8a8578] mt-1">
+                          <span className="block text-[9px] uppercase tracking-wider text-muted mt-1">
                             {vista === 'frente' ? 'Frente' : 'Costas'}
                           </span>
                         </div>
@@ -415,7 +415,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                 {patientGeneralQuestions.map((q) => (
                   <div key={q.id} className="py-1 border-b border-gray-100">
                     <span className="text-[11px] text-gray-500 block leading-tight">{q.texto}</span>
-                    <span className="text-xs font-bold text-[#1A1A1A] block mt-0.5">
+                    <span className="text-xs font-bold text-ink block mt-0.5">
                       {displayValue(q, record.respostasGerais[q.id])}
                     </span>
                   </div>
@@ -433,9 +433,9 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
           {/* Respostas do Paciente — Avaliação Específica */}
           {patientSpecificQuestions.length > 0 && (
             <div className="mb-6">
-              <div className="flex items-center gap-2 border-b border-[#A67C52]/40 pb-1.5 mb-3">
-                <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
-                <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-[#1A1A1A]">
+              <div className="flex items-center gap-2 border-b border-brand/40 pb-1.5 mb-3">
+                <span className="w-2 h-2 rounded-full bg-brand" />
+                <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-ink">
                   Avaliação Específica — {record.procedimentoNome} (Respostas do Paciente)
                 </h4>
               </div>
@@ -459,10 +459,10 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                         <span className="font-medium text-gray-700 leading-snug">
                           {idx + 1}. {q.texto}
                         </span>
-                        {q.obrigatoria && <span className="text-[10px] text-[#A67C52] font-bold">*</span>}
+                        {q.obrigatoria && <span className="text-[10px] text-brand font-bold">*</span>}
                       </div>
-                      <div className="mt-1 font-bold text-[#1A1A1A]">
-                        Resposta: <span className={isWarning ? 'text-amber-900' : 'text-[#1A1A1A]'}>{display}</span>
+                      <div className="mt-1 font-bold text-ink">
+                        Resposta: <span className={isWarning ? 'text-amber-900' : 'text-ink'}>{display}</span>
                       </div>
                     </div>
                   );
@@ -501,7 +501,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                     <span className="font-medium text-gray-700 leading-snug block">
                       {idx + 1}. {q.texto}
                     </span>
-                    <div className="mt-1 font-bold text-[#1A1A1A]">
+                    <div className="mt-1 font-bold text-ink">
                       Resposta:{' '}
                       <span>{displayValue(q, (record.respostasProfissional || {})[q.id])}</span>
                     </div>
@@ -514,9 +514,9 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
           {/* Imagem orientativa do procedimento — o mesmo material que o paciente viu ao preencher */}
           {orientationImage && (
             <div className="mb-6 page-break-inside-avoid">
-              <div className="flex items-center gap-2 border-b border-[#A67C52]/40 pb-1.5 mb-3">
-                <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
-                <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-[#1A1A1A]">
+              <div className="flex items-center gap-2 border-b border-brand/40 pb-1.5 mb-3">
+                <span className="w-2 h-2 rounded-full bg-brand" />
+                <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-ink">
                   {orientationImage.titulo || 'Imagem Orientativa'}
                 </h4>
               </div>
@@ -525,7 +525,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                 <p className="text-[11px] text-gray-600 leading-relaxed mb-2.5">{orientationImage.descricao}</p>
               )}
 
-              <div className="border border-gray-200 rounded-sm bg-[#FAF9F6] p-3 flex justify-center">
+              <div className="border border-gray-200 rounded-sm bg-surface p-3 flex justify-center">
                 {/* Sem caixa de altura fixa: a imagem sai na proporção exata do arquivo enviado, só
                     limitada em altura para não estourar uma página A4 no PDF. */}
                 <img
@@ -541,9 +541,9 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
           {/* Photos & Digital Annotation — clínica apenas */}
           {(record.fotoModeloUrl || record.fotoModeloAnotadaUrl || record.fotoPacienteUrl || record.fotoUrl) && (
             <div className="mb-6 page-break-inside-avoid">
-              <div className="flex items-center gap-2 border-b border-[#A67C52]/40 pb-1.5 mb-3">
-                <span className="w-2 h-2 rounded-full bg-[#A67C52]" />
-                <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-[#1A1A1A]">
+              <div className="flex items-center gap-2 border-b border-brand/40 pb-1.5 mb-3">
+                <span className="w-2 h-2 rounded-full bg-brand" />
+                <h4 className="font-serif-luxury text-xs font-bold uppercase tracking-wider text-ink">
                   Mapeamento Clínico & Fotos
                 </h4>
               </div>
@@ -551,9 +551,9 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
               <div className="space-y-4">
                 <div className="flex flex-col items-center gap-4">
                   {(record.fotoModeloUrl || record.fotoModeloAnotadaUrl) && (
-                    <div className="w-full max-w-xl border border-gray-200 rounded-sm p-3.5 bg-[#FAF9F6] flex flex-col justify-between">
+                    <div className="w-full max-w-xl border border-gray-200 rounded-sm p-3.5 bg-surface flex flex-col justify-between">
                       <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 mb-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[#1A1A1A]">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-ink">
                           Referência / Mapeamento
                           {isStaff && record.fotoModeloAnotadaUrl && (
                             <span className="ml-1.5 text-[9px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded-xs font-semibold border border-indigo-200 normal-case tracking-normal">
@@ -565,7 +565,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                           <button
                             type="button"
                             onClick={() => setAnnotatingTarget('modelo')}
-                            className="print:hidden flex items-center gap-1 px-2 py-1 rounded-xs bg-[#1A1A1A] text-[#C49B74] text-[10px] font-semibold uppercase tracking-wider hover:bg-black transition-colors"
+                            className="print:hidden flex items-center gap-1 px-2 py-1 rounded-xs bg-ink text-brand-light text-[10px] font-semibold uppercase tracking-wider hover:bg-black transition-colors"
                           >
                             <PenTool className="w-3 h-3" />
                             {record.fotoModeloAnotadaUrl ? 'Editar' : 'Anotar'}
@@ -583,7 +583,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                   )}
 
                   {(record.fotoPacienteUrl || record.fotoUrl) && (
-                    <div className="w-full max-w-xl border border-gray-200 rounded-sm p-3.5 bg-[#FAF9F6] flex flex-col justify-between">
+                    <div className="w-full max-w-xl border border-gray-200 rounded-sm p-3.5 bg-surface flex flex-col justify-between">
                       <div>
                         <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 mb-2">
                           <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-950">
@@ -598,7 +598,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                             <button
                               type="button"
                               onClick={() => setAnnotatingTarget('paciente')}
-                              className="print:hidden flex items-center gap-1 px-2 py-1 rounded-xs bg-[#1A1A1A] text-[#C49B74] text-[10px] font-semibold uppercase tracking-wider hover:bg-black transition-colors"
+                              className="print:hidden flex items-center gap-1 px-2 py-1 rounded-xs bg-ink text-brand-light text-[10px] font-semibold uppercase tracking-wider hover:bg-black transition-colors"
                             >
                               <PenTool className="w-3 h-3" />
                               {record.fotoPacienteAnotadaUrl ? 'Editar' : 'Anotar'}
@@ -643,12 +643,12 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
               hasProfessional ? (
                 <div className="mt-12 text-center">
                   <div className="max-w-[220px] mx-auto">
-                    <div className="border-t border-[#1A1A1A] mb-1.5" />
-                    <span className="text-xs font-bold text-[#1A1A1A] block">{record.pacienteNome}</span>
+                    <div className="border-t border-ink mb-1.5" />
+                    <span className="text-xs font-bold text-ink block">{record.pacienteNome}</span>
                     <span className="text-[10px] text-gray-400 block">Assinatura do(a) Paciente</span>
                   </div>
                   <p className="text-[10px] text-gray-500 mt-6">
-                    Profissional responsável: <span className="font-semibold text-[#1A1A1A]">{professionalName}</span>
+                    Profissional responsável: <span className="font-semibold text-ink">{professionalName}</span>
                     {' • '}
                     {clinicProfile.professionalTitle || 'Biomédica Esteta'} • {clinicProfile.name}
                   </p>
@@ -663,7 +663,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                 {hasProfessional && (
                   <p className="text-[11px] text-gray-500 text-center">
                     Profissional responsável pelo seu atendimento:{' '}
-                    <span className="font-semibold text-[#1A1A1A]">{professionalName}</span>
+                    <span className="font-semibold text-ink">{professionalName}</span>
                   </p>
                 )}
                 <div className="flex items-center gap-2 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xs px-3 py-2">
