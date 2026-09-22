@@ -28,20 +28,20 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({
   return (
     <div
       id="printable-single-card"
-      className="w-[500px] bg-[#FAF9F5] rounded-2xl overflow-hidden border-2 border-[#B88358]/30 shadow-2xl p-6 text-[#1A1A1C] font-sans"
+      className="w-[500px] bg-surface rounded-2xl overflow-hidden border-2 border-brand/30 shadow-2xl p-6 text-ink font-sans"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#E8E6DE] pb-4 mb-4">
+      <div className="flex items-center justify-between border-b border-line pb-4 mb-4">
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[#B88358] block">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-brand block">
             {clinic.name}
           </span>
           {doctors.length > 0 ? (
-            <span className="text-xs text-[#52525B] font-medium block mt-0.5">
+            <span className="text-xs text-ink-soft font-medium block mt-0.5">
               {doctors.map((d) => d.specialty ? `${d.name} (${d.specialty})` : d.name).join(' • ')}
             </span>
           ) : (
-            <span className="text-xs text-[#52525B] font-medium">
+            <span className="text-xs text-ink-soft font-medium">
               {clinic.tagline}
             </span>
           )}
@@ -49,23 +49,23 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({
         <ClinicLogo
           clinic={clinic}
           className="w-8 h-8 rounded shrink-0"
-          monogramClassName="bg-[#1A1A1C] text-[#D8A47F] font-serif-luxury text-sm font-bold"
+          monogramClassName="bg-ink text-brand-light font-serif-luxury text-sm font-bold"
         />
       </div>
 
       {/* Main Image */}
-      <div className="relative aspect-16/10 rounded-xl overflow-hidden mb-4 bg-[#EFECE6] border border-[#E0DCD3]">
+      <div className="relative aspect-16/10 rounded-xl overflow-hidden mb-4 bg-line-soft border border-line">
         <img
           src={images[0]}
           alt={procedure.title}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
         />
-        <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded bg-[#1A1A1A]/85 text-[#FAF9F5] text-[10px] font-bold uppercase tracking-wider">
+        <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded bg-ink/85 text-surface text-[10px] font-bold uppercase tracking-wider">
           {procedure.category}
         </div>
         {(isPromoDay || procedure.isFeatured) && (
-          <div className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded bg-[#B88358] text-white text-[10px] font-bold uppercase tracking-wider">
+          <div className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded bg-brand text-white text-[10px] font-bold uppercase tracking-wider">
             {isPromoDay ? `-${formatDiscountPercent(discountPercent)}% OFF` : 'Destaque'}
           </div>
         )}
@@ -73,28 +73,28 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({
 
       {/* Title & Description */}
       <div className="mb-4">
-        <h2 className="font-serif-luxury text-2xl font-bold text-[#1A1A1C] leading-snug">
+        <h2 className="font-serif-luxury text-2xl font-bold text-ink leading-snug">
           {procedure.title}
         </h2>
         {procedure.subtitle && (
-          <p className="text-xs text-[#8A8985] italic font-medium mt-0.5 mb-2">
+          <p className="text-xs text-muted italic font-medium mt-0.5 mb-2">
             {procedure.subtitle}
           </p>
         )}
-        <p className="text-xs text-[#52525B] leading-relaxed line-clamp-3">
+        <p className="text-xs text-ink-soft leading-relaxed line-clamp-3">
           {procedure.description}
         </p>
       </div>
 
       {/* Benefits */}
       {procedure.benefits && procedure.benefits.length > 0 && (
-        <div className="space-y-1.5 mb-4 bg-white p-3 rounded-xl border border-[#E8E6DE]">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[#9C663D] block mb-1">
+        <div className="space-y-1.5 mb-4 bg-white p-3 rounded-xl border border-line">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-hover block mb-1">
             Destaques do Procedimento:
           </span>
           {procedure.benefits.slice(0, 3).map((benefit, idx) => (
-            <div key={idx} className="flex items-center gap-1.5 text-xs text-[#27272A]">
-              <Sparkles className="w-3.5 h-3.5 text-[#B88358] shrink-0" />
+            <div key={idx} className="flex items-center gap-1.5 text-xs text-ink">
+              <Sparkles className="w-3.5 h-3.5 text-brand shrink-0" />
               <span className="line-clamp-1">{benefit}</span>
             </div>
           ))}
@@ -102,37 +102,37 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({
       )}
 
       {/* Specs bar */}
-      <div className="grid grid-cols-2 gap-2 text-[11px] text-[#52525B] mb-4">
+      <div className="grid grid-cols-2 gap-2 text-[11px] text-ink-soft mb-4">
         {procedure.duration && (
-          <div className="flex items-center gap-1 bg-[#F5F4EE] px-2.5 py-1.5 rounded-lg">
-            <Clock className="w-3.5 h-3.5 text-[#B88358]" />
+          <div className="flex items-center gap-1 bg-surface-2 px-2.5 py-1.5 rounded-lg">
+            <Clock className="w-3.5 h-3.5 text-brand" />
             <span>{procedure.duration}</span>
           </div>
         )}
         {procedure.recoveryTime && (
-          <div className="flex items-center gap-1 bg-[#F5F4EE] px-2.5 py-1.5 rounded-lg">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#B88358]" />
+          <div className="flex items-center gap-1 bg-surface-2 px-2.5 py-1.5 rounded-lg">
+            <ShieldCheck className="w-3.5 h-3.5 text-brand" />
             <span>{procedure.recoveryTime}</span>
           </div>
         )}
       </div>
 
       {/* Price block */}
-      <div className="bg-[#1A1A1C] text-white p-4 rounded-xl border border-[#B88358]/30 flex items-center justify-between mb-4">
+      <div className="bg-ink text-white p-4 rounded-xl border border-brand/30 flex items-center justify-between mb-4">
         <div>
-          <span className="text-[9px] uppercase tracking-wider text-[#D8A47F] font-semibold block">
+          <span className="text-[9px] uppercase tracking-wider text-brand-light font-semibold block">
             Investimento
           </span>
           {procedure.isStartingPrice && (
-            <span className="block text-xs text-[#D8A47F] font-medium">a partir de</span>
+            <span className="block text-xs text-brand-light font-medium">a partir de</span>
           )}
           {strikePrice !== null && (
             <div className="flex items-center gap-1.5 leading-none mb-0.5">
-              <span className="text-sm text-[#A0A0A5] line-through">
+              <span className="text-sm text-muted-light line-through">
                 {formatBRL(strikePrice)}
               </span>
               {isPromoDay && (
-                <span className="px-1.5 py-0.5 rounded-xs bg-[#B88358] text-white text-[9px] font-bold tracking-wider">
+                <span className="px-1.5 py-0.5 rounded-xs bg-brand text-white text-[9px] font-bold tracking-wider">
                   -{formatDiscountPercent(discountPercent)}%
                 </span>
               )}
@@ -143,14 +143,14 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({
           </span>
         </div>
         {procedure.priceNote && (
-          <span className="text-xs text-[#C89973] font-medium">
+          <span className="text-xs text-brand-light font-medium">
             {procedure.priceNote}
           </span>
         )}
       </div>
 
       {/* Footer */}
-      <div className="text-center text-[10px] text-[#8A8985] pt-2 border-t border-[#E8E6DE]">
+      <div className="text-center text-[10px] text-muted pt-2 border-t border-line">
         <p>📱 {clinic.phone} • 📸 {clinic.instagram}</p>
         <p className="mt-0.5">{clinic.address} • {clinic.cityState}</p>
       </div>

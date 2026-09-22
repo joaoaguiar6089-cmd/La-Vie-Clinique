@@ -51,11 +51,11 @@ export const QuoteShareModal: React.FC<QuoteShareModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-      <div className="w-full max-w-md bg-[#F9F8F6] rounded-sm overflow-hidden shadow-2xl border border-white/60">
-        <div className="bg-[#1A1A1A] px-6 py-4 flex items-start justify-between">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center sm:p-4 animate-fadeIn">
+      <div className="w-full sm:max-w-md max-h-[88vh] overflow-y-auto bg-surface rounded-t-2xl sm:rounded-card shadow-2xl sm:border sm:border-line animate-slideUpSheet sm:animate-none pb-area-segura sm:pb-0">
+        <div className="bg-ink px-6 py-4 flex items-start justify-between">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52]">
+            <p className="text-label font-semibold uppercase tracking-widest text-brand">
               Compartilhar
             </p>
             <h2 className="text-lg text-white font-serif-luxury tabular-nums">
@@ -89,7 +89,7 @@ export const QuoteShareModal: React.FC<QuoteShareModalProps> = ({
             <button
               type="button"
               onClick={copiar}
-              className="px-3 bg-white/70 border border-[#E2DFD8] rounded-sm text-[#1A1A1A] hover:bg-white transition-colors"
+              className="px-3 bg-white/70 border border-line rounded-sm text-ink hover:bg-white transition-colors"
               aria-label="Copiar link"
             >
               {copiado ? (
@@ -105,7 +105,7 @@ export const QuoteShareModal: React.FC<QuoteShareModalProps> = ({
             target="_blank"
             rel="noopener noreferrer"
             onClick={registrarEnvio}
-            className="w-full px-5 py-3 bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-[#8E653D] transition-colors flex items-center justify-center gap-2"
+            className="w-full px-5 py-3 bg-brand text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-brand-hover transition-colors flex items-center justify-center gap-2"
           >
             <MessageCircle className="w-4 h-4" />
             Enviar no WhatsApp
@@ -113,7 +113,7 @@ export const QuoteShareModal: React.FC<QuoteShareModalProps> = ({
           </a>
 
           {primeiraVez && (
-            <div className="text-[11px] leading-relaxed text-[#8E653D] bg-[#A67C52]/10 border border-[#A67C52]/25 rounded-sm px-3 py-2 flex items-start gap-2">
+            <div className="text-body leading-relaxed text-brand-hover bg-brand/10 border border-brand/25 rounded-sm px-3 py-2 flex items-start gap-2">
               <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               {/* O texto precisa ser um único filho do flex, senão o <strong> vira outra coluna */}
               <span>

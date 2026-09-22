@@ -17,6 +17,10 @@ import { agendamentosAtrasados } from './utils/agenda';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
+import { CommandPalette, AcaoRapida } from './components/common/CommandPalette';
+import { HojeView } from './components/hoje/HojeView';
+import { BottomNav, AcaoDeCriacao } from './components/BottomNav';
+import { FinanceiroView } from './components/financeiro/FinanceiroView';
 import {
   Procedure,
   ClinicProfile,
@@ -27,6 +31,8 @@ import {
   Attendance,
   EvaluationTemplate,
   Patient,
+  PedidoDeNavegacao,
+  Quote,
 } from './types';
 import { mapearTemplatesPorProcedimento, isLaserCategory } from './utils/templateMatching';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
@@ -48,6 +54,8 @@ import {
   subscribeToEvaluationGeneralQuestions,
   subscribeToAttendances,
   subscribeToPatients,
+  subscribeToQuotes,
+  marcarConfirmacao,
   isQuotaOrOfflineError,
   normalizeProcedureList,
 } from './services/databaseService';
@@ -151,12 +159,13 @@ function MainCatalogApp() {
   }, [syncStatus, isQuotaExceeded]);
 
   // Navigation and Modals State
-  const [currentView, setCurrentView] = useState<AppView>('procedures');
+  // A tela inicial é a Hoje: quem abre o sistema de manhã quer saber o que tem pela frente,
+  // não o catálogo. Ela não custa leitura nenhuma — ver `HojeView`.
+  const [currentView, setCurrentView] = useState<AppView>('hoje');
   const [selectedProcedureForDetails, setSelectedProcedureForDetails] = useState<Procedure | null>(null);
   const [selectedProcedureForEdit, setSelectedProcedureForEdit] = useState<Procedure | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isLaserAreasOpen, setIsLaserAreasOpen] = useState(false);
   const [singleProcedureToExport, setSingleProcedureToExport] = useState<Procedure | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -179,6 +188,28 @@ function MainCatalogApp() {
   const [evaluationGerais, setEvaluationGerais] = useState<AnamnesisQuestion[]>([]);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [allPatients, setAllPatients] = useState<Patient[]>([]);
+  /**
+   * Orçamentos sobem para cá por causa da tela Hoje (faturamento do mês, orçamentos abertos,
+   * conversão) e da busca global. **Não é assinatura nova**: `subscribeToQuotes` passa pelo
+   * `subscribeShared`, então esta é a mesma que o painel de Orçamentos e o de Pacientes já
+   * consomem — quem chegar depois recebe o valor em cache, sem pagar leitura.
+   */
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+
+  /**
+   * Primeira resposta do Firestore ainda não chegou — o que as telas usam para desenhar
+   * skeleton no lugar de uma lista vazia. Vira `false` também no erro: uma falha de rede
+   * não pode deixar a tela pulsando para sempre.
+   */
+  const [atendimentosCarregando, setAtendimentosCarregando] = useState(true);
+  /**
+   * O catálogo é diferente das outras coleções: ele tem cópia local da última sincronização,
+   * e mostrar essa cópia é melhor do que mostrar skeleton. Só quem abre o app pela primeira
+   * vez (sem cache e sem os exemplos ainda) vê o carregamento.
+   */
+  const [proceduresCarregando, setProceduresCarregando] = useState(
+    () => !localStorage.getItem(STORAGE_KEY_PROCEDURES)
+  );
 
   /**
    * Pedido vindo do catálogo para o módulo de anamnese. O `nonce` existe porque tocar "Anamnese"
@@ -186,6 +217,69 @@ function MainCatalogApp() {
    * e o formulário não reabriria.
    */
   const [anamnesisRequest, setAnamnesisRequest] = useState<AnamnesisOpenRequest | null>(null);
+
+  /**
+   * A tela anterior a Configurações e ao Financeiro. São as duas em que se entra "de passagem",
+   * de qualquer outra, e voltar sempre para a Hoje tiraria da agenda quem só foi ajustar o
+   * expediente ou conferir o mês.
+   */
+  const viewAnteriorRef = useRef<AppView>('hoje');
+  useEffect(() => {
+    if (currentView !== 'settings' && currentView !== 'financeiro') {
+      viewAnteriorRef.current = currentView;
+    }
+  }, [currentView]);
+
+  /** Busca global (Cmd/Ctrl+K no desktop, campo da tela Hoje no celular). */
+  const [buscaAberta, setBuscaAberta] = useState(false);
+
+  /**
+   * Pedido de navegação para a tela de destino — "abra a ficha da Ana", "comece um orçamento".
+   * Mesma mecânica de `anamnesisRequest`: quem recebe consome e avisa, e o `nonce` garante que
+   * pedir a mesma coisa duas vezes conte como dois pedidos.
+   */
+  const [pedido, setPedido] = useState<PedidoDeNavegacao | null>(null);
+
+  /** Navega e, de passagem, registra o pedido que a tela de destino deve atender. */
+  const navegar = (p: Omit<PedidoDeNavegacao, 'nonce'>) => {
+    setPedido({ ...p, nonce: Date.now() });
+    setCurrentView(p.view);
+    window.scrollTo({ top: 0 });
+  };
+
+  /** O que "criar do zero" significa em cada caso: ir para a tela e já abrir o formulário. */
+  const criar = (acao: AcaoDeCriacao) => {
+    if (acao === 'agendamento') navegar({ view: 'agenda', criarNovo: true });
+    else if (acao === 'paciente') navegar({ view: 'patients', criarNovo: true });
+    else if (acao === 'orcamento') navegar({ view: 'quotes', criarNovo: true });
+    else {
+      // A ficha de anamnese nasce sem procedimento escolhido: quem escolhe é o formulário.
+      setAnamnesisRequest({ tipo: 'nova-ficha', nonce: Date.now() });
+      setCurrentView('anamnesis');
+      window.scrollTo({ top: 0 });
+    }
+  };
+
+  const acaoRapida = (acao: AcaoRapida) => {
+    if (acao === 'novo-agendamento') criar('agendamento');
+    else if (acao === 'nova-paciente') criar('paciente');
+    else criar('orcamento');
+  };
+
+  /**
+   * Cmd+K no Mac, Ctrl+K no resto. Fica no `document` porque a busca precisa abrir de qualquer
+   * tela, inclusive com o foco dentro de um formulário.
+   */
+  useEffect(() => {
+    const noTeclado = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setBuscaAberta((aberta) => !aberta);
+      }
+    };
+    document.addEventListener('keydown', noTeclado);
+    return () => document.removeEventListener('keydown', noTeclado);
+  }, []);
 
   // Initialize Firebase and subscribe to real-time updates — só depois de autenticado,
   // já que as regras do Firestore agora exigem login para procedures/clinic_settings.
@@ -209,6 +303,7 @@ function MainCatalogApp() {
               setProcedures(lista);
               localStorage.setItem(STORAGE_KEY_PROCEDURES, JSON.stringify(lista));
             }
+            setProceduresCarregando(false);
             setSyncStatus('synced');
           },
           (err) => {
@@ -216,6 +311,7 @@ function MainCatalogApp() {
               setIsQuotaExceeded(true);
             }
             console.warn('Firestore procedures subscription offline/error:', err);
+            setProceduresCarregando(false);
             setSyncStatus('error');
           }
         );
@@ -330,10 +426,20 @@ function MainCatalogApp() {
       subscribeToEvaluationGeneralQuestions(setEvaluationGerais, (err) => {
         if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
       }),
-      subscribeToAttendances(setAttendances, (err) => {
+      subscribeToAttendances(
+        (data) => {
+          setAttendances(data);
+          setAtendimentosCarregando(false);
+        },
+        (err) => {
+          if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
+          setAtendimentosCarregando(false);
+        }
+      ),
+      subscribeToPatients(setAllPatients, (err) => {
         if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
       }),
-      subscribeToPatients(setAllPatients, (err) => {
+      subscribeToQuotes(setQuotes, (err) => {
         if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
       }),
     ];
@@ -623,8 +729,8 @@ function MainCatalogApp() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#A67C52] animate-spin" />
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
       </div>
     );
   }
@@ -634,20 +740,20 @@ function MainCatalogApp() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] sm:flex selection:bg-[#A67C52]/25 selection:text-[#1A1A1A]">
+    <div className="min-h-screen bg-surface text-ink sm:flex selection:bg-brand/25 selection:text-ink">
       {/* Toast Notification */}
       {toastMessage && (
         <div
-          className={`fixed bottom-6 right-6 z-50 max-w-sm backdrop-blur-xl text-white px-5 py-3 rounded-lg shadow-2xl border flex items-start gap-3 text-xs font-medium ${
+          className={`fixed bottom-6 right-6 z-50 max-w-sm text-white px-5 py-3 rounded-lg shadow-2xl border flex items-start gap-3 text-xs font-medium ${
             toastTone === 'erro'
               ? 'bg-[#7F1D1D]/95 border-red-300/40'
-              : 'bg-[#1A1A1A]/90 border-white/20 animate-bounce'
+              : 'bg-ink/90 border-white/20 animate-bounce'
           }`}
         >
           {toastTone === 'erro' ? (
             <AlertTriangle className="w-4 h-4 text-red-200 shrink-0 mt-px" />
           ) : (
-            <Check className="w-4 h-4 text-[#C49B74] shrink-0 mt-px" />
+            <Check className="w-4 h-4 text-brand-light shrink-0 mt-px" />
           )}
           <span className="leading-relaxed">{toastMessage}</span>
         </div>
@@ -661,17 +767,40 @@ function MainCatalogApp() {
           setSingleProcedureToExport(null);
           setIsExportModalOpen(true);
         }}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={() => navegar({ view: 'settings' })}
         clinic={clinic}
         proceduresCount={procedures.length}
         avaliacoesPendentesCount={avaliacoesPendentes}
         agendamentosPendentesCount={agendamentosPendentes}
+        ehAdmin={isAdminUser}
         currentProfessionalName={currentProfessional?.name}
+        onOpenBusca={() => setBuscaAberta(true)}
         onLogout={logout}
       />
 
-      {/* Content Column */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      {/* Navegação do celular. Fica fora da coluna de conteúdo por ser `fixed`: dentro dela,
+          o `overflow` de qualquer ancestral poderia prendê-la. */}
+      <BottomNav
+        currentView={currentView}
+        onSelectView={(view) => setCurrentView(view)}
+        onCriar={criar}
+        onOpenSettings={() => navegar({ view: 'settings' })}
+        onOpenExport={() => {
+          setSingleProcedureToExport(null);
+          setIsExportModalOpen(true);
+        }}
+        onLogout={logout}
+        agendamentosPendentesCount={agendamentosPendentes}
+        avaliacoesPendentesCount={avaliacoesPendentes}
+        ehAdmin={isAdminUser}
+      />
+
+      {/* Coluna de conteúdo.
+
+          `pb-barra-inferior` reserva, no celular, a altura da barra de baixo mais a faixa do
+          gesto do iPhone. Fica aqui, depois do rodapé, e não dentro de cada tela: assim nenhuma
+          tela nova precisa lembrar disso, e o rodapé também não termina escondido. */}
+      <div className="flex-1 min-w-0 flex flex-col pb-barra-inferior sm:pb-0">
         {isQuotaExceeded && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
             <div className="flex items-start sm:items-center gap-2.5">
@@ -691,7 +820,48 @@ function MainCatalogApp() {
           </div>
         )}
         <main className="flex-1 w-full">
-          {currentView === 'agenda' ? (
+          {currentView === 'hoje' ? (
+            <HojeView
+              clinic={clinic}
+              catalogProcedures={procedures}
+              atendimentos={attendances}
+              pacientes={allPatients}
+              quotes={quotes}
+              professionalLogada={currentProfessional}
+              carregando={atendimentosCarregando}
+              onAbrirBusca={() => setBuscaAberta(true)}
+              onNovoAgendamento={() => navegar({ view: 'agenda', criarNovo: true })}
+              onIrParaAgenda={() => navegar({ view: 'agenda' })}
+              onIrParaAvaliacoes={() => navegar({ view: 'evaluations' })}
+              onIrParaOrcamentos={() => navegar({ view: 'quotes' })}
+              onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
+              onConfirmar={(a) =>
+                marcarConfirmacao(a.id, true).catch((e) =>
+                  showToast(`Não foi possível confirmar: ${(e as Error).message}`, 'erro')
+                )
+              }
+            />
+          ) : currentView === 'financeiro' ? (
+            <FinanceiroView
+              quotes={quotes}
+              professionals={clinic.professionals || []}
+              ehAdmin={isAdminUser}
+              carregando={atendimentosCarregando}
+              onVoltar={() => setCurrentView(viewAnteriorRef.current)}
+            />
+          ) : currentView === 'settings' ? (
+            <ClinicSettingsModal
+              isOpen
+              /* Voltar da tela de Configurações leva de volta ao que estava aberto antes —
+                 quem foi ali ajustar o expediente quer voltar para a agenda, não para a Hoje. */
+              onClose={() => setCurrentView(viewAnteriorRef.current)}
+              clinic={clinic}
+              onSave={handleSaveClinic}
+              currentUserUid={authUser?.uid}
+              isAdminUser={isAdminUser}
+              onAbrirMapaDeAreas={() => setIsLaserAreasOpen(true)}
+            />
+          ) : currentView === 'agenda' ? (
             <AgendaModule
               clinic={clinic}
               catalogProcedures={procedures}
@@ -699,6 +869,9 @@ function MainCatalogApp() {
               pacientes={allPatients}
               professionals={clinic.professionals || []}
               currentProfessionalId={currentProfessional?.id}
+              carregando={atendimentosCarregando}
+              pedido={currentView === 'agenda' ? pedido : null}
+              onPedidoAtendido={() => setPedido(null)}
             />
           ) : currentView === 'procedures' ? (
             <ProcedureManager
@@ -707,6 +880,7 @@ function MainCatalogApp() {
               categories={categories}
               templatesPorProcedimento={templatesPorProcedimento}
               templatesCarregando={templatesCarregando}
+              carregando={proceduresCarregando}
               onOpenAnamnesis={handleOpenAnamnesis}
               onCreateAnamnesisTemplate={handleCreateAnamnesisTemplate}
               onOpenNewProcedure={() => {
@@ -731,6 +905,8 @@ function MainCatalogApp() {
               fichasAvaliacao={evaluationTemplates}
               avaliacaoGerais={evaluationGerais}
               currentProfessionalId={currentProfessional?.id}
+              pedido={currentView === 'patients' ? pedido : null}
+              onPedidoAtendido={() => setPedido(null)}
             />
           ) : currentView === 'anamnesis' ? (
             <AnamnesisModule
@@ -749,14 +925,20 @@ function MainCatalogApp() {
               pacientes={allPatients}
               professionals={clinic.professionals || []}
               gerais={evaluationGerais}
+              carregando={atendimentosCarregando}
             />
           ) : (
-            <QuotesPanel clinic={clinic} catalogProcedures={procedures} />
+            <QuotesPanel
+              clinic={clinic}
+              catalogProcedures={procedures}
+              pedido={currentView === 'quotes' ? pedido : null}
+              onPedidoAtendido={() => setPedido(null)}
+            />
           )}
         </main>
 
         {/* Frosted Luxury Footer */}
-        <footer className="bg-[#1A1A1A] text-[#E5E4E0] border-t border-white/10 mt-16 transition-all">
+        <footer className="bg-ink text-line-soft border-t border-white/10 mt-16 transition-all">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 pb-8 border-b border-white/10">
               {/* Col 1: Brand */}
@@ -765,7 +947,7 @@ function MainCatalogApp() {
                   <ClinicLogo
                     clinic={clinic}
                     className="w-8 h-8 rounded-sm shrink-0"
-                    monogramClassName="bg-[#A67C52] text-white font-serif-luxury text-sm font-bold shadow-sm"
+                    monogramClassName="bg-brand text-white font-serif-luxury text-sm font-bold shadow-sm"
                   />
                   <h3 className="font-serif-luxury text-xl font-medium tracking-tight text-white">
                     {clinic.name}
@@ -777,13 +959,13 @@ function MainCatalogApp() {
                 {clinic.professionals && clinic.professionals.length > 0 ? (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {clinic.professionals.map((doc, dIdx) => (
-                      <span key={dIdx} className="text-[11px] text-[#C49B74] tracking-wider uppercase font-medium bg-white/5 px-2.5 py-1 rounded-xs border border-white/10">
+                      <span key={dIdx} className="text-label text-brand-light tracking-wider uppercase font-medium bg-white/5 px-2.5 py-1 rounded-xs border border-white/10">
                         {doc.name} {doc.specialty || doc.title ? `• ${doc.specialty || doc.title}` : ''}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[11px] text-[#A67C52] tracking-wider uppercase font-medium">
+                  <p className="text-label text-brand tracking-wider uppercase font-medium">
                     {clinic.professionalName} {clinic.professionalTitle ? `• ${clinic.professionalTitle}` : ''}
                   </p>
                 )}
@@ -791,7 +973,7 @@ function MainCatalogApp() {
 
               {/* Col 2: Fast Navigation */}
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] mb-3">
+                <h4 className="text-xs font-semibold uppercase tracking-widest text-brand mb-3">
                   Navegação
                 </h4>
                 <ul className="space-y-2 text-xs text-gray-400">
@@ -809,7 +991,7 @@ function MainCatalogApp() {
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => setIsSettingsModalOpen(true)} className="hover:text-white transition-colors">
+                    <button onClick={() => navegar({ view: 'settings' })} className="hover:text-white transition-colors">
                       Personalizar Dados da Clínica
                     </button>
                   </li>
@@ -818,7 +1000,7 @@ function MainCatalogApp() {
 
               {/* Col 3: Contact & Demo Actions */}
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] mb-3">
+                <h4 className="text-xs font-semibold uppercase tracking-widest text-brand mb-3">
                   Atendimento
                 </h4>
                 <p className="text-xs text-gray-400 mb-1">📱 {clinic.phone}</p>
@@ -826,7 +1008,7 @@ function MainCatalogApp() {
                 <p className="text-xs text-gray-400 mb-3">{clinic.cityState}</p>
                 <button
                   onClick={handleResetToDefaultSamples}
-                  className="text-[10px] text-gray-500 hover:text-[#A67C52] flex items-center gap-1 transition-colors uppercase tracking-wider"
+                  className="text-label text-gray-500 hover:text-brand flex items-center gap-1 transition-colors uppercase tracking-wider"
                   title="Restaurar dados de exemplo"
                 >
                   <RefreshCw className="w-3 h-3" /> Restaurar demonstração
@@ -836,9 +1018,9 @@ function MainCatalogApp() {
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
               <p>© {new Date().getFullYear()} {clinic.name}. Todos os direitos reservados.</p>
-              <div className="flex items-center space-x-2 text-[#A67C52]">
-                <div className="w-8 h-[1px] bg-[#A67C52]/40"></div>
-                <span className="text-[10px] tracking-widest uppercase font-medium">Design Frosted Glass</span>
+              <div className="flex items-center space-x-2 text-brand">
+                <div className="w-8 h-[1px] bg-brand/40"></div>
+                <span className="text-label tracking-widest uppercase font-medium">Design Frosted Glass</span>
               </div>
             </div>
           </div>
@@ -876,7 +1058,7 @@ function MainCatalogApp() {
         onAbrirConfiguracoes={() => {
           setIsFormModalOpen(false);
           setSelectedProcedureForEdit(null);
-          setIsSettingsModalOpen(true);
+          navegar({ view: 'settings' });
         }}
       />
 
@@ -893,17 +1075,6 @@ function MainCatalogApp() {
         singleProcedureToExport={singleProcedureToExport}
       />
 
-      {/* 4. Clinic Settings Modal */}
-      <ClinicSettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        clinic={clinic}
-        onSave={handleSaveClinic}
-        currentUserUid={authUser?.uid}
-        isAdminUser={isAdminUser}
-        onAbrirMapaDeAreas={() => setIsLaserAreasOpen(true)}
-      />
-
       {/* Gestão das áreas do laser — conferir o mapa inteiro, reposicionar botões, remover áreas.
           Mora aqui, e não dentro das Configurações, porque precisa do catálogo e da gravação de
           procedimento, que são de outro módulo. */}
@@ -917,6 +1088,25 @@ function MainCatalogApp() {
 
       {/* 5. Confirmação de ações destrutivas */}
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+
+      {/* 6. Busca global — filtra o que já está em memória, sem leitura nova no Firestore. */}
+      <CommandPalette
+        aberta={buscaAberta}
+        onFechar={() => setBuscaAberta(false)}
+        pacientes={allPatients}
+        procedimentos={procedures}
+        orcamentos={quotes}
+        onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
+        onAbrirProcedimento={(procedureId) => {
+          const proc = procedures.find((p) => p.id === procedureId);
+          if (proc) {
+            setCurrentView('procedures');
+            setSelectedProcedureForDetails(proc);
+          }
+        }}
+        onAbrirOrcamento={(quoteId) => navegar({ view: 'quotes', quoteId })}
+        onAcaoRapida={acaoRapida}
+      />
     </div>
   );
 }

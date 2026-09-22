@@ -16,8 +16,8 @@ const Campo: React.FC<{ rotulo: string; valor?: string; className?: string }> = 
   className = '',
 }) => (
   <div className={className}>
-    <dt className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{rotulo}</dt>
-    <dd className={`text-sm mt-0.5 ${valor ? 'text-[#1A1A1A]' : 'text-gray-300 italic'}`}>
+    <dt className="text-label font-semibold uppercase tracking-wider text-gray-400">{rotulo}</dt>
+    <dd className={`text-sm mt-0.5 ${valor ? 'text-ink' : 'text-gray-300 italic'}`}>
       {valor || 'Não informado'}
     </dd>
   </div>
@@ -77,7 +77,7 @@ export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = (
   return (
     <section className="glass-card rounded-sm p-5 sm:p-6">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[#A67C52]">
+        <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-brand">
           <IdCard className="w-4 h-4" />
           Dados pessoais
         </h2>
@@ -88,7 +88,7 @@ export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = (
               type="button"
               onClick={cancelar}
               disabled={salvando}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white/70 border border-gray-200 text-xs font-medium text-gray-600 hover:text-[#1A1A1A] transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white/70 border border-gray-200 text-xs font-medium text-gray-600 hover:text-ink transition-colors disabled:opacity-50"
             >
               <X className="w-3.5 h-3.5" />
               Cancelar
@@ -97,7 +97,7 @@ export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = (
               type="button"
               onClick={salvar}
               disabled={salvando}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#8E653D] transition-colors disabled:opacity-60"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover transition-colors disabled:opacity-60"
             >
               <Check className="w-3.5 h-3.5" />
               {salvando ? 'Salvando...' : 'Salvar'}
@@ -107,7 +107,7 @@ export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = (
           <button
             type="button"
             onClick={() => setEditando(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white/70 border border-gray-200 text-xs font-medium text-gray-600 hover:text-[#A67C52] hover:border-[#A67C52]/40 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white/70 border border-gray-200 text-xs font-medium text-gray-600 hover:text-brand hover:border-brand/40 transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />
             Editar

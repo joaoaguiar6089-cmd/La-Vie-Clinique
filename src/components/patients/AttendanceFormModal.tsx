@@ -1,6 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarClock, Check, Link2Off, UserPlus, Users, X } from 'lucide-react';
 import {
+  AlertCircle,
+  CalendarClock,
+  Check,
+  DoorClosed,
+  Link2Off,
+  UserPlus,
+  Users,
+  X,
+} from 'lucide-react';
+import {
+  AgendaSala,
   Attendance,
   Patient,
   Procedure,
@@ -31,11 +41,13 @@ import {
 import {
   AGENDA_DEFAULTS,
   conflitosDe,
+  conflitosDeSala,
   duracaoDoProcedimento,
   hhmmDeMinutos,
   intervaloDoAtendimento,
 } from '../../utils/agenda';
 import { resolveQuoteStatus } from '../../utils/quoteCalc';
+import { SidePanel } from '../common/SidePanel';
 
 /**
  * `novo` nasce em branco; `edicao` corrige um registro; `confirmacao` é o "compareceu" de um
@@ -71,6 +83,11 @@ interface AttendanceFormModalProps {
    * aba do paciente só tem os dele, e conflito é pergunta sobre a agenda inteira).
    */
   atendimentosDaClinica?: Attendance[];
+  /**
+   * Salas e equipamentos da clínica. Lista vazia = a clínica não usa o conceito, e o campo
+   * inteiro some do formulário em vez de virar um select com uma opção só.
+   */
+  salas?: AgendaSala[];
   /** Se o cadastro dele ainda não existe — o formulário avisa que vai criar ao salvar. */
   cadastroSeraCriado: boolean;
   /** Atendimentos já registrados deste paciente: palpite de procedimento e contagem do plano. */
@@ -92,10 +109,18 @@ interface AttendanceFormModalProps {
   modo: ModoDoFormulario;
   /** "+ adicionar sessão" de dentro de um plano: o registro nasce amarrado a ele. */
   planoFixoId?: string;
-  onSalvar: (attendance: Attendance, planoNovo?: SessionPlan) => Promise<void>;
+  /**
+   * `limparConfirmacao` é verdadeiro quando a edição mexeu na data ou na hora: a paciente tinha
+   * confirmado **aquele** horário, e manter o selo verde no novo faria a agenda de amanhã mentir.
+   */
+  onSalvar: (
+    attendance: Attendance,
+    planoNovo?: SessionPlan,
+    opcoes?: { limparConfirmacao?: boolean }
+  ) => Promise<void>;
 }
 
-const labelClass = 'block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1';
+const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
 
 const TITULO: Record<ModoDoFormulario, string> = {
   novo: 'Novo atendimento',
@@ -118,6 +143,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   selecaoDePaciente,
   sementeDataHora,
   atendimentosDaClinica,
+  salas,
   cadastroSeraCriado,
   atendimentos,
   planos,
@@ -138,6 +164,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     procedimentoNome: string;
   }>({ procedimentoNome: '' });
   const [professionalId, setProfessionalId] = useState('');
+  const [salaId, setSalaId] = useState('');
   const [duracao, setDuracao] = useState('');
   /** Uma vez digitada à mão, a duração para de ser reescrita pela troca de procedimento. */
   const [duracaoTocada, setDuracaoTocada] = useState(false);
@@ -170,6 +197,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         procedimentoNome: atendimento.procedimentoNome,
       });
       setProfessionalId(atendimento.professionalId || professionalIdPadrao || '');
+      setSalaId(atendimento.salaId || '');
       setDuracao(atendimento.duracaoMin ? String(atendimento.duracaoMin) : '');
       // Duração já gravada foi escolha de alguém: trocar o procedimento não a reescreve.
       setDuracaoTocada(!!atendimento.duracaoMin);
@@ -240,6 +268,37 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     dataISO,
     hora,
     professionalId,
+    duracaoMin,
+    procedimento.procedureId,
+    procedures,
+    modo,
+    atendimento,
+  ]);
+
+  /**
+   * Choque de **sala**. Ao contrário do de profissional, este **trava o salvamento**: a
+   * profissional pode decidir dobrar o próprio horário, mas nenhuma decisão faz o laser atender
+   * duas pacientes ao mesmo tempo.
+   */
+  const conflitosSala = useMemo(() => {
+    if (!atendimentosDaClinica || !dataISO || !hora.trim() || !salaId) return [];
+    return conflitosDeSala(
+      {
+        id: modo === 'novo' ? undefined : atendimento?.id,
+        data: dataISO,
+        hora,
+        duracaoMin,
+        procedureId: procedimento.procedureId,
+        salaId,
+      },
+      atendimentosDaClinica,
+      procedures
+    );
+  }, [
+    atendimentosDaClinica,
+    dataISO,
+    hora,
+    salaId,
     duracaoMin,
     procedimento.procedureId,
     procedures,
@@ -359,6 +418,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         procedimentoNome: procedimento.procedimentoNome.trim(),
         planoId: planoNovo?.id || planoVinculado?.id,
         professionalId: professionalId || undefined,
+        salaId: salaId || undefined,
         profissionalNome: profissional?.name,
         observacoes: observacoes.trim() || undefined,
         // Natureza congelada na criação. Confirmar resolve o agendamento; editar não mexe nela.
@@ -381,7 +441,13 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         createdAt: modo === 'novo' ? agora : atendimento?.createdAt || agora,
       };
 
-      await onSalvar(registro, planoNovo);
+      const horarioMudou =
+        modo === 'edicao' &&
+        (registro.data !== atendimento?.data || (registro.hora || '') !== (atendimento?.hora || ''));
+
+      await onSalvar(registro, planoNovo, {
+        limparConfirmacao: !!atendimento?.confirmadoEm && horarioMudou,
+      });
       onClose();
     } catch (e) {
       setErroGeral(`Não foi possível salvar: ${(e as Error).message}`);
@@ -390,38 +456,40 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     }
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="atendimento-titulo"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !salvando) onClose();
-      }}
-    >
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-[#F9F8F6] rounded-sm shadow-2xl border border-white/60">
-        <div className="bg-[#1A1A1A] px-6 py-4 flex items-start justify-between gap-3 sticky top-0 z-10">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52]">
-              {patient?.nome || 'Escolha a paciente'}
-            </p>
-            <h2 id="atendimento-titulo" className="text-lg text-white font-serif-luxury">
-              {TITULO[modo]}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={salvando}
-            aria-label="Fechar"
-            className="text-white/60 hover:text-white transition-colors disabled:opacity-40"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  /* O rodapé é montado fora do JSX principal porque o `SidePanel` o recebe por prop: ele
+     precisa ficar fixo abaixo da área que rola, e não no fim do conteúdo rolável. */
+  const rodape = (
+    <div className="flex items-center justify-end gap-3">
+      <button
+        type="button"
+        onClick={onClose}
+        disabled={salvando}
+        className="min-h-[44px] px-4 text-body font-semibold uppercase tracking-widest text-muted hover:text-ink transition-colors disabled:opacity-50"
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        onClick={salvar}
+        disabled={salvando || !patient || conflitosSala.length > 0}
+        className="flex items-center gap-2 min-h-[44px] px-5 rounded-xl bg-brand text-white text-body font-semibold uppercase tracking-widest transition-colors disabled:opacity-60"
+      >
+        <Check className="w-4 h-4" />
+        {salvando ? 'Salvando...' : seraAgendamento ? 'Agendar' : 'Salvar'}
+      </button>
+    </div>
+  );
 
-        <div className="p-6 space-y-4">
+  return (
+    <SidePanel
+      aberto={isOpen}
+      onFechar={onClose}
+      titulo={TITULO[modo]}
+      sobretitulo={patient?.nome || 'Escolha a paciente'}
+      bloqueado={salvando}
+      rodape={rodape}
+    >
+      <div className="p-4 sm:p-5 space-y-4">
           {erroGeral && (
             <div className="px-3 py-2 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
@@ -432,7 +500,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
           {/* Quem só existe como nome num orçamento ganha o cadastro aqui, sem parar a recepção
               para preencher formulário com a cliente na frente. */}
           {cadastroSeraCriado && (
-            <div className="px-3 py-2 rounded-sm bg-[#A67C52]/10 border border-[#A67C52]/25 text-xs text-[#8E653D] flex items-start gap-2">
+            <div className="px-3 py-2 rounded-sm bg-brand/10 border border-brand/25 text-xs text-brand-hover flex items-start gap-2">
               <UserPlus className="w-3.5 h-3.5 shrink-0 mt-px" />
               <span>O cadastro de {patient?.nome} será criado ao salvar este atendimento.</span>
             </div>
@@ -448,7 +516,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                 onSelect={selecaoDePaciente.onSelecionar}
               />
               {erros.paciente && (
-                <p className="mt-1 text-[11px] text-red-600">{erros.paciente}</p>
+                <p className="mt-1 text-body text-red-600">{erros.paciente}</p>
               )}
             </div>
           )}
@@ -498,16 +566,16 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                     setDuracao(e.target.value.replace(/\D/g, '').slice(0, 3));
                   }}
                   placeholder={String(AGENDA_DEFAULTS.duracaoMin)}
-                  className="w-full glass-input pl-3 pr-9 py-2 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                  className="w-full glass-input pl-3 pr-9 py-2 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
                 />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 pointer-events-none">
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-body text-gray-400 pointer-events-none">
                   min
                 </span>
               </div>
               {erros.duracao ? (
-                <p className="mt-1 text-[11px] text-red-600">{erros.duracao}</p>
+                <p className="mt-1 text-body text-red-600">{erros.duracao}</p>
               ) : (
-                terminaAs && <p className="mt-1 text-[11px] text-gray-400">até {terminaAs}</p>
+                terminaAs && <p className="mt-1 text-body text-gray-400">até {terminaAs}</p>
               )}
             </div>
           </div>
@@ -526,6 +594,41 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
             </div>
           )}
 
+          {/* Sala/equipamento. Só aparece quando a clínica cadastrou alguma. */}
+          {!!salas?.length && (
+            <div>
+              <label className={labelClass} htmlFor="atendimento-sala">
+                Sala / equipamento
+              </label>
+              <select
+                id="atendimento-sala"
+                value={salaId}
+                onChange={(e) => setSalaId(e.target.value)}
+                className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
+              >
+                <option value="">Nenhuma</option>
+                {salas.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Trava, não aviso: ver `conflitosSala`. */}
+          {conflitosSala.length > 0 && (
+            <div className="px-3 py-2 rounded-sm bg-danger-bg border border-danger-line text-body text-danger flex items-start gap-2">
+              <DoorClosed className="w-3.5 h-3.5 shrink-0 mt-px" />
+              <span>
+                <strong>Sala ocupada.</strong> {conflitosSala[0].pacienteNome} já está nesta sala
+                às {conflitosSala[0].hora}
+                {conflitosSala.length > 1 && ' (e mais ' + (conflitosSala.length - 1) + ')'}. Troque
+                o horário ou a sala para salvar.
+              </span>
+            </div>
+          )}
+
           <ProcedureSearchSelect
             procedures={procedures}
             procedureId={procedimento.procedureId}
@@ -538,12 +641,12 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               total novo enquanto existe plano aberto não teria significado claro (criaria um
               segundo plano paralelo ou mexeria nas outras sessões sem avisar). */}
           {planoVinculado ? (
-            <div className="px-3 py-2.5 rounded-sm bg-white/70 border border-[#A67C52]/25 flex items-center justify-between gap-3">
+            <div className="px-3 py-2.5 rounded-sm bg-white/70 border border-brand/25 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#A67C52]">
+                <p className="text-label font-semibold uppercase tracking-wider text-brand">
                   Plano em andamento
                 </p>
-                <p className="text-xs text-[#1A1A1A] truncate">
+                <p className="text-xs text-ink truncate">
                   {planoVinculado.procedimentoNome} —{' '}
                   <strong className="tabular-nums">
                     {posicaoNoPlano?.numero}ª de {posicaoNoPlano?.total}
@@ -553,7 +656,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               <button
                 type="button"
                 onClick={() => setDesvinculado(true)}
-                className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-[11px] font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-body font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
               >
                 <Link2Off className="w-3.5 h-3.5" />
                 Desvincular
@@ -566,13 +669,13 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                   type="checkbox"
                   checked={criarPlano}
                   onChange={(e) => ligarPlano(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-[#A67C52]"
+                  className="mt-0.5 w-4 h-4 accent-brand"
                 />
                 <span className="min-w-0">
-                  <span className="block text-xs font-medium text-[#1A1A1A]">
+                  <span className="block text-xs font-medium text-ink">
                     Plano de sessões
                   </span>
-                  <span className="block text-[11px] text-gray-400">
+                  <span className="block text-body text-gray-400">
                     Para pacotes contínuos — as sessões seguintes entram neste plano sozinhas.
                   </span>
                 </span>
@@ -590,11 +693,11 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                     value={totalSessoes}
                     onChange={(e) => setTotalSessoes(e.target.value.replace(/\D/g, '').slice(0, 3))}
                     placeholder="10"
-                    className="w-24 glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                    className="w-24 glass-input px-3 py-2 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
                   />
-                  {erros.plano && <p className="mt-1 text-[11px] text-red-600">{erros.plano}</p>}
+                  {erros.plano && <p className="mt-1 text-body text-red-600">{erros.plano}</p>}
                   {!erros.plano && sugestaoDeSessoes && (
-                    <p className="mt-1 text-[11px] text-gray-400">
+                    <p className="mt-1 text-body text-gray-400">
                       Sugerido pelo orçamento aceito desta cliente.
                     </p>
                   )}
@@ -618,8 +721,8 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                     onClick={() => setProfessionalId(professionalId === p.id ? '' : p.id)}
                     className={`px-3 py-2 rounded-sm text-xs font-medium border transition-colors ${
                       professionalId === p.id
-                        ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                        : 'bg-white/70 text-gray-600 border-gray-200 hover:border-[#A67C52]/40'
+                        ? 'bg-ink text-white border-ink'
+                        : 'bg-white/70 text-gray-600 border-gray-200 hover:border-brand/40'
                     }`}
                   >
                     {p.name}
@@ -639,31 +742,10 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               onChange={(e) => setObservacoes(e.target.value)}
               rows={3}
               placeholder="Parâmetros usados, reação da paciente, o que combinar para a próxima"
-              className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] resize-y focus:outline-hidden"
+              className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink resize-y focus:outline-hidden"
             />
           </div>
-        </div>
-
-        <div className="px-6 py-4 bg-white/50 border-t border-white/70 flex items-center justify-end gap-3 sticky bottom-0">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={salvando}
-            className="px-4 py-2.5 text-xs font-semibold uppercase tracking-widest text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={salvar}
-            disabled={salvando || !patient}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest hover:bg-[#8E653D] transition-colors disabled:opacity-60"
-          >
-            <Check className="w-4 h-4" />
-            {salvando ? 'Salvando...' : seraAgendamento ? 'Agendar' : 'Salvar'}
-          </button>
-        </div>
       </div>
-    </div>
+    </SidePanel>
   );
 };

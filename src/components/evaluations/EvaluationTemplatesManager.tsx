@@ -52,7 +52,7 @@ const FIELD_TYPE_LABELS: Record<QuestionFieldType, string> = {
 };
 
 const inputClass =
-  'w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]';
+  'w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-ink focus:outline-hidden focus:border-brand';
 const labelClass = 'block text-xs font-semibold text-gray-800 mb-1';
 
 const fichaVazia = (): EvaluationTemplate => ({
@@ -287,25 +287,25 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
     const url = draft?.[campo];
     return (
       <div className="flex-1 min-w-[140px]">
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+        <span className="block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1">
           {rotulo}
         </span>
         {url ? (
-          <div className="relative rounded-sm overflow-hidden border border-gray-200 bg-[#FAF9F6]">
+          <div className="relative rounded-sm overflow-hidden border border-gray-200 bg-surface">
             <img src={url} alt={rotulo} className="w-full h-28 object-contain" />
             <button
               type="button"
               onClick={() => draft && setDraft({ ...draft, [campo]: undefined })}
-              className="absolute top-1.5 right-1.5 p-1 rounded-xs bg-white/90 text-gray-500 hover:text-[#E11D48]"
+              className="absolute top-1.5 right-1.5 p-1 rounded-xs bg-white/90 text-gray-500 hover:text-danger"
               aria-label={`Remover ${rotulo}`}
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         ) : (
-          <label className="flex flex-col items-center justify-center gap-1 h-28 rounded-sm border border-dashed border-gray-300 bg-[#FAF9F6] cursor-pointer hover:border-[#A67C52] transition-colors">
+          <label className="flex flex-col items-center justify-center gap-1 h-28 rounded-sm border border-dashed border-gray-300 bg-surface cursor-pointer hover:border-brand transition-colors">
             <Camera className="w-4 h-4 text-gray-400" />
-            <span className="text-[10px] text-gray-500">Enviar</span>
+            <span className="text-label text-gray-500">Enviar</span>
             <input
               type="file"
               accept="image/*"
@@ -320,11 +320,11 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
 
   return (
     <div className="space-y-6">
-      <div className="bg-white/60 backdrop-blur-md rounded-sm border border-white/80 p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-card rounded-sm border border-white/80 p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#A67C52]" />
-            <h3 className="font-serif-luxury text-xl font-medium text-[#1A1A1A]">
+            <span className="w-2.5 h-2.5 rounded-full bg-brand" />
+            <h3 className="font-serif-luxury text-xl font-medium text-ink">
               Fichas-modelo de Avaliação
             </h3>
           </div>
@@ -340,7 +340,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
             setDraft(fichaVazia());
             setErro('');
           }}
-          className="w-full md:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#8e6945] shadow-xs active:scale-95 transition-all"
+          className="w-full md:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover shadow-xs active:scale-95 transition-all"
         >
           <Plus className="w-4 h-4" />
           Nova Ficha
@@ -361,11 +361,11 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
               className="bg-white/70 rounded-sm border border-white/80 shadow-xs p-4 flex flex-col gap-2.5"
             >
               <div className="flex items-start justify-between gap-2">
-                <h4 className="font-semibold text-sm text-[#1A1A1A] leading-snug">{f.nome}</h4>
+                <h4 className="font-semibold text-sm text-ink leading-snug">{f.nome}</h4>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button
                     onClick={() => onImprimirEmBranco(f)}
-                    className="p-1.5 text-gray-400 hover:text-[#A67C52] transition-colors"
+                    className="p-1.5 text-gray-400 hover:text-brand transition-colors"
                     title="Imprimir folha em branco"
                   >
                     <Printer className="w-4 h-4" />
@@ -375,14 +375,14 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                       setDraft({ ...f });
                       setErro('');
                     }}
-                    className="p-1.5 text-gray-400 hover:text-[#1A1A1A] transition-colors"
+                    className="p-1.5 text-gray-400 hover:text-ink transition-colors"
                     title="Editar"
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => pedirExclusao(f)}
-                    className="p-1.5 text-gray-400 hover:text-[#E11D48] transition-colors"
+                    className="p-1.5 text-gray-400 hover:text-danger transition-colors"
                     title="Excluir"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -391,9 +391,9 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
               </div>
 
               <p
-                className={`text-[11px] flex items-start gap-1.5 ${
+                className={`text-body flex items-start gap-1.5 ${
                   (f.categorias?.length || 0) + (f.procedureIds?.length || 0) === 0
-                    ? 'text-[#E11D48]'
+                    ? 'text-danger'
                     : 'text-gray-500'
                 }`}
               >
@@ -401,8 +401,8 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                 {resumoDoVinculo(f)}
               </p>
 
-              <div className="flex items-center gap-2 flex-wrap text-[10px]">
-                <span className="px-1.5 py-0.5 rounded-xs bg-[#A67C52]/10 text-[#A67C52] font-semibold">
+              <div className="flex items-center gap-2 flex-wrap text-label">
+                <span className="px-1.5 py-0.5 rounded-xs bg-brand/10 text-brand font-semibold">
                   {f.perguntas.length} perguntas
                 </span>
                 {f.temFotoSessao && (
@@ -434,8 +434,8 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
             só acontece enquanto sobra espaço; quando não sobra, o wrapper cresce e tudo é alcançável.
           */}
           <div className="flex min-h-full items-start sm:items-center justify-center p-0 sm:p-4">
-            <div className="bg-[#FAF9F6] w-full sm:max-w-2xl sm:rounded-sm shadow-xl min-h-screen sm:min-h-0 sm:my-8">
-              <div className="sticky top-0 z-10 bg-[#1A1A1A] px-5 py-4 flex items-center justify-between">
+            <div className="bg-surface w-full sm:max-w-2xl sm:rounded-sm shadow-xl min-h-screen sm:min-h-0 sm:my-8">
+              <div className="sticky top-0 z-10 bg-ink px-5 py-4 flex items-center justify-between">
                 <h3 className="font-serif-luxury text-lg text-white">
                   {fichas.some((f) => f.id === draft.id) ? 'Editar ficha' : 'Nova ficha de avaliação'}
                 </h3>
@@ -450,7 +450,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
 
               <div className="px-5 py-5 space-y-5">
                 {erro && (
-                  <div className="flex items-start gap-2 text-xs text-[#E11D48] bg-[#FFF1F2] border border-[#FECDD3] rounded-sm px-3 py-2">
+                  <div className="flex items-start gap-2 text-xs text-danger bg-danger-bg border border-danger-line rounded-sm px-3 py-2">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
                     <span>{erro}</span>
                   </div>
@@ -483,7 +483,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
 
                 {/* Vínculo */}
                 <div className="space-y-3 p-3.5 rounded-sm border border-gray-200 bg-white">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                  <span className="text-label font-bold uppercase tracking-wider text-gray-500">
                     Onde esta ficha vale
                   </span>
 
@@ -504,9 +504,9 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                                   : [...(draft.categorias || []), cat],
                               })
                             }
-                            className={`px-2.5 py-1 rounded-sm text-[11px] font-medium border transition-colors ${
+                            className={`px-2.5 py-1 rounded-sm text-body font-medium border transition-colors ${
                               marcada
-                                ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+                                ? 'bg-ink text-white border-ink'
                                 : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
                             }`}
                           >
@@ -524,7 +524,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                       selectedIds={draft.procedureIds || []}
                       onChange={(ids) => setDraft({ ...draft, procedureIds: ids })}
                     />
-                    <p className="text-[10px] text-gray-400 mt-1.5">
+                    <p className="text-label text-gray-400 mt-1.5">
                       Um procedimento listado aqui usa esta ficha mesmo que a categoria dele aponte
                       para outra — o específico sempre vence o geral.
                     </p>
@@ -534,13 +534,13 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                 {/* Perguntas */}
                 <div className="space-y-2 p-3.5 rounded-sm border border-gray-200 bg-white">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                    <span className="text-label font-bold uppercase tracking-wider text-gray-500">
                       Perguntas ({draft.perguntas.length})
                     </span>
                     <button
                       type="button"
                       onClick={abrirPerguntaNova}
-                      className="flex items-center gap-1 text-[11px] font-semibold text-[#A67C52] hover:underline"
+                      className="flex items-center gap-1 text-body font-semibold text-brand hover:underline"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Adicionar
@@ -548,21 +548,21 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                   </div>
 
                   {draft.perguntas.length === 0 ? (
-                    <p className="text-[11px] text-gray-400 py-3 text-center">
+                    <p className="text-body text-gray-400 py-3 text-center">
                       Nenhuma pergunta ainda. A ficha ainda assim abre com observações e foto.
                     </p>
                   ) : (
                     <div className="divide-y divide-gray-100">
                       {draft.perguntas.map((q, idx) => (
                         <div key={q.id} className="py-2 flex items-start gap-2">
-                          <span className="w-5 h-5 rounded-xs bg-[#1A1A1A] text-[#C49B74] font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="w-5 h-5 rounded-xs bg-ink text-brand-light font-mono text-label font-bold flex items-center justify-center shrink-0 mt-0.5">
                             {idx + 1}
                           </span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-[#1A1A1A] leading-snug">
+                            <p className="text-xs font-medium text-ink leading-snug">
                               {q.texto}
                             </p>
-                            <span className="text-[10px] text-[#A67C52]">
+                            <span className="text-label text-brand">
                               {FIELD_TYPE_LABELS[q.tipo_campo]}
                               {q.obrigatoria ? ' · obrigatória' : ''}
                               {q.opcoes?.length ? ` · ${q.opcoes.length} opções` : ''}
@@ -573,7 +573,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                               type="button"
                               onClick={() => moverPergunta(idx, 'up')}
                               disabled={idx === 0}
-                              className="p-1 text-gray-300 hover:text-[#1A1A1A] disabled:opacity-30"
+                              className="p-1 text-gray-300 hover:text-ink disabled:opacity-30"
                               aria-label="Subir"
                             >
                               <ArrowUp className="w-3.5 h-3.5" />
@@ -582,7 +582,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                               type="button"
                               onClick={() => moverPergunta(idx, 'down')}
                               disabled={idx === draft.perguntas.length - 1}
-                              className="p-1 text-gray-300 hover:text-[#1A1A1A] disabled:opacity-30"
+                              className="p-1 text-gray-300 hover:text-ink disabled:opacity-30"
                               aria-label="Descer"
                             >
                               <ArrowDown className="w-3.5 h-3.5" />
@@ -590,7 +590,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                             <button
                               type="button"
                               onClick={() => abrirPerguntaExistente(idx)}
-                              className="p-1 text-gray-400 hover:text-[#1A1A1A]"
+                              className="p-1 text-gray-400 hover:text-ink"
                               aria-label="Editar"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
@@ -598,7 +598,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                             <button
                               type="button"
                               onClick={() => removerPergunta(idx)}
-                              className="p-1 text-gray-400 hover:text-[#E11D48]"
+                              className="p-1 text-gray-400 hover:text-danger"
                               aria-label="Remover"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -612,10 +612,10 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
 
                 {/* Imagens */}
                 <div className="space-y-3 p-3.5 rounded-sm border border-gray-200 bg-white">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                  <span className="text-label font-bold uppercase tracking-wider text-gray-500">
                     Mapa anatômico para anotação
                   </span>
-                  <p className="text-[10px] text-gray-400 -mt-1.5">
+                  <p className="text-label text-gray-400 -mt-1.5">
                     A versão por gênero é resolvida pelo cadastro da paciente. A imagem única serve
                     de reserva quando não há versão para o gênero dela.
                   </p>
@@ -625,12 +625,12 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                     <FotoSlot rotulo="Única (reserva)" campo="fotoModeloUrl" />
                   </div>
 
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A] pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-ink pt-1">
                     <input
                       type="checkbox"
                       checked={draft.temFotoSessao}
                       onChange={(e) => setDraft({ ...draft, temFotoSessao: e.target.checked })}
-                      className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                      className="accent-brand w-4 h-4 rounded-xs"
                     />
                     <span>
                       Pedir foto desta sessão
@@ -642,7 +642,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                 </div>
               </div>
 
-              <div className="sticky bottom-0 bg-[#FAF9F6] border-t border-gray-200 px-5 py-3.5 flex items-center justify-end gap-2">
+              <div className="sticky bottom-0 bg-surface border-t border-gray-200 px-5 py-3.5 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setDraft(null)}
@@ -655,7 +655,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                   type="button"
                   onClick={salvarFicha}
                   disabled={salvando}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-sm bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-black disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-sm bg-ink text-white text-xs font-semibold hover:bg-black disabled:opacity-40"
                 >
                   {salvando ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -676,9 +676,9 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
           <div className="flex min-h-full items-start sm:items-center justify-center p-0 sm:p-4">
             <form
               onSubmit={salvarPergunta}
-              className="bg-[#FAF9F6] w-full sm:max-w-lg sm:rounded-sm shadow-xl min-h-screen sm:min-h-0 sm:my-8"
+              className="bg-surface w-full sm:max-w-lg sm:rounded-sm shadow-xl min-h-screen sm:min-h-0 sm:my-8"
             >
-              <div className="bg-[#1A1A1A] px-5 py-4 flex items-center justify-between">
+              <div className="bg-ink px-5 py-4 flex items-center justify-between">
                 <h3 className="font-serif-luxury text-lg text-white">
                   {qIndex !== null ? 'Editar pergunta' : 'Nova pergunta'}
                 </h3>
@@ -694,7 +694,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
 
               <div className="px-5 py-5 space-y-4">
                 {qErro && (
-                  <div className="flex items-start gap-2 text-xs text-[#E11D48] bg-[#FFF1F2] border border-[#FECDD3] rounded-sm px-3 py-2">
+                  <div className="flex items-start gap-2 text-xs text-danger bg-danger-bg border border-danger-line rounded-sm px-3 py-2">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
                     <span>{qErro}</span>
                   </div>
@@ -757,7 +757,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                           onClick={() => setQEscalaMax(max)}
                           className={`px-4 py-2 rounded-sm text-xs font-semibold border ${
                             qEscalaMax === max
-                              ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+                              ? 'bg-ink text-white border-ink'
                               : 'bg-white text-gray-700 border-gray-200'
                           }`}
                         >
@@ -780,12 +780,12 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                   />
                 </div>
 
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-ink">
                   <input
                     type="checkbox"
                     checked={qObrigatoria}
                     onChange={(e) => setQObrigatoria(e.target.checked)}
-                    className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                    className="accent-brand w-4 h-4 rounded-xs"
                   />
                   <span>
                     Marcar como obrigatória
@@ -806,7 +806,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-sm bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-black"
+                  className="px-5 py-2 rounded-sm bg-ink text-white text-xs font-semibold hover:bg-black"
                 >
                   {qIndex !== null ? 'Salvar alterações' : 'Adicionar pergunta'}
                 </button>

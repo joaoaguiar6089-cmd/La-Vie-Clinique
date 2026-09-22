@@ -25,7 +25,7 @@ const OrientationImageLightbox: React.FC<OrientationImageLightboxProps> = ({ ima
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/92 backdrop-blur-xs flex flex-col animate-fadeIn print:hidden">
+    <div className="fixed inset-0 z-[70] bg-black/92 flex flex-col animate-fadeIn print:hidden">
       <div className="flex items-center justify-between gap-3 px-4 py-3 shrink-0 border-b border-white/10">
         <span className="text-[14px] font-semibold text-white truncate">
           {image.titulo || 'Imagem orientativa'}
@@ -97,12 +97,12 @@ export const OrientationImageCard: React.FC<OrientationImageCardProps> = ({
         className={`${
           isPatient
             ? 'bg-white rounded-2xl p-5 shadow-[0_3px_14px_rgba(0,0,0,.04)]'
-            : 'bg-[#F9F8F6] rounded-xl p-3.5'
+            : 'bg-surface rounded-xl p-3.5'
         } ${className}`}
       >
         <div className="flex items-start gap-2.5 mb-3">
           <span
-            className={`shrink-0 rounded-full bg-[#A67C52]/10 text-[#A67C52] flex items-center justify-center ${
+            className={`shrink-0 rounded-full bg-brand/10 text-brand flex items-center justify-center ${
               isPatient ? 'w-8 h-8' : 'w-7 h-7'
             }`}
           >
@@ -110,13 +110,13 @@ export const OrientationImageCard: React.FC<OrientationImageCardProps> = ({
           </span>
           <div className="min-w-0">
             <p
-              className={`font-semibold text-[#1A1A1A] leading-tight ${
+              className={`font-semibold text-ink leading-tight ${
                 isPatient ? 'text-[15px]' : 'text-[14px]'
               }`}
             >
               {image.titulo || 'Imagem orientativa'}
             </p>
-            <p className={`text-[#8a8578] mt-0.5 ${isPatient ? 'text-[13px]' : 'text-[12px]'}`}>
+            <p className={`text-muted mt-0.5 ${isPatient ? 'text-[13px]' : 'text-[12px]'}`}>
               {image.descricao || 'Material de orientação enviado pela clínica. Toque para ampliar.'}
             </p>
           </div>
@@ -137,7 +137,7 @@ export const OrientationImageCard: React.FC<OrientationImageCardProps> = ({
             alt={image.titulo || 'Imagem orientativa do procedimento'}
             className="block w-full h-auto max-h-[70vh] object-contain"
           />
-          <span className="flex items-center justify-center gap-1.5 h-10 bg-[#F9F8F6] border-t border-[rgba(26,26,26,.07)] text-[#A67C52] text-[13px] font-semibold group-hover:bg-[#A67C52]/10 transition-colors">
+          <span className="flex items-center justify-center gap-1.5 h-10 bg-surface border-t border-[rgba(26,26,26,.07)] text-brand text-[13px] font-semibold group-hover:bg-brand/10 transition-colors">
             <ZoomIn className="w-[15px] h-[15px]" />
             Ampliar imagem
           </span>

@@ -2,6 +2,7 @@ import React from 'react';
 import {
   CalendarClock,
   Check,
+  CheckCheck,
   MessageCircle,
   Pencil,
   Stethoscope,
@@ -14,6 +15,7 @@ import {
   contatoDoAtendimento,
   dataExtensa,
   duracaoDoAtendimento,
+  ehConfirmado,
   hhmmDeMinutos,
   mensagemDeConfirmacao,
   minutosDoHHMM,
@@ -41,6 +43,8 @@ interface AgendaDetalheModalProps {
   onFaltou: (a: Attendance) => void;
   onRemarcar: (a: Attendance) => void;
   onExcluir: (a: Attendance) => void;
+  /** Liga/desliga o "confirmado" — o toque que a recepção dá depois de a paciente responder. */
+  onAlternarConfirmacao: (a: Attendance, confirmado: boolean) => void;
 }
 
 const acaoBase =
@@ -58,16 +62,21 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
   onFaltou,
   onRemarcar,
   onExcluir,
+  onAlternarConfirmacao,
 }) => {
   const inicioMin = minutosDoHHMM(atendimento.hora);
   const duracao = duracaoDoAtendimento(atendimento, catalogo);
   const contato = contatoDoAtendimento(atendimento, pacientes);
-  const linkWhatsApp = buildWhatsAppUrl(contato, mensagemDeConfirmacao(clinic, atendimento));
+  const linkWhatsApp = buildWhatsAppUrl(
+    contato,
+    mensagemDeConfirmacao(clinic, atendimento, catalogo)
+  );
   const pendente = ehPendente(atendimento);
+  const confirmado = ehConfirmado(atendimento);
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+      className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center sm:p-4 animate-fadeIn"
       role="dialog"
       aria-modal="true"
       aria-labelledby="agenda-detalhe-titulo"
@@ -75,10 +84,10 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
         if (e.target === e.currentTarget) onFechar();
       }}
     >
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#F9F8F6] rounded-sm shadow-2xl border border-white/60">
-        <div className="bg-[#1A1A1A] px-6 py-4 flex items-start justify-between gap-3">
+      <div className="w-full sm:max-w-md max-h-[88vh] overflow-y-auto bg-surface rounded-t-2xl sm:rounded-card shadow-2xl sm:border sm:border-line animate-slideUpSheet sm:animate-none pb-area-segura sm:pb-0">
+        <div className="bg-ink px-6 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52] first-letter:uppercase">
+            <p className="text-label font-semibold uppercase tracking-widest text-brand first-letter:uppercase">
               {dataExtensa(atendimento.data)}
               {inicioMin !== null
                 ? ` · ${atendimento.hora}–${hhmmDeMinutos(inicioMin + duracao)}`
@@ -100,12 +109,12 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
 
         <div className="p-6 space-y-4">
           <div className="space-y-2">
-            <p className="flex items-start gap-2 text-sm text-[#1A1A1A]">
-              <Stethoscope className="w-4 h-4 text-[#A67C52] shrink-0 mt-0.5" />
+            <p className="flex items-start gap-2 text-sm text-ink">
+              <Stethoscope className="w-4 h-4 text-brand shrink-0 mt-0.5" />
               <span className="min-w-0">
                 {atendimento.procedimentoNome}
                 {rotuloDoPlano && (
-                  <span className="block text-[11px] text-[#A67C52]">{rotuloDoPlano}</span>
+                  <span className="block text-body text-brand">{rotuloDoPlano}</span>
                 )}
               </span>
             </p>
@@ -114,7 +123,7 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
               {atendimento.profissionalNome || 'Sem profissional atribuída'}
             </p>
             {atendimento.status && (
-              <p className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-white/70 border border-white/80 text-[11px] font-semibold text-gray-600">
+              <p className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-white/70 border border-white/80 text-body font-semibold text-gray-600">
                 {ROTULO_DO_STATUS[atendimento.status]}
               </p>
             )}
@@ -126,24 +135,45 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
             </p>
           )}
 
-          {/* Confirmação por WhatsApp: abre a conversa com a mensagem pronta e **não grava nada** —
-              mesma escolha do "Falar com a clínica" do orçamento. */}
-          {pendente &&
-            (linkWhatsApp ? (
-              <a
-                href={linkWhatsApp}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${acaoBase} w-full bg-[#1A1A1A] text-white hover:bg-black`}
+          {/* Confirmação, em dois passos separados de propósito.
+
+              O botão de WhatsApp **não grava nada**: ele só abre a conversa com a mensagem
+              pronta. Quem confirma é a paciente, respondendo; então a recepção volta aqui e
+              marca. Gravar "confirmado" no momento do envio seria registrar uma pergunta como
+              se fosse resposta, e a agenda de amanhã passaria a mentir. */}
+          {pendente && (
+            <div className="space-y-2">
+              {linkWhatsApp ? (
+                <a
+                  href={linkWhatsApp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${acaoBase} w-full bg-whatsapp text-white`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Confirmar pelo WhatsApp
+                </a>
+              ) : (
+                <p className="px-3 py-2.5 rounded-sm bg-surface-2 border border-line text-body text-muted text-center">
+                  Sem telefone no cadastro — não dá para confirmar pelo WhatsApp.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => onAlternarConfirmacao(atendimento, !confirmado)}
+                aria-pressed={confirmado}
+                className={`${acaoBase} w-full border ${
+                  confirmado
+                    ? 'bg-ok-bg text-ok border-ok-line hover:bg-ok-bg/70'
+                    : 'bg-card text-ink border-line hover:border-brand'
+                }`}
               >
-                <MessageCircle className="w-4 h-4" />
-                Confirmar no WhatsApp
-              </a>
-            ) : (
-              <p className="px-3 py-2.5 rounded-sm bg-white/60 border border-white/80 text-[11px] text-gray-400 text-center">
-                Sem telefone no cadastro — não dá para confirmar pelo WhatsApp.
-              </p>
-            ))}
+                <CheckCheck className="w-4 h-4" />
+                {confirmado ? 'Confirmado — desmarcar' : 'Marcar como confirmado'}
+              </button>
+            </div>
+          )}
 
           {/* Os três desfechos, só enquanto houver o que resolver. */}
           {pendente && (
@@ -167,7 +197,7 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
               <button
                 type="button"
                 onClick={() => onRemarcar(atendimento)}
-                className={`${acaoBase} bg-white/70 text-gray-600 border border-gray-200 hover:border-[#A67C52]/40`}
+                className={`${acaoBase} bg-white/70 text-gray-600 border border-gray-200 hover:border-brand/40`}
               >
                 <CalendarClock className="w-4 h-4" />
                 Remarcar
@@ -188,7 +218,7 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
           <button
             type="button"
             onClick={() => onEditar(atendimento)}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest hover:bg-[#8E653D] transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest hover:bg-brand-hover transition-colors"
           >
             <Pencil className="w-4 h-4" />
             Editar

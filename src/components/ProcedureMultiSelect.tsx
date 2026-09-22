@@ -185,7 +185,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
 
   return (
     <div className="w-full sm:w-auto">
-      <label className="block text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
+      <label className="block text-label font-semibold uppercase tracking-widest text-gray-400 mb-1">
         Selecionar Procedimentos Específicos
       </label>
       <button
@@ -194,19 +194,19 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
         onClick={() => setIsOpen((v) => !v)}
         className={`w-full sm:w-auto flex items-center justify-between gap-2 px-3 py-2 rounded-sm bg-white/70 border text-xs font-medium min-w-[240px] transition-colors cursor-pointer ${
           selectedIds.length > 0
-            ? 'border-[#A67C52] text-[#1A1A1A] bg-[#A67C52]/5'
-            : 'border-white/80 text-[#1A1A1A] hover:border-gray-300'
+            ? 'border-brand text-ink bg-brand/5'
+            : 'border-white/80 text-ink hover:border-gray-300'
         }`}
       >
         <span className="truncate font-medium">{label}</span>
         <div className="flex items-center gap-1.5 shrink-0">
           {selectedIds.length > 0 && (
-            <span className="w-5 h-5 rounded-full bg-[#A67C52] text-white text-[10px] font-bold flex items-center justify-center">
+            <span className="w-5 h-5 rounded-full bg-brand text-white text-label font-bold flex items-center justify-center">
               {selectedIds.length}
             </span>
           )}
           <ChevronDown
-            className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isOpen ? 'rotate-180 text-[#A67C52]' : ''}`}
+            className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isOpen ? 'rotate-180 text-brand' : ''}`}
           />
         </div>
       </button>
@@ -214,7 +214,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
       {isOpen && createPortal(
         isMobile ? (
           /* MOBILE BOTTOM SHEET */
-          <div className="fixed inset-0 z-[120] flex flex-col justify-end bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="fixed inset-0 z-[120] flex flex-col justify-end bg-black/60 animate-fadeIn">
             <div
               className="absolute inset-0"
               onClick={() => setIsOpen(false)}
@@ -229,10 +229,10 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
               {/* Sheet Header */}
               <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
                 <div>
-                  <h3 className="font-semibold text-sm text-[#1A1A1C]">
+                  <h3 className="font-semibold text-sm text-ink">
                     Selecionar Procedimentos
                   </h3>
-                  <p className="text-[11px] text-gray-500">
+                  <p className="text-body text-gray-500">
                     {selectedIds.length === 0
                       ? 'Todos incluídos no catálogo'
                       : `${selectedIds.length} de ${procedures.length} selecionado${selectedIds.length > 1 ? 's' : ''}`}
@@ -248,7 +248,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
               </div>
 
               {/* Search & Category Pills */}
-              <div className="p-3 border-b border-gray-100 space-y-2.5 shrink-0 bg-[#F9F8F6]">
+              <div className="p-3 border-b border-gray-100 space-y-2.5 shrink-0 bg-surface">
                 <div className="relative">
                   <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -256,7 +256,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Buscar por nome ou categoria..."
-                    className="w-full pl-9 pr-8 py-2 rounded-lg bg-white border border-gray-200 text-xs text-[#1A1A1C] placeholder:text-gray-400 focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full pl-9 pr-8 py-2 rounded-lg bg-white border border-gray-200 text-xs text-ink placeholder:text-gray-400 focus:outline-hidden focus:border-brand"
                   />
                   {searchTerm && (
                     <button
@@ -270,7 +270,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                 </div>
 
                 {/* Category Pills (horizontal scroll) */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[11px]">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-body">
                   {categoriesList.map((cat) => {
                     const isCurrent = activeCategoryFilter === cat;
                     return (
@@ -280,7 +280,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                         onClick={() => setActiveCategoryFilter(cat)}
                         className={`px-2.5 py-1 rounded-full whitespace-nowrap font-medium transition-all shrink-0 ${
                           isCurrent
-                            ? 'bg-[#1A1A1C] text-white shadow-2xs'
+                            ? 'bg-ink text-white shadow-2xs'
                             : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300'
                         }`}
                       >
@@ -291,11 +291,11 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                 </div>
 
                 {/* Bulk Actions */}
-                <div className="flex items-center justify-between text-[11px] pt-1">
+                <div className="flex items-center justify-between text-body pt-1">
                   <button
                     type="button"
                     onClick={selectAllFiltered}
-                    className="text-[#A67C52] font-semibold flex items-center gap-1 hover:underline"
+                    className="text-brand font-semibold flex items-center gap-1 hover:underline"
                   >
                     <CheckCheck className="w-3.5 h-3.5" />
                     Selecionar todos
@@ -324,14 +324,14 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
 
                     return (
                       <div key={category} className="bg-white">
-                        <div className="px-4 py-2 bg-gray-50/90 backdrop-blur-xs sticky top-0 z-10 flex items-center justify-between border-y border-gray-100">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600">
+                        <div className="px-4 py-2 bg-surface sticky top-0 z-10 flex items-center justify-between border-y border-gray-100">
+                          <span className="text-label font-bold uppercase tracking-wider text-gray-600">
                             {category} ({procs.length})
                           </span>
                           <button
                             type="button"
                             onClick={() => toggleCategoryAll(category, procs)}
-                            className="text-[10px] font-semibold text-[#A67C52] hover:underline"
+                            className="text-label font-semibold text-brand hover:underline"
                           >
                             {allCatSelected ? 'Desmarcar todos' : 'Marcar todos'}
                           </button>
@@ -342,13 +342,13 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                             <label
                               key={proc.id}
                               className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors active:bg-gray-100 ${
-                                isChecked ? 'bg-[#A67C52]/5' : 'hover:bg-gray-50'
+                                isChecked ? 'bg-brand/5' : 'hover:bg-gray-50'
                               }`}
                             >
                               <span
                                 className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
                                   isChecked
-                                    ? 'bg-[#A67C52] border-[#A67C52] text-white'
+                                    ? 'bg-brand border-brand text-white'
                                     : 'border-gray-300 bg-white'
                                 }`}
                               >
@@ -361,11 +361,11 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                                 className="hidden"
                               />
                               <div className="flex-1 min-w-0">
-                                <div className="text-xs font-semibold text-[#1A1A1C] leading-snug">
+                                <div className="text-xs font-semibold text-ink leading-snug">
                                   {proc.title}
                                 </div>
                                 {(proc.duration || proc.price) && (
-                                  <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-2">
+                                  <div className="text-body text-gray-500 mt-0.5 flex items-center gap-2">
                                     {proc.duration && <span>⏱️ {proc.duration}</span>}
                                     {proc.price > 0 && <span>• R$ {proc.price.toLocaleString('pt-BR')}</span>}
                                   </div>
@@ -385,7 +385,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="w-full py-3 rounded-lg bg-[#A67C52] text-white text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-[#8e6945] active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-lg bg-brand text-white text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-brand-hover active:scale-[0.99] transition-all flex items-center justify-center gap-2"
                 >
                   <Check className="w-4 h-4" />
                   <span>
@@ -403,7 +403,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
             className="z-[110] bg-white rounded-md border border-gray-200 shadow-2xl overflow-hidden animate-fadeIn flex flex-col"
           >
             {/* Header & Search */}
-            <div className="p-3 border-b border-gray-100 space-y-2.5 bg-[#F9F8F6]">
+            <div className="p-3 border-b border-gray-100 space-y-2.5 bg-surface">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -411,7 +411,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Buscar procedimento ou categoria..."
-                  className="w-full pl-8 pr-7 py-1.5 rounded-sm bg-white border border-gray-200 text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full pl-8 pr-7 py-1.5 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
                 />
                 {searchTerm && (
                   <button
@@ -425,7 +425,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
               </div>
 
               {/* Category Pills */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar">
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 text-label no-scrollbar">
                 {categoriesList.map((cat) => (
                   <button
                     key={cat}
@@ -433,7 +433,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                     onClick={() => setActiveCategoryFilter(cat)}
                     className={`px-2 py-0.5 rounded-full whitespace-nowrap font-medium transition-all shrink-0 ${
                       activeCategoryFilter === cat
-                        ? 'bg-[#1A1A1C] text-white'
+                        ? 'bg-ink text-white'
                         : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300'
                     }`}
                   >
@@ -443,11 +443,11 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
               </div>
 
               {/* Bulk actions */}
-              <div className="flex items-center justify-between text-[11px] pt-0.5">
+              <div className="flex items-center justify-between text-body pt-0.5">
                 <button
                   type="button"
                   onClick={selectAllFiltered}
-                  className="text-[#A67C52] hover:underline font-semibold flex items-center gap-1"
+                  className="text-brand hover:underline font-semibold flex items-center gap-1"
                 >
                   <CheckCheck className="w-3 h-3" />
                   Selecionar todos
@@ -474,12 +474,12 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
 
                   return (
                     <div key={category}>
-                      <div className="px-3 py-1.5 bg-gray-50/95 backdrop-blur-xs text-[10px] font-bold uppercase tracking-wider text-gray-500 sticky top-0 z-10 flex items-center justify-between border-y border-gray-100">
+                      <div className="px-3 py-1.5 bg-surface text-label font-bold uppercase tracking-wider text-gray-500 sticky top-0 z-10 flex items-center justify-between border-y border-gray-100">
                         <span>{category} ({procs.length})</span>
                         <button
                           type="button"
                           onClick={() => toggleCategoryAll(category, procs)}
-                          className="text-[9px] font-semibold text-[#A67C52] hover:underline cursor-pointer"
+                          className="text-label font-semibold text-brand hover:underline cursor-pointer"
                         >
                           {allCatSelected ? 'Desmarcar todos' : 'Marcar todos'}
                         </button>
@@ -490,12 +490,12 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                           <label
                             key={proc.id}
                             className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${
-                              isChecked ? 'bg-[#A67C52]/5' : 'hover:bg-[#FAF9F5]'
+                              isChecked ? 'bg-brand/5' : 'hover:bg-surface'
                             }`}
                           >
                             <span
                               className={`w-4 h-4 rounded-xs border flex items-center justify-center shrink-0 transition-colors ${
-                                isChecked ? 'bg-[#A67C52] border-[#A67C52]' : 'border-gray-300 bg-white'
+                                isChecked ? 'bg-brand border-brand' : 'border-gray-300 bg-white'
                               }`}
                             >
                               {isChecked && <Check className="w-3 h-3 text-white stroke-[2.5]" />}
@@ -507,9 +507,9 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
                               className="hidden"
                             />
                             <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                              <span className="text-xs text-[#1A1A1A] truncate">{proc.title}</span>
+                              <span className="text-xs text-ink truncate">{proc.title}</span>
                               {proc.price > 0 && (
-                                <span className="text-[10px] text-gray-400 shrink-0">
+                                <span className="text-label text-gray-400 shrink-0">
                                   R$ {proc.price.toLocaleString('pt-BR')}
                                 </span>
                               )}
@@ -524,8 +524,8 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
             </div>
 
             {/* Desktop Footer */}
-            <div className="px-3 py-2 border-t border-gray-100 bg-[#F9F8F6] flex items-center justify-between">
-              <span className="text-[11px] text-gray-500">
+            <div className="px-3 py-2 border-t border-gray-100 bg-surface flex items-center justify-between">
+              <span className="text-body text-gray-500">
                 {selectedIds.length === 0
                   ? 'Todos os procedimentos'
                   : `${selectedIds.length} selecionado${selectedIds.length > 1 ? 's' : ''}`}
@@ -533,7 +533,7 @@ export const ProcedureMultiSelect: React.FC<ProcedureMultiSelectProps> = ({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="px-3 py-1 bg-[#1A1A1C] text-white text-[11px] font-semibold rounded-xs hover:bg-[#2A2A2E] transition-colors cursor-pointer"
+                className="px-3 py-1 bg-ink text-white text-body font-semibold rounded-xs hover:bg-ink transition-colors cursor-pointer"
               >
                 Concluir
               </button>

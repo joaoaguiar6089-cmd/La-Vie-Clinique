@@ -48,8 +48,8 @@ export function ModuleTabs<T extends string>({ tabs, active, onSelect }: ModuleT
             onClick={() => onSelect(tab.id)}
             className={`flex items-center gap-2 shrink-0 whitespace-nowrap px-4 py-3.5 text-[14px] font-semibold border-b-2 -mb-px transition-colors ${
               ativa
-                ? 'border-[#A67C52] text-[#1A1A1A]'
-                : 'border-transparent text-[#8a8578] hover:text-[#1A1A1A]'
+                ? 'border-brand text-ink'
+                : 'border-transparent text-muted hover:text-ink'
             }`}
           >
             <Icon className="w-4 h-4 shrink-0" />
@@ -57,7 +57,7 @@ export function ModuleTabs<T extends string>({ tabs, active, onSelect }: ModuleT
             {tab.count !== undefined && (
               <span
                 className={`px-2 py-0.5 rounded-full text-[12px] font-semibold ${
-                  ativa ? 'bg-[#A67C52] text-white' : 'bg-gray-100 text-[#8a8578]'
+                  ativa ? 'bg-brand text-white' : 'bg-gray-100 text-muted'
                 }`}
                 style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
               >

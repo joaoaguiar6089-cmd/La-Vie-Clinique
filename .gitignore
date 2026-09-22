@@ -10,3 +10,4 @@ coverage/
 # Backups do Firestore gerados por scripts/exportar-banco.ts.
 # Contêm dados de pacientes (nome, contato, fichas de anamnese) — nunca entram no repositório.
 backup/
+package-lock.json

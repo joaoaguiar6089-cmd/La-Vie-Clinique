@@ -61,11 +61,11 @@ export const LaserQuoteMapModal: React.FC<LaserQuoteMapModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6">
-      <div className="relative w-full max-w-4xl max-h-[92vh] bg-[#F9F8F6] rounded-sm overflow-hidden shadow-2xl border border-white/60 flex flex-col">
-        <div className="bg-[#1A1A1A] text-[#E5E4E0] px-5 py-3.5 flex items-center justify-between shrink-0">
+    <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-3 sm:p-6">
+      <div className="relative w-full max-w-4xl max-h-[92vh] bg-surface rounded-sm overflow-hidden shadow-2xl border border-white/60 flex flex-col">
+        <div className="bg-ink text-line-soft px-5 py-3.5 flex items-center justify-between shrink-0">
           <div>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#C49B74]">
+            <span className="text-label font-semibold uppercase tracking-widest text-brand-light">
               Depilação a Laser
             </span>
             <h3 className="font-serif-luxury text-lg font-medium text-white">
@@ -95,29 +95,29 @@ export const LaserQuoteMapModal: React.FC<LaserQuoteMapModalProps> = ({
         {/* Rodapé com a conta subindo — o motivo de o modal ficar aberto. */}
         <div className="shrink-0 border-t border-[rgba(26,26,26,.1)] bg-white px-5 py-3.5 flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+            <span className="block text-label uppercase tracking-wider text-gray-400 font-semibold">
               {escolhidas.length === 0
                 ? 'Nenhuma área'
                 : `${escolhidas.length} ${escolhidas.length === 1 ? 'área' : 'áreas'}`}
             </span>
-            <span className="block text-[12px] text-[#1A1A1A] truncate">
+            <span className="block text-[12px] text-ink truncate">
               {escolhidas.map((a) => a.nome).join(', ') || 'Toque nas regiões do manequim'}
             </span>
           </div>
 
           <div className="flex items-center gap-4 shrink-0">
             <div className="text-right">
-              <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+              <span className="block text-label uppercase tracking-wider text-gray-400 font-semibold">
                 Soma das áreas
               </span>
-              <span className="block text-[17px] font-semibold text-[#1A1A1A] tabular-nums">
+              <span className="block text-[17px] font-semibold text-ink tabular-nums">
                 {formatBRL(soma)}
               </span>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-1.5"
+              className="px-5 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest hover:bg-brand-hover active:scale-95 transition-all flex items-center gap-1.5"
             >
               <Check className="w-4 h-4" />
               Concluir

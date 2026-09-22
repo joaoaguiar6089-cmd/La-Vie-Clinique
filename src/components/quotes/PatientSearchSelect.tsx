@@ -50,7 +50,7 @@ export const PatientSearchSelect: React.FC<PatientSearchSelectProps> = ({
 
   return (
     <div ref={containerRef} className="relative">
-      <label className="block text-xs font-medium text-[#1A1A1A] mb-1">Paciente *</label>
+      <label className="block text-xs font-medium text-ink mb-1">Paciente *</label>
 
       <div className="relative">
         <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -64,7 +64,7 @@ export const PatientSearchSelect: React.FC<PatientSearchSelectProps> = ({
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="Buscar no cadastro ou digitar um nome"
-          className="w-full glass-input pl-8 pr-8 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+          className="w-full glass-input pl-8 pr-8 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
         />
         {pacienteNome && (
           <button
@@ -82,12 +82,12 @@ export const PatientSearchSelect: React.FC<PatientSearchSelectProps> = ({
       </div>
 
       {selecionado ? (
-        <p className="mt-1 text-[11px] text-[#A67C52] flex items-center gap-1">
+        <p className="mt-1 text-body text-brand flex items-center gap-1">
           <UserCheck className="w-3 h-3" />
           Vinculado ao cadastro de {selecionado.nome}
         </p>
       ) : pacienteNome.trim() ? (
-        <p className="mt-1 text-[11px] text-gray-400">
+        <p className="mt-1 text-body text-gray-400">
           Paciente avulso — não ficará vinculado a um cadastro
         </p>
       ) : null}
@@ -108,11 +108,11 @@ export const PatientSearchSelect: React.FC<PatientSearchSelectProps> = ({
                     onSelect({ id: p.id, nome: p.nome, contato: p.contato });
                     setIsOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 hover:bg-[#FAF9F5] transition-colors flex items-center justify-between gap-3"
+                  className="w-full text-left px-3 py-2 hover:bg-surface transition-colors flex items-center justify-between gap-3"
                 >
-                  <span className="text-xs text-[#1A1A1A] truncate">{p.nome}</span>
+                  <span className="text-xs text-ink truncate">{p.nome}</span>
                   {p.contato && (
-                    <span className="text-[11px] text-gray-400 shrink-0">{p.contato}</span>
+                    <span className="text-body text-gray-400 shrink-0">{p.contato}</span>
                   )}
                 </button>
               ))

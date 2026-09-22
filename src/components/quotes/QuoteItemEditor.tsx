@@ -60,7 +60,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
       {/* Cabeçalho: categoria, título e controles de ordem */}
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52] mb-1 truncate">
+          <p className="text-label font-semibold uppercase tracking-widest text-brand mb-1 truncate">
             {item.categoria || 'Sem categoria'}
           </p>
           <input
@@ -68,7 +68,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
             value={item.titulo}
             onChange={(e) => patch({ titulo: e.target.value })}
             placeholder="Nome do procedimento"
-            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
           />
         </div>
 
@@ -78,7 +78,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
             onClick={() => onMove(-1)}
             disabled={index === 0}
             aria-label="Mover para cima"
-            className="p-1 text-gray-400 hover:text-[#A67C52] disabled:opacity-25 disabled:hover:text-gray-400 transition-colors"
+            className="p-1 text-gray-400 hover:text-brand disabled:opacity-25 disabled:hover:text-gray-400 transition-colors"
           >
             <ChevronUp className="w-4 h-4" />
           </button>
@@ -87,7 +87,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
             onClick={() => onMove(1)}
             disabled={index === total - 1}
             aria-label="Mover para baixo"
-            className="p-1 text-gray-400 hover:text-[#A67C52] disabled:opacity-25 disabled:hover:text-gray-400 transition-colors"
+            className="p-1 text-gray-400 hover:text-brand disabled:opacity-25 disabled:hover:text-gray-400 transition-colors"
           >
             <ChevronDown className="w-4 h-4" />
           </button>
@@ -105,7 +105,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
       {/* Profissional e valor */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+          <label className="block text-body font-medium text-ink mb-1">
             Profissional deste procedimento
           </label>
           <select
@@ -117,7 +117,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
                 profissionalNome: professionals.find((p) => p.id === id)?.name,
               });
             }}
-            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
           >
             <option value="">Sem profissional definida</option>
             {professionals.map((p) => (
@@ -129,7 +129,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
         </div>
 
         <div>
-          <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">Valor de tabela</label>
+          <label className="block text-body font-medium text-ink mb-1">Valor de tabela</label>
           <input
             type="number"
             min="0"
@@ -139,7 +139,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
               setValorTabelaStr(e.target.value);
               patch({ valorTabela: e.target.value === '' ? 0 : Number(e.target.value) });
             }}
-            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
+            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
           />
         </div>
       </div>
@@ -157,9 +157,9 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
                   valorComDesconto: e.target.checked ? item.valorComDesconto : undefined,
                 })
               }
-              className="w-3.5 h-3.5 accent-[#A67C52]"
+              className="w-3.5 h-3.5 accent-brand"
             />
-            <span className="text-xs font-medium text-[#1A1A1A]">Desconto</span>
+            <span className="text-xs font-medium text-ink">Desconto</span>
           </label>
 
           {item.temDesconto && (
@@ -176,15 +176,15 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
                   });
                 }}
                 placeholder="Novo valor"
-                className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
               />
               {descontoInvalido ? (
-                <p className="mt-1 text-[11px] text-amber-600 flex items-center gap-1">
+                <p className="mt-1 text-body text-amber-600 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3 shrink-0" />
                   Precisa ser menor que o valor de tabela — o desconto não será aplicado
                 </p>
               ) : percentual > 0 ? (
-                <p className="mt-1 text-[11px] text-[#A67C52] tabular-nums">
+                <p className="mt-1 text-body text-brand tabular-nums">
                   desconto de {Math.round(percentual)}% · sai de {formatBRL(item.valorTabela)} por{' '}
                   {formatBRL(valorFinal)}
                 </p>
@@ -204,9 +204,9 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
                   sessoes: e.target.checked ? Math.max(2, item.sessoes || 2) : 1,
                 })
               }
-              className="w-3.5 h-3.5 accent-[#A67C52]"
+              className="w-3.5 h-3.5 accent-brand"
             />
-            <span className="text-xs font-medium text-[#1A1A1A]">Mais de 1 sessão</span>
+            <span className="text-xs font-medium text-ink">Mais de 1 sessão</span>
           </label>
 
           {item.maisDeUmaSessao && (
@@ -217,9 +217,9 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
                 step="1"
                 value={item.sessoes}
                 onChange={(e) => patch({ sessoes: Math.max(2, Number(e.target.value) || 2) })}
-                className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
               />
-              <p className="mt-1 text-[11px] text-gray-400">
+              <p className="mt-1 text-body text-gray-400">
                 Informativo no PDF — não multiplica o valor
               </p>
             </div>
@@ -229,7 +229,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
 
       {/* Detalhes do procedimento */}
       <div className="pt-1">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-2">
+        <p className="text-label font-semibold uppercase tracking-widest text-gray-400 mb-2">
           Detalhes ({item.detalhes.length})
         </p>
 
@@ -241,14 +241,14 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
                 value={detail.titulo}
                 onChange={(e) => updateDetail(detail.id, 'titulo', e.target.value)}
                 placeholder="Título"
-                className="w-2/5 glass-input px-2.5 py-1.5 rounded-sm text-xs text-[#1A1A1A] focus:outline-hidden"
+                className="w-2/5 glass-input px-2.5 py-1.5 rounded-sm text-xs text-ink focus:outline-hidden"
               />
               <input
                 type="text"
                 value={detail.valor}
                 onChange={(e) => updateDetail(detail.id, 'valor', e.target.value)}
                 placeholder="Resposta"
-                className="flex-1 glass-input px-2.5 py-1.5 rounded-sm text-xs text-[#1A1A1A] focus:outline-hidden"
+                className="flex-1 glass-input px-2.5 py-1.5 rounded-sm text-xs text-ink focus:outline-hidden"
               />
               <button
                 type="button"
@@ -264,7 +264,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
           <button
             type="button"
             onClick={addDetail}
-            className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" />
             Adicionar campo

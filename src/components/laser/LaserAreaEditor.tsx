@@ -170,11 +170,11 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
   if (larguraDaJanela < LARGURA_MINIMA_AUTORIA) {
     return (
       <div className="py-10 px-6 text-center">
-        <Monitor className="w-7 h-7 text-[#A67C52] mx-auto mb-3" />
-        <p className="text-[13px] font-semibold text-[#1A1A1A] mb-1">
+        <Monitor className="w-7 h-7 text-brand mx-auto mb-3" />
+        <p className="text-[13px] font-semibold text-ink mb-1">
           Abra no computador para editar o mapa
         </p>
-        <p className="text-[12px] text-[#8a8578] leading-relaxed max-w-sm mx-auto">
+        <p className="text-[12px] text-muted leading-relaxed max-w-sm mx-auto">
           Contornar uma região à mão livre e preencher os campos ao lado precisa de tela larga. A
           seleção de áreas na ficha da paciente e no orçamento funciona normalmente no celular.
         </p>
@@ -184,11 +184,11 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
 
   if (semNenhumManequim) {
     return (
-      <div className="py-8 px-6 text-center bg-[#FDF6E7] border border-[#F0DCB4] rounded-sm">
-        <p className="text-[13px] font-semibold text-[#1A1A1A] mb-1">
+      <div className="py-8 px-6 text-center bg-warn-bg border border-[#F0DCB4] rounded-sm">
+        <p className="text-[13px] font-semibold text-ink mb-1">
           Os manequins ainda não foram enviados
         </p>
-        <p className="text-[12px] text-[#8a8578] leading-relaxed max-w-md mx-auto mb-3">
+        <p className="text-[12px] text-muted leading-relaxed max-w-md mx-auto mb-3">
           Envie as imagens de corpo frente e corpo costas nas Configurações da clínica para desenhar
           as áreas. O procedimento pode ser cadastrado normalmente enquanto isso — ele só não
           aparece no mapa.
@@ -197,7 +197,7 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
           <button
             type="button"
             onClick={onAbrirConfiguracoes}
-            className="px-3.5 py-2 rounded-sm bg-white border border-gray-200 text-[12px] font-medium text-[#1A1A1A] hover:border-[#A67C52] inline-flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-sm bg-white border border-gray-200 text-[12px] font-medium text-ink hover:border-brand inline-flex items-center gap-1.5"
           >
             <Settings2 className="w-3.5 h-3.5" />
             Abrir Configurações
@@ -218,7 +218,7 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
               type="button"
               onClick={() => setVista(v)}
               className={`px-3.5 py-1.5 rounded-xs text-[12px] font-semibold transition-colors ${
-                vista === v ? 'bg-[#A67C52] text-white' : 'text-[#1A1A1A] hover:bg-white'
+                vista === v ? 'bg-brand text-white' : 'text-ink hover:bg-white'
               }`}
             >
               {v === 'frente' ? 'Frente' : 'Costas'}
@@ -235,7 +235,7 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
               type="button"
               onClick={espelharUltimaForma}
               title="Duplicar a última forma no lado oposto"
-              className="px-2.5 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] flex items-center gap-1"
+              className="px-2.5 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand flex items-center gap-1"
             >
               <ChevronsLeftRight className="w-3.5 h-3.5" />
               Espelhar
@@ -243,7 +243,7 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
             <button
               type="button"
               onClick={desfazerUltimaForma}
-              className="px-2.5 py-1.5 rounded-xs bg-white border border-gray-200 text-[11px] font-medium text-[#1A1A1A] hover:border-[#A67C52] flex items-center gap-1"
+              className="px-2.5 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand flex items-center gap-1"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Desfazer
@@ -251,7 +251,7 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
             <button
               type="button"
               onClick={limparVista}
-              className="px-2.5 py-1.5 rounded-xs text-[11px] font-medium text-red-500 hover:text-red-700 flex items-center gap-1"
+              className="px-2.5 py-1.5 rounded-xs text-body font-medium text-red-500 hover:text-red-700 flex items-center gap-1"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Limpar
@@ -263,8 +263,8 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
       <div className="flex gap-5 items-start">
         <div className="flex-1 min-w-0">
           {semManequim ? (
-            <div className="py-10 text-center bg-[#F9F8F6] border border-dashed border-[#d8d2c8] rounded-sm">
-              <p className="text-[12px] text-[#8a8578]">
+            <div className="py-10 text-center bg-surface border border-dashed border-line rounded-sm">
+              <p className="text-[12px] text-muted">
                 O manequim de {vista === 'frente' ? 'frente' : 'costas'} ainda não foi enviado.
               </p>
             </div>
@@ -279,7 +279,7 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
                 onLacoConcluido={adicionarForma}
                 alturaManequim={620}
               />
-              <p className="text-[11px] text-[#8a8578] text-center mt-2">
+              <p className="text-body text-muted text-center mt-2">
                 Contorne a região com o mouse. As áreas em cinza são de outros procedimentos.
               </p>
             </>
@@ -292,16 +292,16 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
             children
           ) : (
             <div className="bg-white/70 border border-white/80 rounded-sm p-4">
-              <p className="text-[12px] text-[#8a8578] leading-relaxed">
+              <p className="text-[12px] text-muted leading-relaxed">
                 Destaque uma área no manequim para abrir os campos do procedimento.
               </p>
 
               {pendentes.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-white/80">
-                  <p className="text-[10px] uppercase tracking-wider font-semibold text-[#A67C52] mb-2">
+                  <p className="text-label uppercase tracking-wider font-semibold text-brand mb-2">
                     Sem área no mapa ({pendentes.length})
                   </p>
-                  <p className="text-[11px] text-[#8a8578] leading-relaxed mb-2">
+                  <p className="text-body text-muted leading-relaxed mb-2">
                     Já existem no catálogo, com preço. Escolha um antes de desenhar para aproveitar
                     o cadastro em vez de criar um procedimento repetido.
                   </p>
@@ -311,7 +311,7 @@ export const LaserAreaEditor: React.FC<LaserAreaEditorProps> = ({
                         key={p.id}
                         type="button"
                         onClick={() => onSelecionarProcedimento(p)}
-                        className="w-full text-left px-2.5 py-1.5 rounded-xs bg-white border border-gray-200 text-[12px] text-[#1A1A1A] hover:border-[#A67C52] transition-colors"
+                        className="w-full text-left px-2.5 py-1.5 rounded-xs bg-white border border-gray-200 text-[12px] text-ink hover:border-brand transition-colors"
                       >
                         {nomeCurtoDaArea(p.title)}
                       </button>

@@ -7,6 +7,7 @@ import {
   ClinicProfile,
   EvaluationTemplate,
   Patient,
+  PedidoDeNavegacao,
   Procedure,
   Quote,
   QuoteDraft,
@@ -38,6 +39,7 @@ import {
   pacienteProvisorio,
 } from '../../utils/patientsPanel';
 import { instanteDoAtendimento } from '../../utils/attendances';
+import { salasDaClinica } from '../../utils/agenda';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PatientsListView } from './PatientsListView';
 import { PatientDetailView } from './PatientDetailView';
@@ -56,6 +58,9 @@ interface PatientsModuleProps {
   avaliacaoGerais: AnamnesisQuestion[];
   /** Profissional logada, para o formulário de atendimento já vir preenchido com ela. */
   currentProfessionalId?: string;
+  /** Pedido vindo da busca global ou da tela Hoje: abrir a ficha de alguém, cadastrar alguém. */
+  pedido?: PedidoDeNavegacao | null;
+  onPedidoAtendido?: () => void;
 }
 
 /** O que o formulário de atendimento está fazendo neste instante. */
@@ -82,6 +87,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   fichasAvaliacao,
   avaliacaoGerais,
   currentProfessionalId,
+  pedido,
+  onPedidoAtendido,
 }) => {
   /** Visita cuja ficha de avaliação está aberta. */
   const [avaliando, setAvaliando] = useState<Attendance | null>(null);
@@ -217,6 +224,18 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
     setCadastroAberto(true);
   };
 
+  /**
+   * Atende o pedido de quem chegou de fora — a busca global escolhendo uma paciente, ou
+   * "Nova paciente". Consome e avisa, para não reagir de novo a cada render.
+   */
+  useEffect(() => {
+    if (!pedido) return;
+    if (pedido.pacienteId) setPacienteAbertoId(pedido.pacienteId);
+    if (pedido.criarNovo) abrirCadastro();
+    onPedidoAtendido?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedido?.nonce]);
+
   // ==========================================
   // ATENDIMENTOS
   // ==========================================
@@ -229,13 +248,18 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
    * lança atendimento, e duas cópias dela acabariam divergindo. As fichas já estão aqui em memória,
    * então vão junto e poupam a leitura que o workflow faria sozinho.
    */
-  const handleSalvarAtendimento = async (registro: Attendance, planoNovo?: SessionPlan) => {
+  const handleSalvarAtendimento = async (
+    registro: Attendance,
+    planoNovo?: SessionPlan,
+    opcoes?: { limparConfirmacao?: boolean }
+  ) => {
     await salvarAtendimento({
       registro,
       planoNovo,
       pacienteACriar:
         pacienteAberto && !idsCadastrados.has(pacienteAberto.id) ? pacienteAberto : undefined,
       anamneses: records,
+      limparConfirmacao: opcoes?.limparConfirmacao,
     });
   };
 
@@ -401,6 +425,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           onClose={() => setFormAtendimento(null)}
           patient={pacienteAberto}
           atendimentosDaClinica={attendances}
+          salas={salasDaClinica(clinic)}
           cadastroSeraCriado={cadastroSeraCriado}
           atendimentos={doPacienteAberto.atendimentos}
           planos={doPacienteAberto.planos}

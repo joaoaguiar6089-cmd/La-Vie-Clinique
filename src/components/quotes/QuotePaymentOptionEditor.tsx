@@ -33,7 +33,7 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
   return (
     <div className="glass-card rounded-sm p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52] pt-2">
+        <span className="text-label font-semibold uppercase tracking-widest text-brand pt-2">
           {principal ? 'Forma principal' : 'Forma alternativa'}
         </span>
         {podeRemover && (
@@ -50,7 +50,7 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">Forma</label>
+          <label className="block text-body font-medium text-ink mb-1">Forma</label>
           <select
             value={opcao.forma}
             onChange={(e) => {
@@ -61,7 +61,7 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
                 parcelasSemJuros: forma === 'cartao' ? opcao.parcelasSemJuros || 12 : undefined,
               });
             }}
-            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
           >
             <option value="pix">{NOME_FORMA_PAGAMENTO.pix}</option>
             <option value="cartao">{NOME_FORMA_PAGAMENTO.cartao}</option>
@@ -71,11 +71,11 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
 
         {ehCartao && (
           <div>
-            <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">Parcelas</label>
+            <label className="block text-body font-medium text-ink mb-1">Parcelas</label>
             <select
               value={parcelas}
               onChange={(e) => patch({ parcelas: Number(e.target.value) })}
-              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>
@@ -89,13 +89,13 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
 
       {ehCartao && (
         <div>
-          <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+          <label className="block text-body font-medium text-ink mb-1">
             Sem juros até quantas parcelas
           </label>
           <select
             value={semJuros}
             onChange={(e) => patch({ parcelasSemJuros: Number(e.target.value) })}
-            className="w-full sm:w-48 glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+            className="w-full sm:w-48 glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
@@ -104,13 +104,13 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
             ))}
           </select>
           {temParcelaComJuros ? (
-            <p className="mt-1 text-[11px] text-amber-600 flex items-center gap-1">
+            <p className="mt-1 text-body text-amber-600 flex items-center gap-1">
               <AlertCircle className="w-3 h-3 shrink-0" />
               Da {semJuros + 1}ª parcela em diante pode haver juros da operadora — confirme na
               maquininha.
             </p>
           ) : (
-            <p className="mt-1 text-[11px] text-gray-400">
+            <p className="mt-1 text-body text-gray-400">
               {parcelas}× cabe dentro do limite sem juros
             </p>
           )}
@@ -128,9 +128,9 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
                 descontoPercentual: e.target.checked ? opcao.descontoPercentual : undefined,
               })
             }
-            className="w-3.5 h-3.5 accent-[#A67C52]"
+            className="w-3.5 h-3.5 accent-brand"
           />
-          <span className="text-xs font-medium text-[#1A1A1A]">Desconto nesta forma</span>
+          <span className="text-xs font-medium text-ink">Desconto nesta forma</span>
         </label>
 
         {opcao.temDesconto && (
@@ -143,7 +143,7 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
               value={opcao.descontoPercentual ?? ''}
               onChange={(e) => patch({ descontoPercentual: Number(e.target.value) || 0 })}
               placeholder="%"
-              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
+              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
             />
           </div>
         )}
@@ -154,7 +154,7 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
           {NOME_FORMA_PAGAMENTO[opcao.forma]}
           {ehCartao && parcelas > 1 ? `, ${parcelas}×` : ''}
         </span>
-        <span className="font-semibold text-[#1A1A1A] tabular-nums">
+        <span className="font-semibold text-ink tabular-nums">
           {parcela !== null ? `${parcelas} × ${formatBRL(parcela)}` : formatBRL(valorFinal)}
         </span>
       </div>

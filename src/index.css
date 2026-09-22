@@ -1,16 +1,126 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   TOKENS — a identidade visual da casa em um lugar só
+
+   Antes havia ~95 hex diferentes espalhados pelos componentes e nove tons de
+   bege quase iguais. Aqui cada cor tem um nome; os componentes usam
+   `bg-brand`, `text-muted`, `border-line` e param de repetir o hex.
+
+   Tudo em hex (e não em oklch) de propósito: os PDFs e as imagens do catálogo
+   são gerados por html2canvas a partir do DOM, e hex é o que ele lê sem
+   tradução.
+   ========================================================================== */
+@theme {
+  /* Marca */
+  --color-brand: #A67C52;
+  --color-brand-hover: #8E653D;
+  --color-brand-light: #C49B74;
+  --color-brand-deep: #6E4924;
+  /* Fundo claro de marca — o lugar de um selo bronze sobre superfície clara */
+  --color-brand-bg: #F4EDE5;
+
+  /* Superfícies */
+  --color-surface: #F9F8F6;
+  --color-card: #FFFFFF;
+  /* O bege de cabeçalho de tabela e de faixa de seção dentro do card */
+  --color-surface-2: #F4F2ED;
+  /* Fundo escuro do menu e dos cabeçalhos pretos */
+  --color-ink-deep: #1A1A1A;
+  --color-cream: #F6EFE4;
+
+  /* Texto — os três níveis passam de 4,5:1 sobre `surface`, `card` e
+     `surface-2`. O cinza claro de antes (#A8A29A) ficava em 2,4:1: bonito na
+     tela do projetista, invisível no celular da recepção sob a luz da sala. */
+  --color-ink: #1A1A1A;
+  --color-ink-soft: #4A4740;
+  --color-muted: #6F6A60;
+  --color-muted-light: #736E64;
+
+  /* Linhas */
+  --color-line: #E2DFD8;
+  --color-line-soft: #EFEDE7;
+
+  /* Status — cada um com fundo claro, borda e cor de texto legível sobre o fundo */
+  --color-ok: #2E6B4F;
+  --color-ok-bg: #EAF3EE;
+  --color-ok-line: #BFD9CC;
+  --color-warn: #8A5A12;
+  --color-warn-bg: #FDF6E7;
+  --color-warn-line: #E8D5AC;
+  --color-danger: #B3202F;
+  --color-danger-bg: #FDECEE;
+  --color-danger-line: #F2C6CB;
+  --color-info: #2A5580;
+  --color-info-bg: #EDF3F9;
+  --color-info-line: #C6D6E6;
+
+  /* Verde do WhatsApp — marca de terceiro, não é cor da casa.
+     O #25D366 é o verde reconhecível e serve de preenchimento de selo e de tinta a 10%;
+     como texto, ou sob texto branco, ele fica em 2:1, e aí entra o `whatsapp-strong`. */
+  --color-whatsapp: #25D366;
+  --color-whatsapp-strong: #0F7A3A;
+  --color-whatsapp-deep: #0B5E2C;
+
+  /* ------------------------------------------------------------------------
+     Escala tipográfica — 12 / 13 / 14 / 16 / 20 / 24 / 32
+
+     Não existe nada abaixo de 12px, e 12px é só para rótulo e metadado:
+     conteúdo começa em 13px. Campo de formulário usa 16px no celular porque
+     abaixo disso o Safari do iPhone dá zoom no foco.
+     ------------------------------------------------------------------------ */
+  --text-label: 12px;
+  --text-label--line-height: 1.35;
+  --text-body: 13px;
+  --text-body--line-height: 1.5;
+  --text-body-lg: 14px;
+  --text-body-lg--line-height: 1.5;
+  --text-field: 16px;
+  --text-field--line-height: 1.4;
+  --text-title: 20px;
+  --text-title--line-height: 1.3;
+  --text-title-lg: 24px;
+  --text-title-lg--line-height: 1.25;
+  --text-display: 32px;
+  --text-display--line-height: 1.15;
+
+  /* Raio padrão dos cards */
+  --radius-card: 12px;
+}
+
 @layer base {
   :root {
     --font-serif: 'Cormorant Garamond', Georgia, serif;
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-display: 'Syne', sans-serif;
+    /* Altura da barra inferior do celular, para o conteúdo reservar espaço. */
+    --altura-barra-inferior: 64px;
+    /**
+     * Bronze *de texto*.
+     *
+     * O #A67C52 da marca é uma cor de preenchimento: como texto sobre o
+     * off-white ele dá 3,5:1, abaixo do mínimo de 4,5:1. Então `bg-brand` e
+     * `border-brand` continuam com o tom da marca e só o texto escurece um
+     * grau, para 4,85:1. Sobre fundo escuro a conta se inverte — ver abaixo.
+     */
+    --bronze-texto: var(--color-brand-hover);
+  }
+
+  /* Dentro de qualquer superfície escura é o bronze *claro* que é legível
+     (6,9:1 sobre #1A1A1A; o escuro daria 3,4:1). A troca é por variável
+     herdada, e não por classe, justamente para valer tanto no elemento que
+     tem o fundo escuro quanto em tudo que estiver dentro dele. */
+  [class*="bg-ink"],
+  .glass-dark,
+  .bg-bronze-dark,
+  .bg-bronze-gradient {
+    --bronze-texto: var(--color-brand-light);
   }
 
   body {
     font-family: var(--font-sans);
-    background-color: #F9F8F6;
-    color: #1A1A1A;
+    background-color: var(--color-surface);
+    color: var(--color-ink);
     overflow-x: hidden;
   }
 
@@ -23,70 +133,145 @@
   }
 
   :focus-visible {
-    outline: 2px solid #A67C52;
+    outline: 2px solid var(--color-brand);
     outline-offset: 2px;
   }
 }
 
-/* Frosted Glass Theme Utilities */
-.glass-card {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
+/**
+ * 16px em todo campo de formulário no celular — abaixo disso o Safari do iPhone
+ * dá zoom ao focar, e a pessoa perde o enquadramento da tela e precisa apertar
+ * o formulário de volta com dois dedos.
+ *
+ * O `!important` é deliberado e é o único do arquivo: sem ele, qualquer
+ * `text-body` escrito no `className` de um `<input>` (havia dezenas) venceria
+ * o seletor de elemento e o zoom voltaria. A regra vale só abaixo de 640px;
+ * no desktop o componente continua mandando no tamanho.
+ */
+@media (max-width: 639px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
+/* ==========================================================================
+   SUPERFÍCIES
+
+   O vidro fosco (`backdrop-filter`) saiu dos cards e dos campos: cada camada
+   desfocada é uma repintura de tela inteira a cada rolagem no celular, e o
+   branco a 55% deixava o texto cinza perto de 3:1 de contraste. Ele fica só
+   nas duas barras fixas — a de cima e a de baixo — onde o conteúdo passando
+   por trás é o efeito desejado e a área é pequena.
+
+   Os nomes `.glass-card` e `.glass-input` continuam: são usados em ~60
+   arquivos, e renomear tudo só para trocar a implementação seria ruído.
+   ========================================================================== */
+.glass-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  box-shadow: 0 1px 2px rgba(26, 26, 26, 0.04);
+}
+
+/* Anima só o que muda de verdade. `transition: all` fazia o navegador vigiar
+   box-shadow, transform e filtro em toda linha de uma lista de 200 pacientes. */
 .glass-card-hover {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: border-color 0.18s ease, background-color 0.18s ease;
 }
 
 .glass-card-hover:hover {
-  background: rgba(255, 255, 255, 0.8);
-  border-color: rgba(166, 124, 82, 0.4);
-  box-shadow: 0 12px 30px -4px rgba(166, 124, 82, 0.1), 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+  background: var(--color-surface-2);
+  border-color: var(--color-brand);
 }
 
-/* Cadastro por completar — um creme de canto de olho, não um alerta. Precisa ser CSS e não
-   `bg-amber-50` do Tailwind: `.glass-card` está fora de @layer e venceria a utilitária.
-
-   O hover fica quase igual ao repouso de propósito: `.glass-card-hover` anima `all` em 0.3s, e
-   com um amarelo forte de um lado e o branco do hover do outro, passar o mouse pela lista fazia
-   as linhas piscarem. */
+/* Cadastro por completar — um creme de canto de olho, não um alerta. Precisa
+   ser CSS e não `bg-amber-50` do Tailwind: `.glass-card` está fora de @layer e
+   venceria a utilitária. */
 .glass-card-pendente {
-  background: rgba(252, 250, 242, 0.6);
-  border-color: rgba(210, 190, 150, 0.35);
+  background: #FCFAF2;
+  border-color: var(--color-warn-line);
 }
 
 .glass-card-pendente.glass-card-hover:hover {
-  background: rgba(253, 252, 247, 0.8);
-  border-color: rgba(166, 124, 82, 0.35);
+  background: #F9F5E8;
+  border-color: var(--color-brand);
 }
 
+.glass-input {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+}
+
+.glass-input:focus {
+  background: var(--color-card);
+  border-color: var(--color-brand);
+}
+
+/* As duas barras fixas — o único lugar onde o vidro fosco continua. */
 .glass-nav {
-  background: rgba(249, 248, 246, 0.82);
+  background: rgba(249, 248, 246, 0.9);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-bottom: 1px solid rgba(26, 26, 26, 0.07);
 }
 
-.glass-input {
-  background: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(216, 213, 204, 0.7);
+.glass-bottom-nav {
+  background: rgba(249, 248, 246, 0.94);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid var(--color-line);
 }
 
-.glass-input:focus {
-  background: rgba(255, 255, 255, 0.9);
-  border-color: #A67C52;
-}
-
+/* Sem `backdrop-filter`: o fundo já é opaco a 85% e o desfoque atrás de um
+   painel de tela cheia é o caso mais caro de todos. */
 .glass-dark {
-  background: rgba(26, 26, 26, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(26, 26, 26, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* O bronze de texto entra por aqui, fora de @layer, para vencer as utilitárias
+   `text-brand` e `text-brand-light` que o Tailwind gera a partir dos tokens.
+   `hover:text-brand` continua com o tom da marca: estado transitório, e a
+   especificidade do `:hover` já o coloca na frente. */
+.text-brand,
+.text-brand-light {
+  color: var(--bronze-texto);
+}
+
+/**
+ * Botão bronze com texto branco.
+ *
+ * O branco sobre o #A67C52 dá 3,7:1 — não passa. Só nesse par o preenchimento
+ * escurece um grau (5,2:1 com o branco); o bronze da marca continua intacto em
+ * todo lugar onde ele é selo, barra, ícone ou tinta a 10%. A regra mora aqui, e
+ * não em cada um dos ~67 botões, para quem escrever o próximo `bg-brand
+ * text-white` receber o contraste correto sem precisar saber disto.
+ */
+.bg-brand.text-white,
+.bg-brand.text-card {
+  background-color: var(--color-brand-hover);
+}
+
+.bg-brand.text-white:hover,
+.bg-brand.text-card:hover {
+  background-color: var(--color-brand-deep);
+}
+
+/* Mesma história no verde do WhatsApp: 2:1 com texto branco. */
+.bg-whatsapp.text-white,
+.bg-whatsapp.text-card {
+  background-color: var(--color-whatsapp-strong);
+}
+
+.bg-whatsapp.text-white:hover,
+.bg-whatsapp.text-card:hover {
+  background-color: var(--color-whatsapp-deep);
+}
+
+.text-whatsapp {
+  color: var(--color-whatsapp-strong);
 }
 
 /* Custom metallic bronze & frosted glass luxury accents */
@@ -103,11 +288,11 @@
 }
 
 .text-bronze {
-  color: #A67C52;
+  color: var(--bronze-texto);
 }
 
 .text-bronze-light {
-  color: #C49B74;
+  color: var(--bronze-texto);
 }
 
 .text-bronze-gradient {
@@ -121,7 +306,7 @@
 }
 
 .border-bronze {
-  border-color: #A67C52;
+  border-color: var(--color-brand);
 }
 
 /* Custom scrollbars */
@@ -140,10 +325,27 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #A67C52;
+  background: var(--color-brand);
 }
 
-/* Print Styles */
+/* ==========================================================================
+   ÁREA SEGURA DO IPHONE
+
+   O `env(safe-area-inset-bottom)` é a faixa do gesto de início do iPhone. A
+   barra inferior cresce por dentro para não ficar embaixo dela, e o conteúdo
+   das telas reserva a altura da barra + a faixa para nada terminar escondido.
+   ========================================================================== */
+.pb-barra-inferior {
+  padding-bottom: calc(var(--altura-barra-inferior) + env(safe-area-inset-bottom, 0px) + 16px);
+}
+
+.pb-area-segura {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ==========================================================================
+   ANIMAÇÕES
+   ========================================================================== */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -154,6 +356,21 @@
   to { transform: translateX(0); }
 }
 
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes pulsoSkeleton {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out forwards;
 }
@@ -162,6 +379,31 @@
   animation: slideInLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+.animate-slideInRight {
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slideUpSheet {
+  animation: slideUpSheet 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* O pulso do skeleton. Quem pediu movimento reduzido no sistema recebe o
+   bloco bege parado — a informação ("está carregando") continua lá. */
+.animate-pulso-skeleton {
+  animation: pulsoSkeleton 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulso-skeleton,
+  .animate-fadeIn,
+  .animate-slideInLeft,
+  .animate-slideInRight,
+  .animate-slideUpSheet {
+    animation: none !important;
+  }
+}
+
+/* Print Styles */
 @media print {
   body {
     background: #FFFFFF !important;

@@ -18,6 +18,7 @@ import {
   SectionHeading,
   TickBox,
 } from './printableQuestionBlocks';
+import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 
 interface BlankAnamnesisSheetProps {
   template: AnamnesisTemplate;
@@ -53,6 +54,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
   onClose,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const orientationImage = resolveOrientationImage(template);
@@ -136,19 +138,19 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
       await exportElementAsPDF(contentRef.current, `ficha-em-branco-${slug}.pdf`);
     } catch (err) {
       console.error('Erro ao gerar PDF da ficha em branco:', err);
-      alert('Não foi possível gerar o PDF agora. Tente novamente em instantes.');
+      setConfirmacao(aviso('Não foi possível gerar o PDF', 'Tente novamente em instantes.', 'perigo'));
     } finally {
       setIsGeneratingPdf(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fadeIn">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fadeIn">
       <div className="relative w-full max-w-4xl bg-white rounded-sm shadow-2xl overflow-hidden max-h-[96vh] flex flex-col">
         {/* Controles de tela (não saem na impressão nem no PDF) */}
-        <div className="px-6 py-3.5 bg-[#1A1A1A] text-white flex items-center justify-between shrink-0 print:hidden gap-3">
+        <div className="px-6 py-3.5 bg-ink text-white flex items-center justify-between shrink-0 print:hidden gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74] shrink-0" />
+            <span className="w-2.5 h-2.5 rounded-full bg-brand-light shrink-0" />
             <span className="font-serif-luxury text-sm tracking-wide truncate">
               Ficha em Branco — {template.procedimentoNome}
             </span>
@@ -168,7 +170,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
               type="button"
               onClick={handleSavePdf}
               disabled={isGeneratingPdf}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#8e6945] transition-all shadow-xs disabled:opacity-60"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover transition-all shadow-xs disabled:opacity-60"
             >
               {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               {isGeneratingPdf ? 'Gerando...' : 'Salvar PDF'}
@@ -184,28 +186,28 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
         </div>
 
         {/* Opções do que entra na folha */}
-        <div className="px-6 py-3 bg-[#FAF9F6] border-b border-gray-200 shrink-0 print:hidden flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div className="px-6 py-3 bg-surface border-b border-gray-200 shrink-0 print:hidden flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Incluir na folha</span>
 
           {mostrarMapaLaser && (
-            <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-ink">
               <input
                 type="checkbox"
                 checked={incluirMapaCorporal}
                 onChange={(e) => setIncluirMapaCorporal(e.target.checked)}
-                className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                className="accent-brand w-4 h-4 rounded-xs"
               />
               Mapa corporal (áreas do laser)
             </label>
           )}
 
           {orientationImage && (
-            <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-ink">
               <input
                 type="checkbox"
                 checked={incluirImagemOrientativa}
                 onChange={(e) => setIncluirImagemOrientativa(e.target.checked)}
-                className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                className="accent-brand w-4 h-4 rounded-xs"
               />
               Imagem orientativa
             </label>
@@ -213,12 +215,12 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
 
           {fotoAnotacao && (
             <div className="flex items-center gap-2.5">
-              <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-ink">
                 <input
                   type="checkbox"
                   checked={incluirFotoAnotacao}
                   onChange={(e) => setIncluirFotoAnotacao(e.target.checked)}
-                  className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                  className="accent-brand w-4 h-4 rounded-xs"
                 />
                 Imagem para anotação
               </label>
@@ -233,8 +235,8 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
                       onClick={() => setVersaoFotoAnotacao(f.versao)}
                       className={`px-2 py-0.5 rounded-xs text-[11px] font-semibold border transition-colors ${
                         fotoAnotacao.versao === f.versao
-                          ? 'bg-[#A67C52] text-white border-[#A67C52]'
-                          : 'bg-white text-gray-600 border-gray-300 hover:border-[#A67C52]'
+                          ? 'bg-brand text-white border-brand'
+                          : 'bg-white text-gray-600 border-gray-300 hover:border-brand'
                       }`}
                     >
                       {f.rotulo}
@@ -246,12 +248,12 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
           )}
 
           {consentSections && (
-            <label className="flex items-center gap-2 cursor-pointer text-xs text-[#1A1A1A]">
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-ink">
               <input
                 type="checkbox"
                 checked={incluirTermoConsentimento}
                 onChange={(e) => setIncluirTermoConsentimento(e.target.checked)}
-                className="accent-[#A67C52] w-4 h-4 rounded-xs"
+                className="accent-brand w-4 h-4 rounded-xs"
               />
               Termo de consentimento
             </label>
@@ -261,10 +263,10 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
         {/* DOCUMENTO */}
         <div
           ref={contentRef}
-          className="flex-1 overflow-y-auto p-6 sm:p-10 text-[#1A1A1A] font-sans bg-white print:p-0 print:overflow-visible"
+          className="flex-1 overflow-y-auto p-6 sm:p-10 text-ink font-sans bg-white print:p-0 print:overflow-visible"
         >
           {/* Cabeçalho da clínica */}
-          <div className="border-b-2 border-[#1A1A1A] pb-5 mb-6 flex items-start justify-between gap-4">
+          <div className="border-b-2 border-ink pb-5 mb-6 flex items-start justify-between gap-4">
             <div>
               {/* O documento se apresenta pelo que ele é. Antes o topo trazia só o nome da
                   clínica, e uma folha impressa não dizia de qual procedimento era sem que
@@ -274,10 +276,10 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
                   "La Vie Clinique" é a marca, e vai literal: o nome cadastrado no perfil é a
                   razão social por extenso, longa demais para um título — ela continua logo
                   abaixo, que é onde identifica a clínica. */}
-              <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-[#1A1A1A] leading-tight">
+              <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-ink leading-tight">
                 Anamnese - {template.procedimentoNome} - La Vie Clinique
               </h2>
-              <p className="text-xs font-semibold text-[#1A1A1A] mt-1.5">
+              <p className="text-xs font-semibold text-ink mt-1.5">
                 {clinicProfile.name || 'La Vie Clinique'}
               </p>
               <p className="text-xs text-gray-500 italic mt-0.5">
@@ -289,7 +291,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
             </div>
 
             <div className="text-right shrink-0">
-              <span className="inline-block px-3 py-1 bg-gray-100 border border-gray-200 text-[10px] font-mono font-bold uppercase tracking-wider text-[#1A1A1A] rounded-xs">
+              <span className="inline-block px-3 py-1 bg-gray-100 border border-gray-200 text-[10px] font-mono font-bold uppercase tracking-wider text-ink rounded-xs">
                 Ficha para preenchimento
               </span>
               {/* Rótulo abaixo da linha, como nos campos de assinatura: primeiro o espaço para
@@ -306,14 +308,14 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
           {/* Procedimento */}
           <div className="mb-5">
             <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Procedimento</span>
-            <h3 className="font-serif-luxury text-lg font-bold text-[#A67C52] leading-tight">
+            <h3 className="font-serif-luxury text-lg font-bold text-brand leading-tight">
               {template.procedimentoNome}
             </h3>
             {template.descricao && <p className="text-[11px] text-gray-500 mt-0.5">{template.descricao}</p>}
           </div>
 
           {/* Identificação do paciente — em branco */}
-          <div className="bg-[#FAF9F6] border border-gray-200 rounded-sm p-4 mb-6 page-break-inside-avoid">
+          <div className="bg-surface border border-gray-200 rounded-sm p-4 mb-6 page-break-inside-avoid">
             <div className="grid grid-cols-1 sm:grid-cols-6 gap-x-5 gap-y-3">
               <IdentField label="Paciente" className="sm:col-span-4" />
               <IdentField label="Data de nascimento" className="sm:col-span-2" />
@@ -343,7 +345,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
               {orientationImage.descricao && (
                 <p className="text-[11px] text-gray-600 leading-relaxed mb-2.5">{orientationImage.descricao}</p>
               )}
-              <div className="border border-gray-200 rounded-sm bg-[#FAF9F6] p-3 flex justify-center">
+              <div className="border border-gray-200 rounded-sm bg-surface p-3 flex justify-center">
                 <img
                   src={orientationImage.url}
                   alt={orientationImage.titulo || 'Imagem orientativa do procedimento'}
@@ -367,7 +369,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
             <div className="mb-6 page-break-inside-avoid">
               <SectionHeading title="Áreas de aplicação — assinale as regiões" />
 
-              <div className="border border-gray-200 rounded-sm bg-[#FAF9F6] p-3">
+              <div className="border border-gray-200 rounded-sm bg-surface p-3">
                 <div className="flex flex-wrap items-start justify-center gap-6">
                   {vistasDoMapa.map(({ vista, rotulo, imagem, areas, numeroInicial }) => (
                     <div key={vista} className="text-center">
@@ -395,7 +397,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
                         className="flex items-center gap-1.5 text-[10px] text-gray-700 leading-tight"
                       >
                         <TickBox />
-                        <span className="font-bold text-[#C0392B] tabular-nums">
+                        <span className="font-bold text-danger tabular-nums">
                           {numeroInicial + i}.
                         </span>
                         {a.nomeCurto}
@@ -476,11 +478,11 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
 
             <div className="mt-14 grid grid-cols-1 sm:grid-cols-2 gap-10">
               <div className="text-center">
-                <div className="border-t border-[#1A1A1A] mb-1.5" />
+                <div className="border-t border-ink mb-1.5" />
                 <span className="text-[10px] text-gray-500 block">Assinatura do(a) Paciente</span>
               </div>
               <div className="text-center">
-                <div className="border-t border-[#1A1A1A] mb-1.5" />
+                <div className="border-t border-ink mb-1.5" />
                 <span className="text-[10px] text-gray-500 block">
                   Profissional Responsável — {clinicProfile.name}
                 </span>
@@ -489,6 +491,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
           </div>
         </div>
       </div>
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 };

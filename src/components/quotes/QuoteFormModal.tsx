@@ -38,6 +38,7 @@ import { QuoteItemEditor } from './QuoteItemEditor';
 import { QuotePaymentOptionEditor } from './QuotePaymentOptionEditor';
 import { LaserQuoteMapModal } from '../laser/LaserQuoteMapModal';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { SidePanel } from '../common/SidePanel';
 import { getRecordsForPatient } from '../../services/databaseService';
 import { isLaserCategory } from '../../utils/templateMatching';
 import { nomeCurtoDaArea } from '../../utils/laserAreas';
@@ -80,7 +81,7 @@ const SectionHeader: React.FC<{ icon: React.ReactNode; children: React.ReactNode
   icon,
   children,
 }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+  <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
     {icon}
     {children}
   </h3>
@@ -414,61 +415,76 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       ? `Novo orçamento a partir de ${seedFrom.numero}`
       : 'Novo Orçamento';
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div className="relative w-full max-w-3xl bg-[#F9F8F6]/95 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl border border-white/60 my-6">
-        {/* Header */}
-        <div className="bg-[#1A1A1A] px-6 sm:px-8 py-5 flex items-start justify-between">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52]">
-              Orçamento
-            </p>
-            <h2 className="text-2xl text-white font-serif-luxury">{tituloModal}</h2>
-            {!quoteToEdit && (
-              <p className="text-[11px] text-white/50 mt-1">
-                O número é gerado ao salvar — abrir e desistir não gasta numeração
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="text-white/60 hover:text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  /* O orçamento é o formulário mais longo do sistema, e o único cujo conteúdo ganha de verdade
+     com largura: cada procedimento é uma linha com valor, desconto e sessões. Daí a variante
+     `larga` do painel. */
+  const rodape = (
+    <div className="flex items-center justify-end gap-3">
+      <button
+        type="button"
+        onClick={onClose}
+        className="min-h-[44px] px-5 text-body font-semibold uppercase tracking-widest text-muted hover:text-ink transition-colors"
+      >
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        form="form-orcamento"
+        disabled={isSaving}
+        className="min-h-[44px] px-6 bg-brand text-white text-body font-semibold uppercase tracking-widest rounded-xl transition-colors disabled:opacity-50"
+      >
+        {isSaving ? 'Salvando...' : quoteToEdit ? 'Salvar alterações' : 'Salvar orçamento'}
+      </button>
+    </div>
+  );
 
-        <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-7 max-h-[75vh] overflow-y-auto">
+  return (
+    <SidePanel
+      aberto={isOpen}
+      onFechar={onClose}
+      titulo={tituloModal}
+      sobretitulo="Orçamento"
+      largura="larga"
+      bloqueado={isSaving}
+      /* Adicionar ou remover um procedimento não passa por `input`/`change`, então o painel
+         não enxergaria a alteração sozinho. */
+      alterado={itens.length > 0 && !quoteToEdit}
+      rodape={rodape}
+    >
+      <form id="form-orcamento" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-7">
+        {!quoteToEdit && (
+          <p className="text-body text-muted -mt-1">
+            O número é gerado ao salvar — abrir e desistir não gasta numeração.
+          </p>
+        )}
           {/* Seção 1 — Identificação */}
           <div className="space-y-4">
             <SectionHeader icon={<FileText className="w-3.5 h-3.5" />}>Identificação</SectionHeader>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Data de emissão
                 </label>
                 <input
                   type="date"
                   value={toDateInput(dataEmissao)}
                   onChange={(e) => setDataEmissao(fromDateInput(e.target.value))}
-                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Válido até *
                 </label>
                 <input
                   type="date"
                   value={toDateInput(dataValidade)}
                   onChange={(e) => setDataValidade(fromDateInput(e.target.value))}
-                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
                 />
                 {errors.validade && (
-                  <p className="mt-1 text-[11px] text-red-500">{errors.validade}</p>
+                  <p className="mt-1 text-body text-red-500">{errors.validade}</p>
                 )}
               </div>
             </div>
@@ -486,11 +502,11 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   }}
                 />
                 {errors.paciente && (
-                  <p className="mt-1 text-[11px] text-red-500">{errors.paciente}</p>
+                  <p className="mt-1 text-body text-red-500">{errors.paciente}</p>
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Contato (WhatsApp)
                 </label>
                 <input
@@ -498,7 +514,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   value={pacienteContato}
                   onChange={(e) => setPacienteContato(e.target.value)}
                   placeholder="(19) 99123-4567"
-                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
                 />
               </div>
             </div>
@@ -509,9 +525,9 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   type="checkbox"
                   checked={jaTeveAvaliacao}
                   onChange={(e) => setJaTeveAvaliacao(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-[#A67C52]"
+                  className="w-3.5 h-3.5 accent-brand"
                 />
-                <span className="text-xs font-medium text-[#1A1A1A]">Já teve avaliação</span>
+                <span className="text-xs font-medium text-ink">Já teve avaliação</span>
               </label>
               {jaTeveAvaliacao && (
                 <div className="max-w-xs">
@@ -519,10 +535,10 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                     type="date"
                     value={toDateInput(dataAvaliacao)}
                     onChange={(e) => setDataAvaliacao(fromDateInput(e.target.value))}
-                    className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden"
+                    className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
                   />
                   {errors.avaliacao && (
-                    <p className="mt-1 text-[11px] text-red-500">{errors.avaliacao}</p>
+                    <p className="mt-1 text-body text-red-500">{errors.avaliacao}</p>
                   )}
                 </div>
               )}
@@ -541,10 +557,10 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                 setTextoEditadoManualmente(true);
               }}
               rows={3}
-              className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden resize-y"
+              className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden resize-y"
             />
             {!textoEditadoManualmente && (
-              <p className="text-[11px] text-gray-400">
+              <p className="text-body text-gray-400">
                 Sugestão automática — acompanha o nome da paciente até você editar
               </p>
             )}
@@ -557,7 +573,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
             </SectionHeader>
 
             {errors.itens && (
-              <p className="text-[11px] text-red-500 flex items-center gap-1">
+              <p className="text-body text-red-500 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
                 {errors.itens}
               </p>
@@ -586,19 +602,19 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                 areasNoMapa={areasNoOrcamento.size}
               />
               {areasNoOrcamento.size > 0 && (
-                <label className="w-full flex items-center gap-2 text-[11px] text-[#1A1A1A] cursor-pointer">
+                <label className="w-full flex items-center gap-2 text-body text-ink cursor-pointer">
                   <input
                     type="checkbox"
                     checked={mostrarMapaCorporal}
                     onChange={(e) => setMostrarMapaCorporal(e.target.checked)}
-                    className="w-3.5 h-3.5 accent-[#A67C52]"
+                    className="w-3.5 h-3.5 accent-brand"
                   />
                   Incluir o manequim com as áreas contratadas no PDF
                 </label>
               )}
 
               {avisoDaAnamnese && (
-                <p className="w-full text-[11px] text-[#8E1A54] bg-[#FDF3F7] border border-[#F3C6DC] rounded-sm px-2.5 py-1.5 leading-snug flex items-start justify-between gap-2">
+                <p className="w-full text-body text-[#8E1A54] bg-[#FDF3F7] border border-[#F3C6DC] rounded-sm px-2.5 py-1.5 leading-snug flex items-start justify-between gap-2">
                   <span>
                     {avisoDaAnamnese.quantidade}{' '}
                     {avisoDaAnamnese.quantidade === 1 ? 'área veio' : 'áreas vieram'} da ficha de{' '}
@@ -617,7 +633,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
               <button
                 type="button"
                 onClick={() => setItens((prev) => [...prev, montarItemAvulso()])}
-                className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Procedimento fora do catálogo
@@ -634,15 +650,15 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                 type="checkbox"
                 checked={temDescontoCombinado}
                 onChange={(e) => handleToggleCombinado(e.target.checked)}
-                className="w-3.5 h-3.5 accent-[#A67C52]"
+                className="w-3.5 h-3.5 accent-brand"
               />
-              <span className="text-xs font-medium text-[#1A1A1A]">Desconto plano combinado</span>
+              <span className="text-xs font-medium text-ink">Desconto plano combinado</span>
             </label>
 
             {temDescontoCombinado && (
               <div className="flex items-end gap-3">
                 <div className="w-32">
-                  <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                  <label className="block text-body font-medium text-ink mb-1">
                     Percentual (%)
                   </label>
                   <input
@@ -652,10 +668,10 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                     step="0.5"
                     value={descontoCombinadoPercentual}
                     onChange={(e) => setDescontoCombinadoPercentual(Number(e.target.value) || 0)}
-                    className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-[#1A1A1A] tabular-nums focus:outline-hidden"
+                    className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
                   />
                 </div>
-                <p className="text-[11px] text-gray-500 pb-2">
+                <p className="text-body text-gray-500 pb-2">
                   Sugestão: {sugerirDescontoCombinado(procedimentosParaDesconto, clinic)}% para{' '}
                   {procedimentosParaDesconto}{' '}
                   {procedimentosParaDesconto === 1 ? 'procedimento' : 'procedimentos'} · abate{' '}
@@ -675,12 +691,12 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   <span>− {formatBRL(totais.descontoCombinadoValor)}</span>
                 </div>
               )}
-              <div className="flex justify-between pt-2 mt-1 border-t border-[#E2DFD8] text-[#1A1A1A] font-semibold">
+              <div className="flex justify-between pt-2 mt-1 border-t border-line text-ink font-semibold">
                 <span>Total</span>
                 <span className="text-lg font-serif-luxury">{formatBRL(totais.total)}</span>
               </div>
               {totais.descontoEfetivoPercentual > 0 && (
-                <p className="text-[11px] text-[#A67C52] pt-1">
+                <p className="text-body text-brand pt-1">
                   Desconto efetivo de {totais.descontoEfetivoPercentual.toFixed(1).replace('.', ',')}
                   % sobre os valores de tabela
                 </p>
@@ -694,7 +710,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
               Pagamento ({opcoesPagamento.length})
             </SectionHeader>
 
-            <p className="text-[11px] text-gray-500 -mt-1">
+            <p className="text-body text-gray-500 -mt-1">
               A primeira forma é a principal — dá o valor do bloco preto no PDF. As demais aparecem
               como alternativas, ex.: cartão parcelado com Pix à vista com desconto ao lado.
             </p>
@@ -720,14 +736,14 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
             <button
               type="button"
               onClick={addOpcaoPagamento}
-              className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+              className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
               Adicionar forma de pagamento
             </button>
 
             <div>
-              <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+              <label className="block text-xs font-medium text-ink mb-1">
                 Negociação (opcional)
               </label>
               <textarea
@@ -735,12 +751,12 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                 onChange={(e) => setNegociacao(e.target.value)}
                 rows={2}
                 placeholder="Entrada de R$ 800,00 no Pix e o restante parcelado..."
-                className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden resize-y"
+                className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden resize-y"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+              <label className="block text-xs font-medium text-ink mb-1">
                 Observações (opcional)
               </label>
               <textarea
@@ -748,37 +764,19 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                 onChange={(e) => setObservacoes(e.target.value)}
                 rows={2}
                 placeholder="Você pode iniciar por um único procedimento e incluir o outro depois..."
-                className="w-full glass-input px-3 py-2 rounded-sm text-sm text-[#1A1A1A] focus:outline-hidden resize-y"
+                className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden resize-y"
               />
             </div>
           </div>
 
           {errors.salvar && (
-            <p className="text-[11px] text-red-500 flex items-center gap-1">
+            <p className="text-body text-red-500 flex items-center gap-1">
               <AlertCircle className="w-3 h-3" />
               {errors.salvar}
             </p>
           )}
 
-          {/* Rodapé */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/60">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-6 py-2.5 bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-[#8E653D] transition-colors disabled:opacity-50"
-            >
-              {isSaving ? 'Salvando...' : quoteToEdit ? 'Salvar alterações' : 'Salvar orçamento'}
-            </button>
-          </div>
-        </form>
-      </div>
+      </form>
 
       {/* Fora do <form>: um clique no mapa não pode disparar o submit do orçamento. */}
       <LaserQuoteMapModal
@@ -808,6 +806,6 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
         }
         onFechar={() => setConfirmarRemocao(null)}
       />
-    </div>
+    </SidePanel>
   );
 };

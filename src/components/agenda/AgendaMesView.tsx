@@ -21,7 +21,7 @@ import { situacaoDoCartao } from './AgendaCard';
 const LIMITE_POR_DIA = 3;
 
 const COR_DA_SITUACAO: Record<string, string> = {
-  agendado: 'text-[#1A1A1A]',
+  agendado: 'text-ink',
   atrasado: 'text-amber-800 font-semibold',
   compareceu: 'text-emerald-800',
   faltou: 'text-red-700/70 line-through',
@@ -69,7 +69,7 @@ export const AgendaMesView: React.FC<AgendaMesViewProps> = ({
         {dias.slice(0, 7).map((d) => (
           <div
             key={d}
-            className="px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400"
+            className="px-2 py-2 text-center text-label font-semibold uppercase tracking-wider text-gray-400"
           >
             {nomeCurtoDoDia(d)}
           </div>
@@ -95,14 +95,14 @@ export const AgendaMesView: React.FC<AgendaMesViewProps> = ({
                   onAbrirDia(dia);
                 }
               }}
-              className={`min-h-[92px] p-1.5 border-t border-l border-[rgba(26,26,28,.06)] text-left transition-colors cursor-pointer hover:bg-[#A67C52]/5 focus:outline-hidden focus:ring-1 focus:ring-inset focus:ring-[#A67C52]/50 ${
-                doMes ? '' : 'bg-[#F4F2EF]/50'
-              } ${fechado && doMes ? 'bg-[#E9E5DD]/45' : ''}`}
+              className={`min-h-[92px] p-1.5 border-t border-l border-[rgba(26,26,28,.06)] text-left transition-colors cursor-pointer hover:bg-brand/5 focus:outline-hidden focus:ring-1 focus:ring-inset focus:ring-brand/50 ${
+                doMes ? '' : 'bg-surface/50'
+              } ${fechado && doMes ? 'bg-line/45' : ''}`}
             >
               <span
-                className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] tabular-nums mb-1 ${
+                className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-body tabular-nums mb-1 ${
                   ehHoje
-                    ? 'bg-[#A67C52] text-white font-semibold'
+                    ? 'bg-brand text-white font-semibold'
                     : doMes
                     ? 'text-gray-600'
                     : 'text-gray-300'
@@ -130,7 +130,7 @@ export const AgendaMesView: React.FC<AgendaMesViewProps> = ({
                       style={{ backgroundColor: corDaProfissional(a.professionalId) }}
                     />
                     <span
-                      className={`truncate text-[10px] leading-tight ${
+                      className={`truncate text-label leading-tight ${
                         COR_DA_SITUACAO[situacaoDoCartao(a)]
                       } ${doMes ? '' : 'opacity-50'}`}
                     >
@@ -141,7 +141,7 @@ export const AgendaMesView: React.FC<AgendaMesViewProps> = ({
                 ))}
 
                 {doDia.length > LIMITE_POR_DIA && (
-                  <p className="px-0.5 text-[10px] text-gray-400">
+                  <p className="px-0.5 text-label text-gray-400">
                     +{doDia.length - LIMITE_POR_DIA}
                   </p>
                 )}

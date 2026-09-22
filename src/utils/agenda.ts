@@ -1,5 +1,6 @@
 import {
   AgendaExpedienteDia,
+  AgendaSala,
   Attendance,
   ClinicProfile,
   Patient,
@@ -24,11 +25,12 @@ import { DataISO, ehRealizado, hojeISO } from './attendances';
 /** Expediente inicial: seg–sex o dia inteiro, sábado até o começo da tarde, domingo fechado. */
 const EXPEDIENTE_PADRAO: AgendaExpedienteDia[] = [
   { diaSemana: 0 },
-  { diaSemana: 1, abre: '09:00', fecha: '19:00' },
-  { diaSemana: 2, abre: '09:00', fecha: '19:00' },
-  { diaSemana: 3, abre: '09:00', fecha: '19:00' },
-  { diaSemana: 4, abre: '09:00', fecha: '19:00' },
-  { diaSemana: 5, abre: '09:00', fecha: '19:00' },
+  { diaSemana: 1, abre: '09:00', fecha: '19:00', almocoInicio: '12:00', almocoFim: '13:00' },
+  { diaSemana: 2, abre: '09:00', fecha: '19:00', almocoInicio: '12:00', almocoFim: '13:00' },
+  { diaSemana: 3, abre: '09:00', fecha: '19:00', almocoInicio: '12:00', almocoFim: '13:00' },
+  { diaSemana: 4, abre: '09:00', fecha: '19:00', almocoInicio: '12:00', almocoFim: '13:00' },
+  { diaSemana: 5, abre: '09:00', fecha: '19:00', almocoInicio: '12:00', almocoFim: '13:00' },
+  // Sábado até o começo da tarde: fecha antes do almoço, então não tem pausa.
   { diaSemana: 6, abre: '09:00', fecha: '13:00' },
 ];
 
@@ -286,6 +288,116 @@ export const expedienteDoDia = (
   if (abreMin === null || fechaMin === null || fechaMin <= abreMin) return null;
   return { abreMin, fechaMin };
 };
+
+/**
+ * A pausa do almoço daquele dia, ou `null` quando não há.
+ *
+ * As duas pontas juntas ou nenhuma: meia pausa não quer dizer nada, e uma tabela com só o
+ * início pintaria de cinza tudo dali até o fechamento.
+ */
+export const almocoDoDia = (
+  clinic: Pick<ClinicProfile, 'agendaExpediente'>,
+  data: DataISO
+): IntervaloNoDia | null => {
+  const tabela =
+    clinic.agendaExpediente && clinic.agendaExpediente.length > 0
+      ? clinic.agendaExpediente
+      : AGENDA_DEFAULTS.expediente;
+  const dia = tabela.find((d) => d.diaSemana === diaDaSemanaDe(data));
+  const inicioMin = minutosDoHHMM(dia?.almocoInicio);
+  const fimMin = minutosDoHHMM(dia?.almocoFim);
+  if (inicioMin === null || fimMin === null || fimMin <= inicioMin) return null;
+  return { inicioMin, fimMin };
+};
+
+// ==========================================
+// HORÁRIOS LIVRES
+// ==========================================
+
+/**
+ * Os buracos da agenda do dia, na granularidade da grade.
+ *
+ * Só dentro do expediente e fora do almoço: um horário livre oferecido às 22h ou no meio da
+ * pausa não é encaixe, é engano. Faltas e remarcações **não ocupam** — aquele horário voltou a
+ * estar livre, que é justamente o que a recepção quer saber ao procurar encaixe.
+ *
+ * Com filtro de profissional, o livre é o dela; sem filtro, é o da clínica — um horário só conta
+ * como livre quando ninguém está nele.
+ */
+export const horariosLivresDoDia = (
+  data: DataISO,
+  atendimentos: Attendance[],
+  clinic: Pick<ClinicProfile, 'agendaExpediente' | 'agendaIntervaloMin'>,
+  catalogo: Procedure[],
+  agora: Date = new Date()
+): string[] => {
+  const expediente = expedienteDoDia(clinic, data);
+  if (!expediente) return [];
+
+  const passo = intervaloDaGrade(clinic);
+  const almoco = almocoDoDia(clinic, data);
+
+  const ocupados = atendimentos
+    .filter((a) => a.data === data && a.status !== 'faltou' && a.status !== 'remarcado')
+    .map((a) => intervaloDoAtendimento(a, catalogo))
+    .filter((i): i is IntervaloNoDia => !!i);
+
+  // Horário que já passou não é encaixe. Só vale hoje: ontem inteiro já passou, e amanhã não.
+  const ehHoje = data === hojeISO();
+  const minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+
+  const livres: string[] = [];
+  for (let m = expediente.abreMin; m + passo <= expediente.fechaMin; m += passo) {
+    const fim = m + passo;
+    if (ehHoje && m < minutosAgora) continue;
+    if (almoco && m < almoco.fimMin && almoco.inicioMin < fim) continue;
+    if (ocupados.some((o) => m < o.fimMin && o.inicioMin < fim)) continue;
+    livres.push(hhmmDeMinutos(m));
+  }
+  return livres;
+};
+
+// ==========================================
+// SALAS E EQUIPAMENTOS
+// ==========================================
+
+export const salasDaClinica = (clinic: Pick<ClinicProfile, 'agendaSalas'>): AgendaSala[] =>
+  clinic.agendaSalas || [];
+
+export const nomeDaSala = (
+  salaId: string | undefined,
+  clinic: Pick<ClinicProfile, 'agendaSalas'>
+): string | undefined => (salaId ? salasDaClinica(clinic).find((s) => s.id === salaId)?.nome : undefined);
+
+/**
+ * Os atendimentos que disputam a **mesma sala** neste horário.
+ *
+ * Ao contrário de `conflitosDe`, que só avisa, isto é para **impedir**: a profissional pode
+ * decidir dobrar o próprio horário, mas nenhuma decisão faz o laser atender duas pacientes ao
+ * mesmo tempo. Falta e remarcação não contam — a sala voltou a estar livre.
+ */
+export const conflitosDeSala = (
+  candidato: CandidatoDeHorario & { salaId?: string },
+  atendimentos: Attendance[],
+  catalogo: Procedure[]
+): Attendance[] => {
+  if (!candidato.salaId) return [];
+  const meu = intervaloDoAtendimento(candidato, catalogo);
+  if (!meu) return [];
+
+  return atendimentos.filter((a) => {
+    if (a.id === candidato.id) return false;
+    if (a.data !== candidato.data) return false;
+    if (a.salaId !== candidato.salaId) return false;
+    if (a.status === 'faltou' || a.status === 'remarcado') return false;
+    const outro = intervaloDoAtendimento(a, catalogo);
+    return !!outro && meu.inicioMin < outro.fimMin && outro.inicioMin < meu.fimMin;
+  });
+};
+
+/** Os dias que têm algo marcado — o pontinho da faixa semanal do celular. */
+export const diasComAtendimento = (atendimentos: Attendance[]): Set<DataISO> =>
+  new Set(atendimentos.filter((a) => a.status !== 'remarcado').map((a) => a.data));
 
 export const intervaloDaGrade = (clinic: Pick<ClinicProfile, 'agendaIntervaloMin'>): number => {
   const valor = clinic.agendaIntervaloMin;
@@ -545,13 +657,26 @@ const primeiroNomeDe = (nome: string): string => (nome || '').trim().split(/\s+/
  * Marcador desconhecido fica como está, para um erro de digitação no template aparecer na hora em
  * vez de sumir calado; marcador conhecido e vazio vira string vazia. De todo jeito quem envia revê
  * a mensagem no WhatsApp antes de mandar.
+ *
+ * `{nome}` é o nome inteiro e `{primeiroNome}` é só o primeiro — os dois existem porque o template
+ * padrão sempre usou o primeiro nome, e trocar o significado do marcador reescreveria a mensagem
+ * de toda clínica que já personalizou a sua.
+ *
+ * Quando a clínica liga `agendaConfirmacaoIncluirOrientacoes`, o preparo do procedimento
+ * (`Procedure.orientacoesPreProcedimento`) entra ao fim, separado por uma linha em branco. Ele vem
+ * do catálogo em memória — a mensagem não faz leitura nenhuma.
  */
 export const mensagemDeConfirmacao = (
-  clinic: Pick<ClinicProfile, 'name' | 'agendaConfirmacaoTemplate'>,
-  atendimento: Attendance
+  clinic: Pick<
+    ClinicProfile,
+    'name' | 'agendaConfirmacaoTemplate' | 'agendaConfirmacaoIncluirOrientacoes'
+  >,
+  atendimento: Attendance,
+  catalogo: Procedure[] = []
 ): string => {
   const template = clinic.agendaConfirmacaoTemplate?.trim() || AGENDA_DEFAULTS.confirmacaoTemplate;
   const valores: Record<string, string> = {
+    nome: (atendimento.pacienteNome || '').trim(),
     primeiroNome: primeiroNomeDe(atendimento.pacienteNome),
     data: dataExtensa(atendimento.data),
     hora: atendimento.hora || '',
@@ -559,10 +684,58 @@ export const mensagemDeConfirmacao = (
     profissional: atendimento.profissionalNome || '',
     clinica: clinic.name || '',
   };
-  return template.replace(/\{(\w+)\}/g, (inteiro, chave: string) =>
+  const corpo = template.replace(/\{(\w+)\}/g, (inteiro, chave: string) =>
     chave in valores ? valores[chave] : inteiro
   );
+
+  if (!clinic.agendaConfirmacaoIncluirOrientacoes) return corpo;
+  const orientacoes = orientacoesDoAtendimento(atendimento, catalogo);
+  return orientacoes ? `${corpo}\n\n${orientacoes}` : corpo;
 };
+
+/** O preparo do procedimento agendado, pronto para colar na mensagem. */
+export const orientacoesDoAtendimento = (
+  atendimento: Pick<Attendance, 'procedureId'>,
+  catalogo: Procedure[]
+): string | undefined => {
+  if (!atendimento.procedureId) return undefined;
+  const texto = catalogo
+    .find((p) => p.id === atendimento.procedureId)
+    ?.orientacoesPreProcedimento?.trim();
+  return texto ? `Antes de vir:\n${texto}` : undefined;
+};
+
+// ==========================================
+// CONFIRMAÇÃO DA PACIENTE
+// ==========================================
+
+/**
+ * A paciente já disse que vem?
+ *
+ * Só faz sentido em quem nasceu agendamento e continua pendente: depois do desfecho (compareceu,
+ * faltou, remarcado) a promessa não interessa mais, e um selo verde de "confirmado" ao lado de uma
+ * falta só confundiria a recepção.
+ */
+export const ehConfirmado = (a: Attendance): boolean =>
+  !!a.confirmadoEm && a.status === 'agendado';
+
+/** Agendamento de amanhã que ninguém confirmou — o trabalho de hoje da recepção. */
+export const ehDeAmanhaSemConfirmacao = (a: Attendance, hoje: DataISO = hojeISO()): boolean =>
+  a.status === 'agendado' && !a.confirmadoEm && a.data === deslocarDias(hoje, 1);
+
+/**
+ * A lista de amanhã que falta confirmar, na ordem do dia.
+ *
+ * Amanhã, e não "os próximos dias", porque é esse o expediente da recepção: confirmar hoje o que
+ * acontece amanhã. Uma janela maior devolveria uma lista que ninguém trabalha inteira.
+ */
+export const aConfirmarAmanha = (
+  atendimentos: Attendance[],
+  hoje: DataISO = hojeISO()
+): Attendance[] =>
+  atendimentos
+    .filter((a) => ehDeAmanhaSemConfirmacao(a, hoje))
+    .sort((a, b) => instanteNoDia(a) - instanteNoDia(b));
 
 /** O telefone que a confirmação usa. Paciente sem cadastro não tem contato — o botão desliga. */
 export const contatoDoAtendimento = (

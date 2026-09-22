@@ -68,22 +68,22 @@ const IdentityConfirmGate: React.FC<{
   };
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-surface flex items-center justify-center px-4">
       <form onSubmit={handleSubmit} className="w-full max-w-sm bg-white rounded-3xl shadow-[0_6px_22px_rgba(0,0,0,.06)] p-6 space-y-4">
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-full bg-[#F9F8F6] border border-[rgba(26,26,26,.1)] flex items-center justify-center mx-auto">
-            <ShieldCheck className="w-6 h-6 text-[#A67C52]" />
+          <div className="w-12 h-12 rounded-full bg-surface border border-[rgba(26,26,26,.1)] flex items-center justify-center mx-auto">
+            <ShieldCheck className="w-6 h-6 text-brand" />
           </div>
-          <h2 className="font-serif-luxury text-[21px] font-semibold text-[#1A1A1A]">Confirme sua identidade</h2>
-          <p className="text-[13px] text-[#8a8578]">
+          <h2 className="font-serif-luxury text-[21px] font-semibold text-ink">Confirme sua identidade</h2>
+          <p className="text-[13px] text-muted">
             Sua ficha já foi complementada pela equipe. Confirme seus dados para visualizá-la.
           </p>
         </div>
 
         <div>
-          <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">CPF</label>
+          <label className="block text-[13px] font-semibold text-ink mb-1.5">CPF</label>
           <div className="relative">
-            <IdCard className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+            <IdCard className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
             <input
               type="text"
               inputMode="numeric"
@@ -91,22 +91,22 @@ const IdentityConfirmGate: React.FC<{
               onChange={(e) => setCpf(formatCpf(e.target.value))}
               placeholder="000.000.000-00"
               required
-              className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+              className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
             />
           </div>
         </div>
 
         {expectedBirth && (
           <div>
-            <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">Data de nascimento</label>
+            <label className="block text-[13px] font-semibold text-ink mb-1.5">Data de nascimento</label>
             <div className="relative">
-              <Calendar className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-[#a8a29a]" />
+              <Calendar className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
               <input
                 type="date"
                 value={birth}
                 onChange={(e) => setBirth(e.target.value)}
                 required
-                className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
               />
             </div>
           </div>
@@ -121,7 +121,7 @@ const IdentityConfirmGate: React.FC<{
 
         <button
           type="submit"
-          className="w-full h-[50px] rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all"
+          className="w-full h-[50px] rounded-xl bg-brand text-white text-[15px] font-semibold hover:bg-brand-hover active:scale-97 transition-all"
         >
           Ver minha ficha
         </button>
@@ -357,10 +357,10 @@ export const PublicAnamnesisEntry: React.FC = () => {
 
   if (screen === 'loading') {
     return (
-      <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-surface flex items-center justify-center px-4">
         <div className="text-center space-y-3">
-          <Loader2 className="w-8 h-8 text-[#A67C52] animate-spin mx-auto" />
-          <p className="text-[14px] text-[#8a8578]">Carregando sua ficha de anamnese...</p>
+          <Loader2 className="w-8 h-8 text-brand animate-spin mx-auto" />
+          <p className="text-[14px] text-muted">Carregando sua ficha de anamnese...</p>
         </div>
       </div>
     );
@@ -368,13 +368,13 @@ export const PublicAnamnesisEntry: React.FC = () => {
 
   if (screen === 'error') {
     return (
-      <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-surface flex items-center justify-center px-4">
         <div className="max-w-md w-full bg-white rounded-3xl shadow-[0_6px_22px_rgba(0,0,0,.06)] p-8 text-center space-y-3">
-          <div className="w-14 h-14 rounded-full bg-red-50 text-[#E11D48] border border-red-200 mx-auto flex items-center justify-center">
+          <div className="w-14 h-14 rounded-full bg-red-50 text-danger border border-red-200 mx-auto flex items-center justify-center">
             <AlertTriangle className="w-7 h-7" />
           </div>
-          <h2 className="font-serif-luxury text-[21px] font-semibold text-[#1A1A1A]">Não foi possível abrir a ficha</h2>
-          <p className="text-[14px] text-[#8a8578] leading-relaxed">{errorMsg}</p>
+          <h2 className="font-serif-luxury text-[21px] font-semibold text-ink">Não foi possível abrir a ficha</h2>
+          <p className="text-[14px] text-muted leading-relaxed">{errorMsg}</p>
           <button
             type="button"
             onClick={() => {
@@ -382,7 +382,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
               setScreen('loading');
               setReloadToken((n) => n + 1);
             }}
-            className="inline-flex items-center justify-center gap-2 w-full h-[50px] rounded-xl bg-[#A67C52] text-white text-[15px] font-semibold hover:bg-[#8E653D] active:scale-97 transition-all"
+            className="inline-flex items-center justify-center gap-2 w-full h-[50px] rounded-xl bg-brand text-white text-[15px] font-semibold hover:bg-brand-hover active:scale-97 transition-all"
           >
             <RefreshCw className="w-4 h-4" />
             Tentar novamente
@@ -395,30 +395,30 @@ export const PublicAnamnesisEntry: React.FC = () => {
   if (screen === 'success' && savedRecord) {
     const firstName = savedRecord.pacienteNome?.split(' ')[0] || '';
     return (
-      <div className="min-h-screen bg-[#F9F8F6] py-8 sm:py-16 px-4">
+      <div className="min-h-screen bg-surface py-8 sm:py-16 px-4">
         <div className="max-w-lg mx-auto text-center space-y-5 animate-fadeIn">
-          <div className="w-[76px] h-[76px] rounded-full bg-[#A67C52] text-white mx-auto flex items-center justify-center shadow-[0_6px_22px_rgba(166,124,82,.3)]">
+          <div className="w-[76px] h-[76px] rounded-full bg-brand text-white mx-auto flex items-center justify-center shadow-[0_6px_22px_rgba(166,124,82,.3)]">
             <CheckCircle2 className="w-9 h-9" />
           </div>
           <div>
-            <h2 className="font-serif-luxury text-[32px] font-medium text-[#1A1A1A]">Ficha enviada</h2>
-            <p className="text-[15px] text-[#4a4740] mt-2 max-w-md mx-auto leading-relaxed">
-              Obrigado, <strong className="text-[#1A1A1A]">{firstName}</strong>. Suas informações foram registradas
+            <h2 className="font-serif-luxury text-[32px] font-medium text-ink">Ficha enviada</h2>
+            <p className="text-[15px] text-ink-soft mt-2 max-w-md mx-auto leading-relaxed">
+              Obrigado, <strong className="text-ink">{firstName}</strong>. Suas informações foram registradas
               com segurança no prontuário digital da clínica.
             </p>
           </div>
 
           <div className="bg-white rounded-3xl shadow-[0_6px_22px_rgba(0,0,0,.06)] p-6 text-left space-y-5">
             <div>
-              <span className="text-[13px] font-semibold text-[#A67C52]">Seu atendimento</span>
+              <span className="text-[13px] font-semibold text-brand">Seu atendimento</span>
               <div className="mt-2 space-y-2">
                 <div className="flex justify-between text-[14px]">
-                  <span className="text-[#8a8578]">Procedimento</span>
-                  <span className="font-semibold text-[#1A1A1A]">{savedRecord.procedimentoNome}</span>
+                  <span className="text-muted">Procedimento</span>
+                  <span className="font-semibold text-ink">{savedRecord.procedimentoNome}</span>
                 </div>
                 <div className="flex justify-between text-[14px]">
-                  <span className="text-[#8a8578]">Protocolo digital</span>
-                  <span className="font-semibold text-[#1A1A1A]" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
+                  <span className="text-muted">Protocolo digital</span>
+                  <span className="font-semibold text-ink" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
                     #{savedRecord.id.slice(-8).toUpperCase()}
                   </span>
                 </div>
@@ -426,12 +426,12 @@ export const PublicAnamnesisEntry: React.FC = () => {
             </div>
 
             {wasGenericLink && (
-              <div className="bg-[#F9F8F6] rounded-2xl p-4 space-y-2.5">
-                <div className="flex items-center gap-2 text-[#1A1A1A] font-semibold text-[14px]">
-                  <Sparkles className="w-4 h-4 text-[#A67C52]" />
+              <div className="bg-surface rounded-2xl p-4 space-y-2.5">
+                <div className="flex items-center gap-2 text-ink font-semibold text-[14px]">
+                  <Sparkles className="w-4 h-4 text-brand" />
                   Guarde este link — ele é só seu
                 </div>
-                <p className="text-[13px] text-[#8a8578] leading-relaxed">
+                <p className="text-[13px] text-muted leading-relaxed">
                   Use este link pessoal para voltar, revisar ou corrigir suas respostas até a sua consulta.
                 </p>
                 <div className="flex items-center gap-2">
@@ -439,13 +439,13 @@ export const PublicAnamnesisEntry: React.FC = () => {
                     type="text"
                     readOnly
                     value={personalLink}
-                    className="w-full h-11 px-3 text-[13px] rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-[#4a4740] select-all focus:outline-hidden"
+                    className="w-full h-11 px-3 text-[13px] rounded-xl bg-white border border-[rgba(26,26,26,.1)] text-ink-soft select-all focus:outline-hidden"
                     style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
                   />
                   <button
                     type="button"
                     onClick={handleCopyPersonalLink}
-                    className="w-11 h-11 rounded-xl bg-[#1A1A1A] text-white flex items-center justify-center shrink-0 hover:bg-black transition-all"
+                    className="w-11 h-11 rounded-xl bg-ink text-white flex items-center justify-center shrink-0 hover:bg-black transition-all"
                   >
                     {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                   </button>
@@ -468,7 +468,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
               href={waConfirmUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full h-[52px] rounded-2xl bg-[#25D366] text-white hover:bg-[#20ba59] font-semibold text-[15px] shadow-xs active:scale-97 transition-all"
+              className="flex items-center justify-center gap-2 w-full h-[52px] rounded-2xl bg-whatsapp text-white hover:bg-whatsapp font-semibold text-[15px] shadow-xs active:scale-97 transition-all"
             >
               <MessageCircle className="w-[18px] h-[18px]" />
               Falar com a clínica no WhatsApp
@@ -478,16 +478,16 @@ export const PublicAnamnesisEntry: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPdfModal(true)}
-                className="flex items-center gap-2 text-[13px] text-[#A67C52] hover:text-[#8E653D] font-semibold transition-colors"
+                className="flex items-center gap-2 text-[13px] text-brand hover:text-brand-hover font-semibold transition-colors"
               >
                 <FileDown className="w-4 h-4" />
                 Ver / baixar PDF da ficha
               </button>
-              <span className="hidden sm:inline text-[#a8a29a]">•</span>
+              <span className="hidden sm:inline text-muted-light">•</span>
               <button
                 type="button"
                 onClick={() => setScreen('form')}
-                className="flex items-center gap-2 text-[13px] text-[#8a8578] hover:text-[#1A1A1A] font-semibold transition-colors"
+                className="flex items-center gap-2 text-[13px] text-muted hover:text-ink font-semibold transition-colors"
               >
                 <Edit3 className="w-4 h-4" />
                 Continuar editando respostas
@@ -538,9 +538,9 @@ export const PublicAnamnesisEntry: React.FC = () => {
 
   if (isLocked && existingRecord) {
     return (
-      <div className="min-h-screen bg-[#F9F8F6]">
+      <div className="min-h-screen bg-surface">
         <div className="max-w-3xl mx-auto pt-6 sm:pt-12 px-3 sm:px-6 pb-3 text-center">
-          <p className="text-[13px] text-[#4a4740] bg-white inline-block px-4 py-2 rounded-full border border-[rgba(26,26,26,.1)]">
+          <p className="text-[13px] text-ink-soft bg-white inline-block px-4 py-2 rounded-full border border-[rgba(26,26,26,.1)]">
             Seu atendimento já foi realizado — esta ficha virou documento do seu prontuário e não
             pode mais ser editada. Você ainda pode salvar o PDF com as suas respostas.
           </p>
@@ -559,7 +559,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6] py-6 sm:py-12 px-5 sm:px-6">
+    <div className="min-h-screen bg-surface py-6 sm:py-12 px-5 sm:px-6">
       <OnlinePatientAnamnesisForm
         template={template}
         generalQuestions={generalQuestions}

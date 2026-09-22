@@ -119,6 +119,23 @@ export interface Procedure {
   idealCandidate?: string;
   isFeatured?: boolean;
   quoteDetails?: QuoteItemDetail[]; // "Detalhes para orçamento" — pares título/resposta que pré-preenchem o item no orçamento
+  /**
+   * Quantos dias entre uma sessão e a seguinte, num plano de sessões.
+   *
+   * É o que a ficha da paciente usa para sugerir a data da próxima. Ausente = o padrão de
+   * `INTERVALO_PADRAO_DIAS` (30 dias). Não bloqueia nada: é sugestão, e agendar fora do
+   * intervalo continua sendo decisão da clínica.
+   */
+  intervaloEntreSessoesDias?: number;
+  /**
+   * O que a paciente precisa fazer (ou evitar) antes de vir — "não depilar com cera nos 30 dias
+   * anteriores", "venha sem maquiagem". Entra na mensagem de confirmação do WhatsApp quando a
+   * clínica liga `agendaConfirmacaoIncluirOrientacoes`.
+   *
+   * Separado de `contraindications` de propósito: contraindicação é motivo para **não** fazer o
+   * procedimento; isto é preparo para quem já vai fazer.
+   */
+  orientacoesPreProcedimento?: string;
   assignedDoctorIds?: string[]; // IDs of assigned doctors
   assignedDoctorNames?: string[]; // Names/credentials for display or custom entry
   /**
@@ -142,6 +159,26 @@ export interface AgendaExpedienteDia {
   diaSemana: number; // 0 = domingo … 6 = sábado
   abre?: string; // HH:MM
   fecha?: string; // HH:MM
+  /**
+   * Pausa do almoço. As duas juntas ou nenhuma — meia pausa não quer dizer nada.
+   *
+   * Como o expediente, ela **não bloqueia**: pinta de cinza e some da lista de horários livres,
+   * mas encaixar às 12h30 continua gravável. Quem decide abrir exceção é a clínica.
+   */
+  almocoInicio?: string; // HH:MM
+  almocoFim?: string; // HH:MM
+}
+
+/**
+ * Uma sala ou equipamento da clínica — "Sala 1", "Sala laser", "Cabine de bronzeamento".
+ *
+ * Existe por causa do equipamento, não da parede: o laser é um aparelho só, e duas pacientes
+ * marcadas para ele no mesmo horário é um problema que a agenda por profissional não pega (são
+ * duas profissionais diferentes, cada uma com a sua coluna livre).
+ */
+export interface AgendaSala {
+  id: string;
+  nome: string;
 }
 
 export interface ClinicProfile {
@@ -177,7 +214,11 @@ export interface ClinicProfile {
   /** Expediente por dia da semana. Só pinta a grade: encaixe fora do horário continua permitido. */
   agendaExpediente?: AgendaExpedienteDia[];
   agendaIntervaloMin?: number; // Granularidade da grade em minutos: 15, 30 ou 60 (padrão 30)
+  /** Salas e equipamentos. Vazio = a clínica não usa o conceito, e o campo some do formulário. */
+  agendaSalas?: AgendaSala[];
   agendaConfirmacaoTemplate?: string; // Mensagem de confirmação no WhatsApp; ver `mensagemDeConfirmacao`
+  /** Anexa `Procedure.orientacoesPreProcedimento` ao fim da mensagem de confirmação. */
+  agendaConfirmacaoIncluirOrientacoes?: boolean;
   /**
    * Mapa corporal da depilação a laser — os dois manequins sobre os quais as áreas são desenhadas.
    * Sem sexo, aproveitados para ambos os gêneros: as áreas são desenhadas uma vez só.
@@ -192,7 +233,39 @@ export interface ClinicProfile {
 }
 
 /** Telas do painel autenticado — a navegação é por estado, o app não tem rotas. */
-export type AppView = 'agenda' | 'procedures' | 'patients' | 'anamnesis' | 'evaluations' | 'quotes';
+export type AppView =
+  | 'hoje'
+  | 'agenda'
+  | 'procedures'
+  | 'patients'
+  | 'anamnesis'
+  | 'evaluations'
+  | 'quotes'
+  | 'financeiro'
+  | 'settings';
+
+/**
+ * Um pedido de navegação vindo de outra tela — da busca global, de um card da tela Hoje, de
+ * um card de pendência.
+ *
+ * O `nonce` existe pelo mesmo motivo do `AnamnesisOpenRequest`: pedir duas vezes a mesma
+ * coisa é um pedido novo, e sem ele a tela de destino não veria mudança alguma no objeto e
+ * não reagiria na segunda vez.
+ */
+export interface PedidoDeNavegacao {
+  view: AppView;
+  /** Paciente a abrir, quando o destino é Pacientes. */
+  pacienteId?: string;
+  /** Abrir direto o formulário de criação do destino (novo agendamento, orçamento, paciente). */
+  criarNovo?: boolean;
+  /** Dia a focar, quando o destino é a Agenda. YYYY-MM-DD. */
+  data?: string;
+  /** Orçamento a abrir na prévia, quando o destino é Orçamentos. */
+  quoteId?: string;
+  /** Procedimento a abrir nos detalhes, quando o destino é o catálogo. */
+  procedureId?: string;
+  nonce: number;
+}
 
 export interface FilterState {
   search: string;
@@ -492,6 +565,15 @@ export interface Quote {
   clinica?: QuoteClinicSnapshot; // Ausente só em orçamentos criados antes deste campo existir
   total: number; // Snapshot denormalizado apenas para a listagem — a verdade é calcularOrcamento()
   enviadoEm?: string; // ISO do 1º compartilhamento do link; presença trava a edição
+  /**
+   * Instante em que o orçamento foi marcado como aceito — a data que o faturamento usa.
+   *
+   * Gravado explicitamente em vez de lido de `updatedAt` porque `updatedAt` é a marca de
+   * *qualquer* escrita: um cancelamento, uma substituição, uma correção de status feita por
+   * engano e desfeita depois moveriam o aceite de mês sem ninguém perceber. Orçamento aceito
+   * antes deste campo existir cai no fallback de `dataDeAceite`, em utils/indicadores.ts.
+   */
+  aceitoEm?: string; // ISO
   substituidoPor?: QuoteReference; // Preenchido no antigo quando um novo o substitui
   substituiu?: QuoteReference; // Preenchido no novo, apontando para o que ele substituiu
   createdAt: string;
@@ -577,6 +659,14 @@ export interface Attendance {
   planoId?: string;
   professionalId?: string;
   profissionalNome?: string; // Congelado no registro, para o caso de a equipe mudar depois
+  /**
+   * Sala ou equipamento reservado. Ausente = não reserva nada.
+   *
+   * Diferente do `professionalId`, dois registros na mesma sala e no mesmo horário são
+   * **impedidos** e não apenas avisados: a profissional pode decidir se dobra o próprio horário,
+   * mas nenhuma decisão faz o laser atender duas pacientes ao mesmo tempo.
+   */
+  salaId?: string;
   observacoes?: string;
   /**
    * Presente somente em quem nasceu agendamento. Ausência é o que distingue, para sempre, o
@@ -585,6 +675,17 @@ export interface Attendance {
   status?: AttendanceStatus;
   /** Data e hora originais do agendamento, guardadas quando a confirmação mudou a data. */
   agendadoPara?: string; // ISO
+  /**
+   * Instante em que a paciente confirmou que vem — normalmente respondendo o WhatsApp.
+   *
+   * Campo próprio, e não mais um valor em `AttendanceStatus`, porque as duas coisas são
+   * ortogonais: "confirmado" é uma promessa feita **antes** da visita e `status` é o desfecho
+   * **depois** dela. Um agendamento confirmado que virou falta precisa continuar sendo os dois,
+   * e um `status: 'confirmado'` apagaria o rastro de que a paciente havia prometido vir.
+   *
+   * Ausente = ninguém confirmou ainda. Só existe em quem nasceu agendamento.
+   */
+  confirmadoEm?: string; // ISO
   /**
    * Marca de que existe `EvaluationRecord` para esta visita — só o instante, nunca o conteúdo.
    *

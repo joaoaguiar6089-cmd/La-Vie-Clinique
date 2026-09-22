@@ -50,7 +50,7 @@ interface AttendancesTabProps {
 }
 
 const acaoClass =
-  'p-2 text-gray-400 hover:text-[#A67C52] transition-colors disabled:opacity-40';
+  'p-2 text-gray-400 hover:text-brand transition-colors disabled:opacity-40';
 
 /** Data e hora na linha. Hora ausente é o caso do registro retroativo, e some sem deixar buraco. */
 const quando = (a: Attendance): string =>
@@ -68,11 +68,11 @@ const BadgeDoStatus: React.FC<{ atendimento: Attendance }> = ({ atendimento }) =
       ? 'bg-gray-100 text-gray-500 border-gray-200'
       : atrasado
       ? 'bg-amber-50 text-amber-800 border-amber-300'
-      : 'bg-[#A67C52]/10 text-[#8E653D] border-[#A67C52]/25';
+      : 'bg-brand/10 text-brand-hover border-brand/25';
 
   return (
     <span
-      className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-xs border ${cor}`}
+      className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border ${cor}`}
       title={atrasado ? 'A data já passou e ninguém marcou o desfecho' : undefined}
     >
       {atrasado && <AlertTriangle className="w-3 h-3" />}
@@ -112,7 +112,7 @@ const AcoesDoAgendamento: React.FC<{
       onClick={() => onRemarcar(atendimento)}
       title="Remarcou — abre um agendamento novo com os mesmos dados"
       aria-label="Remarcar"
-      className="p-2 text-gray-400 hover:text-[#A67C52] transition-colors"
+      className="p-2 text-gray-400 hover:text-brand transition-colors"
     >
       <RotateCcw className="w-4 h-4" />
     </button>
@@ -151,18 +151,18 @@ const LinhaDeAtendimento: React.FC<{
     }
   >
     <div className="flex-1 min-w-[150px]">
-      <p className="text-sm text-[#1A1A1A] truncate">
+      <p className="text-sm text-ink truncate">
         {rotuloDaSessao && (
-          <span className="text-[#A67C52] font-semibold tabular-nums">{rotuloDaSessao} · </span>
+          <span className="text-brand font-semibold tabular-nums">{rotuloDaSessao} · </span>
         )}
         {atendimento.procedimentoNome}
       </p>
-      <p className="text-[11px] text-gray-400 truncate">
+      <p className="text-body text-gray-400 truncate">
         {quando(atendimento)}
         {atendimento.profissionalNome && ` · ${atendimento.profissionalNome}`}
       </p>
       {atendimento.observacoes && (
-        <p className="text-[11px] text-gray-500 mt-1 line-clamp-2 whitespace-pre-line">
+        <p className="text-body text-gray-500 mt-1 line-clamp-2 whitespace-pre-line">
           {atendimento.observacoes}
         </p>
       )}
@@ -232,10 +232,10 @@ const ResumoDoPlano: React.FC<{ progresso: ProgressoDoPlano }> = ({ progresso })
   ].filter(Boolean);
 
   return (
-    <p className="text-[11px] text-gray-400 truncate">
+    <p className="text-body text-gray-400 truncate">
       <span
         className={`tabular-nums font-semibold ${
-          progresso.estourado ? 'text-amber-700' : 'text-[#A67C52]'
+          progresso.estourado ? 'text-amber-700' : 'text-brand'
         }`}
         title={progresso.estourado ? 'Passou do total contratado' : undefined}
       >
@@ -293,7 +293,7 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
         <button
           type="button"
           onClick={onNovo}
-          className="mt-3 text-xs font-semibold text-[#A67C52] hover:underline"
+          className="mt-3 text-xs font-semibold text-brand hover:underline"
         >
           Registrar o primeiro
         </button>
@@ -338,11 +338,11 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
                 aria-expanded={aberto}
                 className="flex-1 min-w-[150px] flex items-center gap-3 text-left"
               >
-                <span className="w-8 h-8 shrink-0 rounded-sm bg-[#A67C52]/10 text-[#A67C52] flex items-center justify-center">
+                <span className="w-8 h-8 shrink-0 rounded-sm bg-brand/10 text-brand flex items-center justify-center">
                   <Layers className="w-4 h-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm text-[#1A1A1A] truncate">
+                  <span className="block text-sm text-ink truncate">
                     {plano.procedimentoNome}
                   </span>
                   <ResumoDoPlano progresso={progresso} />
@@ -391,7 +391,7 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
             {aberto && (
               <div className="bg-white/40">
                 {doPlano.length === 0 ? (
-                  <p className="px-4 py-3 text-[11px] text-gray-400 border-t border-white/70">
+                  <p className="px-4 py-3 text-body text-gray-400 border-t border-white/70">
                     Nenhuma sessão registrada neste plano ainda.
                   </p>
                 ) : (
@@ -424,7 +424,7 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
                         ? 'Plano encerrado — reabra para registrar mais sessões'
                         : undefined
                     }
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#A67C52] hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Adicionar sessão

@@ -8,6 +8,8 @@ import { subirImagemOuManter } from '../services/imageStorage';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { isLaserCategory } from '../utils/templateMatching';
 import { LaserAreaEditor } from './laser/LaserAreaEditor';
+import { SidePanel } from './common/SidePanel';
+import { ConfirmDialog, ConfirmRequest } from './ConfirmDialog';
 
 /**
  * A mesma foto aparece em frames bem diferentes (card da lista e detalhe em paisagem, cartão
@@ -60,6 +62,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [duration, setDuration] = useState('45 a 60 min');
   const [sessionsRecommended, setSessionsRecommended] = useState('1 a 3 sessões');
   const [recoveryTime, setRecoveryTime] = useState('Sem downtime');
+  /** O "antes de vir" que a confirmação do WhatsApp anexa quando a clínica liga a opção. */
+  const [orientacoesPreProcedimento, setOrientacoesPreProcedimento] = useState('');
+  /** Dias entre sessões — a ficha da paciente usa para sugerir a data da próxima. */
+  const [intervaloEntreSessoesDias, setIntervaloEntreSessoesDias] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [benefits, setBenefits] = useState<string[]>([]);
@@ -117,6 +123,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const ehLaser = isLaserCategory(categoriaEfetiva);
 
   const [showPresetLibrary, setShowPresetLibrary] = useState(false);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadError, setUploadError] = useState('');
   /** Fotos escolhidas no input que ainda passam pelo recorte, uma de cada vez. */
@@ -138,6 +145,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setDuration(procedureToEdit.duration || '');
       setSessionsRecommended(procedureToEdit.sessionsRecommended || '');
       setRecoveryTime(procedureToEdit.recoveryTime || '');
+      setOrientacoesPreProcedimento(procedureToEdit.orientacoesPreProcedimento || '');
+      setIntervaloEntreSessoesDias(
+        procedureToEdit.intervaloEntreSessoesDias ? String(procedureToEdit.intervaloEntreSessoesDias) : ''
+      );
       setImages(procedureToEdit.images || []);
       setBenefits(procedureToEdit.benefits || []);
       setAreasTreated(procedureToEdit.areasTreated || []);
@@ -396,6 +407,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       duration: duration.trim() || undefined,
       sessionsRecommended: sessionsRecommended.trim() || undefined,
       recoveryTime: recoveryTime.trim() || undefined,
+      orientacoesPreProcedimento: orientacoesPreProcedimento.trim() || undefined,
+      intervaloEntreSessoesDias: Number(intervaloEntreSessoesDias) > 0
+        ? Number(intervaloEntreSessoesDias)
+        : undefined,
       images: uploadedImages,
       benefits: benefits.length > 0 ? benefits : ['Melhora estética e bem-estar'],
       areasTreated: areasTreated.length > 0 ? areasTreated : undefined,
@@ -491,19 +506,21 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
    */
   const handleCategoriaChange = (nova: string) => {
     const saindoDoLaser = ehLaser && !isLaserCategory(nova) && laserAreas.length > 0;
-    if (saindoDoLaser) {
-      const nome = (procedimentoLaserAlvo || procedureToEdit)?.title || 'esta área';
-      if (
-        !window.confirm(
-          `Ao sair da categoria "Depilação a Laser", a área desenhada para ${nome} é apagada. Continuar?`
-        )
-      ) {
-        return;
-      }
-      setLaserAreas([]);
-      setProcedimentoLaserAlvo(null);
+    if (!saindoDoLaser) {
+      setCategory(nova);
+      return;
     }
-    setCategory(nova);
+    const nome = (procedimentoLaserAlvo || procedureToEdit)?.title || 'esta área';
+    setConfirmacao({
+      titulo: 'Descartar a área desenhada?',
+      mensagem: `Ao sair da categoria "Depilação a Laser", a área desenhada para ${nome} é apagada.`,
+      textoConfirmar: 'Descartar e trocar',
+      onConfirmar: () => {
+        setLaserAreas([]);
+        setProcedimentoLaserAlvo(null);
+        setCategory(nova);
+      },
+    });
   };
 
   /** Carrega no painel um procedimento que já existe, para ele receber o próximo desenho. */
@@ -519,6 +536,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setDuration(proc.duration || '');
     setSessionsRecommended(proc.sessionsRecommended || '');
     setRecoveryTime(proc.recoveryTime || '');
+    setOrientacoesPreProcedimento(proc.orientacoesPreProcedimento || '');
+    setIntervaloEntreSessoesDias(
+      proc.intervaloEntreSessoesDias ? String(proc.intervaloEntreSessoesDias) : ''
+    );
     setImages(proc.images || []);
     setBenefits(proc.benefits || []);
     setAreasTreated(proc.areasTreated || []);
@@ -542,37 +563,71 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div 
-        // O modo laser precisa de um modal largo: manequim grande de um lado, painel de campos do
-        // outro, e ainda o anel de botões em volta. Com os `max-w-3xl` (768px) do cadastro comum
-        // não sobra largura para nada disso.
-        className={`relative w-full bg-[#F9F8F6]/95 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl border border-white/60 my-6 transition-all ${
-          ehLaser ? 'max-w-[1240px]' : 'max-w-3xl'
+  /* Rodapé fixo abaixo da área que rola. Em modo laser quem grava é o "Aplicar" de cada área,
+     então ali não há o que submeter — daí o `hidden`. */
+  const rodape = (
+    <div className="flex items-center justify-end gap-3">
+      {confirmandoSaida && (
+        <p className="text-body text-warn mr-auto leading-snug max-w-sm">
+          Há uma área desenhada que ainda não foi aplicada — ela se perde ao fechar. Toque em
+          Fechar de novo para confirmar.
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={handleFechar}
+        className={`min-h-[44px] px-4 rounded-xl border text-body font-semibold uppercase tracking-wider transition-colors ${
+          confirmandoSaida
+            ? 'border-danger-line bg-danger-bg text-danger'
+            : 'border-line text-muted hover:text-ink'
         }`}
-        id="procedure-form-modal"
       >
-        {/* Header */}
-        <div className="bg-[#1A1A1A] text-[#E5E4E0] px-6 py-4 flex items-center justify-between border-b border-white/10">
-          <div>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#C49B74]">
-              Cadastro & Gestão
+        {ehLaser ? 'Fechar' : 'Cancelar'}
+      </button>
+      <button
+        type="submit"
+        form="form-procedimento"
+        hidden={ehLaser}
+        disabled={cropSource !== null || isSaving}
+        className="min-h-[44px] px-6 rounded-xl bg-brand text-white text-body font-semibold uppercase tracking-widest shadow-xs active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+      >
+        {isSaving ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>{savingStatus || 'Salvando...'}</span>
+          </>
+        ) : (
+          <>
+            <Check className="w-4 h-4" />
+            <span>
+              {cropSource
+                ? 'Enquadrando foto...'
+                : procedureToEdit
+                ? 'Salvar Alterações'
+                : 'Cadastrar Procedimento'}
             </span>
-            <h2 className="font-serif-luxury text-xl sm:text-2xl font-medium text-white">
-              {procedureToEdit ? 'Editar Procedimento' : 'Novo Procedimento Estético'}
-            </h2>
-          </div>
-          <button
-            onClick={handleFechar}
-            className="p-1.5 rounded-xs text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+          </>
+        )}
+      </button>
+    </div>
+  );
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 max-h-[80vh] overflow-y-auto">
+  return (
+    /* O modo laser precisa de largura: manequim de um lado, painel de campos do outro, e ainda
+       o anel de botões em volta. Nos 560px do painel padrão não sobra espaço para nada disso. */
+    <SidePanel
+      aberto={isOpen}
+      onFechar={handleFechar}
+      titulo={procedureToEdit ? 'Editar procedimento' : 'Novo procedimento'}
+      sobretitulo="Cadastro & gestão"
+      largura={ehLaser ? 'larga' : 'padrao'}
+      bloqueado={isSaving}
+      /* Foto adicionada e área desenhada não passam por `input`/`change`. */
+      alterado={images.length > 0 || temRascunhoNaoAplicado}
+      rodape={rodape}
+    >
+      <div id="procedure-form-modal">
+        <form id="form-procedimento" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
           {/* ==========================================
               MODO LASER — o mapa corporal substitui a entrada normal do formulário.
               A ordem é a do fluxo pedido: categoria → destacar a área → nome → demais dados.
@@ -582,18 +637,18 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               {!mostrarTodosCampos && (
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-[#1A1A1A] mb-1">Categoria</label>
+                    <label className="block text-xs font-medium text-ink mb-1">Categoria</label>
                     <select
                       value={category}
                       onChange={(e) => handleCategoriaChange(e.target.value)}
-                      className="w-full px-3 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      className="w-full px-3 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                     >
                       {allCategories.map((cat, idx) => (
                         <option key={idx} value={cat}>{cat}</option>
                       ))}
                     </select>
                   </div>
-                  <p className="text-[11px] text-[#8a8578] pb-2 flex-1">
+                  <p className="text-body text-muted pb-2 flex-1">
                     Esta categoria abre o mapa corporal. Destaque a região no manequim para liberar
                     os campos do procedimento.
                   </p>
@@ -601,7 +656,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               )}
 
               {areaAplicada && (
-                <p className="text-[12px] text-[#1B5E20] bg-[#E8F5E9] border border-[#C8E6C9] rounded-sm px-3 py-2 flex items-center gap-1.5">
+                <p className="text-[12px] text-ok bg-ok-bg border border-[#C8E6C9] rounded-sm px-3 py-2 flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5" />
                   <strong>{areaAplicada}</strong> aplicada ao mapa. Destaque a próxima área.
                 </p>
@@ -625,14 +680,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               >
                 <div className="bg-white/70 border border-white/80 rounded-sm p-4 space-y-3">
                   {procedimentoLaserAlvo && (
-                    <p className="text-[11px] text-[#8E5B1A] bg-[#FDF6E7] border border-[#F0DCB4] rounded-xs px-2.5 py-1.5 leading-snug">
+                    <p className="text-body text-warn bg-warn-bg border border-[#F0DCB4] rounded-xs px-2.5 py-1.5 leading-snug">
                       Desenhando a área de um procedimento que já existe. O preço cadastrado foi
                       mantido.
                     </p>
                   )}
 
                   <div>
-                    <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                    <label className="block text-body font-medium text-ink mb-1">
                       Nome do procedimento *
                     </label>
                     <input
@@ -640,18 +695,18 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder="Ex: Virilha Completa"
-                      className={`w-full px-3 py-2 rounded-sm bg-white border text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] ${
+                      className={`w-full px-3 py-2 rounded-sm bg-white border text-xs text-ink focus:outline-hidden focus:border-brand ${
                         errors.title ? 'border-red-400' : 'border-gray-200'
                       }`}
                     />
                     {errors.title && (
-                      <p className="text-[10px] text-red-600 mt-1">{errors.title}</p>
+                      <p className="text-label text-red-600 mt-1">{errors.title}</p>
                     )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                      <label className="block text-body font-medium text-ink mb-1">
                         Valor (R$) *
                       </label>
                       <input
@@ -660,16 +715,16 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                         onChange={(e) => setPrice(e.target.value)}
                         min="0"
                         step="0.01"
-                        className={`w-full px-3 py-2 rounded-sm bg-white border text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] ${
+                        className={`w-full px-3 py-2 rounded-sm bg-white border text-xs text-ink focus:outline-hidden focus:border-brand ${
                           errors.price ? 'border-red-400' : 'border-gray-200'
                         }`}
                       />
                       {errors.price && (
-                        <p className="text-[10px] text-red-600 mt-1">{errors.price}</p>
+                        <p className="text-label text-red-600 mt-1">{errors.price}</p>
                       )}
                     </div>
                     <div>
-                      <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                      <label className="block text-body font-medium text-ink mb-1">
                         Promocional
                       </label>
                       <input
@@ -678,13 +733,13 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                         onChange={(e) => setPromotionalPrice(e.target.value)}
                         min="0"
                         step="0.01"
-                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                    <label className="block text-body font-medium text-ink mb-1">
                       Observação de preço
                     </label>
                     <input
@@ -692,13 +747,13 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                       value={priceNote}
                       onChange={(e) => setPriceNote(e.target.value)}
                       placeholder="por sessão"
-                      className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                      <label className="block text-body font-medium text-ink mb-1">
                         Duração
                       </label>
                       <input
@@ -706,11 +761,11 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                         value={duration}
                         onChange={(e) => setDuration(e.target.value)}
                         placeholder="20 min"
-                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-medium text-[#1A1A1A] mb-1">
+                      <label className="block text-body font-medium text-ink mb-1">
                         Sessões
                       </label>
                       <input
@@ -718,7 +773,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                         value={sessionsRecommended}
                         onChange={(e) => setSessionsRecommended(e.target.value)}
                         placeholder="6 a 10 sessões"
-                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
                       />
                     </div>
                   </div>
@@ -727,7 +782,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                     type="button"
                     onClick={handleAplicarArea}
                     disabled={isSaving}
-                    className="w-full px-4 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest hover:bg-[#8e6945] active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:active:scale-100"
+                    className="w-full px-4 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest hover:bg-brand-hover active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:active:scale-100"
                   >
                     {isSaving ? (
                       <>
@@ -745,14 +800,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setMostrarTodosCampos((v) => !v)}
-                    className="w-full text-[11px] text-[#A67C52] hover:text-[#8e6945] font-medium underline underline-offset-2"
+                    className="w-full text-body text-brand hover:text-brand-hover font-medium underline underline-offset-2"
                   >
                     {mostrarTodosCampos
                       ? 'Ocultar os demais campos'
                       : 'Mostrar todos os campos do cadastro'}
                   </button>
 
-                  <p className="text-[10px] text-[#8a8578] leading-snug">
+                  <p className="text-label text-muted leading-snug">
                     Descrição, contraindicações, recuperação e fotos vêm dos padrões da categoria
                     quando ficam em branco — preencha só o que for diferente nesta área.
                   </p>
@@ -765,14 +820,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             <>
           {/* Section 1: Basic Information */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <Sparkles className="w-3.5 h-3.5" />
               Informações Principais
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Título do Procedimento *
                 </label>
                 <input
@@ -780,14 +835,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Ex: Harmonização Facial Completa, Botox Preventivo, etc."
-                  className="w-full px-3.5 py-2.5 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] transition-all"
+                  className="w-full px-3.5 py-2.5 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand transition-all"
                   required
                 />
                 {errors.title && <p className="text-xs text-red-600 mt-1">{errors.title}</p>}
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Subtítulo / Tagline de Destaque
                 </label>
                 <input
@@ -795,12 +850,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   value={subtitle}
                   onChange={(e) => setSubtitle(e.target.value)}
                   placeholder="Ex: Contorno escultural, eversão delicada e viço imediato"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] transition-all"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Categoria
                 </label>
                 {!isAddingCustomCategory ? (
@@ -808,7 +863,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                     <select
                       value={category}
                       onChange={(e) => handleCategoriaChange(e.target.value)}
-                      className="flex-1 px-3 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      className="flex-1 px-3 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                     >
                       {allCategories.map((cat, idx) => (
                         <option key={idx} value={cat}>{cat}</option>
@@ -820,7 +875,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                         setCustomCategory('');
                         setIsAddingCustomCategory(true);
                       }}
-                      className="px-3 py-2 text-xs bg-white/80 border border-white/80 rounded-sm text-[#1A1A1A] hover:bg-white font-medium transition-colors"
+                      className="px-3 py-2 text-xs bg-white/80 border border-white/80 rounded-sm text-ink hover:bg-white font-medium transition-colors"
                       title="Criar Nova Categoria"
                     >
                       + Nova
@@ -839,13 +894,13 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                         }
                       }}
                       placeholder="Nome da nova categoria (ex: Corporal)"
-                      className="flex-1 px-3 py-2 rounded-sm bg-white/90 border border-[#A67C52]/50 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                      className="flex-1 px-3 py-2 rounded-sm bg-white/90 border border-brand/50 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                       autoFocus
                     />
                     <button
                       type="button"
                       onClick={handleConfirmCustomCategory}
-                      className="px-3 py-2 text-xs bg-[#1A1A1A] text-white font-semibold rounded-sm hover:bg-black transition-colors"
+                      className="px-3 py-2 text-xs bg-ink text-white font-semibold rounded-sm hover:bg-black transition-colors"
                     >
                       Adicionar
                     </button>
@@ -861,15 +916,15 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               </div>
 
               <div className="flex items-center pt-5">
-                <label className="flex items-center gap-2.5 cursor-pointer bg-white/70 backdrop-blur-xs px-3.5 py-2 rounded-sm border border-white/80 w-full hover:border-[#A67C52]/60 transition-colors">
+                <label className="flex items-center gap-2.5 cursor-pointer bg-card px-3.5 py-2 rounded-sm border border-white/80 w-full hover:border-brand/60 transition-colors">
                   <input
                     type="checkbox"
                     checked={isFeatured}
                     onChange={(e) => setIsFeatured(e.target.checked)}
-                    className="w-4 h-4 text-[#A67C52] rounded-xs border-gray-300 focus:ring-[#A67C52]"
+                    className="w-4 h-4 text-brand rounded-xs border-gray-300 focus:ring-brand"
                   />
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-[#1A1A1A]">
-                    <Star className={`w-3.5 h-3.5 ${isFeatured ? 'text-[#A67C52] fill-[#A67C52]' : 'text-gray-400'}`} />
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-ink">
+                    <Star className={`w-3.5 h-3.5 ${isFeatured ? 'text-brand fill-brand' : 'text-gray-400'}`} />
                     Destacar este procedimento no catálogo
                   </div>
                 </label>
@@ -880,11 +935,11 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
           {/* Section: Doctor / Professional Assignment (Required by User) */}
           <div className="space-y-4 bg-white/40 p-4 rounded-sm border border-white/80 shadow-xs">
             <div className="flex items-center justify-between pb-1 border-b border-white/60">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
                 <Stethoscope className="w-3.5 h-3.5" />
                 Médica(s) Responsável(is) pelo Procedimento
               </h3>
-              <span className="text-[10px] text-gray-500 font-medium">
+              <span className="text-label text-gray-500 font-medium">
                 {assignedDoctorIds.length + customDoctorNames.length === 0
                   ? 'Nenhuma selecionada'
                   : assignedDoctorIds.length + customDoctorNames.length === 1
@@ -893,7 +948,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               </span>
             </div>
 
-            <p className="text-[11px] text-gray-600">
+            <p className="text-body text-gray-600">
               Selecione quais profissionais realizam este procedimento na La Vie Clinique. No catálogo poderá constar 1 ou 2 médicas responsáveis:
             </p>
 
@@ -908,7 +963,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                       onClick={() => toggleDoctorSelection(doc.id)}
                       className={`flex items-start gap-3 p-3 rounded-xs border cursor-pointer transition-all ${
                         isSelected
-                          ? 'bg-white border-[#A67C52] shadow-xs ring-1 ring-[#A67C52]'
+                          ? 'bg-white border-brand shadow-xs ring-1 ring-brand'
                           : 'bg-white/60 border-white/80 hover:bg-white hover:border-gray-300'
                       }`}
                     >
@@ -916,20 +971,20 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleDoctorSelection(doc.id)}
-                        className="mt-0.5 w-4 h-4 text-[#A67C52] rounded-xs border-gray-300 focus:ring-[#A67C52] cursor-pointer"
+                        className="mt-0.5 w-4 h-4 text-brand rounded-xs border-gray-300 focus:ring-brand cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
                       />
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-[#1A1A1A]">{doc.name}</p>
+                          <p className="text-xs font-semibold text-ink">{doc.name}</p>
                           {(doc.specialty || doc.title) && (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded-xs bg-[#A67C52]/15 text-[#A67C52] font-semibold truncate max-w-[140px]">
+                            <span className="text-label px-1.5 py-0.2 rounded-xs bg-brand/15 text-brand font-semibold truncate max-w-[140px]">
                               {doc.specialty || doc.title}
                             </span>
                           )}
                         </div>
                         {doc.title && doc.specialty && (
-                          <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{doc.title}</p>
+                          <p className="text-label text-gray-500 mt-0.5 line-clamp-1">{doc.title}</p>
                         )}
                       </div>
                     </div>
@@ -944,7 +999,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             {/* Custom Doctor Addition */}
             <div className="pt-2">
-              <label className="block text-[11px] font-medium text-gray-700 mb-1">
+              <label className="block text-body font-medium text-gray-700 mb-1">
                 Ou atribuir médica / especialista avulsa para este procedimento:
               </label>
               <div className="flex gap-2">
@@ -959,12 +1014,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                     }
                   }}
                   placeholder="Ex: Dra. Nome da Médica • Especialidade"
-                  className="flex-1 px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs text-[#1A1A1A]"
+                  className="flex-1 px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs text-ink"
                 />
                 <button
                   type="button"
                   onClick={handleAddCustomDoctor}
-                  className="px-3 py-1.5 bg-[#1A1A1A] text-white text-xs font-medium rounded-xs hover:bg-[#333]"
+                  className="px-3 py-1.5 bg-ink text-white text-xs font-medium rounded-xs hover:bg-[#333]"
                 >
                   Adicionar
                 </button>
@@ -975,9 +1030,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   {customDoctorNames.map((name, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1 text-xs bg-[#C49B74]/20 text-[#1A1A1A] px-2.5 py-0.5 rounded-xs border border-[#C49B74]/40"
+                      className="inline-flex items-center gap-1 text-xs bg-brand-light/20 text-ink px-2.5 py-0.5 rounded-xs border border-brand-light/40"
                     >
-                      <UserCheck className="w-3 h-3 text-[#A67C52]" />
+                      <UserCheck className="w-3 h-3 text-brand" />
                       {name}
                       <button
                         type="button"
@@ -995,14 +1050,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
           {/* Section 2: Values & Investment */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <span className="font-serif-luxury text-sm">R$</span>
               Valores e Investimento
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Valor Normal (R$) *
                 </label>
                 <input
@@ -1011,14 +1066,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   placeholder="Ex: 1500"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                   required
                 />
                 {errors.price && <p className="text-xs text-red-600 mt-1">{errors.price}</p>}
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Valor Promocional (R$) <span className="text-gray-500 font-normal">(Opcional)</span>
                 </label>
                 <input
@@ -1027,12 +1082,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   value={promotionalPrice}
                   onChange={(e) => setPromotionalPrice(e.target.value)}
                   placeholder="Ex: 1250"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Condição / Sufixo do Valor
                 </label>
                 <input
@@ -1040,13 +1095,13 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   value={priceNote}
                   onChange={(e) => setPriceNote(e.target.value)}
                   placeholder="Ex: por sessão, pacote 3x, a partir de"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
             </div>
 
             {/* Checkbox "A partir de" */}
-            <div className="bg-white/60 backdrop-blur-xs border border-white/80 rounded-sm p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="bg-card border border-white/80 rounded-sm p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <label 
                 htmlFor="procedure-is-starting-price" 
                 className="flex items-start sm:items-center gap-3 cursor-pointer select-none group"
@@ -1056,22 +1111,22 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   id="procedure-is-starting-price"
                   checked={isStartingPrice}
                   onChange={(e) => setIsStartingPrice(e.target.checked)}
-                  className="w-4 h-4 mt-0.5 sm:mt-0 rounded border-gray-300 text-[#A67C52] focus:ring-[#A67C52] accent-[#A67C52] cursor-pointer"
+                  className="w-4 h-4 mt-0.5 sm:mt-0 rounded border-gray-300 text-brand focus:ring-brand accent-brand cursor-pointer"
                 />
                 <div>
-                  <span className="text-xs font-semibold text-[#1A1A1A] group-hover:text-[#A67C52] transition-colors flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-ink group-hover:text-brand transition-colors flex items-center gap-1.5">
                     Habilitar "A partir de" no preço
                   </span>
-                  <p className="text-[11px] text-[#737373] mt-0.5">
+                  <p className="text-body text-muted mt-0.5">
                     Adiciona o prefixo "a partir de" antes do valor nos cards, no catálogo e nos orçamentos.
                   </p>
                 </div>
               </label>
 
               {price && !isNaN(Number(price)) && Number(price) > 0 && (
-                <div className="text-left sm:text-right shrink-0 bg-[#F5F2ED] px-3 py-1.5 rounded border border-[#E5DFD7]">
-                  <span className="text-[10px] text-[#8a8578] uppercase tracking-wider block font-medium">Prévia no catálogo:</span>
-                  <span className="text-xs font-semibold text-[#8E653D]">
+                <div className="text-left sm:text-right shrink-0 bg-surface-2 px-3 py-1.5 rounded border border-line">
+                  <span className="text-label text-muted uppercase tracking-wider block font-medium">Prévia no catálogo:</span>
+                  <span className="text-xs font-semibold text-brand-hover">
                     {isStartingPrice ? 'a partir de ' : ''}
                     {formatBRL(promotionalPrice && Number(promotionalPrice) > 0 ? Number(promotionalPrice) : Number(price))}
                     {priceNote ? ` ${priceNote}` : ''}
@@ -1083,14 +1138,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
           {/* Section 3: Clinical Specs */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <Sparkles className="w-3.5 h-3.5" />
               Especificações e Protocolo
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Duração do Atendimento
                 </label>
                 <input
@@ -1098,12 +1153,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
                   placeholder="Ex: 45 min, 1h 30min"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Plano Recomendado
                 </label>
                 <input
@@ -1111,12 +1166,27 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   value={sessionsRecommended}
                   onChange={(e) => setSessionsRecommended(e.target.value)}
                   placeholder="Ex: 1 a 3 sessões anuais"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
+                  Intervalo entre sessões (dias)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={intervaloEntreSessoesDias}
+                  onChange={(e) => setIntervaloEntreSessoesDias(e.target.value)}
+                  placeholder="30"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">
                   Recuperação / Downtime
                 </label>
                 <input
@@ -1124,13 +1194,32 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   value={recoveryTime}
                   onChange={(e) => setRecoveryTime(e.target.value)}
                   placeholder="Ex: Sem downtime, 48h leve edema"
-                  className="w-full px-3.5 py-2 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A]"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
                 />
               </div>
             </div>
 
+            {/* Preparo da paciente. Diferente de "Contraindicações": aquilo é motivo para não
+                fazer; isto é o que fazer antes de quem já vai. */}
             <div>
-              <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+              <label className="block text-body font-medium text-ink mb-1">
+                Orientações de preparo (antes de vir)
+              </label>
+              <textarea
+                rows={2}
+                value={orientacoesPreProcedimento}
+                onChange={(e) => setOrientacoesPreProcedimento(e.target.value)}
+                placeholder="Ex: Não depile com cera nos 30 dias anteriores. Venha sem maquiagem na área."
+                className="w-full px-3.5 py-2 rounded-sm bg-card border border-line text-body font-medium text-ink focus:outline-hidden focus:border-brand"
+              />
+              <p className="mt-1 text-label text-muted">
+                Vai junto na confirmação pelo WhatsApp, quando essa opção estiver ligada nas
+                Configurações.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">
                 Descrição Completa do Procedimento *
               </label>
               <textarea
@@ -1138,7 +1227,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Descreva detalhadamente a técnica, substâncias utilizadas, objetivos e resultados esperados..."
-                className="w-full px-3.5 py-2.5 rounded-sm bg-white/70 backdrop-blur-xs border border-white/80 text-xs font-medium text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                className="w-full px-3.5 py-2.5 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 required
               />
               {errors.description && <p className="text-xs text-red-600 mt-1">{errors.description}</p>}
@@ -1146,7 +1235,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             {/* Interactive Benefits list */}
             <div>
-              <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+              <label className="block text-xs font-medium text-ink mb-1">
                 Benefícios & Destaques (Tags)
               </label>
               <div className="flex gap-2 mb-2">
@@ -1161,12 +1250,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                     }
                   }}
                   placeholder="Digite um benefício e aperte Adicionar (ex: Efeito lifting sem cortes)"
-                  className="flex-1 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-[#1A1A1A]"
+                  className="flex-1 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-ink"
                 />
                 <button
                   type="button"
                   onClick={handleAddBenefit}
-                  className="px-3 py-1.5 bg-[#1A1A1A] text-white text-xs font-medium rounded-sm hover:bg-[#2A2A2E]"
+                  className="px-3 py-1.5 bg-ink text-white text-xs font-medium rounded-sm hover:bg-ink"
                 >
                   Adicionar
                 </button>
@@ -1175,7 +1264,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 {benefits.map((b, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1.5 text-xs bg-white/80 backdrop-blur-xs px-2.5 py-1 rounded-xs border border-white/90 text-[#1A1A1A]"
+                    className="inline-flex items-center gap-1.5 text-xs bg-card px-2.5 py-1 rounded-xs border border-white/90 text-ink"
                   >
                     ✦ {b}
                     <button
@@ -1192,7 +1281,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             {/* Areas Treated */}
             <div>
-              <label className="block text-xs font-medium text-[#1A1A1A] mb-1">
+              <label className="block text-xs font-medium text-ink mb-1">
                 Regiões Aplicadas (Opcional)
               </label>
               <div className="flex gap-2 mb-2">
@@ -1207,12 +1296,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                     }
                   }}
                   placeholder="Ex: Lábios, Mandíbula, Terço Superior"
-                  className="flex-1 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-[#1A1A1A]"
+                  className="flex-1 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-ink"
                 />
                 <button
                   type="button"
                   onClick={handleAddArea}
-                  className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm"
+                  className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm"
                 >
                   + Região
                 </button>
@@ -1239,12 +1328,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
           {/* Section 3.5: Quote Details — pré-preenchem a grade de detalhes do item no orçamento */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5 pb-1 border-b border-white/60">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <FileText className="w-3.5 h-3.5" />
               Detalhes para Orçamento ({quoteDetails.length})
             </h3>
 
-            <p className="text-[11px] leading-relaxed text-gray-500">
+            <p className="text-body leading-relaxed text-gray-500">
               Campos que já nascem preenchidos no orçamento deste procedimento — produto, unidades,
               duração do efeito, anestesia, intervalo. Quem emitir pode editar ou remover cada um.
               <span className="block mt-1 text-gray-400">
@@ -1261,14 +1350,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                     value={detail.titulo}
                     onChange={(e) => handleUpdateQuoteDetail(detail.id, 'titulo', e.target.value)}
                     placeholder="Produto / marca"
-                    className="w-2/5 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-[#1A1A1A]"
+                    className="w-2/5 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-ink"
                   />
                   <input
                     type="text"
                     value={detail.valor}
                     onChange={(e) => handleUpdateQuoteDetail(detail.id, 'valor', e.target.value)}
                     placeholder="Botulift® 100U"
-                    className="flex-1 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-[#1A1A1A]"
+                    className="flex-1 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-ink"
                   />
                   <button
                     type="button"
@@ -1284,7 +1373,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               <button
                 type="button"
                 onClick={handleAddQuoteDetail}
-                className="px-3 py-1.5 bg-white/60 border border-white/80 text-[#1A1A1A] text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Adicionar campo
@@ -1295,14 +1384,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
           {/* Section 4: Images & Visuals */}
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-1 border-b border-white/60">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-[#A67C52] flex items-center gap-1.5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
                 <ImageIcon className="w-3.5 h-3.5" />
                 Imagens do Procedimento ({images.length}) *
               </h3>
               <button
                 type="button"
                 onClick={() => setShowPresetLibrary(!showPresetLibrary)}
-                className="text-xs font-semibold text-[#A67C52] hover:text-[#8e6945] flex items-center gap-1"
+                className="text-xs font-semibold text-brand hover:text-brand-hover flex items-center gap-1"
               >
                 {showPresetLibrary ? 'Ocultar Banco de Fotos' : 'Ver Banco de Fotos Estéticas'}
               </button>
@@ -1310,7 +1399,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             {/* Preset Photo Picker */}
             {showPresetLibrary && (
-              <div className="p-3 bg-white/60 backdrop-blur-md rounded-sm border border-white/80 space-y-2">
+              <div className="p-3 bg-card rounded-sm border border-white/80 space-y-2">
                 <p className="text-xs font-medium text-gray-600">
                   Selecione fotos de estética premium com um clique:
                 </p>
@@ -1319,11 +1408,11 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                     <div
                       key={pIdx}
                       onClick={() => setImages((prev) => [...prev, preset.url])}
-                      className="relative aspect-4/3 rounded-xs overflow-hidden cursor-pointer group border border-white/80 hover:border-[#A67C52] transition-all"
+                      className="relative aspect-4/3 rounded-xs overflow-hidden cursor-pointer group border border-white/80 hover:border-brand transition-all"
                     >
                       <img src={preset.url} alt={preset.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                       <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 flex items-end p-1.5 transition-colors">
-                        <span className="text-[10px] text-white font-medium line-clamp-1">{preset.title}</span>
+                        <span className="text-label text-white font-medium line-clamp-1">{preset.title}</span>
                       </div>
                     </div>
                   ))}
@@ -1333,10 +1422,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             {/* Upload Box & URL input */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="flex flex-col items-center justify-center p-4 border border-dashed border-white/80 rounded-sm bg-white/60 backdrop-blur-xs transition-all group hover:border-[#A67C52] cursor-pointer">
-                <Upload className="w-6 h-6 text-gray-400 group-hover:text-[#A67C52] mb-1" />
-                <span className="text-xs font-medium text-[#1A1A1A]">Fazer upload de foto</span>
-                <span className="text-[10px] text-gray-500">PNG, JPG, WEBP — você enquadra a foto antes de salvar</span>
+              <label className="flex flex-col items-center justify-center p-4 border border-dashed border-white/80 rounded-sm bg-card transition-all group hover:border-brand cursor-pointer">
+                <Upload className="w-6 h-6 text-gray-400 group-hover:text-brand mb-1" />
+                <span className="text-xs font-medium text-ink">Fazer upload de foto</span>
+                <span className="text-label text-gray-500">PNG, JPG, WEBP — você enquadra a foto antes de salvar</span>
                 <input
                   type="file"
                   multiple
@@ -1346,8 +1435,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 />
               </label>
 
-              <div className="flex flex-col justify-center gap-2 p-3 bg-white/60 backdrop-blur-xs border border-white/80 rounded-sm">
-                <span className="text-xs font-medium text-[#1A1A1A] flex items-center gap-1">
+              <div className="flex flex-col justify-center gap-2 p-3 bg-card border border-white/80 rounded-sm">
+                <span className="text-xs font-medium text-ink flex items-center gap-1">
                   <LinkIcon className="w-3.5 h-3.5 text-gray-400" /> Ou colar URL de imagem:
                 </span>
                 <div className="flex gap-1.5">
@@ -1361,7 +1450,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   <button
                     type="button"
                     onClick={handleAddImageUrl}
-                    className="px-2.5 py-1.5 text-xs bg-[#1A1A1A] text-white rounded-sm font-medium"
+                    className="px-2.5 py-1.5 text-xs bg-ink text-white rounded-sm font-medium"
                   >
                     Adicionar
                   </button>
@@ -1376,7 +1465,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   <div key={idx} className="relative aspect-square rounded-xs overflow-hidden border border-white/80 group">
                     <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     {idx === 0 && (
-                      <span className="absolute top-1 left-1 text-[9px] font-bold bg-[#1A1A1A] text-[#C49B74] px-1.5 py-0.5 rounded-xs">
+                      <span className="absolute top-1 left-1 text-label font-bold bg-ink text-brand-light px-1.5 py-0.5 rounded-xs">
                         Capa
                       </span>
                     )}
@@ -1389,7 +1478,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                           setCropQueueTotal(0);
                           setAdjustingImage({ index: idx, src: img });
                         }}
-                        className="p-1.5 bg-[#1A1A1A]/85 hover:bg-[#1A1A1A] text-white rounded-full shadow-sm transition-colors"
+                        className="p-1.5 bg-ink/85 hover:bg-ink text-white rounded-full shadow-sm transition-colors"
                         title="Ajustar enquadramento"
                       >
                         <Crop className="w-3.5 h-3.5" />
@@ -1424,51 +1513,6 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </>
           )}
 
-          {/* Form Actions Footer */}
-          <div className="pt-4 border-t border-white/60 flex items-center justify-end gap-3 sticky bottom-0 bg-[#F9F8F6]/90 backdrop-blur-md py-2">
-            {confirmandoSaida && (
-              <p className="text-[11px] text-[#8E5B1A] mr-auto leading-snug max-w-sm">
-                Há uma área desenhada que ainda não foi aplicada — ela se perde ao fechar. Toque em
-                Fechar de novo para confirmar.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={handleFechar}
-              className={`px-4 py-2.5 rounded-sm border text-xs font-semibold uppercase tracking-wider transition-colors ${
-                confirmandoSaida
-                  ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
-                  : 'border-white/80 text-gray-600 hover:bg-white'
-              }`}
-            >
-              {/* Em modo laser quem grava é o "Aplicar" de cada área — não há o que cancelar. */}
-              {ehLaser ? 'Fechar' : 'Cancelar'}
-            </button>
-            <button
-              type="submit"
-              hidden={ehLaser}
-              disabled={cropSource !== null || isSaving}
-              className="px-6 py-2.5 rounded-sm bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-[#8e6945] active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{savingStatus || 'Salvando...'}</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  <span>
-                    {cropSource
-                      ? 'Enquadrando foto...'
-                      : procedureToEdit
-                      ? 'Salvar Alterações'
-                      : 'Cadastrar Procedimento'}
-                  </span>
-                </>
-              )}
-            </button>
-          </div>
         </form>
       </div>
 
@@ -1490,6 +1534,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
         onCancel={handleCropCancel}
         onConfirm={handleCropConfirm}
       />
-    </div>
+
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+    </SidePanel>
   );
 };

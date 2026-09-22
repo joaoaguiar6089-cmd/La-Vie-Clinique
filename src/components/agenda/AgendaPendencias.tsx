@@ -64,10 +64,10 @@ export const AgendaPendencias: React.FC<AgendaPendenciasProps> = ({
                 onClick={() => onIrParaData(a.data)}
                 className="flex-1 min-w-0 text-left group"
               >
-                <span className="block text-xs font-medium text-[#1A1A1A] truncate group-hover:text-[#A67C52] transition-colors">
+                <span className="block text-xs font-medium text-ink truncate group-hover:text-brand transition-colors">
                   {a.pacienteNome}
                 </span>
-                <span className="block text-[11px] text-gray-500 truncate">
+                <span className="block text-body text-gray-500 truncate">
                   {dataCurta(a.data)}
                   {a.hora ? ` às ${a.hora}` : ''} · {a.procedimentoNome}
                   {a.profissionalNome ? ` · ${a.profissionalNome}` : ''}
@@ -78,7 +78,7 @@ export const AgendaPendencias: React.FC<AgendaPendenciasProps> = ({
                 <button
                   type="button"
                   onClick={() => onCompareceu(a)}
-                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-sm text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 transition-colors"
+                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-sm text-body font-medium text-emerald-700 hover:bg-emerald-50 transition-colors"
                 >
                   <Check className="w-3.5 h-3.5" />
                   Compareceu
@@ -86,7 +86,7 @@ export const AgendaPendencias: React.FC<AgendaPendenciasProps> = ({
                 <button
                   type="button"
                   onClick={() => onFaltou(a)}
-                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-sm text-[11px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-sm text-body font-medium text-red-600 hover:bg-red-50 transition-colors"
                 >
                   <X className="w-3.5 h-3.5" />
                   Faltou
@@ -94,7 +94,7 @@ export const AgendaPendencias: React.FC<AgendaPendenciasProps> = ({
                 <button
                   type="button"
                   onClick={() => onRemarcar(a)}
-                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-sm text-[11px] font-medium text-gray-500 hover:bg-white transition-colors"
+                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-sm text-body font-medium text-gray-500 hover:bg-white transition-colors"
                 >
                   <CalendarClock className="w-3.5 h-3.5" />
                   Remarcar

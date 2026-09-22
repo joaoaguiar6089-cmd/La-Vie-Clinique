@@ -75,10 +75,10 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex flex-col animate-fadeIn">
-      <div className="flex items-center justify-between px-6 py-4 bg-[#1A1A1A] shrink-0">
+    <div className="fixed inset-0 z-50 bg-black/70 flex flex-col animate-fadeIn">
+      <div className="flex items-center justify-between px-6 py-4 bg-ink shrink-0">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#A67C52]">
+          <p className="text-label font-semibold uppercase tracking-widest text-brand">
             Prévia do orçamento
           </p>
           <h2 className="text-xl text-white font-serif-luxury tabular-nums">
@@ -91,7 +91,7 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
             type="button"
             onClick={baixarPdf}
             disabled={exportando}
-            className="px-5 py-2.5 bg-[#A67C52] text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-[#8E653D] transition-colors disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-brand text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-brand-hover transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             {exportando ? (
               <>

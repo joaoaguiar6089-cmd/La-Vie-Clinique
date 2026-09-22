@@ -22,6 +22,8 @@ import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import { LaserAreaPicker } from '../laser/LaserAreaPicker';
 import { ehTemplateDeLaser } from '../../utils/templateMatching';
+import { SidePanel } from '../common/SidePanel';
+import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 import { listarNomesDeAreas, montarEspelhoPublico } from '../../utils/laserAreas';
 import {
   X,
@@ -53,8 +55,8 @@ interface GenderToggleProps {
 
 const GenderToggle: React.FC<GenderToggleProps> = ({ value, onChange, error }) => (
   <div>
-    <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
-      Gênero <span className="text-[#8a8578] font-normal">(define a foto de referência)</span>
+    <label className="block text-[13px] font-semibold text-ink mb-1.5">
+      Gênero <span className="text-muted font-normal">(define a foto de referência)</span>
     </label>
     <div className="flex items-center gap-2">
       <button
@@ -62,8 +64,8 @@ const GenderToggle: React.FC<GenderToggleProps> = ({ value, onChange, error }) =
         onClick={() => onChange('feminino')}
         className={`flex-1 h-11 rounded-xl text-[14px] font-semibold transition-colors border ${
           value === 'feminino'
-            ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-            : `bg-white text-[#4a4740] hover:border-[#A67C52]/40 ${error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)]'}`
+            ? 'bg-ink text-white border-ink'
+            : `bg-white text-ink-soft hover:border-brand/40 ${error ? 'border-danger' : 'border-[rgba(26,26,26,.12)]'}`
         }`}
       >
         Feminino
@@ -73,20 +75,20 @@ const GenderToggle: React.FC<GenderToggleProps> = ({ value, onChange, error }) =
         onClick={() => onChange('masculino')}
         className={`flex-1 h-11 rounded-xl text-[14px] font-semibold transition-colors border ${
           value === 'masculino'
-            ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-            : `bg-white text-[#4a4740] hover:border-[#A67C52]/40 ${error ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)]'}`
+            ? 'bg-ink text-white border-ink'
+            : `bg-white text-ink-soft hover:border-brand/40 ${error ? 'border-danger' : 'border-[rgba(26,26,26,.12)]'}`
         }`}
       >
         Masculino
       </button>
     </div>
-    {error && <p className="text-[13px] text-[#E11D48] mt-1">{error}</p>}
+    {error && <p className="text-[13px] text-danger mt-1">{error}</p>}
   </div>
 );
 
 /** Pequena pílula indicando que a pergunta é de uso exclusivo da equipe clínica. */
 const StaffOnlyPill: React.FC = () => (
-  <span className="inline-block text-[11px] font-semibold text-[#4338CA] bg-[#EEF2FF] px-2 py-0.5 rounded-full border border-[#E0E7FF] ml-2 align-middle">
+  <span className="inline-block text-body font-semibold text-[#4338CA] bg-[#EEF2FF] px-2 py-0.5 rounded-full border border-[#E0E7FF] ml-2 align-middle">
     Não vai ao paciente
   </span>
 );
@@ -135,6 +137,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   onOpenRecordDetail,
 }) => {
   // Patient selection or creation
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [patientMode, setPatientMode] = useState<'select' | 'new'>('select');
   const [selectedPatientId, setSelectedPatientId] = useState<string>(initialPatientId || '');
   const [newPatientName, setNewPatientName] = useState('');
@@ -254,7 +257,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
       setFotoAnotacoesJson(undefined);
     } catch (err) {
       console.error(err);
-      alert('Falha ao processar foto.');
+      setConfirmacao(aviso('Não foi possível usar essa foto', 'Falha ao processar a imagem. Tente outra foto.', 'perigo'));
     }
   };
 
@@ -321,7 +324,12 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
   const handleSaveForm = async (openPrintAfter = false) => {
     if (!validateForm()) {
-      alert('Por favor, verifique os campos obrigatórios (paciente, procedimento e profissional responsável).');
+      setConfirmacao(
+        aviso(
+          'Faltam campos obrigatórios',
+          'Confira paciente, procedimento e profissional responsável antes de salvar.'
+        )
+      );
       return;
     }
 
@@ -447,65 +455,73 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
       }
     } catch (err) {
       console.error(err);
-      alert('Erro ao salvar ficha de anamnese.');
+      setConfirmacao(aviso('Não foi possível salvar', 'Erro ao salvar a ficha de anamnese. Tente novamente.', 'perigo'));
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fadeIn">
-      <div className="relative w-full max-w-4xl bg-[#F9F8F6] rounded-2xl border border-white/80 shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
-        {/* Modal Top Header */}
-        <div className="px-4 sm:px-6 py-4 bg-[#1A1A1A] text-white flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#C49B74] shrink-0" />
-            <div className="min-w-0">
-              <h3 className="font-serif-luxury text-[18px] sm:text-[21px] font-medium tracking-tight truncate">
-                Nova Ficha de Anamnese
-              </h3>
-              <p className="text-[13px] text-[#C49B74] font-medium truncate hidden sm:block">
-                {clinicProfile.name || 'La Vie Clinique'} · Registro médico e estético integrado
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+    <SidePanel
+      aberto
+      onFechar={onClose}
+      titulo="Nova ficha de anamnese"
+      sobretitulo={clinicProfile.name || 'La Vie Clinique'}
+      largura="larga"
+      bloqueado={isSaving}
+      /* Escolher a paciente ou a ficha-modelo passa por `change`; anexar foto, não. */
+      alterado={!!fotoUrl}
+      rodape={
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setIsShareOpen(true)}
+            className="w-full sm:w-auto h-[48px] px-4 rounded-xl border border-line text-body-lg font-semibold text-ink-soft hover:border-brand hover:text-brand transition-colors whitespace-nowrap flex items-center justify-center gap-2"
+          >
+            <Share2 className="w-[18px] h-[18px] shrink-0" />
+            Link pro paciente
+          </button>
+
+          <div className="w-full sm:w-auto flex items-center gap-2.5">
             <button
               type="button"
-              onClick={() => setIsShareOpen(true)}
-              className="flex items-center gap-2 h-10 px-3 sm:px-4 rounded-xl border border-white/25 text-white text-[13px] sm:text-[14px] font-semibold hover:bg-white/10 active:scale-97 transition-all"
+              disabled={isSaving}
+              onClick={() => handleSaveForm(false)}
+              className="flex-1 sm:flex-initial h-[48px] px-5 rounded-xl bg-card border border-line text-body-lg font-semibold text-ink hover:border-brand hover:text-brand transition-colors disabled:opacity-50 whitespace-nowrap"
             >
-              <Share2 className="w-[18px] h-[18px] shrink-0" />
-              Link pro paciente
+              {isSaving ? 'Gravando...' : 'Salvar ficha'}
             </button>
+
             <button
               type="button"
-              onClick={onClose}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+              disabled={isSaving}
+              onClick={() => handleSaveForm(true)}
+              className="flex-1 sm:flex-initial h-[48px] px-6 rounded-xl bg-ink text-brand-light text-body-lg font-semibold flex items-center justify-center gap-2 shadow-xs active:scale-97 transition-all disabled:opacity-50 whitespace-nowrap"
             >
-              <X className="w-5 h-5" />
+              <Printer className="w-4 h-4" />
+              {isSaving ? 'Processando...' : 'Salvar e gerar PDF'}
             </button>
           </div>
         </div>
-
-        {/* Modal Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+      }
+    >
+      <div className="p-4 sm:p-6 space-y-5">
           {/* SECTION 1: PACIENTE & ATENDIMENTO */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3 border-b border-[rgba(26,26,26,.07)] pb-3">
-              <h4 className="text-[15px] font-semibold text-[#1A1A1A] flex items-center gap-2">
-                <User className="w-4 h-4 text-[#A67C52]" />
+              <h4 className="text-[15px] font-semibold text-ink flex items-center gap-2">
+                <User className="w-4 h-4 text-brand" />
                 1. Identificação do paciente & atendimento
               </h4>
 
-              <div className="flex items-center gap-1 bg-[#F9F8F6] p-1 rounded-xl">
+              <div className="flex items-center gap-1 bg-surface p-1 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setPatientMode('select')}
                   className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
                     patientMode === 'select'
-                      ? 'bg-white text-[#1A1A1A] shadow-xs font-semibold'
-                      : 'text-[#8a8578] hover:text-[#1A1A1A]'
+                      ? 'bg-white text-ink shadow-xs font-semibold'
+                      : 'text-muted hover:text-ink'
                   }`}
                 >
                   Paciente cadastrado
@@ -515,8 +531,8 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                   onClick={() => setPatientMode('new')}
                   className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
                     patientMode === 'new'
-                      ? 'bg-white text-[#1A1A1A] shadow-xs font-semibold'
-                      : 'text-[#8a8578] hover:text-[#1A1A1A]'
+                      ? 'bg-white text-ink shadow-xs font-semibold'
+                      : 'text-muted hover:text-ink'
                   }`}
                 >
                   + Novo paciente
@@ -528,15 +544,15 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
             {patientMode === 'select' && (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                  <label className="block text-[13px] font-semibold text-ink mb-1.5">
                     Selecione o paciente
                   </label>
                   <select
                     value={selectedPatientId}
                     onChange={(e) => setSelectedPatientId(e.target.value)}
-                    className={`w-full h-11 px-3 text-[14px] rounded-xl bg-[#F9F8F6] border ${
-                      errors['patient_select'] ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)]'
-                    } text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] font-medium`}
+                    className={`w-full h-11 px-3 text-[14px] rounded-xl bg-surface border ${
+                      errors['patient_select'] ? 'border-danger' : 'border-[rgba(26,26,26,.12)]'
+                    } text-ink focus:outline-hidden focus:border-brand font-medium`}
                   >
                     <option value="">-- Escolha um paciente da clínica --</option>
                     {patients.map((pat) => (
@@ -546,15 +562,15 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     ))}
                   </select>
                   {errors['patient_select'] && (
-                    <p className="text-[13px] text-[#E11D48] mt-1">{errors['patient_select']}</p>
+                    <p className="text-[13px] text-danger mt-1">{errors['patient_select']}</p>
                   )}
                 </div>
 
                 {selectedPatientId && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-[#F9F8F6] rounded-xl">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-surface rounded-xl">
                     <div>
-                      <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5 flex items-center gap-1.5">
-                        <Music className="w-3.5 h-3.5 text-[#A67C52]" />
+                      <label className="block text-[13px] font-semibold text-ink mb-1.5 flex items-center gap-1.5">
+                        <Music className="w-3.5 h-3.5 text-brand" />
                         Tipo de música
                       </label>
                       <input
@@ -562,7 +578,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                         value={tipoMusica}
                         onChange={(e) => setTipoMusica(e.target.value)}
                         placeholder="Ex: MPB, Jazz, Pop, Lounge, Clássica..."
-                        className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                        className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                       />
                     </div>
                     <GenderToggle
@@ -580,9 +596,9 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
             {/* New Patient Inline Fields */}
             {patientMode === 'new' && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-[#F9F8F6] rounded-xl">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-surface rounded-xl">
                 <div className="sm:col-span-2">
-                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                  <label className="block text-[13px] font-semibold text-ink mb-1.5">
                     Nome completo
                   </label>
                   <input
@@ -590,15 +606,15 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     value={newPatientName}
                     onChange={(e) => setNewPatientName(e.target.value)}
                     placeholder="Ex: Ana Clara Menezes"
-                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                   />
                   {errors['patient_name'] && (
-                    <p className="text-[13px] text-[#E11D48] mt-1">{errors['patient_name']}</p>
+                    <p className="text-[13px] text-danger mt-1">{errors['patient_name']}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                  <label className="block text-[13px] font-semibold text-ink mb-1.5">
                     WhatsApp / telefone
                   </label>
                   <input
@@ -606,25 +622,25 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     value={newPatientPhone}
                     onChange={(e) => setNewPatientPhone(e.target.value)}
                     placeholder="(19) 99999-9999"
-                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                  <label className="block text-[13px] font-semibold text-ink mb-1.5">
                     Data de nascimento
                   </label>
                   <input
                     type="date"
                     value={newPatientBirth}
                     onChange={(e) => setNewPatientBirth(e.target.value)}
-                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5 flex items-center gap-1.5">
-                    <Music className="w-3.5 h-3.5 text-[#A67C52]" />
+                  <label className="block text-[13px] font-semibold text-ink mb-1.5 flex items-center gap-1.5">
+                    <Music className="w-3.5 h-3.5 text-brand" />
                     Tipo de música
                   </label>
                   <input
@@ -632,14 +648,14 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     value={tipoMusica}
                     onChange={(e) => setTipoMusica(e.target.value)}
                     placeholder="Ex: MPB, Jazz, Pop, Lounge, Clássica..."
-                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5 flex items-center gap-1.5">
-                    <IdCard className="w-3.5 h-3.5 text-[#A67C52]" />
-                    CPF <span className="text-[#8a8578] font-normal">(opcional)</span>
+                  <label className="block text-[13px] font-semibold text-ink mb-1.5 flex items-center gap-1.5">
+                    <IdCard className="w-3.5 h-3.5 text-brand" />
+                    CPF <span className="text-muted font-normal">(opcional)</span>
                   </label>
                   <input
                     type="text"
@@ -647,12 +663,12 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     value={newPatientCpf}
                     onChange={(e) => setNewPatientCpf(formatCpf(e.target.value))}
                     placeholder="000.000.000-00"
-                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                  <label className="block text-[13px] font-semibold text-ink mb-1.5">
                     E-mail
                   </label>
                   <input
@@ -660,7 +676,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     value={newPatientEmail}
                     onChange={(e) => setNewPatientEmail(e.target.value)}
                     placeholder="paciente@exemplo.com"
-                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                    className="w-full h-11 px-3 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                   />
                 </div>
 
@@ -678,13 +694,13 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
             {/* Procedure Template, Date & Professional */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
               <div>
-                <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                <label className="block text-[13px] font-semibold text-ink mb-1.5">
                   Procedimento / ficha
                 </label>
                 <select
                   value={selectedTemplateId}
                   onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  className="w-full h-11 px-3 text-[14px] rounded-xl bg-[#F9F8F6] border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] font-semibold"
+                  className="w-full h-11 px-3 text-[14px] rounded-xl bg-surface border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand font-semibold"
                 >
                   {templates.map((tpl) => (
                     <option key={tpl.id} value={tpl.id}>
@@ -695,19 +711,19 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                <label className="block text-[13px] font-semibold text-ink mb-1.5">
                   Data do atendimento
                 </label>
                 <input
                   type="date"
                   value={dataAtendimento}
                   onChange={(e) => setDataAtendimento(e.target.value)}
-                  className="w-full h-11 px-3 text-[14px] rounded-xl bg-[#F9F8F6] border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]"
+                  className="w-full h-11 px-3 text-[14px] rounded-xl bg-surface border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
 
               <div>
-                <label className="block text-[13px] font-semibold text-[#1A1A1A] mb-1.5">
+                <label className="block text-[13px] font-semibold text-ink mb-1.5">
                   Profissional responsável
                 </label>
                 <select
@@ -722,9 +738,9 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                       });
                     }
                   }}
-                  className={`w-full h-11 px-3 text-[14px] rounded-xl bg-[#F9F8F6] border ${
-                    errors['professional'] ? 'border-[#E11D48]' : 'border-[rgba(26,26,26,.12)]'
-                  } text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52]`}
+                  className={`w-full h-11 px-3 text-[14px] rounded-xl bg-surface border ${
+                    errors['professional'] ? 'border-danger' : 'border-[rgba(26,26,26,.12)]'
+                  } text-ink focus:outline-hidden focus:border-brand`}
                 >
                   <option value="">-- Selecione o profissional --</option>
                   {clinicProfile.professionals?.map((p) => (
@@ -734,7 +750,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                   ))}
                 </select>
                 {errors['professional'] && (
-                  <p className="text-[13px] text-[#E11D48] mt-1">{errors['professional']}</p>
+                  <p className="text-[13px] text-danger mt-1">{errors['professional']}</p>
                 )}
                 {(!clinicProfile.professionals || clinicProfile.professionals.length === 0) && (
                   <p className="text-[13px] text-amber-600 mt-1">
@@ -769,11 +785,11 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           {ehFichaDeLaser && (
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-3">
               <div className="border-b border-[rgba(26,26,26,.07)] pb-3">
-                <h4 className="text-[15px] font-semibold text-[#1A1A1A] flex items-center gap-2">
-                  <Scan className="w-4 h-4 text-[#A67C52]" />
+                <h4 className="text-[15px] font-semibold text-ink flex items-center gap-2">
+                  <Scan className="w-4 h-4 text-brand" />
                   Áreas a tratar
                 </h4>
-                <p className="text-[13px] text-[#8a8578] mt-0.5">
+                <p className="text-[13px] text-muted mt-0.5">
                   Marque as regiões desta sessão. Fica gravado como a conduta da profissional,
                   separado do que a paciente pediu pelo link.
                 </p>
@@ -788,7 +804,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
               />
 
               {areasConfirmadas.size > 0 && (
-                <p className="text-[13px] text-[#1A1A1A] bg-[#FCE4EF] border border-[#F3C6DC] rounded-xl px-3 py-2 leading-snug">
+                <p className="text-[13px] text-ink bg-[#FCE4EF] border border-[#F3C6DC] rounded-xl px-3 py-2 leading-snug">
                   <strong>{areasConfirmadas.size}</strong>{' '}
                   {areasConfirmadas.size === 1 ? 'área' : 'áreas'}: {nomesDasAreasConfirmadas}
                 </p>
@@ -801,15 +817,15 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-2 border-b border-[rgba(26,26,26,.07)] pb-3">
                 <div>
-                  <h4 className="text-[15px] font-semibold text-[#1A1A1A] flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-[#A67C52]" />
+                  <h4 className="text-[15px] font-semibold text-ink flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-brand" />
                     2. Avaliação específica — {currentTemplate.procedimentoNome}
                   </h4>
                   {currentTemplate.descricao && (
-                    <p className="text-[13px] text-[#8a8578] mt-1">{currentTemplate.descricao}</p>
+                    <p className="text-[13px] text-muted mt-1">{currentTemplate.descricao}</p>
                   )}
                 </div>
-                <span className="text-[12px] text-[#1A1A1A] bg-[#F9F8F6] px-2.5 py-1 rounded-full font-semibold">
+                <span className="text-[12px] text-ink bg-surface px-2.5 py-1 rounded-full font-semibold">
                   {currentTemplate.perguntasEspecificas.length} questões
                 </span>
               </div>
@@ -817,7 +833,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
               {orientationImage && <OrientationImageCard image={orientationImage} variant="clinica" />}
 
               {currentTemplate.perguntasEspecificas.length === 0 ? (
-                <p className="text-[14px] text-[#8a8578] py-3 italic">
+                <p className="text-[14px] text-muted py-3 italic">
                   Este procedimento não possui perguntas específicas cadastradas no modelo.
                 </p>
               ) : (
@@ -828,7 +844,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     return (
                       <div
                         key={q.id}
-                        className={`pt-4 first:pt-0 ${warning ? '-mx-3 px-3 rounded-xl bg-[#E11D48]/5' : ''}`}
+                        className={`pt-4 first:pt-0 ${warning ? '-mx-3 px-3 rounded-xl bg-danger/5' : ''}`}
                       >
                         {(q.publicoAlvo || 'paciente') === 'medico' && <StaffOnlyPill />}
                         <QuestionFieldRenderer
@@ -854,11 +870,11 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           {(currentTemplate?.tem_foto || previewFotoModelo) && (
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-4">
               <div>
-                <h4 className="text-[15px] font-semibold text-[#1A1A1A] flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-[#A67C52]" />
+                <h4 className="text-[15px] font-semibold text-ink flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-brand" />
                   4. Fotos de mapeamento & registro clínico
                 </h4>
-                <p className="text-[13px] text-[#8a8578] mt-1">
+                <p className="text-[13px] text-muted mt-1">
                   A foto de referência da clínica e a foto do paciente ficam disponíveis para anotações manuais (unidades, doses, vetores).
                 </p>
               </div>
@@ -866,12 +882,12 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* 1. Foto de Referência da Clínica (escolhida pelo gênero do paciente) */}
                 {previewFotoModelo ? (
-                  <div className="p-3.5 bg-[#F9F8F6] rounded-xl space-y-2">
+                  <div className="p-3.5 bg-surface rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[14px] font-semibold text-[#1A1A1A]">
+                      <span className="text-[14px] font-semibold text-ink">
                         Referência da clínica
                       </span>
-                      <span className="text-[11px] text-[#4a4740] bg-white px-2 py-0.5 rounded-full font-semibold border border-[rgba(26,26,26,.1)]">
+                      <span className="text-body text-ink-soft bg-white px-2 py-0.5 rounded-full font-semibold border border-[rgba(26,26,26,.1)]">
                         Modelo
                       </span>
                     </div>
@@ -882,7 +898,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                         className="w-full h-full object-contain"
                       />
                     </div>
-                    <p className="text-[12px] text-[#8a8578] text-center italic">
+                    <p className="text-[12px] text-muted text-center italic">
                       Guia anatômico configurado para {currentTemplate.procedimentoNome}
                     </p>
                   </div>
@@ -896,18 +912,18 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
                 {/* 2. Foto do Paciente */}
                 {currentTemplate?.tem_foto && (
-                  <div className={`p-3.5 bg-[#F9F8F6] rounded-xl space-y-2 ${!previewFotoModelo ? 'sm:col-span-2' : ''}`}>
+                  <div className={`p-3.5 bg-surface rounded-xl space-y-2 ${!previewFotoModelo ? 'sm:col-span-2' : ''}`}>
                     <div className="flex items-center justify-between">
-                      <span className="text-[14px] font-semibold text-[#1A1A1A]">
+                      <span className="text-[14px] font-semibold text-ink">
                         Foto do paciente
                       </span>
                       <div className="flex items-center gap-1.5">
                         {fotoAnotadaUrl && (
-                          <span className="text-[11px] text-[#4338CA] bg-[#EEF2FF] px-2 py-0.5 rounded-full font-semibold border border-[#E0E7FF]">
+                          <span className="text-body text-[#4338CA] bg-[#EEF2FF] px-2 py-0.5 rounded-full font-semibold border border-[#E0E7FF]">
                             Anotada
                           </span>
                         )}
-                        <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                        <span className="text-body text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
                           Prontuário
                         </span>
                       </div>
@@ -928,7 +944,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                             Foto anexada
                           </span>
                           <div className="flex items-center gap-3">
-                            <label className="cursor-pointer text-[13px] font-semibold text-[#A67C52] hover:underline">
+                            <label className="cursor-pointer text-[13px] font-semibold text-brand hover:underline">
                               Trocar
                               <input
                                 type="file"
@@ -944,7 +960,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                                 setFotoAnotadaUrl('');
                                 setFotoAnotacoesJson(undefined);
                               }}
-                              className="text-[13px] text-[#E11D48] hover:underline"
+                              className="text-[13px] text-danger hover:underline"
                             >
                               Remover
                             </button>
@@ -953,19 +969,19 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setIsAnnotatingPhoto(true)}
-                          className="w-full h-11 rounded-xl bg-[#A67C52] text-white text-[14px] font-semibold flex items-center justify-center gap-2 hover:bg-[#8E653D] active:scale-97 transition-all"
+                          className="w-full h-11 rounded-xl bg-brand text-white text-[14px] font-semibold flex items-center justify-center gap-2 hover:bg-brand-hover active:scale-97 transition-all"
                         >
                           <PenTool className="w-4 h-4" />
                           Anotar foto
                         </button>
                       </div>
                     ) : (
-                      <label className="cursor-pointer flex flex-col items-center justify-center h-44 rounded-xl bg-white hover:bg-[#F9F8F6] transition-all text-center group" style={{ border: '1.5px dashed rgba(166,124,82,.5)' }}>
-                        <Camera className="w-6 h-6 text-[#A67C52] group-hover:scale-105 transition-transform mb-1.5" />
-                        <span className="text-[14px] font-semibold text-[#8E653D]">
+                      <label className="cursor-pointer flex flex-col items-center justify-center h-44 rounded-xl bg-white hover:bg-surface transition-all text-center group" style={{ border: '1.5px dashed rgba(166,124,82,.5)' }}>
+                        <Camera className="w-6 h-6 text-brand group-hover:scale-105 transition-transform mb-1.5" />
+                        <span className="text-[14px] font-semibold text-brand-hover">
                           Tirar ou selecionar foto do paciente
                         </span>
-                        <span className="text-[12px] text-[#8a8578] mt-0.5">
+                        <span className="text-[12px] text-muted mt-0.5">
                           Para registro clínico e marcações personalizadas
                         </span>
                         <input
@@ -984,7 +1000,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
           {/* SECTION 5: OBSERVAÇÕES FINAIS & CONDUTA */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-2">
-            <h4 className="text-[15px] font-semibold text-[#1A1A1A]">
+            <h4 className="text-[15px] font-semibold text-ink">
               5. Observações finais & conduta do atendimento
             </h4>
             <textarea
@@ -992,43 +1008,10 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
               value={observacoesFinais}
               onChange={(e) => setObservacoesFinais(e.target.value)}
               placeholder="Ex: Paciente bem orientada quanto aos cuidados pós-procedimento. Retorno agendado em 15 dias para conferência de simetria..."
-              className="w-full min-h-[120px] px-3.5 py-3 text-[14px] rounded-xl bg-[#F9F8F6] border border-[rgba(26,26,26,.12)] text-[#1A1A1A] focus:outline-hidden focus:border-[#A67C52] resize-y"
+              className="w-full min-h-[120px] px-3.5 py-3 text-[14px] rounded-xl bg-surface border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand resize-y"
             />
           </div>
         </div>
-
-        {/* Modal Bottom Actions */}
-        <div className="px-6 py-4 bg-white border-t border-[rgba(26,26,26,.07)] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full sm:w-auto h-[52px] px-5 rounded-2xl border border-[rgba(26,26,26,.12)] text-[15px] font-semibold text-[#4a4740] hover:bg-[#F9F8F6] transition-colors whitespace-nowrap"
-          >
-            Cancelar
-          </button>
-
-          <div className="w-full sm:w-auto flex items-center gap-2.5">
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => handleSaveForm(false)}
-              className="flex-1 sm:flex-initial h-[52px] px-5 rounded-2xl bg-white border border-[rgba(26,26,26,.15)] text-[15px] font-semibold text-[#1A1A1A] hover:border-[#A67C52] hover:text-[#A67C52] transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-              {isSaving ? 'Gravando...' : 'Salvar ficha'}
-            </button>
-
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => handleSaveForm(true)}
-              className="flex-1 sm:flex-initial h-[52px] px-6 rounded-2xl bg-[#1A1A1A] text-[#C49B74] text-[15px] font-semibold flex items-center justify-center gap-2 hover:bg-black shadow-xs active:scale-97 transition-all disabled:opacity-50 whitespace-nowrap"
-            >
-              <Printer className="w-4 h-4" />
-              {isSaving ? 'Processando...' : 'Salvar e gerar PDF'}
-            </button>
-          </div>
-        </div>
-      </div>
 
       {isAnnotatingPhoto && fotoUrl && (
         <PhotoAnnotationEditor
@@ -1059,6 +1042,8 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           onShared={() => setLinkFoiCompartilhado(true)}
         />
       )}
-    </div>
+
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+    </SidePanel>
   );
 };
