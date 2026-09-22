@@ -533,6 +533,15 @@ export interface Quote {
   clinica?: QuoteClinicSnapshot; // Ausente só em orçamentos criados antes deste campo existir
   total: number; // Snapshot denormalizado apenas para a listagem — a verdade é calcularOrcamento()
   enviadoEm?: string; // ISO do 1º compartilhamento do link; presença trava a edição
+  /**
+   * Instante em que o orçamento foi marcado como aceito — a data que o faturamento usa.
+   *
+   * Gravado explicitamente em vez de lido de `updatedAt` porque `updatedAt` é a marca de
+   * *qualquer* escrita: um cancelamento, uma substituição, uma correção de status feita por
+   * engano e desfeita depois moveriam o aceite de mês sem ninguém perceber. Orçamento aceito
+   * antes deste campo existir cai no fallback de `dataDeAceite`, em utils/indicadores.ts.
+   */
+  aceitoEm?: string; // ISO
   substituidoPor?: QuoteReference; // Preenchido no antigo quando um novo o substitui
   substituiu?: QuoteReference; // Preenchido no novo, apontando para o que ele substituiu
   createdAt: string;

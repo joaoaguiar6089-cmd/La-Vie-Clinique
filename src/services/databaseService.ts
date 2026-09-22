@@ -1688,7 +1688,15 @@ export async function markQuoteAsSent(quoteId: string): Promise<void> {
 /** Troca manual de status na listagem (marcar como aceito, voltar para enviado). */
 export async function setQuoteStatus(quoteId: string, status: QuoteStoredStatus): Promise<void> {
   const docRef = doc(db, QUOTES_COLLECTION, quoteId);
-  await updateDoc(docRef, { status, updatedAt: new Date().toISOString() });
+  const agora = new Date().toISOString();
+  // O aceite é datado aqui, e desfeito junto quando alguém volta atrás: é esta data que o
+  // faturamento do mês soma, e um `aceitoEm` sobrevivente num orçamento reaberto faria o mês
+  // fechar com dinheiro que ninguém recebeu.
+  await updateDoc(docRef, {
+    status,
+    aceitoEm: status === 'aceito' ? agora : deleteField(),
+    updatedAt: agora,
+  });
 }
 
 /** Exclusão de rascunho ou orçamento cancelado. */

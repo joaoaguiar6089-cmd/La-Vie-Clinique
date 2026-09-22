@@ -18,6 +18,7 @@ import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { CommandPalette, AcaoRapida } from './components/common/CommandPalette';
+import { HojeView } from './components/hoje/HojeView';
 import {
   Procedure,
   ClinicProfile,
@@ -52,6 +53,7 @@ import {
   subscribeToAttendances,
   subscribeToPatients,
   subscribeToQuotes,
+  marcarConfirmacao,
   isQuotaOrOfflineError,
   normalizeProcedureList,
 } from './services/databaseService';
@@ -155,7 +157,9 @@ function MainCatalogApp() {
   }, [syncStatus, isQuotaExceeded]);
 
   // Navigation and Modals State
-  const [currentView, setCurrentView] = useState<AppView>('procedures');
+  // A tela inicial é a Hoje: quem abre o sistema de manhã quer saber o que tem pela frente,
+  // não o catálogo. Ela não custa leitura nenhuma — ver `HojeView`.
+  const [currentView, setCurrentView] = useState<AppView>('hoje');
   const [selectedProcedureForDetails, setSelectedProcedureForDetails] = useState<Procedure | null>(null);
   const [selectedProcedureForEdit, setSelectedProcedureForEdit] = useState<Procedure | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -768,7 +772,28 @@ function MainCatalogApp() {
           </div>
         )}
         <main className="flex-1 w-full">
-          {currentView === 'agenda' ? (
+          {currentView === 'hoje' ? (
+            <HojeView
+              clinic={clinic}
+              catalogProcedures={procedures}
+              atendimentos={attendances}
+              pacientes={allPatients}
+              quotes={quotes}
+              professionalLogada={currentProfessional}
+              carregando={atendimentosCarregando}
+              onAbrirBusca={() => setBuscaAberta(true)}
+              onNovoAgendamento={() => navegar({ view: 'agenda', criarNovo: true })}
+              onIrParaAgenda={() => navegar({ view: 'agenda' })}
+              onIrParaAvaliacoes={() => navegar({ view: 'evaluations' })}
+              onIrParaOrcamentos={() => navegar({ view: 'quotes' })}
+              onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
+              onConfirmar={(a) =>
+                marcarConfirmacao(a.id, true).catch((e) =>
+                  showToast(`Não foi possível confirmar: ${(e as Error).message}`, 'erro')
+                )
+              }
+            />
+          ) : currentView === 'agenda' ? (
             <AgendaModule
               clinic={clinic}
               catalogProcedures={procedures}
