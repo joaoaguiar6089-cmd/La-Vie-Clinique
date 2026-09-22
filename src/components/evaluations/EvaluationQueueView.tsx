@@ -3,9 +3,12 @@ import { CalendarCheck, CheckCircle2, ClipboardCheck, User } from 'lucide-react'
 import { Attendance } from '../../types';
 import { formatDateOnly } from '../../utils/formatters';
 import { JANELA_PENDENTES_DIAS, filaDePendentes } from '../../utils/evaluations';
+import { SkeletonLista } from '../common/Skeleton';
 
 interface EvaluationQueueViewProps {
   atendimentos: Attendance[];
+  /** Primeira resposta de `attendances` ainda não chegou. */
+  carregando?: boolean;
   onAvaliar: (a: Attendance) => void;
 }
 
@@ -27,6 +30,7 @@ const JANELAS: { rotulo: string; dias: number | undefined }[] = [
  */
 export const EvaluationQueueView: React.FC<EvaluationQueueViewProps> = ({
   atendimentos,
+  carregando,
   onAvaliar,
 }) => {
   const [janela, setJanela] = useState<number | undefined>(JANELA_PENDENTES_DIAS);
@@ -72,7 +76,9 @@ export const EvaluationQueueView: React.FC<EvaluationQueueViewProps> = ({
         </div>
       </div>
 
-      {pendentes.length === 0 ? (
+      {carregando ? (
+        <SkeletonLista linhas={5} />
+      ) : pendentes.length === 0 ? (
         <div className="bg-white/50 rounded-sm border border-white/70 p-12 text-center">
           <CheckCircle2 className="w-9 h-9 text-emerald-400 mx-auto mb-3" />
           <p className="text-sm font-semibold text-ink">Nenhuma avaliação pendente</p>

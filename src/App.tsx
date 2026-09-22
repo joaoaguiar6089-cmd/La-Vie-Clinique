@@ -181,6 +181,21 @@ function MainCatalogApp() {
   const [allPatients, setAllPatients] = useState<Patient[]>([]);
 
   /**
+   * Primeira resposta do Firestore ainda não chegou — o que as telas usam para desenhar
+   * skeleton no lugar de uma lista vazia. Vira `false` também no erro: uma falha de rede
+   * não pode deixar a tela pulsando para sempre.
+   */
+  const [atendimentosCarregando, setAtendimentosCarregando] = useState(true);
+  /**
+   * O catálogo é diferente das outras coleções: ele tem cópia local da última sincronização,
+   * e mostrar essa cópia é melhor do que mostrar skeleton. Só quem abre o app pela primeira
+   * vez (sem cache e sem os exemplos ainda) vê o carregamento.
+   */
+  const [proceduresCarregando, setProceduresCarregando] = useState(
+    () => !localStorage.getItem(STORAGE_KEY_PROCEDURES)
+  );
+
+  /**
    * Pedido vindo do catálogo para o módulo de anamnese. O `nonce` existe porque tocar "Anamnese"
    * duas vezes no mesmo procedimento é um pedido novo — sem ele o módulo não veria mudança alguma
    * e o formulário não reabriria.
@@ -209,6 +224,7 @@ function MainCatalogApp() {
               setProcedures(lista);
               localStorage.setItem(STORAGE_KEY_PROCEDURES, JSON.stringify(lista));
             }
+            setProceduresCarregando(false);
             setSyncStatus('synced');
           },
           (err) => {
@@ -216,6 +232,7 @@ function MainCatalogApp() {
               setIsQuotaExceeded(true);
             }
             console.warn('Firestore procedures subscription offline/error:', err);
+            setProceduresCarregando(false);
             setSyncStatus('error');
           }
         );
@@ -330,9 +347,16 @@ function MainCatalogApp() {
       subscribeToEvaluationGeneralQuestions(setEvaluationGerais, (err) => {
         if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
       }),
-      subscribeToAttendances(setAttendances, (err) => {
-        if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
-      }),
+      subscribeToAttendances(
+        (data) => {
+          setAttendances(data);
+          setAtendimentosCarregando(false);
+        },
+        (err) => {
+          if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
+          setAtendimentosCarregando(false);
+        }
+      ),
       subscribeToPatients(setAllPatients, (err) => {
         if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
       }),
@@ -699,6 +723,7 @@ function MainCatalogApp() {
               pacientes={allPatients}
               professionals={clinic.professionals || []}
               currentProfessionalId={currentProfessional?.id}
+              carregando={atendimentosCarregando}
             />
           ) : currentView === 'procedures' ? (
             <ProcedureManager
@@ -707,6 +732,7 @@ function MainCatalogApp() {
               categories={categories}
               templatesPorProcedimento={templatesPorProcedimento}
               templatesCarregando={templatesCarregando}
+              carregando={proceduresCarregando}
               onOpenAnamnesis={handleOpenAnamnesis}
               onCreateAnamnesisTemplate={handleCreateAnamnesisTemplate}
               onOpenNewProcedure={() => {
@@ -749,6 +775,7 @@ function MainCatalogApp() {
               pacientes={allPatients}
               professionals={clinic.professionals || []}
               gerais={evaluationGerais}
+              carregando={atendimentosCarregando}
             />
           ) : (
             <QuotesPanel clinic={clinic} catalogProcedures={procedures} />

@@ -39,6 +39,7 @@ import { QuoteFormModal } from './QuoteFormModal';
 import { QuotePreviewModal } from './QuotePreviewModal';
 import { montarEspelhoPublico } from '../../utils/laserAreas';
 import { QuoteShareModal } from './QuoteShareModal';
+import { SkeletonLista } from '../common/Skeleton';
 
 interface QuotesPanelProps {
   clinic: ClinicProfile;
@@ -71,6 +72,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [erro, setErro] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(true);
   const [quotaAtingida, setQuotaAtingida] = useState(false);
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | QuoteStatus>('todos');
@@ -86,10 +88,13 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
     const unsubQuotes = subscribeToQuotes(
       (data) => {
         setQuotes(data);
+        setCarregando(false);
         setQuotaAtingida(false);
         setErro(null);
       },
       (e) => {
+        // Sem isto a falha de rede deixaria o skeleton pulsando para sempre.
+        setCarregando(false);
         const msg = e.message || '';
         const isQuota = msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted');
         if (isQuota) {
@@ -261,7 +266,9 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
       </div>
 
       {/* Lista */}
-      {listaFiltrada.length === 0 ? (
+      {carregando ? (
+        <SkeletonLista linhas={6} comAvatar={false} />
+      ) : listaFiltrada.length === 0 ? (
         <div className="glass-card rounded-sm py-16 text-center">
           <FileText className="w-8 h-8 text-gray-300 mx-auto mb-3" />
           <p className="text-sm text-gray-500">

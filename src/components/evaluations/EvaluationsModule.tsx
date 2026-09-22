@@ -30,6 +30,8 @@ interface EvaluationsModuleProps {
   /** Fichas-modelo assinadas no App, como as de anamnese — o preenchimento também precisa delas. */
   fichas: EvaluationTemplate[];
   atendimentos: Attendance[];
+  /** Primeira resposta de `attendances` ainda não chegou — repassado à fila. */
+  carregando?: boolean;
   pacientes: Patient[];
   professionals: Professional[];
   /** Perguntas gerais de avaliação, assinadas no App para o contador e o modal as verem. */
@@ -50,6 +52,7 @@ export const EvaluationsModule: React.FC<EvaluationsModuleProps> = ({
   catalogProcedures,
   fichas,
   atendimentos,
+  carregando,
   pacientes,
   professionals,
   gerais,
@@ -87,7 +90,11 @@ export const EvaluationsModule: React.FC<EvaluationsModuleProps> = ({
       />
 
       {abaAtiva === 'fila' ? (
-        <EvaluationQueueView atendimentos={atendimentos} onAvaliar={setAvaliando} />
+        <EvaluationQueueView
+          atendimentos={atendimentos}
+          carregando={carregando}
+          onAvaliar={setAvaliando}
+        />
       ) : (
         <div className="space-y-8">
           {/*

@@ -18,6 +18,7 @@ import {
   ordenarLinhas,
   ROTULO_DA_INTERACAO,
 } from '../../utils/patientsPanel';
+import { SkeletonLista } from '../common/Skeleton';
 
 interface PatientsListViewProps {
   /** Já montadas em `PatientsModule` — inclui quem só existe em orçamento ou ficha avulsa. */
@@ -133,9 +134,7 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
 
       {/* Lista */}
       {carregando ? (
-        <div className="glass-card rounded-sm py-16 text-center">
-          <p className="text-sm text-gray-500">Carregando pacientes...</p>
-        </div>
+        <SkeletonLista linhas={7} />
       ) : listaFiltrada.length === 0 ? (
         <div className="glass-card rounded-sm py-16 text-center">
           <Users className="w-8 h-8 text-gray-300 mx-auto mb-3" />

@@ -36,6 +36,7 @@ import { AgendaGradeView } from './AgendaGradeView';
 import { AgendaMesView } from './AgendaMesView';
 import { AgendaPendencias } from './AgendaPendencias';
 import { AgendaDetalheModal } from './AgendaDetalheModal';
+import { SkeletonAgenda } from '../common/Skeleton';
 
 /**
  * A agenda da clínica.
@@ -62,6 +63,8 @@ interface AgendaModuleProps {
    * quem abre a agenda precisa ver a clínica inteira para saber se a sala está livre.
    */
   currentProfessionalId?: string;
+  /** Primeira resposta de `attendances` ainda não chegou — a grade nasce em skeleton. */
+  carregando?: boolean;
 }
 
 /** O que o formulário está fazendo agora. */
@@ -89,6 +92,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   pacientes,
   professionals,
   currentProfessionalId,
+  carregando,
 }) => {
   const hoje = hojeISO();
 
@@ -370,7 +374,9 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         onRemarcar={abrirRemarcacao}
       />
 
-      {visao === 'mes' ? (
+      {carregando ? (
+        <SkeletonAgenda />
+      ) : visao === 'mes' ? (
         <AgendaMesView
           dias={dias}
           referencia={dataFoco}

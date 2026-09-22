@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Procedure, ClinicProfile, AnamnesisTemplate } from '../types';
 import { formatBRL } from '../utils/formatters';
+import { SkeletonCards } from './common/Skeleton';
 
 interface ProcedureManagerProps {
   procedures: Procedure[];
@@ -26,6 +27,8 @@ interface ProcedureManagerProps {
    * que um procedimento não tem ficha leva a cadastrar uma ficha duplicada.
    */
   templatesCarregando: boolean;
+  /** Primeira resposta do Firestore ainda não chegou e não há cópia local para mostrar. */
+  carregando?: boolean;
   onOpenNewProcedure: () => void;
   onEditProcedure: (procedure: Procedure) => void;
   onDeleteProcedure: (id: string) => void;
@@ -42,6 +45,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
   categories,
   templatesPorProcedimento,
   templatesCarregando,
+  carregando,
   onOpenNewProcedure,
   onEditProcedure,
   onDeleteProcedure,
@@ -228,7 +232,9 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
       </div>
 
       {/* Cards grid */}
-      {filteredProcedures.length === 0 ? (
+      {carregando ? (
+        <SkeletonCards quantidade={6} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4" />
+      ) : filteredProcedures.length === 0 ? (
         <div className="text-center py-16 text-muted text-[15px] bg-white/50 rounded-2xl border border-white/70">
           <p>Nenhum procedimento encontrado com os filtros selecionados.</p>
           {(selectedCategory !== 'Todos' || searchTerm.trim() !== '') && (
