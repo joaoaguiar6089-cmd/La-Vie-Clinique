@@ -1317,27 +1317,52 @@ const SecaoAgendaDaClinica: React.FC<{
                 </label>
 
                 {aberto ? (
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                     <input
                       type="text"
                       inputMode="numeric"
                       value={dia.abre || ''}
                       onChange={(e) => atualizar(i, { abre: mascararHora(e.target.value) })}
                       placeholder="hh:mm"
-                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-xs text-ink tabular-nums focus:outline-hidden"
+                      aria-label={`${rotulo}: abre às`}
+                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-body text-ink tabular-nums focus:outline-hidden"
                     />
-                    <span className="text-body text-gray-400">às</span>
+                    <span className="text-body text-muted">às</span>
                     <input
                       type="text"
                       inputMode="numeric"
                       value={dia.fecha || ''}
                       onChange={(e) => atualizar(i, { fecha: mascararHora(e.target.value) })}
                       placeholder="hh:mm"
-                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-xs text-ink tabular-nums focus:outline-hidden"
+                      aria-label={`${rotulo}: fecha às`}
+                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-body text-ink tabular-nums focus:outline-hidden"
+                    />
+
+                    {/* Pausa do almoço. As duas pontas juntas ou nenhuma: só o início
+                        pintaria de cinza tudo dali até o fechamento. */}
+                    <span className="text-body text-muted ml-1">almoço</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={dia.almocoInicio || ''}
+                      onChange={(e) => atualizar(i, { almocoInicio: mascararHora(e.target.value) })}
+                      placeholder="hh:mm"
+                      aria-label={`${rotulo}: almoço começa às`}
+                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-body text-muted tabular-nums focus:outline-hidden"
+                    />
+                    <span className="text-body text-muted">às</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={dia.almocoFim || ''}
+                      onChange={(e) => atualizar(i, { almocoFim: mascararHora(e.target.value) })}
+                      placeholder="hh:mm"
+                      aria-label={`${rotulo}: almoço termina às`}
+                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-body text-muted tabular-nums focus:outline-hidden"
                     />
                   </div>
                 ) : (
-                  <span className="text-body text-gray-400">Fechado</span>
+                  <span className="text-body text-muted">Fechado</span>
                 )}
               </div>
             );
@@ -1360,6 +1385,69 @@ const SecaoAgendaDaClinica: React.FC<{
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Salas e equipamentos.
+
+          Existe por causa do equipamento, não da parede: o laser é um aparelho só, e duas
+          pacientes marcadas para ele no mesmo horário é um problema que a agenda por
+          profissional não pega — são duas profissionais diferentes, cada uma com a coluna
+          livre. Clínica que não usa o conceito deixa a lista vazia e o campo some do
+          formulário de agendamento. */}
+      <div>
+        <label className="block text-body font-medium text-ink mb-1">
+          Salas e equipamentos
+        </label>
+        <p className="text-label text-muted mb-2">
+          Dois agendamentos na mesma sala e no mesmo horário são impedidos — ao contrário do
+          conflito de profissional, que só avisa.
+        </p>
+
+        <div className="space-y-1.5">
+          {(formData.agendaSalas || []).map((sala, i) => (
+            <div key={sala.id} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={sala.nome}
+                onChange={(e) => {
+                  const nova = [...(formData.agendaSalas || [])];
+                  nova[i] = { ...sala, nome: e.target.value };
+                  onChange('agendaSalas', nova);
+                }}
+                placeholder="Ex.: Sala laser"
+                aria-label={`Nome da sala ${i + 1}`}
+                className="flex-1 glass-input px-3 py-2 rounded-sm text-body text-ink focus:outline-hidden"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  onChange(
+                    'agendaSalas',
+                    (formData.agendaSalas || []).filter((s) => s.id !== sala.id)
+                  )
+                }
+                aria-label={`Remover ${sala.nome || 'esta sala'}`}
+                className="w-11 h-11 shrink-0 rounded-lg flex items-center justify-center text-muted hover:text-danger hover:bg-danger-bg transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            onChange('agendaSalas', [
+              ...(formData.agendaSalas || []),
+              { id: `sala-${Date.now()}`, nome: '' },
+            ])
+          }
+          className="mt-2 inline-flex items-center gap-1.5 min-h-[40px] px-3 rounded-lg border border-line bg-card text-body font-semibold text-ink hover:border-brand transition-colors"
+        >
+          <Plus className="w-4 h-4 text-brand" />
+          Adicionar sala
+        </button>
       </div>
 
       <div>

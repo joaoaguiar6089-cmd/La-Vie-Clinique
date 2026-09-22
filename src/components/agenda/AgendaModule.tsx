@@ -25,6 +25,8 @@ import {
   aConfirmarAmanha,
   agendamentosAtrasados,
   dataCurta,
+  diasComAtendimento,
+  salasDaClinica,
   deslocarDias,
   deslocarMeses,
   diasDaSemanaDe,
@@ -39,6 +41,9 @@ import { AgendaGradeView } from './AgendaGradeView';
 import { AgendaMesView } from './AgendaMesView';
 import { AgendaPendencias } from './AgendaPendencias';
 import { AgendaAConfirmar } from './AgendaAConfirmar';
+import { AgendaSemanaStrip } from './AgendaSemanaStrip';
+import { AgendaDiaMobile } from './AgendaDiaMobile';
+import { AgendaFiltros } from './AgendaFiltros';
 import { AgendaDetalheModal } from './AgendaDetalheModal';
 import { SkeletonAgenda } from '../common/Skeleton';
 
@@ -108,6 +113,8 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   const [visao, setVisao] = useState<AgendaVisao>(visaoInicial);
   const [dataFoco, setDataFoco] = useState<DataISO>(hoje);
   const [filtroProfissionalId, setFiltroProfissionalId] = useState('');
+  /** Sala/equipamento. Só existe quando a clínica cadastrou salas nas Configurações. */
+  const [filtroSalaId, setFiltroSalaId] = useState('');
 
   const [planos, setPlanos] = useState<SessionPlan[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -147,11 +154,32 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
 
   const visiveis = useMemo(
     () =>
-      filtroProfissionalId
-        ? atendimentos.filter((a) => a.professionalId === filtroProfissionalId)
-        : atendimentos,
-    [atendimentos, filtroProfissionalId]
+      atendimentos.filter(
+        (a) =>
+          (!filtroProfissionalId || a.professionalId === filtroProfissionalId) &&
+          (!filtroSalaId || a.salaId === filtroSalaId)
+      ),
+    [atendimentos, filtroProfissionalId, filtroSalaId]
   );
+
+  /** Os dias que têm algo marcado — o pontinho da faixa semanal do celular. */
+  const diasComAlgo = useMemo(() => diasComAtendimento(visiveis), [visiveis]);
+
+  /**
+   * Abaixo de 640px a visão de dia é uma lista, não uma grade proporcional.
+   *
+   * A troca é por largura de janela e não por `sm:hidden`/`sm:block`: as duas versões montariam
+   * juntas, e a grade esconde dezenas de cartões absolutos que custam layout mesmo invisíveis.
+   */
+  const [ehCelular, setEhCelular] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 640
+  );
+  useEffect(() => {
+    const consulta = window.matchMedia('(max-width: 639px)');
+    const aoMudar = (e: MediaQueryListEvent) => setEhCelular(e.matches);
+    consulta.addEventListener('change', aoMudar);
+    return () => consulta.removeEventListener('change', aoMudar);
+  }, []);
 
   const dias = useMemo(() => {
     if (visao === 'dia') return [dataFoco];
@@ -418,9 +446,6 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         onAnterior={() => andar(-1)}
         onProximo={() => andar(1)}
         onHoje={() => setDataFoco(hoje)}
-        professionals={professionals}
-        filtroProfissionalId={filtroProfissionalId}
-        onFiltrarProfissional={setFiltroProfissionalId}
         onNovo={() => abrirNovo()}
       />
 
@@ -431,14 +456,6 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         </div>
       )}
 
-      <AgendaPendencias
-        pendentes={pendentes}
-        onIrParaData={irParaDia}
-        onCompareceu={abrirConfirmacao}
-        onFaltou={(a) => marcarStatus(a, 'faltou')}
-        onRemarcar={abrirRemarcacao}
-      />
-
       <AgendaAConfirmar
         aConfirmar={aConfirmar}
         clinic={clinic}
@@ -448,8 +465,43 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         onConfirmar={(a) => alternarConfirmacao(a, true)}
       />
 
+      {/* Faixa da semana — só no celular, e só na visão de dia: na semana e no mês o próprio
+          calendário já é a navegação. */}
+      {ehCelular && visao === 'dia' && (
+        <AgendaSemanaStrip
+          dataFoco={dataFoco}
+          hoje={hoje}
+          clinic={clinic}
+          diasComAlgo={diasComAlgo}
+          onEscolherDia={setDataFoco}
+        />
+      )}
+
+      <AgendaFiltros
+        professionals={professionals}
+        clinic={clinic}
+        filtroProfissionalId={filtroProfissionalId}
+        filtroSalaId={filtroSalaId}
+        onFiltrarProfissional={setFiltroProfissionalId}
+        onFiltrarSala={setFiltroSalaId}
+      />
+
       {carregando ? (
         <SkeletonAgenda />
+      ) : ehCelular && visao === 'dia' ? (
+        <AgendaDiaMobile
+          data={dataFoco}
+          hoje={hoje}
+          atendimentos={visiveis}
+          clinic={clinic}
+          catalogo={catalogProcedures}
+          pacientes={pacientes}
+          professionals={professionals}
+          rotulosDePlano={rotulosDePlano}
+          onAbrirAtendimento={setDetalhe}
+          onNovoEm={(data, hora) => abrirNovo({ data, hora })}
+          onConfirmar={(a) => alternarConfirmacao(a, !a.confirmadoEm)}
+        />
       ) : visao === 'mes' ? (
         <AgendaMesView
           dias={dias}
@@ -478,9 +530,21 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         />
       )}
 
-      <p className="text-body text-gray-400 text-center">
-        Clique num horário vazio para agendar. Arraste um agendamento para remarcá-lo.
+      <p className="text-body text-muted text-center">
+        {ehCelular
+          ? 'Toque num horário livre para agendar.'
+          : 'Clique num horário vazio para agendar. Arraste um agendamento para remarcá-lo.'}
       </p>
+
+      {/* Ao final, e não no topo: é trabalho represado de outros dias, e quem abre a agenda
+          quer ver o dia de hoje antes de qualquer outra coisa. */}
+      <AgendaPendencias
+        pendentes={pendentes}
+        onIrParaData={irParaDia}
+        onCompareceu={abrirConfirmacao}
+        onFaltou={(a) => marcarStatus(a, 'faltou')}
+        onRemarcar={abrirRemarcacao}
+      />
 
       {detalhe && (
         <AgendaDetalheModal
@@ -524,6 +588,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         }
         sementeDataHora={formulario?.semente}
         atendimentosDaClinica={atendimentos}
+        salas={salasDaClinica(clinic)}
         cadastroSeraCriado={cadastroSeraCriado}
         atendimentos={doPacienteDoForm.atendimentos}
         planos={doPacienteDoForm.planos}

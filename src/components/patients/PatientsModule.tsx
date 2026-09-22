@@ -39,6 +39,7 @@ import {
   pacienteProvisorio,
 } from '../../utils/patientsPanel';
 import { instanteDoAtendimento } from '../../utils/attendances';
+import { salasDaClinica } from '../../utils/agenda';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PatientsListView } from './PatientsListView';
 import { PatientDetailView } from './PatientDetailView';
@@ -424,6 +425,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           onClose={() => setFormAtendimento(null)}
           patient={pacienteAberto}
           atendimentosDaClinica={attendances}
+          salas={salasDaClinica(clinic)}
           cadastroSeraCriado={cadastroSeraCriado}
           atendimentos={doPacienteAberto.atendimentos}
           planos={doPacienteAberto.planos}

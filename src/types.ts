@@ -159,6 +159,26 @@ export interface AgendaExpedienteDia {
   diaSemana: number; // 0 = domingo … 6 = sábado
   abre?: string; // HH:MM
   fecha?: string; // HH:MM
+  /**
+   * Pausa do almoço. As duas juntas ou nenhuma — meia pausa não quer dizer nada.
+   *
+   * Como o expediente, ela **não bloqueia**: pinta de cinza e some da lista de horários livres,
+   * mas encaixar às 12h30 continua gravável. Quem decide abrir exceção é a clínica.
+   */
+  almocoInicio?: string; // HH:MM
+  almocoFim?: string; // HH:MM
+}
+
+/**
+ * Uma sala ou equipamento da clínica — "Sala 1", "Sala laser", "Cabine de bronzeamento".
+ *
+ * Existe por causa do equipamento, não da parede: o laser é um aparelho só, e duas pacientes
+ * marcadas para ele no mesmo horário é um problema que a agenda por profissional não pega (são
+ * duas profissionais diferentes, cada uma com a sua coluna livre).
+ */
+export interface AgendaSala {
+  id: string;
+  nome: string;
 }
 
 export interface ClinicProfile {
@@ -194,6 +214,8 @@ export interface ClinicProfile {
   /** Expediente por dia da semana. Só pinta a grade: encaixe fora do horário continua permitido. */
   agendaExpediente?: AgendaExpedienteDia[];
   agendaIntervaloMin?: number; // Granularidade da grade em minutos: 15, 30 ou 60 (padrão 30)
+  /** Salas e equipamentos. Vazio = a clínica não usa o conceito, e o campo some do formulário. */
+  agendaSalas?: AgendaSala[];
   agendaConfirmacaoTemplate?: string; // Mensagem de confirmação no WhatsApp; ver `mensagemDeConfirmacao`
   /** Anexa `Procedure.orientacoesPreProcedimento` ao fim da mensagem de confirmação. */
   agendaConfirmacaoIncluirOrientacoes?: boolean;
@@ -636,6 +658,14 @@ export interface Attendance {
   planoId?: string;
   professionalId?: string;
   profissionalNome?: string; // Congelado no registro, para o caso de a equipe mudar depois
+  /**
+   * Sala ou equipamento reservado. Ausente = não reserva nada.
+   *
+   * Diferente do `professionalId`, dois registros na mesma sala e no mesmo horário são
+   * **impedidos** e não apenas avisados: a profissional pode decidir se dobra o próprio horário,
+   * mas nenhuma decisão faz o laser atender duas pacientes ao mesmo tempo.
+   */
+  salaId?: string;
   observacoes?: string;
   /**
    * Presente somente em quem nasceu agendamento. Ausência é o que distingue, para sempre, o

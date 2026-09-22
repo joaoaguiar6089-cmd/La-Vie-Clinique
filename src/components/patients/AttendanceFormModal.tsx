@@ -1,6 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarClock, Check, Link2Off, UserPlus, Users, X } from 'lucide-react';
 import {
+  AlertCircle,
+  CalendarClock,
+  Check,
+  DoorClosed,
+  Link2Off,
+  UserPlus,
+  Users,
+  X,
+} from 'lucide-react';
+import {
+  AgendaSala,
   Attendance,
   Patient,
   Procedure,
@@ -31,6 +41,7 @@ import {
 import {
   AGENDA_DEFAULTS,
   conflitosDe,
+  conflitosDeSala,
   duracaoDoProcedimento,
   hhmmDeMinutos,
   intervaloDoAtendimento,
@@ -72,6 +83,11 @@ interface AttendanceFormModalProps {
    * aba do paciente só tem os dele, e conflito é pergunta sobre a agenda inteira).
    */
   atendimentosDaClinica?: Attendance[];
+  /**
+   * Salas e equipamentos da clínica. Lista vazia = a clínica não usa o conceito, e o campo
+   * inteiro some do formulário em vez de virar um select com uma opção só.
+   */
+  salas?: AgendaSala[];
   /** Se o cadastro dele ainda não existe — o formulário avisa que vai criar ao salvar. */
   cadastroSeraCriado: boolean;
   /** Atendimentos já registrados deste paciente: palpite de procedimento e contagem do plano. */
@@ -127,6 +143,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   selecaoDePaciente,
   sementeDataHora,
   atendimentosDaClinica,
+  salas,
   cadastroSeraCriado,
   atendimentos,
   planos,
@@ -147,6 +164,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     procedimentoNome: string;
   }>({ procedimentoNome: '' });
   const [professionalId, setProfessionalId] = useState('');
+  const [salaId, setSalaId] = useState('');
   const [duracao, setDuracao] = useState('');
   /** Uma vez digitada à mão, a duração para de ser reescrita pela troca de procedimento. */
   const [duracaoTocada, setDuracaoTocada] = useState(false);
@@ -179,6 +197,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         procedimentoNome: atendimento.procedimentoNome,
       });
       setProfessionalId(atendimento.professionalId || professionalIdPadrao || '');
+      setSalaId(atendimento.salaId || '');
       setDuracao(atendimento.duracaoMin ? String(atendimento.duracaoMin) : '');
       // Duração já gravada foi escolha de alguém: trocar o procedimento não a reescreve.
       setDuracaoTocada(!!atendimento.duracaoMin);
@@ -249,6 +268,37 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     dataISO,
     hora,
     professionalId,
+    duracaoMin,
+    procedimento.procedureId,
+    procedures,
+    modo,
+    atendimento,
+  ]);
+
+  /**
+   * Choque de **sala**. Ao contrário do de profissional, este **trava o salvamento**: a
+   * profissional pode decidir dobrar o próprio horário, mas nenhuma decisão faz o laser atender
+   * duas pacientes ao mesmo tempo.
+   */
+  const conflitosSala = useMemo(() => {
+    if (!atendimentosDaClinica || !dataISO || !hora.trim() || !salaId) return [];
+    return conflitosDeSala(
+      {
+        id: modo === 'novo' ? undefined : atendimento?.id,
+        data: dataISO,
+        hora,
+        duracaoMin,
+        procedureId: procedimento.procedureId,
+        salaId,
+      },
+      atendimentosDaClinica,
+      procedures
+    );
+  }, [
+    atendimentosDaClinica,
+    dataISO,
+    hora,
+    salaId,
     duracaoMin,
     procedimento.procedureId,
     procedures,
@@ -368,6 +418,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         procedimentoNome: procedimento.procedimentoNome.trim(),
         planoId: planoNovo?.id || planoVinculado?.id,
         professionalId: professionalId || undefined,
+        salaId: salaId || undefined,
         profissionalNome: profissional?.name,
         observacoes: observacoes.trim() || undefined,
         // Natureza congelada na criação. Confirmar resolve o agendamento; editar não mexe nela.
@@ -420,7 +471,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
       <button
         type="button"
         onClick={salvar}
-        disabled={salvando || !patient}
+        disabled={salvando || !patient || conflitosSala.length > 0}
         className="flex items-center gap-2 min-h-[44px] px-5 rounded-xl bg-brand text-white text-body font-semibold uppercase tracking-widest transition-colors disabled:opacity-60"
       >
         <Check className="w-4 h-4" />
@@ -539,6 +590,41 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                 às {conflitos[0].hora}
                 {conflitos.length > 1 && ' e mais ' + (conflitos.length - 1)}. Dá para salvar assim
                 mesmo, se for encaixe.
+              </span>
+            </div>
+          )}
+
+          {/* Sala/equipamento. Só aparece quando a clínica cadastrou alguma. */}
+          {!!salas?.length && (
+            <div>
+              <label className={labelClass} htmlFor="atendimento-sala">
+                Sala / equipamento
+              </label>
+              <select
+                id="atendimento-sala"
+                value={salaId}
+                onChange={(e) => setSalaId(e.target.value)}
+                className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
+              >
+                <option value="">Nenhuma</option>
+                {salas.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Trava, não aviso: ver `conflitosSala`. */}
+          {conflitosSala.length > 0 && (
+            <div className="px-3 py-2 rounded-sm bg-danger-bg border border-danger-line text-body text-danger flex items-start gap-2">
+              <DoorClosed className="w-3.5 h-3.5 shrink-0 mt-px" />
+              <span>
+                <strong>Sala ocupada.</strong> {conflitosSala[0].pacienteNome} já está nesta sala
+                às {conflitosSala[0].hora}
+                {conflitosSala.length > 1 && ' (e mais ' + (conflitosSala.length - 1) + ')'}. Troque
+                o horário ou a sala para salvar.
               </span>
             </div>
           )}

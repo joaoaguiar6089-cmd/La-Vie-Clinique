@@ -1,6 +1,5 @@
 import React from 'react';
 import { CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Professional } from '../../types';
 import { AgendaVisao, rotuloDoPeriodo } from '../../utils/agenda';
 import { DataISO } from '../../utils/attendances';
 
@@ -12,6 +11,9 @@ const VISOES: { id: AgendaVisao; rotulo: string }[] = [
   { id: 'mes', rotulo: 'Mês' },
 ];
 
+/* O filtro de profissional saiu daqui e virou chip (`AgendaFiltros`): num `select`, a agenda
+   filtrada parece uma agenda vazia, e já aconteceu de alguém marcar em cima de um horário que o
+   filtro estava escondendo. */
 interface AgendaToolbarProps {
   visao: AgendaVisao;
   onTrocarVisao: (v: AgendaVisao) => void;
@@ -19,9 +21,6 @@ interface AgendaToolbarProps {
   onAnterior: () => void;
   onProximo: () => void;
   onHoje: () => void;
-  professionals: Professional[];
-  filtroProfissionalId: string;
-  onFiltrarProfissional: (id: string) => void;
   onNovo: () => void;
 }
 
@@ -32,9 +31,6 @@ export const AgendaToolbar: React.FC<AgendaToolbarProps> = ({
   onAnterior,
   onProximo,
   onHoje,
-  professionals,
-  filtroProfissionalId,
-  onFiltrarProfissional,
   onNovo,
 }) => (
   <div className="flex flex-col gap-3">
@@ -100,21 +96,6 @@ export const AgendaToolbar: React.FC<AgendaToolbarProps> = ({
         ))}
       </div>
 
-      {professionals.length > 1 && (
-        <select
-          value={filtroProfissionalId}
-          onChange={(e) => onFiltrarProfissional(e.target.value)}
-          aria-label="Filtrar por profissional"
-          className="glass-input px-3 py-2 rounded-sm text-xs text-ink focus:outline-hidden"
-        >
-          <option value="">Todas as profissionais</option>
-          {professionals.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      )}
     </div>
   </div>
 );
