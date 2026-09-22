@@ -17,6 +17,7 @@ import { agendamentosAtrasados } from './utils/agenda';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
+import { CommandPalette, AcaoRapida } from './components/common/CommandPalette';
 import {
   Procedure,
   ClinicProfile,
@@ -27,6 +28,8 @@ import {
   Attendance,
   EvaluationTemplate,
   Patient,
+  PedidoDeNavegacao,
+  Quote,
 } from './types';
 import { mapearTemplatesPorProcedimento, isLaserCategory } from './utils/templateMatching';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
@@ -48,6 +51,7 @@ import {
   subscribeToEvaluationGeneralQuestions,
   subscribeToAttendances,
   subscribeToPatients,
+  subscribeToQuotes,
   isQuotaOrOfflineError,
   normalizeProcedureList,
 } from './services/databaseService';
@@ -179,6 +183,13 @@ function MainCatalogApp() {
   const [evaluationGerais, setEvaluationGerais] = useState<AnamnesisQuestion[]>([]);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [allPatients, setAllPatients] = useState<Patient[]>([]);
+  /**
+   * Orçamentos sobem para cá por causa da tela Hoje (faturamento do mês, orçamentos abertos,
+   * conversão) e da busca global. **Não é assinatura nova**: `subscribeToQuotes` passa pelo
+   * `subscribeShared`, então esta é a mesma que o painel de Orçamentos e o de Pacientes já
+   * consomem — quem chegar depois recebe o valor em cache, sem pagar leitura.
+   */
+  const [quotes, setQuotes] = useState<Quote[]>([]);
 
   /**
    * Primeira resposta do Firestore ainda não chegou — o que as telas usam para desenhar
@@ -201,6 +212,44 @@ function MainCatalogApp() {
    * e o formulário não reabriria.
    */
   const [anamnesisRequest, setAnamnesisRequest] = useState<AnamnesisOpenRequest | null>(null);
+
+  /** Busca global (Cmd/Ctrl+K no desktop, campo da tela Hoje no celular). */
+  const [buscaAberta, setBuscaAberta] = useState(false);
+
+  /**
+   * Pedido de navegação para a tela de destino — "abra a ficha da Ana", "comece um orçamento".
+   * Mesma mecânica de `anamnesisRequest`: quem recebe consome e avisa, e o `nonce` garante que
+   * pedir a mesma coisa duas vezes conte como dois pedidos.
+   */
+  const [pedido, setPedido] = useState<PedidoDeNavegacao | null>(null);
+
+  /** Navega e, de passagem, registra o pedido que a tela de destino deve atender. */
+  const navegar = (p: Omit<PedidoDeNavegacao, 'nonce'>) => {
+    setPedido({ ...p, nonce: Date.now() });
+    setCurrentView(p.view);
+    window.scrollTo({ top: 0 });
+  };
+
+  const acaoRapida = (acao: AcaoRapida) => {
+    if (acao === 'novo-agendamento') navegar({ view: 'agenda', criarNovo: true });
+    else if (acao === 'nova-paciente') navegar({ view: 'patients', criarNovo: true });
+    else navegar({ view: 'quotes', criarNovo: true });
+  };
+
+  /**
+   * Cmd+K no Mac, Ctrl+K no resto. Fica no `document` porque a busca precisa abrir de qualquer
+   * tela, inclusive com o foco dentro de um formulário.
+   */
+  useEffect(() => {
+    const noTeclado = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setBuscaAberta((aberta) => !aberta);
+      }
+    };
+    document.addEventListener('keydown', noTeclado);
+    return () => document.removeEventListener('keydown', noTeclado);
+  }, []);
 
   // Initialize Firebase and subscribe to real-time updates — só depois de autenticado,
   // já que as regras do Firestore agora exigem login para procedures/clinic_settings.
@@ -358,6 +407,9 @@ function MainCatalogApp() {
         }
       ),
       subscribeToPatients(setAllPatients, (err) => {
+        if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
+      }),
+      subscribeToQuotes(setQuotes, (err) => {
         if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
       }),
     ];
@@ -691,6 +743,7 @@ function MainCatalogApp() {
         avaliacoesPendentesCount={avaliacoesPendentes}
         agendamentosPendentesCount={agendamentosPendentes}
         currentProfessionalName={currentProfessional?.name}
+        onOpenBusca={() => setBuscaAberta(true)}
         onLogout={logout}
       />
 
@@ -724,6 +777,8 @@ function MainCatalogApp() {
               professionals={clinic.professionals || []}
               currentProfessionalId={currentProfessional?.id}
               carregando={atendimentosCarregando}
+              pedido={currentView === 'agenda' ? pedido : null}
+              onPedidoAtendido={() => setPedido(null)}
             />
           ) : currentView === 'procedures' ? (
             <ProcedureManager
@@ -757,6 +812,8 @@ function MainCatalogApp() {
               fichasAvaliacao={evaluationTemplates}
               avaliacaoGerais={evaluationGerais}
               currentProfessionalId={currentProfessional?.id}
+              pedido={currentView === 'patients' ? pedido : null}
+              onPedidoAtendido={() => setPedido(null)}
             />
           ) : currentView === 'anamnesis' ? (
             <AnamnesisModule
@@ -778,7 +835,12 @@ function MainCatalogApp() {
               carregando={atendimentosCarregando}
             />
           ) : (
-            <QuotesPanel clinic={clinic} catalogProcedures={procedures} />
+            <QuotesPanel
+              clinic={clinic}
+              catalogProcedures={procedures}
+              pedido={currentView === 'quotes' ? pedido : null}
+              onPedidoAtendido={() => setPedido(null)}
+            />
           )}
         </main>
 
@@ -944,6 +1006,25 @@ function MainCatalogApp() {
 
       {/* 5. Confirmação de ações destrutivas */}
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+
+      {/* 6. Busca global — filtra o que já está em memória, sem leitura nova no Firestore. */}
+      <CommandPalette
+        aberta={buscaAberta}
+        onFechar={() => setBuscaAberta(false)}
+        pacientes={allPatients}
+        procedimentos={procedures}
+        orcamentos={quotes}
+        onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
+        onAbrirProcedimento={(procedureId) => {
+          const proc = procedures.find((p) => p.id === procedureId);
+          if (proc) {
+            setCurrentView('procedures');
+            setSelectedProcedureForDetails(proc);
+          }
+        }}
+        onAbrirOrcamento={(quoteId) => navegar({ view: 'quotes', quoteId })}
+        onAcaoRapida={acaoRapida}
+      />
     </div>
   );
 }

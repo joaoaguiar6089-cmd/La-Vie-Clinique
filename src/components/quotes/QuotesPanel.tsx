@@ -16,6 +16,7 @@ import {
 import {
   ClinicProfile,
   Patient,
+  PedidoDeNavegacao,
   Procedure,
   Quote,
   QuoteDraft,
@@ -44,6 +45,9 @@ import { SkeletonLista } from '../common/Skeleton';
 interface QuotesPanelProps {
   clinic: ClinicProfile;
   catalogProcedures: Procedure[];
+  /** Pedido vindo da busca global ou da tela Hoje: abrir um orçamento, começar um novo. */
+  pedido?: PedidoDeNavegacao | null;
+  onPedidoAtendido?: () => void;
 }
 
 const STATUS_LABEL: Record<QuoteStatus, string> = {
@@ -62,7 +66,12 @@ const STATUS_CLASS: Record<QuoteStatus, string> = {
   cancelado: 'bg-ink text-brand-light border-ink',
 };
 
-export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedures }) => {
+export const QuotesPanel: React.FC<QuotesPanelProps> = ({
+  clinic,
+  catalogProcedures,
+  pedido,
+  onPedidoAtendido,
+}) => {
   /** Mapa corporal do catálogo, para a página das áreas contratadas no PDF. */
   const mapaDoLaser = useMemo(
     () => montarEspelhoPublico(catalogProcedures, clinic),
@@ -140,6 +149,27 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({ clinic, catalogProcedu
     setModoSubstituicao(null);
     setIsFormOpen(true);
   };
+
+  /**
+   * Atende o pedido de quem chegou de fora — a busca global abrindo um orçamento pelo número, ou
+   * "Novo orçamento". O `quotes` entra nas dependências porque o pedido pode chegar antes de a
+   * lista: nesse caso ele é atendido assim que o documento aparece.
+   */
+  useEffect(() => {
+    if (!pedido) return;
+    if (pedido.criarNovo) {
+      abrirNovo();
+      onPedidoAtendido?.();
+      return;
+    }
+    if (pedido.quoteId) {
+      const achado = quotes.find((q) => q.id === pedido.quoteId);
+      if (!achado) return;
+      setQuoteNaPrevia(achado);
+    }
+    onPedidoAtendido?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedido?.nonce, quotes]);
 
   const abrirEdicao = (quote: Quote) => {
     setQuoteToEdit(quote);

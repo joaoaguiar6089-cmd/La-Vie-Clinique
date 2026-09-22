@@ -192,7 +192,37 @@ export interface ClinicProfile {
 }
 
 /** Telas do painel autenticado — a navegação é por estado, o app não tem rotas. */
-export type AppView = 'agenda' | 'procedures' | 'patients' | 'anamnesis' | 'evaluations' | 'quotes';
+export type AppView =
+  | 'hoje'
+  | 'agenda'
+  | 'procedures'
+  | 'patients'
+  | 'anamnesis'
+  | 'evaluations'
+  | 'quotes';
+
+/**
+ * Um pedido de navegação vindo de outra tela — da busca global, de um card da tela Hoje, de
+ * um card de pendência.
+ *
+ * O `nonce` existe pelo mesmo motivo do `AnamnesisOpenRequest`: pedir duas vezes a mesma
+ * coisa é um pedido novo, e sem ele a tela de destino não veria mudança alguma no objeto e
+ * não reagiria na segunda vez.
+ */
+export interface PedidoDeNavegacao {
+  view: AppView;
+  /** Paciente a abrir, quando o destino é Pacientes. */
+  pacienteId?: string;
+  /** Abrir direto o formulário de criação do destino (novo agendamento, orçamento, paciente). */
+  criarNovo?: boolean;
+  /** Dia a focar, quando o destino é a Agenda. YYYY-MM-DD. */
+  data?: string;
+  /** Orçamento a abrir na prévia, quando o destino é Orçamentos. */
+  quoteId?: string;
+  /** Procedimento a abrir nos detalhes, quando o destino é o catálogo. */
+  procedureId?: string;
+  nonce: number;
+}
 
 export interface FilterState {
   search: string;

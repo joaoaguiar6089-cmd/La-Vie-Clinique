@@ -13,12 +13,14 @@ import {
   PanelLeftOpen,
   PanelLeftClose,
   CalendarDays,
+  Search,
 } from 'lucide-react';
 import { ClinicProfile, AppView } from '../types';
 import { ClinicLogo } from './ClinicLogo';
 
 /** Nome da tela atual, exibido sob o nome da clínica no cabeçalho mobile. */
 const VIEW_LABEL: Record<AppView, string> = {
+  hoje: 'Hoje',
   agenda: 'Agenda',
   procedures: 'Procedimentos',
   patients: 'Pacientes',
@@ -46,6 +48,8 @@ interface NavbarProps {
    */
   agendamentosPendentesCount?: number;
   currentProfessionalName?: string;
+  /** Abre a busca global. No desktop o atalho é Cmd/Ctrl+K; aqui é o caminho para o dedo. */
+  onOpenBusca: () => void;
   onLogout: () => void;
 }
 
@@ -59,6 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   avaliacoesPendentesCount,
   agendamentosPendentesCount,
   currentProfessionalName,
+  onOpenBusca,
   onLogout,
 }) => {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
@@ -217,6 +222,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Ações rápidas no topo */}
           <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={onOpenBusca}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-ink hover:bg-black/5 active:scale-95 transition-all"
+              title="Buscar"
+              aria-label="Buscar paciente, procedimento ou orçamento"
+            >
+              <Search className="w-5 h-5" />
+            </button>
             <button
               onClick={onOpenSettings}
               className="w-9 h-9 rounded-lg flex items-center justify-center text-ink hover:bg-black/5 active:scale-95 transition-all"
@@ -408,6 +421,27 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
         )}
+
+        {/* Busca global. É um botão com cara de campo: quem digita aqui digita no palette, e
+            duplicar o input traria dois lugares com o mesmo estado. */}
+        <button
+          onClick={onOpenBusca}
+          title="Buscar (Ctrl+K)"
+          aria-label="Buscar paciente, procedimento ou orçamento"
+          className={`flex items-center rounded-xl mb-3 bg-white/5 hover:bg-white/10 text-[rgba(246,239,228,.7)] hover:text-cream transition-colors ${
+            isSidebarExpanded ? 'gap-2.5 h-[42px] px-3' : 'justify-center h-[44px] px-2'
+          }`}
+        >
+          <Search className="w-[18px] h-[18px] shrink-0" />
+          {isSidebarExpanded && (
+            <>
+              <span className="text-body-lg flex-1 text-left">Buscar…</span>
+              <kbd className="text-label font-sans font-semibold px-1.5 py-0.5 rounded-sm bg-white/10">
+                ⌘K
+              </kbd>
+            </>
+          )}
+        </button>
 
         {/* Itens de navegação */}
         <nav className="flex-1 flex flex-col gap-1.5">

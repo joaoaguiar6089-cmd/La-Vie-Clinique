@@ -5,6 +5,7 @@ import {
   ClinicProfile,
   Patient,
   Procedure,
+  PedidoDeNavegacao,
   Professional,
   Quote,
   SessionPlan,
@@ -65,6 +66,9 @@ interface AgendaModuleProps {
   currentProfessionalId?: string;
   /** Primeira resposta de `attendances` ainda não chegou — a grade nasce em skeleton. */
   carregando?: boolean;
+  /** Pedido vindo da busca global ou da tela Hoje: abrir um dia, começar um agendamento. */
+  pedido?: PedidoDeNavegacao | null;
+  onPedidoAtendido?: () => void;
 }
 
 /** O que o formulário está fazendo agora. */
@@ -93,6 +97,8 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   professionals,
   currentProfessionalId,
   carregando,
+  pedido,
+  onPedidoAtendido,
 }) => {
   const hoje = hojeISO();
 
@@ -245,6 +251,19 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
     setPacienteDoForm(pacienteDe(a));
     setFormulario({ modo: 'edicao', atendimento: a });
   };
+
+  /**
+   * Atende o pedido de quem chegou de fora — a busca global ("Novo agendamento") ou um card da
+   * tela Hoje ("ver o dia 24"). Consome e avisa, para o mesmo pedido não ser atendido de novo a
+   * cada render.
+   */
+  useEffect(() => {
+    if (!pedido) return;
+    if (pedido.data) irParaDia(pedido.data as DataISO);
+    if (pedido.criarNovo) abrirNovo(pedido.data ? { data: pedido.data as DataISO } : undefined);
+    onPedidoAtendido?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedido?.nonce]);
 
   const abrirConfirmacao = (a: Attendance) => {
     setErro(null);

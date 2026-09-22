@@ -55,8 +55,12 @@
   --color-info-bg: #EDF3F9;
   --color-info-line: #C6D6E6;
 
-  /* Verde do WhatsApp — marca de terceiro, não é cor da casa */
+  /* Verde do WhatsApp — marca de terceiro, não é cor da casa.
+     O #25D366 é o verde reconhecível e serve de preenchimento de selo e de tinta a 10%;
+     como texto, ou sob texto branco, ele fica em 2:1, e aí entra o `whatsapp-strong`. */
   --color-whatsapp: #25D366;
+  --color-whatsapp-strong: #0F7A3A;
+  --color-whatsapp-deep: #0B5E2C;
 
   /* ------------------------------------------------------------------------
      Escala tipográfica — 12 / 13 / 14 / 16 / 20 / 24 / 32
@@ -234,6 +238,40 @@
 .text-brand,
 .text-brand-light {
   color: var(--bronze-texto);
+}
+
+/**
+ * Botão bronze com texto branco.
+ *
+ * O branco sobre o #A67C52 dá 3,7:1 — não passa. Só nesse par o preenchimento
+ * escurece um grau (5,2:1 com o branco); o bronze da marca continua intacto em
+ * todo lugar onde ele é selo, barra, ícone ou tinta a 10%. A regra mora aqui, e
+ * não em cada um dos ~67 botões, para quem escrever o próximo `bg-brand
+ * text-white` receber o contraste correto sem precisar saber disto.
+ */
+.bg-brand.text-white,
+.bg-brand.text-card {
+  background-color: var(--color-brand-hover);
+}
+
+.bg-brand.text-white:hover,
+.bg-brand.text-card:hover {
+  background-color: var(--color-brand-deep);
+}
+
+/* Mesma história no verde do WhatsApp: 2:1 com texto branco. */
+.bg-whatsapp.text-white,
+.bg-whatsapp.text-card {
+  background-color: var(--color-whatsapp-strong);
+}
+
+.bg-whatsapp.text-white:hover,
+.bg-whatsapp.text-card:hover {
+  background-color: var(--color-whatsapp-deep);
+}
+
+.text-whatsapp {
+  color: var(--color-whatsapp-strong);
 }
 
 /* Custom metallic bronze & frosted glass luxury accents */
