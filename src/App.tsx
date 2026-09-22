@@ -165,7 +165,6 @@ function MainCatalogApp() {
   const [selectedProcedureForEdit, setSelectedProcedureForEdit] = useState<Procedure | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isLaserAreasOpen, setIsLaserAreasOpen] = useState(false);
   const [singleProcedureToExport, setSingleProcedureToExport] = useState<Procedure | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -217,6 +216,15 @@ function MainCatalogApp() {
    * e o formulário não reabriria.
    */
   const [anamnesisRequest, setAnamnesisRequest] = useState<AnamnesisOpenRequest | null>(null);
+
+  /**
+   * A tela anterior a Configurações. Ela é a única que se entra "de passagem" — de qualquer
+   * outra —, e voltar sempre para a Hoje tiraria da agenda quem só foi ajustar o expediente.
+   */
+  const viewAnteriorRef = useRef<AppView>('hoje');
+  useEffect(() => {
+    if (currentView !== 'settings') viewAnteriorRef.current = currentView;
+  }, [currentView]);
 
   /** Busca global (Cmd/Ctrl+K no desktop, campo da tela Hoje no celular). */
   const [buscaAberta, setBuscaAberta] = useState(false);
@@ -755,7 +763,7 @@ function MainCatalogApp() {
           setSingleProcedureToExport(null);
           setIsExportModalOpen(true);
         }}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={() => navegar({ view: 'settings' })}
         clinic={clinic}
         proceduresCount={procedures.length}
         avaliacoesPendentesCount={avaliacoesPendentes}
@@ -771,7 +779,7 @@ function MainCatalogApp() {
         currentView={currentView}
         onSelectView={(view) => setCurrentView(view)}
         onCriar={criar}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={() => navegar({ view: 'settings' })}
         onOpenExport={() => {
           setSingleProcedureToExport(null);
           setIsExportModalOpen(true);
@@ -826,6 +834,18 @@ function MainCatalogApp() {
                   showToast(`Não foi possível confirmar: ${(e as Error).message}`, 'erro')
                 )
               }
+            />
+          ) : currentView === 'settings' ? (
+            <ClinicSettingsModal
+              isOpen
+              /* Voltar da tela de Configurações leva de volta ao que estava aberto antes —
+                 quem foi ali ajustar o expediente quer voltar para a agenda, não para a Hoje. */
+              onClose={() => setCurrentView(viewAnteriorRef.current)}
+              clinic={clinic}
+              onSave={handleSaveClinic}
+              currentUserUid={authUser?.uid}
+              isAdminUser={isAdminUser}
+              onAbrirMapaDeAreas={() => setIsLaserAreasOpen(true)}
             />
           ) : currentView === 'agenda' ? (
             <AgendaModule
@@ -957,7 +977,7 @@ function MainCatalogApp() {
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => setIsSettingsModalOpen(true)} className="hover:text-white transition-colors">
+                    <button onClick={() => navegar({ view: 'settings' })} className="hover:text-white transition-colors">
                       Personalizar Dados da Clínica
                     </button>
                   </li>
@@ -1024,7 +1044,7 @@ function MainCatalogApp() {
         onAbrirConfiguracoes={() => {
           setIsFormModalOpen(false);
           setSelectedProcedureForEdit(null);
-          setIsSettingsModalOpen(true);
+          navegar({ view: 'settings' });
         }}
       />
 
@@ -1039,17 +1059,6 @@ function MainCatalogApp() {
         clinic={clinic}
         categories={categories}
         singleProcedureToExport={singleProcedureToExport}
-      />
-
-      {/* 4. Clinic Settings Modal */}
-      <ClinicSettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        clinic={clinic}
-        onSave={handleSaveClinic}
-        currentUserUid={authUser?.uid}
-        isAdminUser={isAdminUser}
-        onAbrirMapaDeAreas={() => setIsLaserAreasOpen(true)}
       />
 
       {/* Gestão das áreas do laser — conferir o mapa inteiro, reposicionar botões, remover áreas.

@@ -9,7 +9,7 @@ import {
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { subirImagemOuManter } from '../../services/imageStorage';
-import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
+import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import { BlankAnamnesisSheet } from './BlankAnamnesisSheet';
 import { CONSENT_TERM_HEADING } from './ConsentTermView';
@@ -392,7 +392,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
       });
     } catch (err) {
       console.error(err);
-      alert('Erro ao carregar a imagem. Tente outro arquivo.');
+      setConfirmacao(aviso('Não foi possível usar essa imagem', 'Erro ao carregar a imagem. Tente outro arquivo.', 'perigo'));
     } finally {
       setIsUploadingFotoModelo(null);
       e.target.value = '';
@@ -412,7 +412,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
       setDraftTemplate({ ...draftTemplate, imagemOrientativaUrl: url });
     } catch (err) {
       console.error(err);
-      alert('Erro ao carregar a imagem orientativa. Tente outro arquivo.');
+      setConfirmacao(aviso('Não foi possível usar essa imagem', 'Erro ao carregar a imagem orientativa. Tente outro arquivo.', 'perigo'));
     } finally {
       setIsUploadingImagemOrientativa(false);
       e.target.value = '';
@@ -465,7 +465,7 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
     e.preventDefault();
     if (!draftTemplate) return;
     if (!draftTemplate.procedimentoNome.trim()) {
-      alert('Informe o nome do procedimento.');
+      setConfirmacao(aviso('Falta o nome do procedimento', 'Informe o nome do procedimento antes de salvar a ficha-modelo.'));
       return;
     }
 
@@ -485,7 +485,13 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
       // O banco recusa a ficha quando as imagens estouram o limite de 1MB por documento, e essa
       // mensagem diz exatamente o que fazer — engolir tudo num "Erro ao salvar" deixaria o usuário
       // tentando de novo sem saber que o problema é o tamanho das imagens.
-      alert(err instanceof Error && err.message ? err.message : 'Erro ao salvar modelo de ficha.');
+      setConfirmacao(
+        aviso(
+          'Não foi possível salvar',
+          err instanceof Error && err.message ? err.message : 'Erro ao salvar modelo de ficha.',
+          'perigo'
+        )
+      );
     } finally {
       setIsSaving(false);
     }

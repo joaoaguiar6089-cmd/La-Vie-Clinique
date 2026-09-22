@@ -36,6 +36,7 @@ import {
   intervaloDoAtendimento,
 } from '../../utils/agenda';
 import { resolveQuoteStatus } from '../../utils/quoteCalc';
+import { SidePanel } from '../common/SidePanel';
 
 /**
  * `novo` nasce em branco; `edicao` corrige um registro; `confirmacao` é o "compareceu" de um
@@ -404,38 +405,40 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     }
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 animate-fadeIn"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="atendimento-titulo"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !salvando) onClose();
-      }}
-    >
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-surface rounded-sm shadow-2xl border border-white/60">
-        <div className="bg-ink px-6 py-4 flex items-start justify-between gap-3 sticky top-0 z-10">
-          <div className="min-w-0">
-            <p className="text-label font-semibold uppercase tracking-widest text-brand">
-              {patient?.nome || 'Escolha a paciente'}
-            </p>
-            <h2 id="atendimento-titulo" className="text-lg text-white font-serif-luxury">
-              {TITULO[modo]}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={salvando}
-            aria-label="Fechar"
-            className="text-white/60 hover:text-white transition-colors disabled:opacity-40"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  /* O rodapé é montado fora do JSX principal porque o `SidePanel` o recebe por prop: ele
+     precisa ficar fixo abaixo da área que rola, e não no fim do conteúdo rolável. */
+  const rodape = (
+    <div className="flex items-center justify-end gap-3">
+      <button
+        type="button"
+        onClick={onClose}
+        disabled={salvando}
+        className="min-h-[44px] px-4 text-body font-semibold uppercase tracking-widest text-muted hover:text-ink transition-colors disabled:opacity-50"
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        onClick={salvar}
+        disabled={salvando || !patient}
+        className="flex items-center gap-2 min-h-[44px] px-5 rounded-xl bg-brand text-white text-body font-semibold uppercase tracking-widest transition-colors disabled:opacity-60"
+      >
+        <Check className="w-4 h-4" />
+        {salvando ? 'Salvando...' : seraAgendamento ? 'Agendar' : 'Salvar'}
+      </button>
+    </div>
+  );
 
-        <div className="p-6 space-y-4">
+  return (
+    <SidePanel
+      aberto={isOpen}
+      onFechar={onClose}
+      titulo={TITULO[modo]}
+      sobretitulo={patient?.nome || 'Escolha a paciente'}
+      bloqueado={salvando}
+      rodape={rodape}
+    >
+      <div className="p-4 sm:p-5 space-y-4">
           {erroGeral && (
             <div className="px-3 py-2 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
@@ -656,28 +659,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink resize-y focus:outline-hidden"
             />
           </div>
-        </div>
-
-        <div className="px-6 py-4 bg-white/50 border-t border-white/70 flex items-center justify-end gap-3 sticky bottom-0">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={salvando}
-            className="px-4 py-2.5 text-xs font-semibold uppercase tracking-widest text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={salvar}
-            disabled={salvando || !patient}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest hover:bg-brand-hover transition-colors disabled:opacity-60"
-          >
-            <Check className="w-4 h-4" />
-            {salvando ? 'Salvando...' : seraAgendamento ? 'Agendar' : 'Salvar'}
-          </button>
-        </div>
       </div>
-    </div>
+    </SidePanel>
   );
 };

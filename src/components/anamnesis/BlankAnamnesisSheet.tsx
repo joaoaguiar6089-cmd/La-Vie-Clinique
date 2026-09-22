@@ -18,6 +18,7 @@ import {
   SectionHeading,
   TickBox,
 } from './printableQuestionBlocks';
+import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 
 interface BlankAnamnesisSheetProps {
   template: AnamnesisTemplate;
@@ -53,6 +54,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
   onClose,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const orientationImage = resolveOrientationImage(template);
@@ -136,7 +138,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
       await exportElementAsPDF(contentRef.current, `ficha-em-branco-${slug}.pdf`);
     } catch (err) {
       console.error('Erro ao gerar PDF da ficha em branco:', err);
-      alert('Não foi possível gerar o PDF agora. Tente novamente em instantes.');
+      setConfirmacao(aviso('Não foi possível gerar o PDF', 'Tente novamente em instantes.', 'perigo'));
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -489,6 +491,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
           </div>
         </div>
       </div>
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 };

@@ -39,6 +39,7 @@ import {
 import { formatDateOnly } from '../../utils/formatters';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PrintableEvaluationSheet } from './PrintableEvaluationSheet';
+import { SidePanel } from '../common/SidePanel';
 
 interface EvaluationFillModalProps {
   isOpen: boolean;
@@ -283,59 +284,66 @@ export const EvaluationFillModal: React.FC<EvaluationFillModalProps> = ({
   const fotoModeloExibida = fotoModeloAnotadaUrl || fotoModeloUrl;
   const fotoSessaoExibida = fotoSessaoAnotadaUrl || fotoSessaoUrl;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto">
-      {/*
-        O que rola é ESTE contêiner; a centralização mora no wrapper de dentro.
-      
-        Juntar as duas coisas — `overflow-y-auto` e `items-center` no mesmo elemento — quebra
-        silenciosamente quando o conteúdo passa da altura da tela: o item centralizado transborda
-        para os dois lados, e o que sai por cima fica **fora do alcance da rolagem**. O formulário
-        abre já cortado no meio e não há como subir. Com o wrapper `min-h-full`, a centralização
-        só acontece enquanto sobra espaço; quando não sobra, o wrapper cresce e tudo é alcançável.
-      */}
-      <div className="flex min-h-full items-start sm:items-center justify-center p-0 sm:p-4">
-        <div className="bg-white w-full sm:max-w-3xl sm:rounded-2xl shadow-xl min-h-screen sm:min-h-0 sm:my-8">
-          {/* Cabeçalho */}
-          <div className="sticky top-0 z-10 bg-white border-b border-[rgba(26,26,26,.1)] px-4 sm:px-6 py-4 flex items-start justify-between gap-3 sm:rounded-t-2xl">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <ClipboardCheck className="w-4 h-4 text-brand shrink-0" />
-                <h2 className="text-[17px] font-semibold text-ink truncate">
-                  Ficha de avaliação
-                </h2>
-              </div>
-              <p className="text-[13px] text-ink-soft mt-0.5 truncate">
-                {atendimento.pacienteNome} · {atendimento.procedimentoNome} ·{' '}
-                {formatDateOnly(atendimento.data)}
-              </p>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {/*
-                Imprime o que está **gravado**, não o rascunho na tela: o documento impresso precisa
-                corresponder ao que o prontuário guarda. Por isso só aparece depois do primeiro
-                salvamento.
-              */}
-              {registro && (
-                <button
-                  onClick={() => setImprimindo(true)}
-                  className="p-2 text-gray-400 hover:text-brand transition-colors"
-                  title="Imprimir / salvar PDF"
-                  aria-label="Imprimir a ficha de avaliação"
-                >
-                  <Printer className="w-5 h-5" />
-                </button>
-              )}
-              <button
-                onClick={onClose}
-                className="p-2 text-gray-400 hover:text-ink transition-colors"
-                aria-label="Fechar"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+  /*
+    Imprimir usa o que está **gravado**, não o rascunho na tela: o documento impresso precisa
+    corresponder ao que o prontuário guarda. Por isso só aparece depois do primeiro salvamento.
+  */
+  const rodape = carregando ? null : (
+    <div className="flex items-center justify-between gap-3">
+      {registro ? (
+        <button
+          onClick={pedirExclusao}
+          disabled={salvando}
+          className="min-h-[44px] px-2 text-body font-semibold text-muted hover:text-danger transition-colors disabled:opacity-40"
+        >
+          Excluir avaliação
+        </button>
+      ) : (
+        <span />
+      )}
+      <div className="flex items-center gap-2">
+        {registro && (
+          <button
+            onClick={() => setImprimindo(true)}
+            className="w-11 h-11 rounded-xl flex items-center justify-center text-muted hover:text-brand hover:bg-surface-2 transition-colors"
+            title="Imprimir / salvar PDF"
+            aria-label="Imprimir a ficha de avaliação"
+          >
+            <Printer className="w-5 h-5" />
+          </button>
+        )}
+        <button
+          onClick={onClose}
+          disabled={salvando}
+          className="min-h-[44px] px-4 rounded-xl text-body-lg font-semibold text-ink-soft hover:bg-surface-2 transition-colors disabled:opacity-40"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={handleSalvar}
+          disabled={salvando}
+          className="inline-flex items-center gap-2 min-h-[44px] px-5 rounded-xl bg-ink text-white text-body-lg font-semibold transition-colors disabled:opacity-40"
+        >
+          {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Salvar avaliação
+        </button>
+      </div>
+    </div>
+  );
 
+  return (
+    <SidePanel
+      aberto
+      onFechar={onClose}
+      titulo="Ficha de avaliação"
+      sobretitulo={`${atendimento.pacienteNome} · ${formatDateOnly(atendimento.data)}`}
+      largura="larga"
+      bloqueado={salvando}
+      /* Anotar uma foto ou anexar a foto da sessão não gera `input`/`change` no painel. */
+      alterado={!!fotoSessaoUrl || !!fotoModeloAnotadaUrl || !!fotoSessaoAnotadaUrl}
+      rodape={rodape}
+    >
+      <div className="bg-card min-h-full">
           <div className="px-4 sm:px-6 py-5 space-y-6">
             {carregando ? (
               <div className="flex items-center justify-center py-16 text-gray-400">
@@ -500,44 +508,6 @@ export const EvaluationFillModal: React.FC<EvaluationFillModalProps> = ({
             )}
           </div>
 
-          {/* Rodapé */}
-          {!carregando && (
-            <div className="sticky bottom-0 bg-white border-t border-[rgba(26,26,26,.1)] px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3 sm:rounded-b-2xl">
-              {registro ? (
-                <button
-                  onClick={pedirExclusao}
-                  disabled={salvando}
-                  className="text-[13px] font-semibold text-gray-400 hover:text-danger transition-colors disabled:opacity-40"
-                >
-                  Excluir avaliação
-                </button>
-              ) : (
-                <span />
-              )}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onClose}
-                  disabled={salvando}
-                  className="px-4 py-2.5 rounded-xl text-[14px] font-semibold text-ink-soft hover:bg-surface transition-colors disabled:opacity-40"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleSalvar}
-                  disabled={salvando}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ink text-white text-[14px] font-semibold hover:bg-black transition-colors disabled:opacity-40"
-                >
-                  {salvando ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Check className="w-4 h-4" />
-                  )}
-                  Salvar avaliação
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {imprimindo && registro && (
@@ -563,6 +533,6 @@ export const EvaluationFillModal: React.FC<EvaluationFillModalProps> = ({
           onClose={() => setAnotando(null)}
         />
       )}
-    </div>
+    </SidePanel>
   );
 };

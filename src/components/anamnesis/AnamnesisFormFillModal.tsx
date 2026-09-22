@@ -22,6 +22,8 @@ import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import { LaserAreaPicker } from '../laser/LaserAreaPicker';
 import { ehTemplateDeLaser } from '../../utils/templateMatching';
+import { SidePanel } from '../common/SidePanel';
+import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 import { listarNomesDeAreas, montarEspelhoPublico } from '../../utils/laserAreas';
 import {
   X,
@@ -135,6 +137,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   onOpenRecordDetail,
 }) => {
   // Patient selection or creation
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [patientMode, setPatientMode] = useState<'select' | 'new'>('select');
   const [selectedPatientId, setSelectedPatientId] = useState<string>(initialPatientId || '');
   const [newPatientName, setNewPatientName] = useState('');
@@ -254,7 +257,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
       setFotoAnotacoesJson(undefined);
     } catch (err) {
       console.error(err);
-      alert('Falha ao processar foto.');
+      setConfirmacao(aviso('Não foi possível usar essa foto', 'Falha ao processar a imagem. Tente outra foto.', 'perigo'));
     }
   };
 
@@ -321,7 +324,12 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
 
   const handleSaveForm = async (openPrintAfter = false) => {
     if (!validateForm()) {
-      alert('Por favor, verifique os campos obrigatórios (paciente, procedimento e profissional responsável).');
+      setConfirmacao(
+        aviso(
+          'Faltam campos obrigatórios',
+          'Confira paciente, procedimento e profissional responsável antes de salvar.'
+        )
+      );
       return;
     }
 
@@ -447,49 +455,57 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
       }
     } catch (err) {
       console.error(err);
-      alert('Erro ao salvar ficha de anamnese.');
+      setConfirmacao(aviso('Não foi possível salvar', 'Erro ao salvar a ficha de anamnese. Tente novamente.', 'perigo'));
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fadeIn">
-      <div className="relative w-full max-w-4xl bg-surface rounded-2xl border border-white/80 shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
-        {/* Modal Top Header */}
-        <div className="px-4 sm:px-6 py-4 bg-ink text-white flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-brand-light shrink-0" />
-            <div className="min-w-0">
-              <h3 className="font-serif-luxury text-[18px] sm:text-[21px] font-medium tracking-tight truncate">
-                Nova Ficha de Anamnese
-              </h3>
-              <p className="text-[13px] text-brand-light font-medium truncate hidden sm:block">
-                {clinicProfile.name || 'La Vie Clinique'} · Registro médico e estético integrado
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+    <SidePanel
+      aberto
+      onFechar={onClose}
+      titulo="Nova ficha de anamnese"
+      sobretitulo={clinicProfile.name || 'La Vie Clinique'}
+      largura="larga"
+      bloqueado={isSaving}
+      /* Escolher a paciente ou a ficha-modelo passa por `change`; anexar foto, não. */
+      alterado={!!fotoUrl}
+      rodape={
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setIsShareOpen(true)}
+            className="w-full sm:w-auto h-[48px] px-4 rounded-xl border border-line text-body-lg font-semibold text-ink-soft hover:border-brand hover:text-brand transition-colors whitespace-nowrap flex items-center justify-center gap-2"
+          >
+            <Share2 className="w-[18px] h-[18px] shrink-0" />
+            Link pro paciente
+          </button>
+
+          <div className="w-full sm:w-auto flex items-center gap-2.5">
             <button
               type="button"
-              onClick={() => setIsShareOpen(true)}
-              className="flex items-center gap-2 h-10 px-3 sm:px-4 rounded-xl border border-white/25 text-white text-[13px] sm:text-[14px] font-semibold hover:bg-white/10 active:scale-97 transition-all"
+              disabled={isSaving}
+              onClick={() => handleSaveForm(false)}
+              className="flex-1 sm:flex-initial h-[48px] px-5 rounded-xl bg-card border border-line text-body-lg font-semibold text-ink hover:border-brand hover:text-brand transition-colors disabled:opacity-50 whitespace-nowrap"
             >
-              <Share2 className="w-[18px] h-[18px] shrink-0" />
-              Link pro paciente
+              {isSaving ? 'Gravando...' : 'Salvar ficha'}
             </button>
+
             <button
               type="button"
-              onClick={onClose}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+              disabled={isSaving}
+              onClick={() => handleSaveForm(true)}
+              className="flex-1 sm:flex-initial h-[48px] px-6 rounded-xl bg-ink text-brand-light text-body-lg font-semibold flex items-center justify-center gap-2 shadow-xs active:scale-97 transition-all disabled:opacity-50 whitespace-nowrap"
             >
-              <X className="w-5 h-5" />
+              <Printer className="w-4 h-4" />
+              {isSaving ? 'Processando...' : 'Salvar e gerar PDF'}
             </button>
           </div>
         </div>
-
-        {/* Modal Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+      }
+    >
+      <div className="p-4 sm:p-6 space-y-5">
           {/* SECTION 1: PACIENTE & ATENDIMENTO */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3 border-b border-[rgba(26,26,26,.07)] pb-3">
@@ -997,39 +1013,6 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Bottom Actions */}
-        <div className="px-6 py-4 bg-white border-t border-[rgba(26,26,26,.07)] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full sm:w-auto h-[52px] px-5 rounded-2xl border border-[rgba(26,26,26,.12)] text-[15px] font-semibold text-ink-soft hover:bg-surface transition-colors whitespace-nowrap"
-          >
-            Cancelar
-          </button>
-
-          <div className="w-full sm:w-auto flex items-center gap-2.5">
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => handleSaveForm(false)}
-              className="flex-1 sm:flex-initial h-[52px] px-5 rounded-2xl bg-white border border-[rgba(26,26,26,.15)] text-[15px] font-semibold text-ink hover:border-brand hover:text-brand transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-              {isSaving ? 'Gravando...' : 'Salvar ficha'}
-            </button>
-
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => handleSaveForm(true)}
-              className="flex-1 sm:flex-initial h-[52px] px-6 rounded-2xl bg-ink text-brand-light text-[15px] font-semibold flex items-center justify-center gap-2 hover:bg-black shadow-xs active:scale-97 transition-all disabled:opacity-50 whitespace-nowrap"
-            >
-              <Printer className="w-4 h-4" />
-              {isSaving ? 'Processando...' : 'Salvar e gerar PDF'}
-            </button>
-          </div>
-        </div>
-      </div>
-
       {isAnnotatingPhoto && fotoUrl && (
         <PhotoAnnotationEditor
           imageUrl={fotoAnotadaUrl || fotoUrl}
@@ -1059,6 +1042,8 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           onShared={() => setLinkFoiCompartilhado(true)}
         />
       )}
-    </div>
+
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+    </SidePanel>
   );
 };

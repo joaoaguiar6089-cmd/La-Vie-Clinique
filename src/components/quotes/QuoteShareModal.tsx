@@ -51,8 +51,8 @@ export const QuoteShareModal: React.FC<QuoteShareModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 animate-fadeIn">
-      <div className="w-full max-w-md bg-surface rounded-sm overflow-hidden shadow-2xl border border-white/60">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center sm:p-4 animate-fadeIn">
+      <div className="w-full sm:max-w-md max-h-[88vh] overflow-y-auto bg-surface rounded-t-2xl sm:rounded-card shadow-2xl sm:border sm:border-line animate-slideUpSheet sm:animate-none pb-area-segura sm:pb-0">
         <div className="bg-ink px-6 py-4 flex items-start justify-between">
           <div>
             <p className="text-label font-semibold uppercase tracking-widest text-brand">

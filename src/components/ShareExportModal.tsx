@@ -9,6 +9,7 @@ import { buildPublicLink } from '../utils/publicLinks';
 import { PrintableCatalog } from './PrintableCatalog';
 import { PrintableProcedureCard } from './PrintableProcedureCard';
 import { ProcedureMultiSelect } from './ProcedureMultiSelect';
+import { ConfirmDialog, ConfirmRequest, aviso } from './ConfirmDialog';
 
 interface ShareExportModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   categories,
   singleProcedureToExport,
 }) => {
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [activeTab, setActiveTab] = useState<'pdf' | 'image' | 'single-card' | 'whatsapp' | 'qrcode'>(
     singleProcedureToExport ? 'single-card' : 'pdf'
   );
@@ -98,7 +100,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
       triggerConfetti();
     } catch (err) {
       console.error('Error generating PDF:', err);
-      alert('Houve uma falha ao gerar o PDF. Tente novamente.');
+      setConfirmacao(aviso('Não foi possível gerar o PDF', 'Houve uma falha ao gerar o PDF do catálogo. Tente novamente.', 'perigo'));
     } finally {
       setIsExporting(false);
     }
@@ -113,7 +115,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
       triggerConfetti();
     } catch (err) {
       console.error('Error generating image:', err);
-      alert('Houve uma falha ao gerar a imagem. Tente novamente.');
+      setConfirmacao(aviso('Não foi possível gerar a imagem', 'Houve uma falha ao gerar a imagem do catálogo. Tente novamente.', 'perigo'));
     } finally {
       setIsExporting(false);
     }
@@ -136,7 +138,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
       triggerConfetti();
     } catch (err) {
       console.error('Error generating single card PDF:', err);
-      alert('Houve uma falha ao gerar o PDF do card. Tente novamente.');
+      setConfirmacao(aviso('Não foi possível gerar o PDF', 'Houve uma falha ao gerar o PDF do card. Tente novamente.', 'perigo'));
     } finally {
       setIsExporting(false);
     }
@@ -151,7 +153,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
       triggerConfetti();
     } catch (err) {
       console.error('Error generating single card image:', err);
-      alert('Houve uma falha ao gerar a imagem do card.');
+      setConfirmacao(aviso('Não foi possível gerar a imagem', 'Houve uma falha ao gerar a imagem do card. Tente novamente.', 'perigo'));
     } finally {
       setIsExporting(false);
     }
@@ -621,6 +623,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
           )}
         </div>
       </div>
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 };

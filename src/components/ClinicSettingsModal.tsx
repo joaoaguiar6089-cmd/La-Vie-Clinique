@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, Scan, CalendarDays } from 'lucide-react';
+import { X, ArrowLeft, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, Scan, CalendarDays } from 'lucide-react';
 import { AgendaExpedienteDia, ClinicProfile, LaserCategoryDefaults, Professional } from '../types';
 import { AGENDA_DEFAULTS, INTERVALOS_DISPONIVEIS } from '../utils/agenda';
 import { mascararHora } from './common/MaskedDateTimeInput';
@@ -75,6 +75,16 @@ const LASER_PADROES_CAMPOS: {
     linhas: 2,
   },
 ];
+
+/** O índice do topo da página. A ordem é a mesma em que as seções aparecem abaixo. */
+const SECOES = [
+  { id: 'cfg-identidade', rotulo: 'Identidade', icone: Building2 },
+  { id: 'cfg-equipe', rotulo: 'Equipe', icone: Stethoscope },
+  { id: 'cfg-contato', rotulo: 'Contato', icone: Phone },
+  { id: 'cfg-catalogo', rotulo: 'Catálogo', icone: Sparkles },
+  { id: 'cfg-agenda', rotulo: 'Agenda', icone: CalendarDays },
+  { id: 'cfg-laser', rotulo: 'Mapa do laser', icone: Scan },
+] as const;
 
 interface ClinicSettingsModalProps {
   isOpen: boolean;
@@ -430,33 +440,56 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div className="relative w-full max-w-2xl bg-surface rounded-sm overflow-hidden shadow-2xl border border-white/60 my-6 transition-all">
-        {/* Header */}
-        <div className="bg-ink text-line-soft px-6 py-4 flex items-center justify-between border-b border-white/10">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-brand-light" />
-            <div>
-              <span className="text-label font-semibold uppercase tracking-widest text-brand-light">
-                Configurações & Corpo Clínico
-              </span>
-              <h2 className="font-serif-luxury text-xl font-medium text-white leading-none mt-0.5">
-                Dados da Clínica & Médicas Responsáveis
-              </h2>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xs text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    /* Página, não modal.
 
+       Eram 700 linhas de formulário dentro de uma caixa de 672px com rolagem própria, sobre
+       um véu preto: no celular, meia tela útil; no desktop, a sensação de que fechar sem querer
+       perderia tudo. Como página ela usa a largura que tem, rola com a página e o índice do topo
+       leva direto à seção. */
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+      <header className="mb-5">
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center gap-1.5 min-h-[44px] -ml-1 pr-2 text-body font-semibold text-muted hover:text-ink transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Voltar
+        </button>
+        <p className="text-label uppercase tracking-wider font-semibold text-brand">
+          Configurações
+        </p>
+        <h1 className="font-serif-luxury text-title-lg sm:text-display text-ink mt-0.5">
+          Dados da clínica e equipe
+        </h1>
+      </header>
+
+      {/* Índice das seções. Rola horizontalmente no celular, onde os seis rótulos não cabem
+          lado a lado — melhor deslizar do que quebrar em três linhas. */}
+      <nav
+        aria-label="Seções das configurações"
+        className="sticky top-[57px] sm:top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 py-2 mb-5 bg-surface/95 border-b border-line overflow-x-auto"
+      >
+        <ul className="flex items-center gap-1.5 w-max">
+          {SECOES.map((s) => (
+            <li key={s.id}>
+              <a
+                href={`#${s.id}`}
+                className="inline-flex items-center gap-1.5 min-h-[40px] px-3 rounded-lg text-body font-medium text-ink-soft hover:bg-surface-2 hover:text-brand transition-colors whitespace-nowrap"
+              >
+                <s.icone className="w-3.5 h-3.5 text-brand shrink-0" />
+                {s.rotulo}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      <div className="glass-card">
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-7">
           {/* Clinic & Brand */}
-          <div className="space-y-4">
+          <div id="cfg-identidade" className="space-y-4 scroll-mt-24">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <Building2 className="w-3.5 h-3.5" />
               Identidade da Clínica
@@ -564,7 +597,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           </div>
 
           {/* Clinical Team / Registered Doctors */}
-          <div className="space-y-4">
+          <div id="cfg-equipe" className="space-y-4 scroll-mt-24">
             <div className="flex items-center justify-between pb-1 border-b border-white/60">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
                 <Stethoscope className="w-3.5 h-3.5" />
@@ -859,7 +892,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           </div>
 
           {/* Contact & Location (Editable for Footer & PDF) */}
-          <div className="space-y-4">
+          <div id="cfg-contato" className="space-y-4 scroll-mt-24">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <Phone className="w-3.5 h-3.5" />
               Canais de Contato & Localização (Exibidos no Rodapé e PDF)
@@ -942,7 +975,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           </div>
 
           {/* Catalog notes */}
-          <div className="space-y-4">
+          <div id="cfg-catalogo" className="space-y-4 scroll-mt-24">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <Sparkles className="w-3.5 h-3.5" />
               Mensagens do Catálogo & PDF
@@ -973,10 +1006,12 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
             </div>
           </div>
 
-          <SecaoAgendaDaClinica formData={formData} onChange={handleChange} />
+          <div id="cfg-agenda" className="scroll-mt-24">
+            <SecaoAgendaDaClinica formData={formData} onChange={handleChange} />
+          </div>
 
           {/* Mapa corporal da depilação a laser */}
-          <div className="space-y-4">
+          <div id="cfg-laser" className="space-y-4 scroll-mt-24">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
               <Scan className="w-3.5 h-3.5" />
               Depilação a Laser — Mapa Corporal
@@ -1097,21 +1132,22 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Footer actions */}
-          <div className="pt-4 border-t border-white/60 flex items-center justify-end gap-3 sticky bottom-0 bg-surface py-2">
+          {/* Ações. Coladas no fim da página, e não numa barra flutuante: numa página de
+              configurações a pessoa rola até acabar e salva — não salva no meio. */}
+          <div className="pt-5 border-t border-line flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-sm border border-white/80 text-xs font-semibold uppercase tracking-wider text-gray-600 hover:bg-white"
+              className="min-h-[44px] px-4 rounded-xl border border-line text-body font-semibold uppercase tracking-wider text-muted hover:text-ink transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-brand-hover active:scale-95 transition-all flex items-center gap-1.5"
+              className="min-h-[44px] px-6 rounded-xl bg-brand text-white text-body font-semibold uppercase tracking-widest shadow-xs active:scale-95 transition-all flex items-center gap-1.5"
             >
               <Check className="w-4 h-4" />
-              Salvar Informações
+              Salvar informações
             </button>
           </div>
         </form>

@@ -38,6 +38,7 @@ import { QuoteItemEditor } from './QuoteItemEditor';
 import { QuotePaymentOptionEditor } from './QuotePaymentOptionEditor';
 import { LaserQuoteMapModal } from '../laser/LaserQuoteMapModal';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { SidePanel } from '../common/SidePanel';
 import { getRecordsForPatient } from '../../services/databaseService';
 import { isLaserCategory } from '../../utils/templateMatching';
 import { nomeCurtoDaArea } from '../../utils/laserAreas';
@@ -414,33 +415,48 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       ? `Novo orçamento a partir de ${seedFrom.numero}`
       : 'Novo Orçamento';
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div className="relative w-full max-w-3xl bg-surface rounded-sm overflow-hidden shadow-2xl border border-white/60 my-6">
-        {/* Header */}
-        <div className="bg-ink px-6 sm:px-8 py-5 flex items-start justify-between">
-          <div>
-            <p className="text-label font-semibold uppercase tracking-widest text-brand">
-              Orçamento
-            </p>
-            <h2 className="text-2xl text-white font-serif-luxury">{tituloModal}</h2>
-            {!quoteToEdit && (
-              <p className="text-body text-white/50 mt-1">
-                O número é gerado ao salvar — abrir e desistir não gasta numeração
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="text-white/60 hover:text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  /* O orçamento é o formulário mais longo do sistema, e o único cujo conteúdo ganha de verdade
+     com largura: cada procedimento é uma linha com valor, desconto e sessões. Daí a variante
+     `larga` do painel. */
+  const rodape = (
+    <div className="flex items-center justify-end gap-3">
+      <button
+        type="button"
+        onClick={onClose}
+        className="min-h-[44px] px-5 text-body font-semibold uppercase tracking-widest text-muted hover:text-ink transition-colors"
+      >
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        form="form-orcamento"
+        disabled={isSaving}
+        className="min-h-[44px] px-6 bg-brand text-white text-body font-semibold uppercase tracking-widest rounded-xl transition-colors disabled:opacity-50"
+      >
+        {isSaving ? 'Salvando...' : quoteToEdit ? 'Salvar alterações' : 'Salvar orçamento'}
+      </button>
+    </div>
+  );
 
-        <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-7 max-h-[75vh] overflow-y-auto">
+  return (
+    <SidePanel
+      aberto={isOpen}
+      onFechar={onClose}
+      titulo={tituloModal}
+      sobretitulo="Orçamento"
+      largura="larga"
+      bloqueado={isSaving}
+      /* Adicionar ou remover um procedimento não passa por `input`/`change`, então o painel
+         não enxergaria a alteração sozinho. */
+      alterado={itens.length > 0 && !quoteToEdit}
+      rodape={rodape}
+    >
+      <form id="form-orcamento" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-7">
+        {!quoteToEdit && (
+          <p className="text-body text-muted -mt-1">
+            O número é gerado ao salvar — abrir e desistir não gasta numeração.
+          </p>
+        )}
           {/* Seção 1 — Identificação */}
           <div className="space-y-4">
             <SectionHeader icon={<FileText className="w-3.5 h-3.5" />}>Identificação</SectionHeader>
@@ -760,25 +776,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
             </p>
           )}
 
-          {/* Rodapé */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/60">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-6 py-2.5 bg-brand text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-brand-hover transition-colors disabled:opacity-50"
-            >
-              {isSaving ? 'Salvando...' : quoteToEdit ? 'Salvar alterações' : 'Salvar orçamento'}
-            </button>
-          </div>
-        </form>
-      </div>
+      </form>
 
       {/* Fora do <form>: um clique no mapa não pode disparar o submit do orçamento. */}
       <LaserQuoteMapModal
@@ -808,6 +806,6 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
         }
         onFechar={() => setConfirmarRemocao(null)}
       />
-    </div>
+    </SidePanel>
   );
 };

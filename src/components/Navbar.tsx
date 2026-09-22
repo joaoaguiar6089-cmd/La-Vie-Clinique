@@ -26,6 +26,7 @@ const VIEW_LABEL: Record<AppView, string> = {
   anamnesis: 'Anamneses',
   evaluations: 'Fichas de Avaliação',
   quotes: 'Orçamentos',
+  settings: 'Configurações',
 };
 
 interface NavbarProps {
@@ -183,7 +184,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       id: 'settings' as const,
       label: 'Configurações',
       icon: Settings,
-      active: false,
+      active: currentView === 'settings',
       count: undefined,
       onClick: onOpenSettings,
     },

@@ -37,6 +37,7 @@ import {
   ArrowRight,
   IdCard,
 } from 'lucide-react';
+import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 
 const formatCpf = (raw: string): string => {
   const digits = raw.replace(/\D/g, '').slice(0, 11);
@@ -105,6 +106,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
     clinicProfile.professionals?.find((p) => p.id === resolvedProfessionalId)?.name ||
     existingRecord?.profissionalNome;
 
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [step, setStep] = useState<Step>(isEditing ? 1 : 'intro');
   const termoRef = useRef<HTMLLabelElement>(null);
 
@@ -215,7 +217,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
       setFotoPacienteUrl(await subirImagemOuManter(compressed, 'anamnese/fotos-pacientes'));
     } catch (err) {
       console.error(err);
-      alert('Não foi possível processar a imagem selecionada. Tente outra foto.');
+      setConfirmacao(aviso('Não foi possível usar essa foto', 'Tente outra imagem — de preferência menor.', 'perigo'));
     } finally {
       setIsProcessingPhoto(false);
       e.target.value = '';
@@ -390,7 +392,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
       onSaved(record);
     } catch (err) {
       console.error('Erro ao enviar anamnese:', err);
-      alert('Ocorreu um erro ao enviar sua ficha. Por favor, tente novamente.');
+      setConfirmacao(aviso('Não foi possível enviar a ficha', 'Ocorreu um erro ao enviar. Por favor, tente novamente.', 'perigo'));
     } finally {
       setIsSubmitting(false);
     }
@@ -915,6 +917,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
           </div>
         </div>
       </form>
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 };

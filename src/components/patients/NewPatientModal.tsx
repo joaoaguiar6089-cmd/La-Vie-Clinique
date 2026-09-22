@@ -79,7 +79,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 animate-fadeIn"
+      className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center sm:p-4 animate-fadeIn"
       role="dialog"
       aria-modal="true"
       aria-labelledby="novo-paciente-titulo"
@@ -87,7 +87,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
         if (e.target === e.currentTarget && !salvando) onClose();
       }}
     >
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-surface rounded-sm shadow-2xl border border-white/60">
+      <div className="w-full sm:max-w-lg max-h-[88vh] overflow-y-auto bg-surface rounded-t-2xl sm:rounded-card shadow-2xl sm:border sm:border-line animate-slideUpSheet sm:animate-none pb-area-segura sm:pb-0">
         <div className="bg-ink px-6 py-4 flex items-start justify-between gap-3 sticky top-0 z-10">
           <div>
             <p className="text-label font-semibold uppercase tracking-widest text-brand">

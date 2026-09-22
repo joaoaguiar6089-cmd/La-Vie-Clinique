@@ -26,6 +26,7 @@ import {
   Loader2,
   PenTool,
 } from 'lucide-react';
+import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 
 interface PrintableAnamnesisSheetProps {
   record: AnamnesisRecord;
@@ -65,6 +66,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   mapaCorporal,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [annotatingTarget, setAnnotatingTarget] = useState<'modelo' | 'paciente' | null>(null);
 
@@ -86,10 +88,14 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
       console.error('Erro ao salvar anotações:', err);
       const message = err instanceof Error ? err.message : String(err);
       const isTooLarge = /longer than|exceeds|too large|maximum.*byte/i.test(message);
-      alert(
-        isTooLarge
-          ? 'Esta ficha ficou grande demais para salvar (limite de tamanho do banco de dados) — provavelmente por acumular várias fotos/anotações no mesmo registro. Tente remover alguma foto não essencial desta ficha antes de anotar, ou avise o suporte técnico.'
-          : 'Não foi possível salvar as anotações agora. Tente novamente.'
+      setConfirmacao(
+        aviso(
+          'Não foi possível salvar as anotações',
+          isTooLarge
+            ? 'Esta ficha ficou grande demais para salvar (limite de tamanho do banco de dados) — provavelmente por acumular várias fotos e anotações no mesmo registro. Tente remover alguma foto não essencial desta ficha antes de anotar, ou avise o suporte técnico.'
+            : 'Tente novamente em instantes.',
+          'perigo'
+        )
       );
     }
   };
@@ -102,7 +108,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
       await exportElementAsPDF(contentRef.current, filename);
     } catch (err) {
       console.error('Erro ao gerar PDF:', err);
-      alert('Não foi possível gerar o PDF agora. Tente novamente em instantes.');
+      setConfirmacao(aviso('Não foi possível gerar o PDF', 'Tente novamente em instantes.', 'perigo'));
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -697,6 +703,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
             onClose={() => setAnnotatingTarget(null)}
           />
         )}
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 };

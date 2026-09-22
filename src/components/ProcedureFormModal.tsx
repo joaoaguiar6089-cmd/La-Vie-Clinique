@@ -8,6 +8,8 @@ import { subirImagemOuManter } from '../services/imageStorage';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { isLaserCategory } from '../utils/templateMatching';
 import { LaserAreaEditor } from './laser/LaserAreaEditor';
+import { SidePanel } from './common/SidePanel';
+import { ConfirmDialog, ConfirmRequest } from './ConfirmDialog';
 
 /**
  * A mesma foto aparece em frames bem diferentes (card da lista e detalhe em paisagem, cartão
@@ -119,6 +121,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const ehLaser = isLaserCategory(categoriaEfetiva);
 
   const [showPresetLibrary, setShowPresetLibrary] = useState(false);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadError, setUploadError] = useState('');
   /** Fotos escolhidas no input que ainda passam pelo recorte, uma de cada vez. */
@@ -495,19 +498,21 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
    */
   const handleCategoriaChange = (nova: string) => {
     const saindoDoLaser = ehLaser && !isLaserCategory(nova) && laserAreas.length > 0;
-    if (saindoDoLaser) {
-      const nome = (procedimentoLaserAlvo || procedureToEdit)?.title || 'esta área';
-      if (
-        !window.confirm(
-          `Ao sair da categoria "Depilação a Laser", a área desenhada para ${nome} é apagada. Continuar?`
-        )
-      ) {
-        return;
-      }
-      setLaserAreas([]);
-      setProcedimentoLaserAlvo(null);
+    if (!saindoDoLaser) {
+      setCategory(nova);
+      return;
     }
-    setCategory(nova);
+    const nome = (procedimentoLaserAlvo || procedureToEdit)?.title || 'esta área';
+    setConfirmacao({
+      titulo: 'Descartar a área desenhada?',
+      mensagem: `Ao sair da categoria "Depilação a Laser", a área desenhada para ${nome} é apagada.`,
+      textoConfirmar: 'Descartar e trocar',
+      onConfirmar: () => {
+        setLaserAreas([]);
+        setProcedimentoLaserAlvo(null);
+        setCategory(nova);
+      },
+    });
   };
 
   /** Carrega no painel um procedimento que já existe, para ele receber o próximo desenho. */
@@ -547,37 +552,71 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div 
-        // O modo laser precisa de um modal largo: manequim grande de um lado, painel de campos do
-        // outro, e ainda o anel de botões em volta. Com os `max-w-3xl` (768px) do cadastro comum
-        // não sobra largura para nada disso.
-        className={`relative w-full bg-surface rounded-sm overflow-hidden shadow-2xl border border-white/60 my-6 transition-all ${
-          ehLaser ? 'max-w-[1240px]' : 'max-w-3xl'
+  /* Rodapé fixo abaixo da área que rola. Em modo laser quem grava é o "Aplicar" de cada área,
+     então ali não há o que submeter — daí o `hidden`. */
+  const rodape = (
+    <div className="flex items-center justify-end gap-3">
+      {confirmandoSaida && (
+        <p className="text-body text-warn mr-auto leading-snug max-w-sm">
+          Há uma área desenhada que ainda não foi aplicada — ela se perde ao fechar. Toque em
+          Fechar de novo para confirmar.
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={handleFechar}
+        className={`min-h-[44px] px-4 rounded-xl border text-body font-semibold uppercase tracking-wider transition-colors ${
+          confirmandoSaida
+            ? 'border-danger-line bg-danger-bg text-danger'
+            : 'border-line text-muted hover:text-ink'
         }`}
-        id="procedure-form-modal"
       >
-        {/* Header */}
-        <div className="bg-ink text-line-soft px-6 py-4 flex items-center justify-between border-b border-white/10">
-          <div>
-            <span className="text-label font-semibold uppercase tracking-widest text-brand-light">
-              Cadastro & Gestão
+        {ehLaser ? 'Fechar' : 'Cancelar'}
+      </button>
+      <button
+        type="submit"
+        form="form-procedimento"
+        hidden={ehLaser}
+        disabled={cropSource !== null || isSaving}
+        className="min-h-[44px] px-6 rounded-xl bg-brand text-white text-body font-semibold uppercase tracking-widest shadow-xs active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+      >
+        {isSaving ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>{savingStatus || 'Salvando...'}</span>
+          </>
+        ) : (
+          <>
+            <Check className="w-4 h-4" />
+            <span>
+              {cropSource
+                ? 'Enquadrando foto...'
+                : procedureToEdit
+                ? 'Salvar Alterações'
+                : 'Cadastrar Procedimento'}
             </span>
-            <h2 className="font-serif-luxury text-xl sm:text-2xl font-medium text-white">
-              {procedureToEdit ? 'Editar Procedimento' : 'Novo Procedimento Estético'}
-            </h2>
-          </div>
-          <button
-            onClick={handleFechar}
-            className="p-1.5 rounded-xs text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+          </>
+        )}
+      </button>
+    </div>
+  );
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 max-h-[80vh] overflow-y-auto">
+  return (
+    /* O modo laser precisa de largura: manequim de um lado, painel de campos do outro, e ainda
+       o anel de botões em volta. Nos 560px do painel padrão não sobra espaço para nada disso. */
+    <SidePanel
+      aberto={isOpen}
+      onFechar={handleFechar}
+      titulo={procedureToEdit ? 'Editar procedimento' : 'Novo procedimento'}
+      sobretitulo="Cadastro & gestão"
+      largura={ehLaser ? 'larga' : 'padrao'}
+      bloqueado={isSaving}
+      /* Foto adicionada e área desenhada não passam por `input`/`change`. */
+      alterado={images.length > 0 || temRascunhoNaoAplicado}
+      rodape={rodape}
+    >
+      <div id="procedure-form-modal">
+        <form id="form-procedimento" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
           {/* ==========================================
               MODO LASER — o mapa corporal substitui a entrada normal do formulário.
               A ordem é a do fluxo pedido: categoria → destacar a área → nome → demais dados.
@@ -1448,51 +1487,6 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </>
           )}
 
-          {/* Form Actions Footer */}
-          <div className="pt-4 border-t border-white/60 flex items-center justify-end gap-3 sticky bottom-0 bg-surface py-2">
-            {confirmandoSaida && (
-              <p className="text-body text-warn mr-auto leading-snug max-w-sm">
-                Há uma área desenhada que ainda não foi aplicada — ela se perde ao fechar. Toque em
-                Fechar de novo para confirmar.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={handleFechar}
-              className={`px-4 py-2.5 rounded-sm border text-xs font-semibold uppercase tracking-wider transition-colors ${
-                confirmandoSaida
-                  ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
-                  : 'border-white/80 text-gray-600 hover:bg-white'
-              }`}
-            >
-              {/* Em modo laser quem grava é o "Aplicar" de cada área — não há o que cancelar. */}
-              {ehLaser ? 'Fechar' : 'Cancelar'}
-            </button>
-            <button
-              type="submit"
-              hidden={ehLaser}
-              disabled={cropSource !== null || isSaving}
-              className="px-6 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest shadow-xs hover:bg-brand-hover active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{savingStatus || 'Salvando...'}</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  <span>
-                    {cropSource
-                      ? 'Enquadrando foto...'
-                      : procedureToEdit
-                      ? 'Salvar Alterações'
-                      : 'Cadastrar Procedimento'}
-                  </span>
-                </>
-              )}
-            </button>
-          </div>
         </form>
       </div>
 
@@ -1514,6 +1508,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
         onCancel={handleCropCancel}
         onConfirm={handleCropConfirm}
       />
-    </div>
+
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+    </SidePanel>
   );
 };

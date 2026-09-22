@@ -210,7 +210,8 @@ export type AppView =
   | 'patients'
   | 'anamnesis'
   | 'evaluations'
-  | 'quotes';
+  | 'quotes'
+  | 'settings';
 
 /**
  * Um pedido de navegação vindo de outra tela — da busca global, de um card da tela Hoje, de

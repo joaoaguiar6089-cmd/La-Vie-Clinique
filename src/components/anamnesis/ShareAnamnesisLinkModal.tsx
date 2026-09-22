@@ -102,12 +102,12 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 sm:p-6 animate-fadeIn"
+      className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center sm:p-6 animate-fadeIn"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-xl bg-white rounded-2xl border border-white/80 shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh]">
+      <div className="relative w-full sm:max-w-xl bg-card rounded-t-2xl sm:rounded-card sm:border sm:border-line shadow-2xl overflow-hidden flex flex-col max-h-[88dvh] sm:max-h-[90vh] animate-slideUpSheet sm:animate-none">
         {/* Header (fixo no topo) */}
         <div className="px-5 sm:px-6 py-3.5 sm:py-4 bg-ink text-white flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
