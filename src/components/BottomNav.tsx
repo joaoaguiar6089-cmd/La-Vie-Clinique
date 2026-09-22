@@ -78,14 +78,20 @@ const Destino: React.FC<{
       <Icone className="w-[22px] h-[22px]" strokeWidth={ativo ? 2.4 : 1.8} />
       {!!contador && (
         <span
-          className="absolute -top-1.5 -right-2.5 min-w-[17px] h-[17px] px-1 rounded-full bg-brand text-white text-[10px] font-bold flex items-center justify-center tabular-nums"
+          className="absolute -top-2 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-brand text-white text-label font-bold flex items-center justify-center tabular-nums leading-none"
           aria-label={`${contador} pendente${contador === 1 ? '' : 's'}`}
         >
           {contador > 9 ? '9+' : contador}
         </span>
       )}
     </span>
-    <span className={`text-[11px] leading-none ${ativo ? 'font-semibold' : 'font-medium'}`}>
+    {/* 12px é o piso da escala tipográfica da casa: nada abaixo disso, nem num rótulo de
+        barra. Cinco rótulos a 12px cabem em 375px porque a barra é `flex-1` com `truncate`. */}
+    <span
+      className={`text-label leading-none max-w-full truncate px-0.5 ${
+        ativo ? 'font-semibold' : 'font-medium'
+      }`}
+    >
       {rotulo}
     </span>
   </button>
