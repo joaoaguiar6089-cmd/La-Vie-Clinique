@@ -15,15 +15,36 @@ import { useEffect } from 'react';
  *
  * Empilhar um por painel também resolve o painel dentro do painel: cada um consome o seu.
  */
+/**
+ * A entrada do histórico que um painel acabou de largar e que ainda não foi desempilhada.
+ *
+ * O `history.back()` da limpeza é **assíncrono**: o `popstate` que ele provoca chega depois, e
+ * chega para quem estiver escutando naquele momento. Se outro painel abriu nesse intervalo, ele
+ * recebe o evento como se a pessoa tivesse apertado voltar e fecha na mesma hora — o painel "não
+ * abre". Era o que acontecia com a ficha de avaliação, montada já aberta: o StrictMode monta,
+ * desmonta e remonta o efeito, e a remontagem levava o `popstate` da desmontagem.
+ *
+ * Por isso a limpeza não desempilha na hora. Ela agenda, e quem abrir antes de o agendamento
+ * rodar **adota** a entrada largada em vez de empilhar outra: o histórico fica com a mesma
+ * profundidade e nenhum `popstate` fantasma é disparado.
+ */
+let largada: { marca: string; timer: ReturnType<typeof setTimeout> } | null = null;
+
 export function useVoltarFecha(aberto: boolean, fechar: () => void): void {
   useEffect(() => {
     if (!aberto || typeof window === 'undefined') return;
 
     // Marca única: é por ela que a limpeza confere se a entrada do topo ainda é a nossa antes
-    // de desempilhar. Sem a conferência, o StrictMode do desenvolvimento (que monta, desmonta e
-    // remonta o efeito) deixaria uma entrada órfã — e um "voltar" que não fecha nada.
-    const marca = `painel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    window.history.pushState({ laviePainel: marca }, '');
+    // de desempilhar.
+    let marca: string;
+    if (largada && window.history.state?.laviePainel === largada.marca) {
+      clearTimeout(largada.timer);
+      marca = largada.marca;
+      largada = null;
+    } else {
+      marca = `painel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      window.history.pushState({ laviePainel: marca }, '');
+    }
 
     let fechadoPeloVoltar = false;
     const aoVoltar = () => {
@@ -35,7 +56,13 @@ export function useVoltarFecha(aberto: boolean, fechar: () => void): void {
     return () => {
       window.removeEventListener('popstate', aoVoltar);
       if (fechadoPeloVoltar) return;
-      if (window.history.state?.laviePainel === marca) window.history.back();
+      if (window.history.state?.laviePainel !== marca) return;
+      const timer = setTimeout(() => {
+        if (largada?.marca !== marca) return;
+        largada = null;
+        if (window.history.state?.laviePainel === marca) window.history.back();
+      }, 0);
+      largada = { marca, timer };
     };
     // `fechar` costuma ser uma função nova a cada render; incluí-la republicaria a entrada no
     // histórico a cada pintura. O que importa é a abertura.
