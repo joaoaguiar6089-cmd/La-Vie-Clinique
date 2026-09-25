@@ -10,7 +10,7 @@ import { itemValorFinal, resolveQuoteStatus } from './quoteCalc';
  * catálogo, assinados uma vez por sessão no App. Nenhuma função deste arquivo lê o Firestore, e
  * é por isso que trocar o filtro de período no painel financeiro não custa leitura nenhuma.
  *
- * Fonte do dinheiro: **o orçamento aceito**. É a única fonte que o sistema guarda com valor
+ * Fonte do dinheiro: **o orçamento pago**. É a única fonte que o sistema guarda com valor
  * fechado e data — o atendimento não tem preço, e puxar o preço do catálogo na leitura faria o
  * faturamento de março mudar quando a tabela de preços subisse em abril. Ver `valorDoOrcamento`.
  */
@@ -92,14 +92,15 @@ export const diasAntesDeHoje = (dias: number, hoje: DataISO = hojeISO()): DataIS
 // ==========================================
 
 /**
- * Quando o orçamento foi aceito, em ISO.
+ * Quando o orçamento foi pago, em ISO.
  *
- * `aceitoEm` é o campo certo; `updatedAt` é o fallback para os orçamentos aceitos antes de ele
- * existir, e `dataEmissao` é o último recurso. Sem o fallback, todo faturamento anterior a esta
- * versão desapareceria do painel — o que pareceria um bug de cálculo, não um campo novo.
+ * `pagoEm` é o campo certo — nos orçamentos marcados como "aceito" antes de o status virar
+ * "pago", `normalizarQuote` já o preenche com a data de aceite. `updatedAt` é o fallback para os
+ * aceitos antes até dessa data existir, e `dataEmissao` é o último recurso. Sem o fallback, todo
+ * faturamento antigo desapareceria do painel — o que pareceria um bug de cálculo.
  */
-export const dataDeAceite = (q: Quote): string =>
-  q.aceitoEm || q.updatedAt || q.dataEmissao || q.createdAt;
+export const dataDoPagamento = (q: Quote): string =>
+  q.pagoEm || q.aceitoEm || q.updatedAt || q.dataEmissao || q.createdAt;
 
 /**
  * Quanto este orçamento vale.
@@ -113,21 +114,21 @@ export const valorDoOrcamento = (q: Quote): number =>
     ? q.total
     : (q.itens || []).reduce((soma, item) => soma + itemValorFinal(item), 0);
 
-export const orcamentosAceitos = (quotes: Quote[]): Quote[] =>
-  quotes.filter((q) => q.status === 'aceito');
+export const orcamentosPagos = (quotes: Quote[]): Quote[] =>
+  quotes.filter((q) => q.status === 'pago');
 
-/** Aceitos dentro do mês, pela data de aceite. */
-export const aceitosNoMes = (quotes: Quote[], mes: MesISO): Quote[] =>
-  orcamentosAceitos(quotes).filter((q) => mesDe(dataDeAceite(q)) === mes);
+/** Pagos dentro do mês, pela data do pagamento. */
+export const pagosNoMes = (quotes: Quote[], mes: MesISO): Quote[] =>
+  orcamentosPagos(quotes).filter((q) => mesDe(dataDoPagamento(q)) === mes);
 
 export const faturamentoDoMes = (quotes: Quote[], mes: MesISO): number =>
-  aceitosNoMes(quotes, mes).reduce((soma, q) => soma + valorDoOrcamento(q), 0);
+  pagosNoMes(quotes, mes).reduce((soma, q) => soma + valorDoOrcamento(q), 0);
 
 /**
  * Orçamentos enviados e ainda dentro da validade — o que está em aberto agora.
  *
  * `resolveQuoteStatus` já derruba para "expirado" o que passou da validade, então isto é
- * exatamente "a paciente recebeu e ainda pode aceitar".
+ * exatamente "a paciente recebeu e ainda pode fechar".
  */
 export const orcamentosAbertos = (quotes: Quote[]): Quote[] =>
   quotes.filter((q) => resolveQuoteStatus(q) === 'enviado');
@@ -135,7 +136,7 @@ export const orcamentosAbertos = (quotes: Quote[]): Quote[] =>
 export interface Conversao {
   /** Orçamentos que saíram da clínica na janela — a base da conta. */
   enviados: number;
-  aceitos: number;
+  pagos: number;
   /** 0–100. `null` quando não houve nenhum envio: 0% ali seria uma acusação falsa. */
   percentual: number | null;
 }
@@ -143,9 +144,10 @@ export interface Conversao {
 /**
  * Conversão dos orçamentos **emitidos** nos últimos N dias.
  *
- * Pela emissão, e não pelo aceite: a pergunta é "de tudo o que mandamos, quanto fechou", e
- * contar pelo aceite daria 100% sempre. Rascunho fica de fora — nunca chegou à paciente —, e
- * cancelado também, porque cancelar é apagar um orçamento já enviado, não perdê-lo.
+ * Pela emissão, e não pelo pagamento: a pergunta é "de tudo o que mandamos, quanto fechou", e
+ * contar pelo pagamento daria 100% sempre. Rascunho fica de fora — nunca chegou à paciente —, e
+ * cancelado também, porque cancelar é apagar um orçamento já enviado, não perdê-lo. Recusado
+ * entra na base: é exatamente o que não fechou.
  */
 export const conversaoDeOrcamentos = (
   quotes: Quote[],
@@ -156,48 +158,48 @@ export const conversaoDeOrcamentos = (
   const naJanela = quotes.filter(
     (q) => q.status !== 'rascunho' && q.status !== 'cancelado' && (q.dataEmissao || '') >= desde
   );
-  const aceitos = naJanela.filter((q) => q.status === 'aceito').length;
+  const pagos = naJanela.filter((q) => q.status === 'pago').length;
   return {
     enviados: naJanela.length,
-    aceitos,
-    percentual: naJanela.length === 0 ? null : Math.round((aceitos / naJanela.length) * 100),
+    pagos,
+    percentual: naJanela.length === 0 ? null : Math.round((pagos / naJanela.length) * 100),
   };
 };
 
 export interface TicketMedio {
   valor: number;
-  /** Quantos orçamentos entraram na média — sem isto, "R$ 1.200" de um único aceite engana. */
+  /** Quantos orçamentos entraram na média — sem isto, "R$ 1.200" de um único pagamento engana. */
   base: number;
 }
 
 export const ticketMedioDoMes = (quotes: Quote[], mes: MesISO): TicketMedio => {
-  const aceitos = aceitosNoMes(quotes, mes);
-  if (aceitos.length === 0) return { valor: 0, base: 0 };
-  const soma = aceitos.reduce((s, q) => s + valorDoOrcamento(q), 0);
-  return { valor: soma / aceitos.length, base: aceitos.length };
+  const pagos = pagosNoMes(quotes, mes);
+  if (pagos.length === 0) return { valor: 0, base: 0 };
+  const soma = pagos.reduce((s, q) => s + valorDoOrcamento(q), 0);
+  return { valor: soma / pagos.length, base: pagos.length };
 };
 
 export interface FaturamentoPorProcedimento {
   nome: string;
   valor: number;
-  /** Quantas vezes o procedimento apareceu nos orçamentos aceitos da janela. */
+  /** Quantas vezes o procedimento apareceu nos orçamentos pagos da janela. */
   vezes: number;
 }
 
 /**
  * Os procedimentos que mais faturam, do maior para o menor.
  *
- * A soma é por **item** do orçamento aceito, com o valor do item já com desconto. O desconto de
+ * A soma é por **item** do orçamento pago, com o valor do item já com desconto. O desconto de
  * plano combinado, que é do orçamento inteiro, fica de fora desta divisão de propósito: ratear
  * um abatimento global entre os itens inventaria uma precisão que o dado não tem, e aqui o que
  * interessa é a ordem, não o centavo.
  */
 export const faturamentoPorProcedimento = (
-  aceitos: Quote[],
+  pagos: Quote[],
   limite = 5
 ): FaturamentoPorProcedimento[] => {
   const mapa = new Map<string, FaturamentoPorProcedimento>();
-  aceitos.forEach((q) => {
+  pagos.forEach((q) => {
     (q.itens || []).forEach((item) => {
       const nome = (item.titulo || item.categoria || 'Sem nome').trim();
       const atual = mapa.get(nome) || { nome, valor: 0, vezes: 0 };
@@ -263,20 +265,20 @@ export const periodoAnterior = (periodo: Periodo): Periodo => {
 };
 
 /**
- * Os orçamentos aceitos dentro do período, opcionalmente de uma profissional só.
+ * Os orçamentos pagos dentro do período, opcionalmente de uma profissional só.
  *
  * O filtro por profissional olha os **itens**: cada procedimento do orçamento tem a sua
  * (`QuoteItem.professionalId`), porque nem sempre é a mesma pessoa que faz tudo. Um orçamento
  * com dois itens de profissionais diferentes aparece nos dois filtros — e é por isso que a soma
  * dos filtros pode passar do total, o que o painel diz em letra pequena em vez de esconder.
  */
-export const aceitosNoPeriodo = (
+export const pagosNoPeriodo = (
   quotes: Quote[],
   periodo: Periodo,
   professionalId?: string
 ): Quote[] =>
-  orcamentosAceitos(quotes).filter((q) => {
-    const data = dataDeAceite(q).slice(0, 10);
+  orcamentosPagos(quotes).filter((q) => {
+    const data = dataDoPagamento(q).slice(0, 10);
     if (data < periodo.de || data > periodo.ate) return false;
     if (!professionalId) return true;
     return (q.itens || []).some((i) => i.professionalId === professionalId);
@@ -298,7 +300,7 @@ export interface ResumoFinanceiro {
 /**
  * Tudo o que o painel financeiro mostra, num cálculo só.
  *
- * **Fonte do dinheiro: o orçamento aceito.** É a única no sistema com valor fechado e data — o
+ * **Fonte do dinheiro: o orçamento pago.** É a única no sistema com valor fechado e data — o
  * atendimento não guarda preço nenhum e o catálogo guarda só o preço de hoje, o que faria o
  * faturamento de março mudar sozinho num reajuste de abril.
  */
@@ -308,10 +310,10 @@ export const resumoFinanceiro = (
   professionalId?: string,
   hoje: DataISO = hojeISO()
 ): ResumoFinanceiro => {
-  const aceitos = aceitosNoPeriodo(quotes, periodo, professionalId);
-  const anteriores = aceitosNoPeriodo(quotes, periodoAnterior(periodo), professionalId);
+  const pagos = pagosNoPeriodo(quotes, periodo, professionalId);
+  const anteriores = pagosNoPeriodo(quotes, periodoAnterior(periodo), professionalId);
 
-  const faturamento = aceitos.reduce((s, q) => s + valorDoOrcamento(q), 0);
+  const faturamento = pagos.reduce((s, q) => s + valorDoOrcamento(q), 0);
   const faturamentoAnterior = anteriores.reduce((s, q) => s + valorDoOrcamento(q), 0);
 
   /**
@@ -342,15 +344,15 @@ export const resumoFinanceiro = (
         ? null
         : Math.round(((faturamento - faturamentoAnterior) / faturamentoAnterior) * 100),
     ticket:
-      aceitos.length === 0
+      pagos.length === 0
         ? { valor: 0, base: 0 }
-        : { valor: faturamento / aceitos.length, base: aceitos.length },
+        : { valor: faturamento / pagos.length, base: pagos.length },
     conversao: conversaoNoPeriodo(quotes, periodo, professionalId),
-    porProcedimento: faturamentoPorProcedimento(aceitos, 6),
+    porProcedimento: faturamentoPorProcedimento(pagos, 6),
     porMes: meses.map((mes) => ({
       mes,
-      valor: aceitos
-        .filter((q) => mesDe(dataDeAceite(q)) === mes)
+      valor: pagos
+        .filter((q) => mesDe(dataDoPagamento(q)) === mes)
         .reduce((s, q) => s + valorDoOrcamento(q), 0),
     })),
   };
@@ -369,11 +371,11 @@ export const conversaoNoPeriodo = (
     if (!professionalId) return true;
     return (q.itens || []).some((i) => i.professionalId === professionalId);
   });
-  const aceitos = naJanela.filter((q) => q.status === 'aceito').length;
+  const pagos = naJanela.filter((q) => q.status === 'pago').length;
   return {
     enviados: naJanela.length,
-    aceitos,
-    percentual: naJanela.length === 0 ? null : Math.round((aceitos / naJanela.length) * 100),
+    pagos,
+    percentual: naJanela.length === 0 ? null : Math.round((pagos / naJanela.length) * 100),
   };
 };
 

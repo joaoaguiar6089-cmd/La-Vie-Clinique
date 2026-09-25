@@ -27,12 +27,26 @@ Status: **aprovado, pronto para implementar** — 2026-09-08.
 - Numeração `AAAA-####` via `runTransaction` sobre `counters/quotes_<ano>`,
   reiniciando a cada ano. O número é **gerado no primeiro salvamento**, não ao abrir
   o formulário: abrir e desistir não queima número. É imutável depois de gerado.
-- Status: `rascunho` · `enviado` · `aceito` · `expirado` · `cancelado`.
+- Status: `rascunho` · `enviado` · `pago` · `recusado` · `expirado` · `cancelado`.
   - `expirado` é **calculado na hora** (comparando `dataValidade` com hoje), nunca
     gravado — sem job agendado.
-  - `enviado` é marcado **automaticamente** no primeiro compartilhamento do link,
-    e continua editável manualmente na listagem.
-  - `aceito` é marcado à mão pela clínica.
+  - `enviado` é marcado **automaticamente** no primeiro compartilhamento do link.
+  - `pago` e `recusado` são o **desfecho, decidido pela profissional** (a cliente
+    não marca nada pelo link). Em rascunho ou enviado — inclusive o enviado que
+    passou da validade —, a linha do orçamento mostra **"Pagou"** e **"Recusou"**,
+    tanto na tela de Orçamentos quanto na aba de orçamentos da paciente.
+    Orçamento substituído não recebe desfecho: quem vale é o novo.
+  - **Pagou** abre a folha de pagamento: data do pagamento (padrão hoje; é a data
+    que o faturamento usa, em `pagoEm`) e o **comprovante, opcional** — foto ou
+    PDF, até 10 MB. Sem o arquivo em mãos, registra-se só o pagamento e a linha
+    passa a oferecer "Anexar comprovante"; com ele, "Comprovante anexo" abre a
+    mesma folha para ver, trocar ou remover o arquivo, ou desfazer o pagamento.
+  - **Recusou** pede confirmação e grava `recusadoEm`. O link da cliente não muda.
+  - Pago e recusado podem ser **desfeitos** (engano): o orçamento volta para
+    enviado, ou para rascunho se nunca foi compartilhado, e as datas saem junto.
+    Desfazer o pagamento apaga também o comprovante.
+  - O antigo `aceito` virou `pago`: documentos gravados como aceitos são lidos
+    como pagos (`normalizarQuote`), com a data de aceite no lugar da de pagamento.
   - `cancelado` é o "excluir" de um orçamento já enviado.
 - **Depois de "enviado", o orçamento trava.** Qualquer ajuste vira uma
   **substituição**: cria um orçamento novo (cópia do antigo, número novo) e grava no
@@ -41,8 +55,10 @@ Status: **aprovado, pronto para implementar** — 2026-09-08.
 - **Excluir depende de já ter saído da clínica**: rascunho é apagado de verdade
   (nunca foi enviado a ninguém); um orçamento já enviado vira `cancelado`, porque o
   link que a paciente tem no WhatsApp precisa continuar existindo para avisar que
-  aquele orçamento não vale mais. Cancelado perde as ações de substituir e aceitar,
-  e a página pública abre com uma tarja preta de cancelamento acima de tudo.
+  aquele orçamento não vale mais. Cancelado perde as ações de substituir e de
+  registrar desfecho, e a página pública abre com uma tarja preta de cancelamento
+  acima de tudo. Pago não se cancela, não se exclui nem se substitui — primeiro se
+  desfaz o pagamento.
 - Um orçamento **cancelado pode ser excluído em definitivo** depois — aí o link
   passa a mostrar "orçamento não encontrado", o que a confirmação avisa antes.
 - Toda confirmação usa o `ConfirmDialog` (`src/components/ConfirmDialog.tsx`), nunca
@@ -218,6 +234,15 @@ e capturaria distorcido um `transform: scale`. O arquivo sai como
 - Validade vencida → tarja no topo ("Validade expirada em DD/MM/AAAA — fale com a
   clínica para revalidar"), com os valores ainda visíveis.
 - Substituído → aviso com link para o orçamento novo.
+- Pago → tarja verde "Pagamento confirmado em DD/MM/AAAA" e, havendo comprovante,
+  o botão **"Ver comprovante"**. Recusado não muda nada na página.
+- **O link não pode pedir senha.** A base do link vem de `utils/publicLinks.ts`:
+  o endereço configurado em Configurações → "Endereço público do sistema" se ele
+  abrir sem login, senão o da janela atual se ele abrir sem login. Os endereços do
+  AI Studio `ais-dev-…` / `ais-pre-…` e `aistudio.google.com` pedem login do
+  Google e nunca são preferidos. Quando o painel é aberto pelo site publicado e o
+  perfil não tem um endereço que sirva, o App grava esse endereço sozinho. Se
+  nenhum endereço aberto é conhecido, o compartilhamento avisa em vermelho.
 
 ## 8. Configurações (`ClinicSettingsModal`)
 
@@ -243,14 +268,17 @@ Quatro parâmetros, com os valores do design como padrão:
 | `src/components/quotes/QuotePrintable.tsx` | páginas A4 + paginação medida |
 | `src/components/quotes/QuotePreviewModal.tsx` | prévia e download do PDF |
 | `src/components/quotes/QuoteShareModal.tsx` | link, WhatsApp e marcação de enviado |
+| `src/components/quotes/QuoteDesfecho.tsx` | status na lista, "Pagou/Recusou" e folha de pagamento com comprovante |
+| `src/services/comprovantes.ts` | envio do comprovante ao Storage (`orcamentos/<id>/comprovantes/`) |
+| `src/utils/publicLinks.ts` | base dos links públicos — nunca um endereço que pede login |
 | `src/components/quotes/QuotesPanel.tsx` | listagem, filtros e ações |
 | `src/components/quotes/PublicQuoteEntry.tsx` | página da cliente (`?orcamento=`) |
 
 ## 10. Fora de escopo
 
-- Firebase Storage / hospedagem do PDF (não existe Storage configurado no projeto;
-  imagens hoje são base64 dentro do Firestore).
-- Botão de aceite pela cliente na página online.
+- Hospedagem do PDF do orçamento no Storage (o PDF continua gerado na hora).
+- Botão de aceite ou de pagamento pela cliente na página online — o desfecho é
+  sempre marcado pela profissional.
 - **Cálculo real de juros no cartão**: o sistema sabe até qual parcela é sem juros e
   avisa quando a escolha passa desse limite, mas o valor da parcela continua nominal
   (`valor ÷ parcelas`) — calcular o valor real com juros exigiria a taxa da operadora,

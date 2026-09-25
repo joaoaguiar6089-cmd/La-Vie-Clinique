@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, AlertCircle, MessageCircle, Download, Clock, RefreshCw, Ban } from 'lucide-react';
+import {
+  Loader2,
+  AlertCircle,
+  MessageCircle,
+  Download,
+  Clock,
+  RefreshCw,
+  Ban,
+  CheckCircle2,
+  Paperclip,
+} from 'lucide-react';
 import { LaserBodyMap, Quote } from '../../types';
 import { getQuoteById, getMapaCorporalDoLaserPublico } from '../../services/databaseService';
 import { formatBRL } from '../../utils/formatters';
@@ -36,6 +46,9 @@ const linkWhatsApp = (telefone: string | undefined, texto: string): string => {
  * Página que a paciente abre pelo link `?orcamento=<id>`, sem login. É uma versão
  * responsiva do documento — não o A4 encolhido, que no celular obrigaria a dar zoom.
  * Não grava nada: o "quero fechar" leva a conversa para o WhatsApp da clínica.
+ *
+ * Quando a clínica marca o orçamento como pago, a página abre com a confirmação do pagamento e,
+ * se houver, o comprovante anexado. Recusado não muda nada aqui — é informação interna.
  */
 export const PublicQuoteEntry: React.FC = () => {
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -125,7 +138,30 @@ export const PublicQuoteEntry: React.FC = () => {
           </div>
         )}
 
-        {quote.substituidoPor && status !== 'cancelado' && (
+        {status === 'pago' && (
+          <div className="mb-5 px-4 py-3 rounded-sm bg-ok-bg border border-ok-line text-xs text-ok flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-px" />
+            <div className="min-w-0 flex-1">
+              <p>
+                Pagamento <strong>confirmado</strong>
+                {quote.pagoEm ? ` em ${dataCurta(quote.pagoEm)}` : ''}.
+              </p>
+              {quote.comprovante && (
+                <a
+                  href={quote.comprovante.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-ok-line rounded-sm text-label font-semibold uppercase tracking-widest hover:bg-ok-bg transition-colors"
+                >
+                  <Paperclip className="w-3.5 h-3.5" />
+                  Ver comprovante
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {quote.substituidoPor && status !== 'cancelado' && status !== 'pago' && (
           <div className="mb-5 px-4 py-3 rounded-sm bg-brand/10 border border-brand/25 text-xs text-brand-hover flex items-start gap-2">
             <RefreshCw className="w-4 h-4 shrink-0 mt-px" />
             <span>

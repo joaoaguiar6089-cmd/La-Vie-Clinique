@@ -25,11 +25,11 @@ import {
 /**
  * Painel financeiro.
  *
- * **A fonte do dinheiro é o orçamento aceito.** Foi uma decisão, não um padrão: o `Attendance`
+ * **A fonte do dinheiro é o orçamento pago.** Foi uma decisão, não um padrão: o `Attendance`
  * não guarda valor nenhum, o `SessionPlan` também não, e o `Procedure` guarda só o preço de
  * hoje — somar atendimento × catálogo faria o faturamento de março mudar sozinho num reajuste
- * de abril, e o painel deixaria de servir para fechar mês. O orçamento aceito é o único número
- * com valor fechado e data (`Quote.total` e `Quote.aceitoEm`).
+ * de abril, e o painel deixaria de servir para fechar mês. O orçamento pago é o único número
+ * com valor fechado e data (`Quote.total` e `Quote.pagoEm`).
  *
  * A consequência a dizer em voz alta: **atendimento feito sem orçamento emitido não aparece
  * aqui**. A tela diz isso em letra pequena, em vez de deixar a equipe descobrir sozinha
@@ -129,7 +129,7 @@ const RankingDeProcedimentos: React.FC<{
         Procedimentos que mais faturam
       </h3>
       {dados.length === 0 ? (
-        <p className="text-body text-muted">Nenhum orçamento aceito neste período.</p>
+        <p className="text-body text-muted">Nenhum orçamento pago neste período.</p>
       ) : (
         <ul className="space-y-2.5">
           {dados.map((d) => (
@@ -325,7 +325,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
           }
           detalhe={
             <span className="text-muted">
-              {resumo.conversao.aceitos} de {resumo.conversao.enviados} enviados
+              {resumo.conversao.pagos} de {resumo.conversao.enviados} enviados
             </span>
           }
         />
@@ -343,8 +343,8 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
       {/* A ressalva, escrita. Não é rodapé decorativo: é a diferença entre conferir a soma e
           achar que o sistema está errado. */}
       <p className="text-body text-muted leading-relaxed">
-        O faturamento soma os <strong className="text-ink-soft">orçamentos aceitos</strong>, pela
-        data do aceite. É o único valor que o sistema guarda fechado e datado — o atendimento não
+        O faturamento soma os <strong className="text-ink-soft">orçamentos pagos</strong>, pela
+        data do pagamento. É o único valor que o sistema guarda fechado e datado — o atendimento não
         tem preço gravado, e usar o preço do catálogo faria o faturamento de um mês fechado mudar
         sozinho a cada reajuste. <strong className="text-ink-soft">Atendimento realizado sem
         orçamento emitido não entra nesta conta.</strong>

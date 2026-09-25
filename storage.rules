@@ -83,6 +83,24 @@ service firebase.storage {
       allow write: if request.auth != null && ehImagem() && cabeNoLimite();
     }
 
+    // Comprovantes de pagamento dos orçamentos — foto ou PDF, anexados pela equipe ao marcar o
+    // orçamento como pago. Só a equipe envia, troca ou apaga.
+    //
+    // Leitura aberta pelo mesmo motivo dos demais caminhos: a cliente vê o comprovante na página
+    // do orçamento, que ela abre pelo link sem login. O segredo é duplo — o ID do orçamento na
+    // pasta (randomUUID) e o token aleatório que o Firebase põe na URL de cada arquivo.
+    //
+    // 10 MB e não 5: aqui entra PDF, que não dá para reduzir no navegador como se faz com a foto.
+    // `delete` separado de `create`/`update` porque na exclusão não existe `request.resource`, e
+    // a checagem de tipo recusaria o pedido.
+    match /orcamentos/{quoteId}/comprovantes/{arquivo} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && (ehImagem() || request.resource.contentType == 'application/pdf')
+        && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if request.auth != null;
+    }
+
     // Qualquer outro caminho fica fechado.
     match /{allPaths=**} {
       allow read, write: if false;
