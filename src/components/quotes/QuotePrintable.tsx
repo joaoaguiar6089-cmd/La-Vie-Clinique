@@ -35,6 +35,7 @@ const OFFWHITE = '#F9F8F6';
 const HAIRLINE = '#E2DFD8';
 const CINZA = '#6B6862';
 const TEXTO_DETALHE = '#3A3833';
+const MARCA_TEXTO_AMARELO = '#FEF08A';
 
 const dataCurta = (iso?: string): string => {
   if (!iso) return '';
@@ -231,11 +232,30 @@ const BlocoItem: React.FC<{ item: QuoteItem; semSeparador: boolean }> = ({ item,
           >
             {item.categoria}
           </div>
-          <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, color: PRETO, lineHeight: 1.2 }}>
-            {item.titulo}
+          <div
+            style={{
+              fontFamily: 'var(--font-serif)',
+              fontSize: 22,
+              color: PRETO,
+              lineHeight: 1.25,
+              marginTop: 2,
+            }}
+          >
+            <span
+              style={{
+                backgroundColor: MARCA_TEXTO_AMARELO,
+                padding: '2px 6px',
+                borderRadius: 3,
+                boxDecorationBreak: 'clone',
+                WebkitBoxDecorationBreak: 'clone',
+                display: 'inline',
+              }}
+            >
+              {item.titulo}
+            </span>
           </div>
           {item.profissionalNome && (
-            <div style={{ fontSize: 9.5, color: CINZA, marginTop: 2 }}>
+            <div style={{ fontSize: 9.5, color: CINZA, marginTop: 4 }}>
               com {item.profissionalNome}
             </div>
           )}

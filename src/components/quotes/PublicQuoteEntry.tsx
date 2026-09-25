@@ -220,7 +220,11 @@ export const PublicQuoteEntry: React.FC = () => {
                 <p className="text-label uppercase tracking-[.16em] text-brand">
                   {item.categoria}
                 </p>
-                <h2 className="font-serif-luxury text-xl leading-tight mt-0.5">{item.titulo}</h2>
+                <h2 className="font-serif-luxury text-xl leading-tight mt-1">
+                  <span className="bg-[#FEF08A] px-1.5 py-0.5 rounded-xs inline [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">
+                    {item.titulo}
+                  </span>
+                </h2>
                 {item.profissionalNome && (
                   <p className="text-xs text-ink-soft mt-0.5">com {item.profissionalNome}</p>
                 )}
