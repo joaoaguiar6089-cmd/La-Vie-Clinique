@@ -28,12 +28,10 @@ import {
   Procedure,
   Quote,
   QuoteDraft,
-  QuoteStatus,
   SessionPlan,
 } from '../../types';
 import { formatBRL, formatDate, formatDateOnly } from '../../utils/formatters';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
-import { resolveQuoteStatus } from '../../utils/quoteCalc';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
@@ -43,6 +41,7 @@ import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
 import { QuoteFormModal } from '../quotes/QuoteFormModal';
 import { QuotePreviewModal } from '../quotes/QuotePreviewModal';
 import { QuoteShareModal } from '../quotes/QuoteShareModal';
+import { QuoteDesfecho } from '../quotes/QuoteDesfecho';
 import { PatientPersonalDataCard } from './PatientPersonalDataCard';
 import { AttendancesTab, contarAtendimentosRealizados } from './AttendancesTab';
 import { anamneseFechada } from '../../utils/evaluations';
@@ -106,22 +105,6 @@ type Aba = 'resumo' | 'atendimentos' | 'fotos' | 'orcamentos' | 'anamneses';
 
 /** As três coisas que o menu "Novo" cria. */
 type TipoNovo = 'atendimento' | 'anamnese' | 'orcamento';
-
-const STATUS_LABEL: Record<QuoteStatus, string> = {
-  rascunho: 'Rascunho',
-  enviado: 'Enviado',
-  aceito: 'Aceito',
-  expirado: 'Expirado',
-  cancelado: 'Cancelado',
-};
-
-const STATUS_CLASS: Record<QuoteStatus, string> = {
-  rascunho: 'bg-gray-100 text-gray-500 border-gray-200',
-  enviado: 'bg-brand/10 text-brand-hover border-brand/25',
-  aceito: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  expirado: 'bg-amber-50 text-amber-700 border-amber-200',
-  cancelado: 'bg-ink text-brand-light border-ink',
-};
 
 /** A data de atendimento pode estar em "YYYY-MM-DD" ou em ISO completo, conforme a origem da ficha. */
 const formatarDataAtendimento = (valor: string): string =>
@@ -616,61 +599,54 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           </div>
         ) : (
           <div className="space-y-2">
-            {quotes.map((orcamento) => {
-              const status = resolveQuoteStatus(orcamento);
-              return (
-                <div
-                  key={orcamento.id}
-                  className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
-                >
-                  <div className="min-w-[110px]">
-                    <p className="font-serif-luxury text-lg text-ink tabular-nums">
-                      {orcamento.numero}
-                    </p>
-                    <p className="text-body text-gray-400">{formatDate(orcamento.dataEmissao)}</p>
-                  </div>
-
-                  <div className="flex-1 min-w-[140px]">
-                    <p className="text-sm font-semibold text-ink tabular-nums">
-                      {formatBRL(orcamento.total)}
-                    </p>
-                    <p className="text-body text-gray-400 truncate">
-                      {orcamento.itens.length} procedimento
-                      {orcamento.itens.length === 1 ? '' : 's'} · válido até{' '}
-                      {formatDate(orcamento.dataValidade)}
-                    </p>
-                  </div>
-
-                  <span
-                    className={`px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border ${STATUS_CLASS[status]}`}
-                  >
-                    {STATUS_LABEL[status]}
-                  </span>
-
-                  <div className="flex items-center gap-0.5 ml-auto">
-                    <button
-                      type="button"
-                      onClick={() => setOrcamentoParaCompartilhar(orcamento)}
-                      aria-label={`Compartilhar ${orcamento.numero}`}
-                      title="Compartilhar link com a cliente"
-                      className="p-2 text-gray-400 hover:text-brand transition-colors"
-                    >
-                      <Share2 className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setOrcamentoNaPrevia(orcamento)}
-                      aria-label={`Visualizar ${orcamento.numero}`}
-                      title="Visualizar — o botão de salvar PDF fica dentro da prévia"
-                      className="p-2 text-gray-400 hover:text-brand transition-colors"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                  </div>
+            {quotes.map((orcamento) => (
+              <div
+                key={orcamento.id}
+                className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
+              >
+                <div className="min-w-[110px]">
+                  <p className="font-serif-luxury text-lg text-ink tabular-nums">
+                    {orcamento.numero}
+                  </p>
+                  <p className="text-body text-gray-400">{formatDate(orcamento.dataEmissao)}</p>
                 </div>
-              );
-            })}
+
+                <div className="flex-1 min-w-[140px]">
+                  <p className="text-sm font-semibold text-ink tabular-nums">
+                    {formatBRL(orcamento.total)}
+                  </p>
+                  <p className="text-body text-gray-400 truncate">
+                    {orcamento.itens.length} procedimento
+                    {orcamento.itens.length === 1 ? '' : 's'} · válido até{' '}
+                    {formatDate(orcamento.dataValidade)}
+                  </p>
+                </div>
+
+                <QuoteDesfecho quote={orcamento} />
+
+                <div className="flex items-center gap-0.5 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setOrcamentoParaCompartilhar(orcamento)}
+                    aria-label={`Compartilhar ${orcamento.numero}`}
+                    title="Compartilhar link com a cliente"
+                    className="p-2 text-gray-400 hover:text-brand transition-colors"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOrcamentoNaPrevia(orcamento)}
+                    aria-label={`Visualizar ${orcamento.numero}`}
+                    title="Visualizar — o botão de salvar PDF fica dentro da prévia"
+                    className="p-2 text-gray-400 hover:text-brand transition-colors"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         ))}
 

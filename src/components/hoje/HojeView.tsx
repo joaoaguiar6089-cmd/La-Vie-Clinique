@@ -217,7 +217,7 @@ export const HojeView: React.FC<HojeViewProps> = ({
           icone={Wallet}
           rotulo="Faturamento"
           valor={formatBRL(faturamento)}
-          detalhe={`${nomeDoMes(mes).split(' de ')[0]} · aceitos`}
+          detalhe={`${nomeDoMes(mes).split(' de ')[0]} · pagos`}
           onClick={onIrParaOrcamentos}
         />
         <Metrica
@@ -234,7 +234,7 @@ export const HojeView: React.FC<HojeViewProps> = ({
           detalhe={
             conversao.percentual === null
               ? '30 dias · nenhum enviado'
-              : `30 dias · ${conversao.aceitos} de ${conversao.enviados}`
+              : `30 dias · ${conversao.pagos} de ${conversao.enviados}`
           }
           onClick={onIrParaOrcamentos}
         />

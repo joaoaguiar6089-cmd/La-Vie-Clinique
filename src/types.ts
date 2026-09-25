@@ -506,8 +506,13 @@ export interface QuotePayment {
  * Status gravado no documento. `expirado` nunca é gravado: deriva da validade.
  * `cancelado` é o "excluir" de um orçamento já enviado — o registro sobrevive para
  * que o link que a paciente recebeu consiga avisar que ele não vale mais.
+ *
+ * `pago` e `recusado` são o desfecho, e quem decide é a profissional: saindo de rascunho ou de
+ * enviado, ela marca se a cliente pagou ou recusou. `pago` substituiu o antigo `aceito` — aceite
+ * sem pagamento não entrava em caixa nenhum, e o financeiro somava como se tivesse entrado.
+ * Documentos gravados como `aceito` são lidos como `pago` (ver `normalizarQuote`).
  */
-export type QuoteStoredStatus = 'rascunho' | 'enviado' | 'aceito' | 'cancelado';
+export type QuoteStoredStatus = 'rascunho' | 'enviado' | 'pago' | 'recusado' | 'cancelado';
 
 /** Status exibido na interface, já considerando a data de validade. */
 export type QuoteStatus = QuoteStoredStatus | 'expirado';
@@ -526,6 +531,19 @@ export interface QuoteClinicSnapshot {
   email?: string;
   instagram?: string;
   legalNotice: string;
+}
+
+/**
+ * Comprovante de pagamento anexado pela clínica — foto ou PDF, guardado no Firebase Storage.
+ *
+ * Fica visível para a cliente na página do link: é a confirmação, do lado dela, de que o
+ * pagamento foi recebido.
+ */
+export interface QuoteComprovante {
+  url: string; // URL de download do Storage (o token aleatório nela é o segredo)
+  nome: string; // Nome original do arquivo, para exibir
+  tipo: string; // MIME: image/jpeg, application/pdf…
+  enviadoEm: string; // ISO
 }
 
 /** Referência a outro orçamento na cadeia de substituição. */
@@ -566,12 +584,19 @@ export interface Quote {
   total: number; // Snapshot denormalizado apenas para a listagem — a verdade é calcularOrcamento()
   enviadoEm?: string; // ISO do 1º compartilhamento do link; presença trava a edição
   /**
-   * Instante em que o orçamento foi marcado como aceito — a data que o faturamento usa.
+   * Data do pagamento — a que o faturamento usa. A profissional informa ao marcar como pago
+   * (padrão: hoje), porque o registro no sistema costuma vir depois do Pix.
    *
    * Gravado explicitamente em vez de lido de `updatedAt` porque `updatedAt` é a marca de
    * *qualquer* escrita: um cancelamento, uma substituição, uma correção de status feita por
-   * engano e desfeita depois moveriam o aceite de mês sem ninguém perceber. Orçamento aceito
-   * antes deste campo existir cai no fallback de `dataDeAceite`, em utils/indicadores.ts.
+   * engano e desfeita depois moveriam o pagamento de mês sem ninguém perceber.
+   */
+  pagoEm?: string; // ISO
+  comprovante?: QuoteComprovante; // Só em orçamento pago; opcional, pode ser anexado depois
+  recusadoEm?: string; // ISO
+  /**
+   * Legado: a data de aceite, de quando o status se chamava `aceito`. Só é lido — vira `pagoEm`
+   * em `normalizarQuote` — e é apagado na próxima troca de status.
    */
   aceitoEm?: string; // ISO
   substituidoPor?: QuoteReference; // Preenchido no antigo quando um novo o substitui
@@ -586,7 +611,20 @@ export interface Quote {
  */
 export type QuoteDraft = Omit<
   Quote,
-  'id' | 'numero' | 'ano' | 'sequencia' | 'status' | 'enviadoEm' | 'substituidoPor' | 'substituiu' | 'createdAt' | 'updatedAt'
+  | 'id'
+  | 'numero'
+  | 'ano'
+  | 'sequencia'
+  | 'status'
+  | 'enviadoEm'
+  | 'pagoEm'
+  | 'comprovante'
+  | 'recusadoEm'
+  | 'aceitoEm'
+  | 'substituidoPor'
+  | 'substituiu'
+  | 'createdAt'
+  | 'updatedAt'
 >;
 
 

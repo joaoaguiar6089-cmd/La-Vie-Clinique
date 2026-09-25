@@ -338,7 +338,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   const sugestaoDeSessoes = useMemo(() => {
     if (!procedimento.procedimentoNome.trim()) return undefined;
     for (const q of quotes) {
-      if (resolveQuoteStatus(q) !== 'aceito') continue;
+      if (resolveQuoteStatus(q) !== 'pago') continue;
       const item = q.itens.find((i) =>
         mesmoProcedimento(
           { procedureId: i.procedureId, procedimentoNome: i.titulo },
@@ -698,7 +698,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                   {erros.plano && <p className="mt-1 text-body text-red-600">{erros.plano}</p>}
                   {!erros.plano && sugestaoDeSessoes && (
                     <p className="mt-1 text-body text-gray-400">
-                      Sugerido pelo orçamento aceito desta cliente.
+                      Sugerido pelo orçamento pago desta cliente.
                     </p>
                   )}
                 </div>

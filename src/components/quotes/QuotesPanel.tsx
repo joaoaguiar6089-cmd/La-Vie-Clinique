@@ -6,7 +6,6 @@ import {
   Copy,
   RefreshCw,
   Trash2,
-  Check,
   FileText,
   AlertCircle,
   Eye,
@@ -21,7 +20,6 @@ import {
   Quote,
   QuoteDraft,
   QuoteStatus,
-  QuoteStoredStatus,
 } from '../../types';
 import { formatBRL, formatDate } from '../../utils/formatters';
 import { resolveQuoteStatus, isQuoteEditavel } from '../../utils/quoteCalc';
@@ -32,7 +30,7 @@ import {
   updateQuote,
   replaceQuote,
   deleteQuote,
-  setQuoteStatus,
+  cancelarQuote,
   markQuoteAsSent,
 } from '../../services/databaseService';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
@@ -40,6 +38,7 @@ import { QuoteFormModal } from './QuoteFormModal';
 import { QuotePreviewModal } from './QuotePreviewModal';
 import { montarEspelhoPublico } from '../../utils/laserAreas';
 import { QuoteShareModal } from './QuoteShareModal';
+import { QUOTE_STATUS_LABEL, QuoteDesfecho } from './QuoteDesfecho';
 import { SkeletonLista } from '../common/Skeleton';
 
 interface QuotesPanelProps {
@@ -49,22 +48,6 @@ interface QuotesPanelProps {
   pedido?: PedidoDeNavegacao | null;
   onPedidoAtendido?: () => void;
 }
-
-const STATUS_LABEL: Record<QuoteStatus, string> = {
-  rascunho: 'Rascunho',
-  enviado: 'Enviado',
-  aceito: 'Aceito',
-  expirado: 'Expirado',
-  cancelado: 'Cancelado',
-};
-
-const STATUS_CLASS: Record<QuoteStatus, string> = {
-  rascunho: 'bg-gray-100 text-gray-500 border-gray-200',
-  enviado: 'bg-brand/10 text-brand-hover border-brand/25',
-  aceito: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  expirado: 'bg-amber-50 text-amber-700 border-amber-200',
-  cancelado: 'bg-ink text-brand-light border-ink',
-};
 
 export const QuotesPanel: React.FC<QuotesPanelProps> = ({
   clinic,
@@ -203,11 +186,11 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
     }
   };
 
-  const handleSetStatus = async (quote: Quote, status: QuoteStoredStatus) => {
+  const handleCancelar = async (quote: Quote) => {
     try {
-      await setQuoteStatus(quote.id, status);
+      await cancelarQuote(quote.id);
     } catch (e) {
-      setErro(`Não foi possível atualizar o status: ${(e as Error).message}`);
+      setErro(`Não foi possível cancelar: ${(e as Error).message}`);
     }
   };
 
@@ -277,8 +260,8 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-1.5">
-          {(['todos', 'rascunho', 'enviado', 'aceito', 'expirado', 'cancelado'] as const).map((s) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(['todos', 'rascunho', 'enviado', 'pago', 'recusado', 'expirado', 'cancelado'] as const).map((s) => (
             <button
               key={s}
               type="button"
@@ -289,7 +272,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
                   : 'bg-white/60 text-gray-600 border-white/80 hover:bg-white/80'
               }`}
             >
-              {s === 'todos' ? 'Todos' : STATUS_LABEL[s]}
+              {s === 'todos' ? 'Todos' : QUOTE_STATUS_LABEL[s]}
             </button>
           ))}
         </div>
@@ -349,11 +332,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
                 </div>
 
                 <div className="flex flex-col items-start gap-1">
-                  <span
-                    className={`px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border ${STATUS_CLASS[status]}`}
-                  >
-                    {STATUS_LABEL[status]}
-                  </span>
+                  <QuoteDesfecho quote={quote} />
                   {substituido && (
                     <span className="text-label text-gray-400">
                       substituído por {quote.substituidoPor?.numero}
@@ -394,7 +373,8 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
                     </button>
                   )}
 
-                  {!editavel && !substituido && status !== 'cancelado' && (
+                  {/* Pago não se substitui: o dinheiro entrou por este, com este número */}
+                  {!editavel && !substituido && status !== 'cancelado' && status !== 'pago' && (
                     <button
                       type="button"
                       onClick={() => abrirSubstituicao(quote)}
@@ -416,20 +396,9 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
                     <Copy className="w-4 h-4" />
                   </button>
 
-                  {status === 'enviado' && (
-                    <button
-                      type="button"
-                      onClick={() => handleSetStatus(quote, 'aceito')}
-                      aria-label={`Marcar ${quote.numero} como aceito`}
-                      title="Marcar como aceito"
-                      className="p-2 text-gray-400 hover:text-emerald-600 transition-colors"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                  )}
-
-                  {/* Rascunho ou cancelado podem ser excluídos definitivamente */}
-                  {editavel ? (
+                  {/* Rascunho ou cancelado podem ser excluídos definitivamente. Pago não tem
+                      nenhum dos dois: primeiro se desfaz o pagamento, na folha do comprovante. */}
+                  {status === 'pago' ? null : editavel ? (
                     <button
                       type="button"
                       onClick={() =>
@@ -474,7 +443,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
                           mensagem:
                             'Ele sai da lista de ativos e o link que a cliente recebeu passa a avisar que foi cancelado.',
                           textoConfirmar: 'Cancelar orçamento',
-                          onConfirmar: () => handleSetStatus(quote, 'cancelado'),
+                          onConfirmar: () => handleCancelar(quote),
                         })
                       }
                       aria-label={`Cancelar ${quote.numero}`}

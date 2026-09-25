@@ -209,14 +209,8 @@ export const resolveQuoteStatus = (
   quote: Pick<Quote, "status" | "dataValidade">,
   agora: Date = new Date()
 ): QuoteStatus => {
-  // Cancelado e aceito são estados finais; rascunho nunca "vence" porque nem saiu daqui
-  if (
-    quote.status === "aceito" ||
-    quote.status === "rascunho" ||
-    quote.status === "cancelado"
-  ) {
-    return quote.status;
-  }
+  // Pago, recusado e cancelado são estados finais; rascunho nunca "vence" porque nem saiu daqui
+  if (quote.status !== "enviado") return quote.status;
   const validade = new Date(quote.dataValidade);
   if (isNaN(validade.getTime())) return quote.status;
   return validade < agora ? "expirado" : quote.status;
@@ -225,6 +219,26 @@ export const resolveQuoteStatus = (
 /** Depois de enviado o orçamento trava: ajuste vira substituição, com número novo. */
 export const isQuoteEditavel = (quote: Pick<Quote, "status">): boolean =>
   quote.status === "rascunho";
+
+/**
+ * Se a profissional ainda pode dizer como terminou: a cliente pagou ou recusou.
+ *
+ * Vale para rascunho e enviado — inclusive o enviado que passou da validade, porque um Pix que
+ * chega atrasado continua sendo dinheiro recebido. Orçamento substituído não entra: quem vale
+ * agora é o novo, e é nele que o pagamento deve ser registrado.
+ */
+export const podeRegistrarDesfecho = (
+  quote: Pick<Quote, "status" | "substituidoPor">
+): boolean =>
+  (quote.status === "rascunho" || quote.status === "enviado") && !quote.substituidoPor;
+
+/**
+ * Para onde volta um orçamento cujo desfecho foi desfeito: enviado, se o link já tinha saído;
+ * rascunho, se foi marcado direto, sem nunca ter sido compartilhado.
+ */
+export const statusAntesDoDesfecho = (
+  quote: Pick<Quote, "enviadoEm">
+): "rascunho" | "enviado" => (quote.enviadoEm ? "enviado" : "rascunho");
 
 /** Mensagem de abertura sugerida, com o primeiro nome da paciente aplicado ao template. */
 export const montarTextoApresentacao = (

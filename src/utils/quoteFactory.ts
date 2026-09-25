@@ -148,15 +148,25 @@ export const montarSnapshotClinica = (clinic: ClinicProfile): QuoteClinicSnapsho
 
 /**
  * Ponto único de migração: aplicado a todo `Quote` vindo do Firestore, para que o
- * resto do app sempre veja o formato atual de `pagamento`, não importa a idade do
- * documento.
+ * resto do app sempre veja o formato atual de `pagamento` e de `status`, não importa a
+ * idade do documento.
+ *
+ * O status `aceito` deixou de existir — virou `pago` (ver `QuoteStoredStatus`). O documento
+ * antigo não é regravado: é lido como pago, com a data de aceite no lugar da de pagamento, e
+ * só troca de fato no banco quando alguém mexer no status dele de novo.
  */
-export const normalizarQuote = <T extends { pagamento?: unknown }>(
+export const normalizarQuote = <
+  T extends { pagamento?: unknown; status?: string; pagoEm?: string; aceitoEm?: string },
+>(
   quote: T
-): T & { pagamento: QuotePayment } => ({
-  ...quote,
-  pagamento: normalizarPagamento(quote.pagamento),
-});
+): T & { pagamento: QuotePayment } =>
+  ({
+    ...quote,
+    ...(quote.status === "aceito"
+      ? { status: "pago", pagoEm: quote.pagoEm || quote.aceitoEm }
+      : {}),
+    pagamento: normalizarPagamento(quote.pagamento),
+  }) as T & { pagamento: QuotePayment };
 
 /** Cópia profunda de itens com IDs novos — usada ao duplicar ou substituir um orçamento. */
 export const clonarItens = (itens: QuoteItem[]): QuoteItem[] =>

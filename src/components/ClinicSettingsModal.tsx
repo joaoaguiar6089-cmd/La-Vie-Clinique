@@ -6,6 +6,7 @@ import { mascararHora } from './common/MaskedDateTimeInput';
 import { createProfessionalLogin } from '../services/authService';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
+import { motivoEnderecoFechado, normalizarEnderecoPublico } from '../utils/publicLinks';
 
 /**
  * A foto da profissional entra em dois lugares com recortes diferentes: o bloco 92×104 da capa do
@@ -970,6 +971,15 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   aberto por um endereço de desenvolvimento, a paciente recebe esse endereço e cai
                   numa tela de login. Para conferir, abra o link numa aba anônima.
                 </p>
+                {(() => {
+                  const base = normalizarEnderecoPublico(formData.publicBaseUrl);
+                  const motivo = base ? motivoEnderecoFechado(base) : null;
+                  return motivo ? (
+                    <p className="text-body text-red-600 mt-1.5 leading-snug">
+                      Este endereço não serve: ele {motivo}. Use o endereço publicado do site.
+                    </p>
+                  ) : null;
+                })()}
               </div>
             </div>
           </div>

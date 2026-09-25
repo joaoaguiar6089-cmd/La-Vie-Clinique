@@ -32,12 +32,13 @@ import {
   Quote,
   QuoteDraft,
   QuoteStoredStatus,
+  QuoteComprovante,
   LaserBodyMap,
   ConsentTermSection,
   EvaluationTemplate,
   EvaluationRecord,
 } from '../types';
-import { formatQuoteNumber } from '../utils/quoteCalc';
+import { formatQuoteNumber, statusAntesDoDesfecho } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
 import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
@@ -682,6 +683,18 @@ export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<Cli
   // Devolve o perfil com as imagens já como URL do Storage: é essa versão que a tela e o backup
   // local devem passar a guardar, em vez das base64 que entraram.
   return comImagensNoStorage;
+}
+
+/**
+ * Grava só o endereço público do sistema — a base dos links que vão para a paciente.
+ *
+ * Um campo, e não o perfil inteiro: quem chama é o App, sozinho, quando percebe que foi aberto
+ * pelo site publicado e o perfil não tem um endereço que abra sem login (ver `utils/publicLinks`).
+ * Regravar o perfil inteiro ali arriscaria sobrescrever uma edição feita em outra aba.
+ */
+export async function salvarEnderecoPublicoDaClinica(publicBaseUrl: string): Promise<void> {
+  const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
+  await updateDoc(clinicRef, { publicBaseUrl });
 }
 
 /** Escreve (ou reescreve) o espelho público do perfil da clínica. */
@@ -1685,17 +1698,74 @@ export async function markQuoteAsSent(quoteId: string): Promise<void> {
   });
 }
 
-/** Troca manual de status na listagem (marcar como aceito, voltar para enviado). */
-export async function setQuoteStatus(quoteId: string, status: QuoteStoredStatus): Promise<void> {
-  const docRef = doc(db, QUOTES_COLLECTION, quoteId);
+/**
+ * A cliente pagou. `pagoEm` é a data informada pela profissional — é ela que o faturamento do mês
+ * soma. O comprovante é opcional aqui e pode chegar depois, por `anexarComprovanteAoQuote`.
+ *
+ * `aceitoEm` sai junto: é o campo do status antigo, e deixá-lo no documento faria o orçamento
+ * ter duas datas de entrada de dinheiro.
+ */
+export async function marcarQuoteComoPago(
+  quoteId: string,
+  pagoEm: string,
+  comprovante?: QuoteComprovante
+): Promise<void> {
+  await updateDoc(doc(db, QUOTES_COLLECTION, quoteId), {
+    status: 'pago' as QuoteStoredStatus,
+    pagoEm,
+    comprovante: comprovante ? cleanForFirestore(comprovante) : deleteField(),
+    recusadoEm: deleteField(),
+    aceitoEm: deleteField(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/** A cliente recusou. O link dela continua mostrando o orçamento como estava. */
+export async function marcarQuoteComoRecusado(quoteId: string): Promise<void> {
   const agora = new Date().toISOString();
-  // O aceite é datado aqui, e desfeito junto quando alguém volta atrás: é esta data que o
-  // faturamento do mês soma, e um `aceitoEm` sobrevivente num orçamento reaberto faria o mês
-  // fechar com dinheiro que ninguém recebeu.
-  await updateDoc(docRef, {
-    status,
-    aceitoEm: status === 'aceito' ? agora : deleteField(),
+  await updateDoc(doc(db, QUOTES_COLLECTION, quoteId), {
+    status: 'recusado' as QuoteStoredStatus,
+    recusadoEm: agora,
+    pagoEm: deleteField(),
+    comprovante: deleteField(),
+    aceitoEm: deleteField(),
     updatedAt: agora,
+  });
+}
+
+/**
+ * Desfaz o pagamento ou a recusa marcados por engano: o orçamento volta para enviado (ou para
+ * rascunho, se nunca foi compartilhado). As datas saem junto — um `pagoEm` sobrevivente num
+ * orçamento reaberto faria o mês fechar com dinheiro que ninguém recebeu. O arquivo do
+ * comprovante, se havia, quem apaga é quem chama (`apagarComprovante`).
+ */
+export async function desfazerDesfechoDoQuote(quote: Quote): Promise<void> {
+  await updateDoc(doc(db, QUOTES_COLLECTION, quote.id), {
+    status: statusAntesDoDesfecho(quote),
+    pagoEm: deleteField(),
+    comprovante: deleteField(),
+    recusadoEm: deleteField(),
+    aceitoEm: deleteField(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/** Anexa, troca ou (com `null`) remove o comprovante de um orçamento já pago. */
+export async function anexarComprovanteAoQuote(
+  quoteId: string,
+  comprovante: QuoteComprovante | null
+): Promise<void> {
+  await updateDoc(doc(db, QUOTES_COLLECTION, quoteId), {
+    comprovante: comprovante ? cleanForFirestore(comprovante) : deleteField(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/** Cancela um orçamento já enviado — o "excluir" de quem já saiu da clínica. */
+export async function cancelarQuote(quoteId: string): Promise<void> {
+  await updateDoc(doc(db, QUOTES_COLLECTION, quoteId), {
+    status: 'cancelado' as QuoteStoredStatus,
+    updatedAt: new Date().toISOString(),
   });
 }
 
