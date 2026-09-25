@@ -407,11 +407,14 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
     setConfirmacao({
       titulo: 'Excluir atendimento',
       textoConfirmar: 'Excluir',
-      mensagem: `O registro de ${a.pacienteNome} em ${dataCurta(a.data)} será apagado. Não tem volta.`,
+      mensagem:
+        `O registro de ${a.pacienteNome} em ${dataCurta(a.data)} será apagado` +
+        (a.acompanhamentoPreenchidoEm ? ', junto com o acompanhamento preenchido' : '') +
+        '. Não tem volta.',
       onConfirmar: async () => {
         try {
           setErro(null);
-          await deleteAttendance(a.id);
+          await deleteAttendance(a);
         } catch (e) {
           setErro(`Não foi possível excluir: ${(e as Error).message}`);
         }

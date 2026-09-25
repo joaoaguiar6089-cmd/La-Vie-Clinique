@@ -3,12 +3,14 @@ import {
   AlertTriangle,
   CalendarCheck,
   CalendarPlus,
+  ClipboardCheck,
   ClipboardList,
   Receipt,
 } from 'lucide-react';
 import {
   AnamnesisRecord,
   Attendance,
+  EvaluationRecord,
   Procedure,
   Quote,
   SessionPlan,
@@ -37,8 +39,11 @@ interface PatientResumoTabProps {
   atendimentos: Attendance[];
   planos: SessionPlan[];
   quotes: Quote[];
+  /** Avaliações emitidas para ela — entram na linha do tempo. */
+  avaliacoes: EvaluationRecord[];
   catalogProcedures: Procedure[];
   onAbrirFicha: (record: AnamnesisRecord) => void;
+  onAbrirAvaliacao: (registro: EvaluationRecord) => void;
   onAbrirOrcamento: (quote: Quote) => void;
   onIrParaAba: (aba: 'atendimentos' | 'anamneses' | 'orcamentos') => void;
   onAgendarSessao: (plano: SessionPlan) => void;
@@ -47,12 +52,14 @@ interface PatientResumoTabProps {
 const ICONE_DA_LINHA = {
   atendimento: CalendarCheck,
   anamnese: ClipboardList,
+  avaliacao: ClipboardCheck,
   orcamento: Receipt,
 } as const;
 
 const ROTULO_DA_LINHA = {
   atendimento: 'Atendimento',
   anamnese: 'Anamnese',
+  avaliacao: 'Avaliação',
   orcamento: 'Orçamento',
 } as const;
 
@@ -61,8 +68,10 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
   atendimentos,
   planos,
   quotes,
+  avaliacoes,
   catalogProcedures,
   onAbrirFicha,
+  onAbrirAvaliacao,
   onAbrirOrcamento,
   onIrParaAba,
   onAgendarSessao,
@@ -77,12 +86,13 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
   );
   const fotos = useMemo(() => fotosDaPaciente(records), [records]);
   const linha = useMemo(
-    () => linhaDoTempo(atendimentos, records, quotes),
-    [atendimentos, records, quotes]
+    () => linhaDoTempo(atendimentos, records, quotes, avaliacoes),
+    [atendimentos, records, quotes, avaliacoes]
   );
 
   const abrirItem = (item: ItemDaLinha) => {
     if (item.tipo === 'anamnese') onAbrirFicha(item.ref);
+    else if (item.tipo === 'avaliacao') onAbrirAvaliacao(item.ref);
     else if (item.tipo === 'orcamento') onAbrirOrcamento(item.ref);
     else onIrParaAba('atendimentos');
   };
@@ -223,7 +233,8 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
           <div className="glass-card p-6 text-center">
             <p className="text-body-lg text-ink font-medium">Nada registrado ainda.</p>
             <p className="text-body text-muted mt-1">
-              Atendimentos, anamneses e orçamentos aparecem aqui conforme forem acontecendo.
+              Orçamentos, anamneses, avaliações e atendimentos aparecem aqui conforme forem
+              acontecendo.
             </p>
           </div>
         ) : (

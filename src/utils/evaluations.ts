@@ -17,80 +17,13 @@ import { paraArray } from './firestoreShapes';
 import { ehRealizado, hojeISO } from './attendances';
 
 /**
- * As regras da ficha de avaliação: quando ela abre, qual ficha-modelo vale para cada atendimento,
- * e o que uma avaliação preenchida passa a travar na anamnese.
+ * As regras das fichas clínicas: qual ficha-modelo vale para cada procedimento, e o que uma
+ * visita realizada passa a travar na anamnese.
  *
- * Mora fora dos componentes porque quatro telas precisam concordar sobre isso — a linha do
- * atendimento, a fila de pendentes, o formulário de preenchimento e o formulário público da
- * paciente. Discordar aqui significaria um selo de "avaliada" numa visita cuja ficha não abre.
+ * Valem para os dois tipos de ficha — avaliação e acompanhamento (ver `utils/fichasClinicas.ts`).
+ * A fila de avaliações pendentes que morava aqui saiu: a avaliação virou ficha pré-procedimento,
+ * emitida quando a profissional precisa, e deixou de ser cobrança de todo atendimento.
  */
-
-// ==========================================
-// QUANDO A AVALIAÇÃO ABRE
-// ==========================================
-
-/**
- * O atendimento aconteceu? — a trava que libera o formulário para a profissional.
- *
- * São **dois** eixos, e não só a data. A data resolve o óbvio (não se avalia o que ainda não
- * aconteceu), mas o corte é `<= hoje` e não `< hoje`: a recepção lança a visita no mesmo dia em
- * que ela acontece, e exigir data estritamente anterior obrigaria a profissional a esperar até
- * amanhã para escrever o que viu hoje — justamente quando ela lembra.
- *
- * O segundo eixo é o desfecho. Um agendamento marcado `faltou` ou `remarcado` tem data passada e
- * atendimento nenhum: pela data sozinha ele abriria ficha de avaliação de uma visita que não
- * existiu.
- */
-export const avaliacaoLiberada = (a: Attendance): boolean =>
-  !!a.data && a.data <= hojeISO() && ehRealizado(a);
-
-/**
- * A ficha continua à vista mesmo com a data no futuro, uma vez que exista conteúdo.
- *
- * `avaliacaoLiberada` governa a **abertura** de avaliação nova. Se alguém corrigir a data de uma
- * visita já avaliada para a semana que vem, esconder o que já está gravado faria o dado sumir
- * sem ninguém perceber que sumiu — e o caminho de uma data digitada errado é corrigi-la, não
- * fazer o documento clínico desaparecer.
- */
-export const avaliacaoVisivel = (a: Attendance): boolean =>
-  !!a.avaliacaoPreenchidaEm || avaliacaoLiberada(a);
-
-/** Aconteceu, está liberado e ninguém preencheu — o trabalho pendente. */
-export const avaliacaoPendente = (a: Attendance): boolean =>
-  avaliacaoLiberada(a) && !a.avaliacaoPreenchidaEm;
-
-/**
- * Quantos dias para trás a fila de pendentes enxerga.
- *
- * Existe porque, sem janela, a fila nasce no dia 1 com todo atendimento já lançado na história da
- * clínica — centenas de linhas que ninguém vai preencher, e um contador no menu que mente desde o
- * primeiro minuto. A alternativa seria cortar pela data de lançamento da funcionalidade, um número
- * mágico que não quer dizer nada daqui a seis meses; a janela móvel continua fazendo sentido
- * sozinha, e a tela oferece alargar.
- */
-export const JANELA_PENDENTES_DIAS = 30;
-
-export const diasAtras = (dias: number): string => {
-  const d = new Date();
-  d.setDate(d.getDate() - dias);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
-
-/**
- * Atendimentos que aconteceram e ainda não têm avaliação, do mais recente para o mais antigo.
- *
- * `janelaDias` indefinido = sem corte, que é o que o filtro "ver tudo" da tela usa.
- */
-export const filaDePendentes = (
-  atendimentos: Attendance[],
-  janelaDias: number | undefined = JANELA_PENDENTES_DIAS
-): Attendance[] => {
-  const corte = janelaDias === undefined ? undefined : diasAtras(janelaDias);
-  return (atendimentos || [])
-    .filter((a) => avaliacaoPendente(a) && (!corte || a.data >= corte))
-    .sort((x, y) => (y.data || '').localeCompare(x.data || ''));
-};
 
 // ==========================================
 // QUAL FICHA-MODELO VALE

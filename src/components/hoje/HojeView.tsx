@@ -4,7 +4,6 @@ import {
   CalendarCheck,
   CalendarPlus,
   CheckCheck,
-  ClipboardCheck,
   Clock,
   MessageCircle,
   Receipt,
@@ -40,7 +39,6 @@ import {
   saudacaoDaHora,
 } from '../../utils/indicadores';
 import { agendamentosAtrasados } from '../../utils/agenda';
-import { filaDePendentes } from '../../utils/evaluations';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
 import { SkeletonLinhas } from '../common/Skeleton';
 
@@ -53,8 +51,11 @@ import { SkeletonLinhas } from '../common/Skeleton';
  * por ele todo dia, inclusive quem só entrou para abrir o catálogo.
  *
  * A ordem da tela é a ordem da pergunta: primeiro o dia (quem vem agora), depois o que está
- * represado (avaliações, agendamentos sem desfecho, confirmações de amanhã), e só então os
- * números do mês. Métrica não é tarefa, e por isso não vem antes das tarefas.
+ * represado (agendamentos sem desfecho, confirmações de amanhã), e só então os números do mês.
+ * Métrica não é tarefa, e por isso não vem antes das tarefas.
+ *
+ * Avaliação e acompanhamento não entram nas pendências: as duas fichas são opcionais, e cobrar
+ * todo atendimento por elas treinava a equipe a ignorar o contador.
  */
 
 interface HojeViewProps {
@@ -68,7 +69,6 @@ interface HojeViewProps {
   onAbrirBusca: () => void;
   onNovoAgendamento: () => void;
   onIrParaAgenda: () => void;
-  onIrParaAvaliacoes: () => void;
   onIrParaOrcamentos: () => void;
   onAbrirPaciente: (pacienteId: string) => void;
   onConfirmar: (a: Attendance) => void;
@@ -148,7 +148,6 @@ export const HojeView: React.FC<HojeViewProps> = ({
   onAbrirBusca,
   onNovoAgendamento,
   onIrParaAgenda,
-  onIrParaAvaliacoes,
   onIrParaOrcamentos,
   onAbrirPaciente,
   onConfirmar,
@@ -157,7 +156,6 @@ export const HojeView: React.FC<HojeViewProps> = ({
 
   const doDia = useMemo(() => atendimentosDeHoje(atendimentos, hoje), [atendimentos, hoje]);
   const proximos = useMemo(() => proximosDeHoje(atendimentos, hoje), [atendimentos, hoje]);
-  const avaliacoesPendentes = useMemo(() => filaDePendentes(atendimentos), [atendimentos]);
   const semDesfecho = useMemo(() => agendamentosAtrasados(atendimentos), [atendimentos]);
   const aConfirmar = useMemo(() => aConfirmarAmanha(atendimentos, hoje), [atendimentos, hoje]);
 
@@ -351,9 +349,7 @@ export const HojeView: React.FC<HojeViewProps> = ({
 
       {/* Pendências. Cada card só aparece quando tem o que fazer — um contador aceso em zero
           treina a equipe a ignorar todos eles. */}
-      {(avaliacoesPendentes.length > 0 ||
-        semDesfecho.length > 0 ||
-        aConfirmar.length > 0) && (
+      {(semDesfecho.length > 0 || aConfirmar.length > 0) && (
         <section className="space-y-2">
           <h2 className="font-serif-luxury text-title text-ink">Pendências</h2>
 
@@ -377,15 +373,6 @@ export const HojeView: React.FC<HojeViewProps> = ({
             />
           )}
 
-          {avaliacoesPendentes.length > 0 && (
-            <Pendencia
-              icone={ClipboardCheck}
-              quantidade={avaliacoesPendentes.length}
-              titulo="Avaliações a preencher"
-              descricao="Atendimentos que já aconteceram e ainda não têm ficha."
-              onClick={onIrParaAvaliacoes}
-            />
-          )}
         </section>
       )}
     </div>

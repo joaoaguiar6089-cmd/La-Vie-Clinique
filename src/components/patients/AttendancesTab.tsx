@@ -8,8 +8,8 @@ import {
   ChevronRight,
   Layers,
   Link2Off,
-  ClipboardCheck,
   Lock,
+  NotebookPen,
   Pencil,
   Plus,
   RotateCcw,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Attendance, SessionPlan } from '../../types';
 import { formatDateOnly } from '../../utils/formatters';
-import { avaliacaoVisivel } from '../../utils/evaluations';
+import { acompanhamentoVisivel } from '../../utils/fichasClinicas';
 import {
   ehPendente,
   ehPendenteAtrasado,
@@ -39,7 +39,8 @@ interface AttendancesTabProps {
   onExcluir: (a: Attendance) => void;
   /** "Compareceu" — abre o formulário inteiro pré-preenchido para confirmar. */
   onConfirmar: (a: Attendance) => void;
-  onAvaliar: (a: Attendance) => void;
+  /** Abre o acompanhamento (o registro pós-atendimento) desta visita. */
+  onAcompanhamento: (a: Attendance) => void;
   onFaltou: (a: Attendance) => void;
   /** Marca como remarcado e abre um agendamento novo com os dados copiados. */
   onRemarcar: (a: Attendance) => void;
@@ -130,8 +131,8 @@ const LinhaDeAtendimento: React.FC<{
   onConfirmar: (a: Attendance) => void;
   onFaltou: (a: Attendance) => void;
   onRemarcar: (a: Attendance) => void;
-  /** Abre a ficha de avaliação desta visita. */
-  onAvaliar: (a: Attendance) => void;
+  /** Abre o acompanhamento desta visita. */
+  onAcompanhamento: (a: Attendance) => void;
 }> = ({
   atendimento,
   rotuloDaSessao,
@@ -141,7 +142,7 @@ const LinhaDeAtendimento: React.FC<{
   onConfirmar,
   onFaltou,
   onRemarcar,
-  onAvaliar,
+  onAcompanhamento,
 }) => (
   <div
     className={
@@ -181,23 +182,27 @@ const LinhaDeAtendimento: React.FC<{
       )}
 
       {/*
-        Só aparece depois que a visita aconteceu — avaliar o que ainda não ocorreu não faz
-        sentido, e agendamento que virou falta ou remarcação nunca teve o que avaliar. A regra
-        mora em `avaliacaoVisivel`, compartilhada com a fila de pendentes e o contador do menu.
+        Só aparece depois que a visita aconteceu — registrar o que ainda não ocorreu não faz
+        sentido, e agendamento que virou falta ou remarcação nunca teve o que registrar. A regra
+        mora em `acompanhamentoVisivel`. Verde quando já preenchido; nunca é cobrança.
       */}
-      {avaliacaoVisivel(atendimento) && (
+      {acompanhamentoVisivel(atendimento) && (
         <button
           type="button"
-          onClick={() => onAvaliar(atendimento)}
-          title={atendimento.avaliacaoPreenchidaEm ? 'Ver avaliação' : 'Preencher avaliação'}
-          aria-label={`Ficha de avaliação do atendimento de ${atendimento.procedimentoNome}`}
+          onClick={() => onAcompanhamento(atendimento)}
+          title={
+            atendimento.acompanhamentoPreenchidoEm
+              ? 'Ver acompanhamento'
+              : 'Preencher acompanhamento'
+          }
+          aria-label={`Acompanhamento do atendimento de ${atendimento.procedimentoNome}`}
           className={
-            atendimento.avaliacaoPreenchidaEm
+            atendimento.acompanhamentoPreenchidoEm
               ? 'p-2 text-emerald-600 hover:text-emerald-700 transition-colors'
               : acaoClass
           }
         >
-          <ClipboardCheck className="w-4 h-4" />
+          <NotebookPen className="w-4 h-4" />
         </button>
       )}
 
@@ -262,7 +267,7 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
   onEditar,
   onExcluir,
   onConfirmar,
-  onAvaliar,
+  onAcompanhamento,
   onFaltou,
   onRemarcar,
   onAdicionarSessao,
@@ -312,7 +317,7 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
               onEditar={onEditar}
               onExcluir={onExcluir}
               onConfirmar={onConfirmar}
-              onAvaliar={onAvaliar}
+              onAcompanhamento={onAcompanhamento}
               onFaltou={onFaltou}
               onRemarcar={onRemarcar}
             />
@@ -406,7 +411,7 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
                         onEditar={onEditar}
                         onExcluir={onExcluir}
                         onConfirmar={onConfirmar}
-                        onAvaliar={onAvaliar}
+                        onAcompanhamento={onAcompanhamento}
                         onFaltou={onFaltou}
                         onRemarcar={onRemarcar}
                       />
