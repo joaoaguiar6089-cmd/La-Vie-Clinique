@@ -241,6 +241,7 @@ export type AppView =
   | 'anamnesis'
   | 'evaluations'
   | 'acompanhamento'
+  | 'estoque'
   | 'quotes'
   | 'financeiro'
   | 'settings';
@@ -741,6 +742,113 @@ export interface Attendance {
    * fica de fora de propósito: `subscribeToAttendances` baixa esta coleção inteira em toda sessão.
    */
   acompanhamentoPreenchidoEm?: string; // ISO
+  /**
+   * Marca de que os materiais usados nesta visita foram registrados, e quanto custaram — o total
+   * gravado em `MateriaisDoAtendimento`, nunca as linhas.
+   *
+   * O custo mora aqui, e não só no documento dos materiais, porque o Financeiro soma o custo do
+   * mês e a linha do atendimento mostra o valor: com o número aqui, as duas contas saem da
+   * coleção que já está em memória, sem uma leitura por atendimento.
+   */
+  materiaisRegistradosEm?: string; // ISO
+  custoMateriais?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// ==========================================
+// ESTOQUE — TIPOS
+// ==========================================
+
+/**
+ * Um material do estoque: o que a clínica compra e usa nos procedimentos.
+ *
+ * Os dois valores são **por unidade de uso**, e não por embalagem: a toxina vem em frasco de
+ * 100 U, mas o atendimento usa 20 U — é o custo da unidade que permite calcular o de cada
+ * atendimento. O cadastro ajuda a chegar nele a partir do preço da embalagem.
+ *
+ * Sem saldo, por enquanto: esta é a lista de materiais e dos seus custos. O uso registrado em
+ * cada atendimento já fica gravado, então ligar o saldo depois não exige refazer nada.
+ */
+export interface ProdutoDeEstoque {
+  id: string;
+  nome: string;
+  /** Unidade de uso: "U", "ml", "un", "seringa", "ampola"… */
+  unidade: string;
+  /** Valor comprado — quanto a unidade custa para a clínica. */
+  custoUnitario: number;
+  /** Valor repassado à cliente, por unidade. Só informativo: não entra em total nenhum. */
+  valorCliente: number;
+  marca?: string;
+  observacoes?: string;
+  /**
+   * Sai das listas de escolha, mas continua existindo. É o "excluir" de um produto que já foi
+   * usado: o histórico guarda o nome e o preço do dia, e o consumo padrão que ainda apontar
+   * para ele segue calculando.
+   */
+  arquivado?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/** Uma linha do consumo padrão: qual produto e quanto dele, por sessão. */
+export interface ItemDeConsumoPadrao {
+  produtoId: string;
+  quantidade: number;
+}
+
+/**
+ * O que um procedimento costuma consumir, por sessão — o que abre preenchido no registro de
+ * materiais do atendimento e no custo estimado do orçamento.
+ *
+ * Um documento por procedimento, com o id dele: "um consumo padrão por procedimento" passa a
+ * ser impossível de violar. Guarda só produto e quantidade; os preços são lidos do produto na
+ * hora de usar, porque isto é configuração viva e não registro.
+ */
+export interface ConsumoPadrao {
+  /** Igual ao `procedureId`. */
+  id: string;
+  procedureId: string;
+  itens: ItemDeConsumoPadrao[];
+  updatedAt?: string;
+}
+
+/**
+ * Um material usado, com o preço **congelado** no momento do registro.
+ *
+ * O produto pode subir de preço, mudar de nome ou ser arquivado depois; o custo do atendimento
+ * de março continua sendo o de março. Mesma razão pela qual o orçamento espelha o nome da
+ * profissional.
+ */
+export interface MaterialUsado {
+  /** Ausente = material digitado à mão, fora do estoque. */
+  produtoId?: string;
+  nome: string;
+  unidade: string;
+  quantidade: number;
+  custoUnitario: number;
+  valorCliente: number;
+}
+
+/**
+ * Os materiais usados num atendimento.
+ *
+ * Coleção própria, e não dentro do `Attendance`, pelo mesmo motivo do acompanhamento: a coleção
+ * de atendimentos é baixada inteira em toda sessão. No atendimento fica só a marca e o total
+ * (`materiaisRegistradosEm`, `custoMateriais`).
+ */
+export interface MateriaisDoAtendimento {
+  /** Igual ao `Attendance.id`. */
+  id: string;
+  atendimentoId: string;
+  pacienteId: string;
+  pacienteNome: string;
+  procedureId?: string;
+  procedimentoNome: string;
+  data: string; // YYYY-MM-DD, a do atendimento
+  itens: MaterialUsado[];
+  custoTotal: number;
+  valorClienteTotal: number;
   createdAt: string;
   updatedAt?: string;
 }

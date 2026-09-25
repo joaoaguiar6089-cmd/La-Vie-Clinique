@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Home,
   NotebookPen,
+  Package,
   Search,
   Wallet,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ const VIEW_LABEL: Record<AppView, string> = {
   anamnesis: 'Anamneses',
   evaluations: 'Fichas de Avaliação',
   acompanhamento: 'Acompanhamento',
+  estoque: 'Estoque',
   quotes: 'Orçamentos',
   financeiro: 'Financeiro',
   settings: 'Configurações',
@@ -184,6 +186,17 @@ export const Navbar: React.FC<NavbarProps> = ({
       count: undefined,
       onClick: () => {
         onSelectView('acompanhamento');
+        scrollToTop();
+      },
+    },
+    {
+      id: 'estoque' as const,
+      label: 'Estoque',
+      icon: Package,
+      active: currentView === 'estoque',
+      count: undefined,
+      onClick: () => {
+        onSelectView('estoque');
         scrollToTop();
       },
     },

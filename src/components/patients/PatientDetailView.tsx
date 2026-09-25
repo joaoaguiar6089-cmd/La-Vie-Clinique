@@ -93,6 +93,8 @@ interface PatientDetailViewProps {
   onConfirmarAtendimento: (a: Attendance) => void;
   /** Abre o acompanhamento (o registro pós-atendimento) de uma visita já realizada. */
   onAcompanhamentoAtendimento: (a: Attendance) => void;
+  /** Abre os materiais usados numa visita já realizada. */
+  onMateriaisAtendimento: (a: Attendance) => void;
   onFaltouAtendimento: (a: Attendance) => void;
   onRemarcarAtendimento: (a: Attendance) => void;
   onAdicionarSessao: (planoId: string) => void;
@@ -148,6 +150,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   onExcluirAtendimento,
   onConfirmarAtendimento,
   onAcompanhamentoAtendimento,
+  onMateriaisAtendimento,
   onFaltouAtendimento,
   onRemarcarAtendimento,
   onAdicionarSessao,
@@ -473,6 +476,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           onExcluir={onExcluirAtendimento}
           onConfirmar={onConfirmarAtendimento}
           onAcompanhamento={onAcompanhamentoAtendimento}
+          onMateriais={onMateriaisAtendimento}
           onFaltou={onFaltouAtendimento}
           onRemarcar={onRemarcarAtendimento}
           onAdicionarSessao={onAdicionarSessao}
