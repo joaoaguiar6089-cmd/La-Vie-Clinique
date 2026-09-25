@@ -10,7 +10,6 @@ import {
   Link2Off,
   Lock,
   NotebookPen,
-  PackageOpen,
   Pencil,
   Plus,
   RotateCcw,
@@ -19,9 +18,7 @@ import {
 } from 'lucide-react';
 import { Attendance, SessionPlan } from '../../types';
 import { formatDateOnly } from '../../utils/formatters';
-import { acompanhamentoVisivel } from '../../utils/fichasClinicas';
-import { materiaisVisiveis } from '../../utils/estoque';
-import { formatBRL } from '../../utils/formatters';
+import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fichasClinicas';
 import {
   ehPendente,
   ehPendenteAtrasado,
@@ -42,10 +39,8 @@ interface AttendancesTabProps {
   onExcluir: (a: Attendance) => void;
   /** "Compareceu" — abre o formulário inteiro pré-preenchido para confirmar. */
   onConfirmar: (a: Attendance) => void;
-  /** Abre o acompanhamento (o registro pós-atendimento) desta visita. */
+  /** Abre o acompanhamento (o registro pós-atendimento, com os materiais usados) desta visita. */
   onAcompanhamento: (a: Attendance) => void;
-  /** Abre os materiais usados nesta visita. */
-  onMateriais: (a: Attendance) => void;
   onFaltou: (a: Attendance) => void;
   /** Marca como remarcado e abre um agendamento novo com os dados copiados. */
   onRemarcar: (a: Attendance) => void;
@@ -138,7 +133,6 @@ const LinhaDeAtendimento: React.FC<{
   onRemarcar: (a: Attendance) => void;
   /** Abre o acompanhamento desta visita. */
   onAcompanhamento: (a: Attendance) => void;
-  onMateriais: (a: Attendance) => void;
 }> = ({
   atendimento,
   rotuloDaSessao,
@@ -149,7 +143,6 @@ const LinhaDeAtendimento: React.FC<{
   onFaltou,
   onRemarcar,
   onAcompanhamento,
-  onMateriais,
 }) => (
   <div
     className={
@@ -191,45 +184,27 @@ const LinhaDeAtendimento: React.FC<{
       {/*
         Só aparece depois que a visita aconteceu — registrar o que ainda não ocorreu não faz
         sentido, e agendamento que virou falta ou remarcação nunca teve o que registrar. A regra
-        mora em `acompanhamentoVisivel`. Verde quando já preenchido; nunca é cobrança.
+        mora em `acompanhamentoVisivel`. Verde quando já há registro (acompanhamento ou materiais,
+        que moram no mesmo formulário); nunca é cobrança. O custo dos materiais não aparece aqui:
+        a ficha da paciente é aberta ao lado dela — ele fica no Financeiro.
       */}
       {acompanhamentoVisivel(atendimento) && (
         <button
           type="button"
           onClick={() => onAcompanhamento(atendimento)}
           title={
-            atendimento.acompanhamentoPreenchidoEm
+            acompanhamentoComRegistro(atendimento)
               ? 'Ver acompanhamento'
               : 'Preencher acompanhamento'
           }
           aria-label={`Acompanhamento do atendimento de ${atendimento.procedimentoNome}`}
           className={
-            atendimento.acompanhamentoPreenchidoEm
+            acompanhamentoComRegistro(atendimento)
               ? 'p-2 text-emerald-600 hover:text-emerald-700 transition-colors'
               : acaoClass
           }
         >
           <NotebookPen className="w-4 h-4" />
-        </button>
-      )}
-
-      {materiaisVisiveis(atendimento) && (
-        <button
-          type="button"
-          onClick={() => onMateriais(atendimento)}
-          title={
-            atendimento.materiaisRegistradosEm
-              ? `Materiais usados — custo ${formatBRL(atendimento.custoMateriais || 0)}`
-              : 'Registrar materiais usados'
-          }
-          aria-label={`Materiais usados no atendimento de ${atendimento.procedimentoNome}`}
-          className={
-            atendimento.materiaisRegistradosEm
-              ? 'p-2 text-emerald-600 hover:text-emerald-700 transition-colors'
-              : acaoClass
-          }
-        >
-          <PackageOpen className="w-4 h-4" />
         </button>
       )}
 
@@ -295,7 +270,6 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
   onExcluir,
   onConfirmar,
   onAcompanhamento,
-  onMateriais,
   onFaltou,
   onRemarcar,
   onAdicionarSessao,
@@ -346,7 +320,6 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
               onExcluir={onExcluir}
               onConfirmar={onConfirmar}
               onAcompanhamento={onAcompanhamento}
-              onMateriais={onMateriais}
               onFaltou={onFaltou}
               onRemarcar={onRemarcar}
             />
@@ -441,7 +414,6 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
                         onExcluir={onExcluir}
                         onConfirmar={onConfirmar}
                         onAcompanhamento={onAcompanhamento}
-                        onMateriais={onMateriais}
                         onFaltou={onFaltou}
                         onRemarcar={onRemarcar}
                       />

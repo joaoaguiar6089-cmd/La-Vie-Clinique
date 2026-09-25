@@ -122,6 +122,25 @@ export const perguntasRespondidas = (
     return true;
   });
 
+/**
+ * A ficha tem alguma coisa escrita — resposta, foto, anotação ou observação?
+ *
+ * É o que decide se o acompanhamento é gravado quando a profissional só lançou os materiais:
+ * gravar a ficha em branco criaria um "acompanhamento preenchido" sem nada dentro, que apareceria
+ * na lista de registros da seção.
+ */
+export const fichaTemConteudo = (ficha: {
+  perguntas: AnamnesisQuestion[];
+  respostas: Record<string, any>;
+  fotoSessaoUrl?: string;
+  fotoModeloAnotadaUrl?: string;
+  observacoes?: string;
+}): boolean =>
+  perguntasRespondidas(ficha.perguntas, ficha.respostas).length > 0 ||
+  !!ficha.fotoSessaoUrl ||
+  !!ficha.fotoModeloAnotadaUrl ||
+  !!(ficha.observacoes || '').trim();
+
 // ==========================================
 // O QUE A AVALIAÇÃO TRAVA NA ANAMNESE
 // ==========================================

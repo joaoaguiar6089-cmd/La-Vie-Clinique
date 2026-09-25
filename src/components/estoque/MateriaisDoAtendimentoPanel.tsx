@@ -12,6 +12,7 @@ import {
   LinhaDeMaterial,
   linhasParaGravar,
   materiaisSugeridos,
+  montarMateriaisDoAtendimento,
   totaisDosMateriais,
 } from '../../utils/estoque';
 import { procedimentoDoAtendimento } from '../../utils/evaluations';
@@ -35,12 +36,16 @@ interface MateriaisDoAtendimentoPanelProps {
 }
 
 /**
- * Os materiais usados num atendimento, e o que custaram.
+ * Os materiais usados num atendimento, e o que custaram — o detalhe com valores.
  *
- * Abre com o consumo padrão do procedimento (Estoque › Consumo por procedimento), com o preço de
- * hoje de cada produto, e tudo é ajustável: quantidade, valores, materiais a mais ou a menos. Ao
- * salvar, os preços ficam **congelados** no registro — o produto subir de preço amanhã não muda
- * o custo desta visita.
+ * Abre pelo Financeiro, que é o único lugar onde os valores aparecem: a equipe lança material e
+ * quantidade no acompanhamento, ao lado da paciente, sem preço na tela. Aqui a administradora
+ * confere o custo, corrige um valor e completa o do material digitado à mão ("falta valor").
+ *
+ * Sem registro, abre com o consumo padrão do procedimento (Estoque › Consumo por procedimento),
+ * com o preço de hoje de cada produto, e tudo é ajustável: quantidade, valores, materiais a mais
+ * ou a menos. Ao salvar, os preços ficam **congelados** no registro — o produto subir de preço
+ * amanhã não muda o custo desta visita.
  */
 export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelProps> = ({
   atendimento,
@@ -170,21 +175,14 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
         return;
       }
 
-      const soma = totaisDosMateriais(itens);
-      const agora = new Date().toISOString();
-      await saveMateriaisDoAtendimento({
-        id: atendimento.id,
-        atendimentoId: atendimento.id,
-        pacienteId: atendimento.pacienteId,
-        pacienteNome: atendimento.pacienteNome,
-        procedureId: atendimento.procedureId,
-        procedimentoNome: atendimento.procedimentoNome,
-        data: atendimento.data,
-        itens,
-        custoTotal: soma.custo,
-        valorClienteTotal: soma.valorCliente,
-        createdAt: registro?.createdAt || agora,
-      });
+      await saveMateriaisDoAtendimento(
+        montarMateriaisDoAtendimento(
+          { ...atendimento, atendimentoId: atendimento.id },
+          itens,
+          registro,
+          new Date().toISOString()
+        )
+      );
       onFechar();
     } catch (e) {
       setErro(`Não foi possível salvar: ${(e as Error).message}`);

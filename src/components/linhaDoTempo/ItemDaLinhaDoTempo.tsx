@@ -8,7 +8,6 @@ import {
   Eye,
   MoreHorizontal,
   NotebookPen,
-  PackageOpen,
   Pencil,
   Receipt,
   RefreshCw,
@@ -18,8 +17,7 @@ import { AnamnesisRecord, Attendance, EvaluationRecord, Quote } from '../../type
 import { ItemDaLinha } from '../../utils/pacienteResumo';
 import { formatBRL, formatDateOnly } from '../../utils/formatters';
 import { isQuoteEditavel, podeSubstituir } from '../../utils/quoteCalc';
-import { acompanhamentoVisivel } from '../../utils/fichasClinicas';
-import { materiaisVisiveis } from '../../utils/estoque';
+import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fichasClinicas';
 import { anamneseFechada } from '../../utils/evaluations';
 import { ROTULO_DO_STATUS } from '../../utils/attendances';
 import { QuoteDesfecho } from '../quotes/QuoteDesfecho';
@@ -37,14 +35,14 @@ export interface AcoesDaLinha {
   >;
   onVerAnamnese: (r: AnamnesisRecord) => void;
   onVerAvaliacao: (r: EvaluationRecord) => void;
+  /** O acompanhamento, com os materiais usados dentro. */
   onAcompanhamento: (a: Attendance) => void;
-  onMateriais: (a: Attendance) => void;
 }
 
 interface Atalho {
   id: string;
   rotulo: string;
-  /** Linha pequena na folha do celular — o custo dos materiais, por exemplo. */
+  /** Linha pequena na folha do celular — "Cria um novo com número próprio", por exemplo. */
   detalhe?: string;
   icone: React.ElementType;
   onClick: () => void;
@@ -63,29 +61,20 @@ interface Atalho {
 export const atalhosDoItem = (item: ItemDaLinha, acoes: AcoesDaLinha): Atalho[] => {
   if (item.tipo === 'atendimento') {
     const a = item.ref;
-    const lista: Atalho[] = [];
-    if (materiaisVisiveis(a)) {
-      lista.push({
-        id: 'materiais',
-        rotulo: a.materiaisRegistradosEm ? 'Materiais usados' : 'Registrar materiais',
-        detalhe: a.materiaisRegistradosEm ? `Custo ${formatBRL(a.custoMateriais || 0)}` : undefined,
-        icone: PackageOpen,
-        onClick: () => acoes.onMateriais(a),
-        preenchido: !!a.materiaisRegistradosEm,
-        principal: true,
-      });
-    }
-    if (acompanhamentoVisivel(a)) {
-      lista.push({
+    // Um atalho só: os materiais usados moram dentro do acompanhamento, e o custo deles fica no
+    // Financeiro — a linha do tempo é aberta ao lado da paciente.
+    if (!acompanhamentoVisivel(a)) return [];
+    const registrado = acompanhamentoComRegistro(a);
+    return [
+      {
         id: 'acompanhamento',
-        rotulo: a.acompanhamentoPreenchidoEm ? 'Ver acompanhamento' : 'Preencher acompanhamento',
+        rotulo: registrado ? 'Ver acompanhamento' : 'Preencher acompanhamento',
         icone: NotebookPen,
         onClick: () => acoes.onAcompanhamento(a),
-        preenchido: !!a.acompanhamentoPreenchidoEm,
+        preenchido: registrado,
         principal: true,
-      });
-    }
-    return lista;
+      },
+    ];
   }
 
   if (item.tipo === 'anamnese') {

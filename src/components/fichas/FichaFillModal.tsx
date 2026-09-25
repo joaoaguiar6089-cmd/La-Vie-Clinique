@@ -13,16 +13,20 @@ import { QuestionFieldRenderer } from '../anamnesis/QuestionFieldRenderer';
 import { PhotoAnnotationEditor } from '../anamnesis/PhotoAnnotationEditor';
 import {
   fichaDeAvaliacaoPara,
+  fichaTemConteudo,
   perguntasDaAvaliacao,
   perguntasRespondidas,
 } from '../../utils/evaluations';
 import { AlvoDaFicha, ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
+import { montarMateriaisDoAtendimento } from '../../utils/estoque';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { subirImagemOuManter } from '../../services/imageStorage';
 import {
+  deleteMateriaisDoAtendimento,
   deleteRegistroDeFicha,
   getRegistroDeFicha,
+  saveMateriaisDoAtendimento,
   saveRegistroDeFicha,
   subscribeToFichasModelo,
   subscribeToPerguntasGeraisDaFicha,
@@ -31,6 +35,7 @@ import { formatDateOnly } from '../../utils/formatters';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PrintableFichaSheet } from './PrintableFichaSheet';
 import { SidePanel } from '../common/SidePanel';
+import { SecaoUsoDeMaterial, useUsoDeMaterial } from '../estoque/UsoDeMaterial';
 
 interface FichaFillModalProps {
   tipo: TipoDeFicha;
@@ -67,6 +72,10 @@ type AlvoAnotacao = 'modelo' | 'sessao' | null;
  * Um documento por ficha. Numa paciente com plano de 10 sessões, são 10 acompanhamentos
  * independentes — é o que transforma as sessões num histórico de evolução em vez de um único
  * documento sobrescrito.
+ *
+ * O acompanhamento carrega também os materiais usados ("Uso de material?"), sem valor nenhum na
+ * tela: ele é preenchido ao lado da paciente. Continuam dois documentos — a ficha e os materiais —
+ * gravados pelo mesmo botão; o custo aparece só no Financeiro.
  */
 export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   tipo,
@@ -218,6 +227,8 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, tipo, alvo.registroId]);
 
+  const uso = useUsoDeMaterial(alvo, catalogo, isOpen && tipo === 'acompanhamento');
+
   if (!isOpen) return null;
 
   const handleResposta = (questionId: string, valor: any) => {
@@ -257,41 +268,88 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   const handleSalvar = async () => {
     setSalvando(true);
     setErro(null);
-    try {
-      const agora = new Date().toISOString();
-      const novo: EvaluationRecord = {
-        id: alvo.registroId,
-        atendimentoId: alvo.atendimentoId,
-        pacienteId: alvo.pacienteId,
-        pacienteNome: alvo.pacienteNome,
-        pacienteGenero: paciente?.genero || registro?.pacienteGenero,
-        procedureId: alvo.procedureId,
-        procedimentoNome: alvo.procedimentoNome,
-        dataAtendimento: alvo.data,
-        professionalId: alvo.professionalId,
-        profissionalNome: profissional?.name || alvo.profissionalNome,
-        templateId: ficha?.id,
+    const agora = new Date().toISOString();
+    const todasAsPerguntas = [...perguntas, ...perguntasSoDoRegistro];
+    const materiais = uso.plano();
+    /*
+      A ficha só é gravada se tem o que guardar, ou se já existia. Lançar só os materiais não
+      pode criar um acompanhamento em branco — ele apareceria como preenchido na lista da seção.
+    */
+    const gravarFicha =
+      tipo === 'avaliacao' ||
+      !!registro ||
+      fichaTemConteudo({
+        perguntas: todasAsPerguntas,
         respostas,
-        // Só o que foi respondido: congelar a ficha-modelo inteira faria cada ficha pagar KB por
-        // pergunta em branco, e a cota do Firestore aqui é por KB gravado.
-        perguntasSnapshot: perguntasRespondidas([...perguntas, ...perguntasSoDoRegistro], respostas),
-        fotoModeloUrl: fotoModeloUrl || undefined,
-        fotoModeloAnotadaUrl: fotoModeloAnotadaUrl || undefined,
-        fotoModeloAnotacoesJson,
-        fotoSessaoUrl: fotoSessaoUrl || undefined,
-        fotoSessaoAnotadaUrl: fotoSessaoAnotadaUrl || undefined,
-        fotoSessaoAnotacoesJson,
-        observacoes: observacoes.trim() || undefined,
-        preenchidoEm: registro?.preenchidoEm || agora,
-        createdAt: registro?.createdAt || agora,
-      };
+        fotoSessaoUrl,
+        fotoModeloAnotadaUrl,
+        observacoes,
+      });
+    if (!gravarFicha && materiais.acao === 'manter') {
+      onClose();
+      return;
+    }
 
-      await saveRegistroDeFicha(tipo, novo);
+    let etapa: 'ficha' | 'materiais' = 'ficha';
+    try {
+      if (gravarFicha) {
+        const novo: EvaluationRecord = {
+          id: alvo.registroId,
+          atendimentoId: alvo.atendimentoId,
+          pacienteId: alvo.pacienteId,
+          pacienteNome: alvo.pacienteNome,
+          pacienteGenero: paciente?.genero || registro?.pacienteGenero,
+          procedureId: alvo.procedureId,
+          procedimentoNome: alvo.procedimentoNome,
+          dataAtendimento: alvo.data,
+          professionalId: alvo.professionalId,
+          profissionalNome: profissional?.name || alvo.profissionalNome,
+          templateId: ficha?.id,
+          respostas,
+          // Só o que foi respondido: congelar a ficha-modelo inteira faria cada ficha pagar KB
+          // por pergunta em branco, e a cota do Firestore aqui é por KB gravado.
+          perguntasSnapshot: perguntasRespondidas(todasAsPerguntas, respostas),
+          fotoModeloUrl: fotoModeloUrl || undefined,
+          fotoModeloAnotadaUrl: fotoModeloAnotadaUrl || undefined,
+          fotoModeloAnotacoesJson,
+          fotoSessaoUrl: fotoSessaoUrl || undefined,
+          fotoSessaoAnotadaUrl: fotoSessaoAnotadaUrl || undefined,
+          fotoSessaoAnotacoesJson,
+          observacoes: observacoes.trim() || undefined,
+          preenchidoEm: registro?.preenchidoEm || agora,
+          createdAt: registro?.createdAt || agora,
+        };
+        await saveRegistroDeFicha(tipo, novo);
+        // Se os materiais falharem, a segunda tentativa regrava a ficha com as mesmas datas.
+        setRegistro(novo);
+      }
+
+      etapa = 'materiais';
+      if (materiais.acao === 'gravar' && alvo.atendimentoId) {
+        await saveMateriaisDoAtendimento(
+          montarMateriaisDoAtendimento(
+            { ...alvo, atendimentoId: alvo.atendimentoId },
+            materiais.itens,
+            uso.registro,
+            agora
+          )
+        );
+      } else if (materiais.acao === 'apagar' && alvo.atendimentoId) {
+        await deleteMateriaisDoAtendimento(alvo.atendimentoId);
+      }
+
       onSalvou?.();
       onClose();
     } catch (e) {
       console.error(e);
-      setErro(`Não foi possível salvar ${rotulos.artigo} ${rotulos.minusculo}. Tente de novo.`);
+      const motivo = (e as Error).message;
+      setErro(
+        etapa === 'ficha'
+          ? `Não foi possível salvar ${rotulos.artigo} ${rotulos.minusculo}. Tente de novo.`
+          : gravarFicha
+          ? `O acompanhamento foi salvo, mas os materiais não: ${motivo} Toque em Salvar de novo.`
+          : `Não foi possível salvar os materiais: ${motivo}`
+      );
       setSalvando(false);
     }
   };
@@ -299,20 +357,29 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   /**
    * `window.confirm` não serve aqui: em contexto embutido ele responde sozinho, sem mostrar nada
    * — ou a exclusão nunca roda, ou roda sem perguntar. Ver `ConfirmDialog`.
+   *
+   * No acompanhamento, excluir leva a ficha e os materiais: os dois são o mesmo formulário.
    */
   const pedirExclusao = () => {
-    if (!registro) return;
+    if (!registro && !uso.registro) return;
+    const oQueSai =
+      registro && uso.registro
+        ? 'As respostas, as anotações das fotos e os materiais registrados são apagados.'
+        : registro
+        ? 'As respostas e as anotações das fotos são apagadas.'
+        : 'Os materiais registrados são apagados.';
     setConfirmacao({
       titulo: `Excluir ${rotulos.artigo === 'a' ? 'esta' : 'este'} ${rotulos.minusculo}?`,
-      mensagem:
-        'As respostas e as anotações das fotos são apagadas.' +
-        (tipo === 'acompanhamento' ? ' O atendimento em si não é afetado.' : ''),
+      mensagem: oQueSai + (tipo === 'acompanhamento' ? ' O atendimento em si não é afetado.' : ''),
       textoConfirmar: 'Excluir',
       tom: 'perigo',
       onConfirmar: async () => {
         setSalvando(true);
         try {
-          await deleteRegistroDeFicha(tipo, registro);
+          if (registro) await deleteRegistroDeFicha(tipo, registro);
+          if (uso.registro && alvo.atendimentoId) {
+            await deleteMateriaisDoAtendimento(alvo.atendimentoId);
+          }
           onSalvou?.();
           onClose();
         } catch (e) {
@@ -333,7 +400,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   */
   const rodape = carregando || leituraFalhou ? null : (
     <div className="flex items-center justify-between gap-3">
-      {registro ? (
+      {registro || uso.registro ? (
         <button
           onClick={pedirExclusao}
           disabled={salvando}
@@ -382,8 +449,9 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       sobretitulo={`${alvo.pacienteNome} · ${alvo.procedimentoNome} · ${formatDateOnly(alvo.data)}`}
       largura="larga"
       bloqueado={salvando}
-      /* Anotar uma foto ou anexar a foto da sessão não gera `input`/`change` no painel. */
-      alterado={!!fotoSessaoUrl || !!fotoModeloAnotadaUrl || !!fotoSessaoAnotadaUrl}
+      /* Anotar uma foto, anexar a foto da sessão ou tirar um material da lista não gera
+         `input`/`change` no painel. */
+      alterado={!!fotoSessaoUrl || !!fotoModeloAnotadaUrl || !!fotoSessaoAnotadaUrl || uso.mexido}
       rodape={rodape}
     >
       <div className="bg-card min-h-full">
@@ -541,6 +609,9 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[rgba(26,26,26,.15)] text-[14px] text-ink placeholder:text-gray-400 focus:outline-none focus:border-brand transition-colors resize-y"
                 />
               </div>
+
+              {/* Só no acompanhamento: material e quantidade, sem valor — o custo fica no Financeiro. */}
+              <SecaoUsoDeMaterial uso={uso} />
 
               {registro?.preenchidoEm && (
                 <p className="text-[12px] text-gray-400">

@@ -46,7 +46,6 @@ import { AgendaDiaMobile } from './AgendaDiaMobile';
 import { AgendaFiltros } from './AgendaFiltros';
 import { AgendaDetalheModal } from './AgendaDetalheModal';
 import { FichaFillModal } from '../fichas/FichaFillModal';
-import { MateriaisDoAtendimentoPanel } from '../estoque/MateriaisDoAtendimentoPanel';
 import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { SkeletonAgenda } from '../common/Skeleton';
 
@@ -126,7 +125,6 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   const [pacienteDoForm, setPacienteDoForm] = useState<Patient | null>(null);
   const [detalhe, setDetalhe] = useState<Attendance | null>(null);
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
-  const [materiaisDe, setMateriaisDe] = useState<Attendance | null>(null);
   const [arrastando, setArrastando] = useState<Attendance | null>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -572,10 +570,6 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
             setDetalhe(null);
             setAcompanhando(a);
           }}
-          onMateriais={(a) => {
-            setDetalhe(null);
-            setMateriaisDe(a);
-          }}
         />
       )}
 
@@ -591,12 +585,6 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
           clinicProfile={clinic}
         />
       )}
-
-      <MateriaisDoAtendimentoPanel
-        atendimento={materiaisDe}
-        onFechar={() => setMateriaisDe(null)}
-        catalogo={catalogProcedures}
-      />
 
       <AttendanceFormModal
         isOpen={!!formulario}

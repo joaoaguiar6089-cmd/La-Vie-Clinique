@@ -752,6 +752,12 @@ export interface Attendance {
    */
   materiaisRegistradosEm?: string; // ISO
   custoMateriais?: number;
+  /**
+   * Quantas linhas dos materiais estão sem valor — o material digitado à mão no acompanhamento,
+   * que não mostra preço. É o "falta valor" da lista do Financeiro, pelo mesmo motivo do custo
+   * morar aqui: sem uma leitura por atendimento. Ausente = nenhuma.
+   */
+  materiaisSemValor?: number;
   createdAt: string;
   updatedAt?: string;
 }

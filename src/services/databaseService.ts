@@ -56,7 +56,7 @@ import {
 } from '../utils/evaluations';
 import { paraArray } from '../utils/firestoreShapes';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../utils/fichasClinicas';
-import { caixaLida } from '../utils/estoque';
+import { caixaLida, linhasSemValor } from '../utils/estoque';
 import {
   montarEspelhoPublico,
   serializarAreas,
@@ -2110,6 +2110,7 @@ export async function remarcarAtendimento(
     acompanhamentoPreenchidoEm: undefined,
     materiaisRegistradosEm: undefined,
     custoMateriais: undefined,
+    materiaisSemValor: undefined,
     confirmadoEm: undefined,
     createdAt: agora,
     updatedAt: agora,
@@ -2703,6 +2704,7 @@ export async function getMateriaisDoAtendimento(
  */
 export async function saveMateriaisDoAtendimento(registro: MateriaisDoAtendimento): Promise<void> {
   const agora = new Date().toISOString();
+  const semValor = linhasSemValor(registro.itens);
   const batch = writeBatch(db);
   batch.set(
     doc(db, ATTENDANCE_MATERIALS_COLLECTION, registro.atendimentoId),
@@ -2711,6 +2713,8 @@ export async function saveMateriaisDoAtendimento(registro: MateriaisDoAtendiment
   batch.update(doc(db, ATTENDANCES_COLLECTION, registro.atendimentoId), {
     materiaisRegistradosEm: registro.createdAt || agora,
     custoMateriais: registro.custoTotal,
+    // Some quando a última linha ganha valor — é o "falta valor" do Financeiro que se apaga.
+    materiaisSemValor: semValor > 0 ? semValor : deleteField(),
     updatedAt: agora,
   });
   await comConfirmacaoDoServidor(batch.commit(), 'dos materiais');
@@ -2723,9 +2727,10 @@ export async function deleteMateriaisDoAtendimento(atendimentoId: string): Promi
   batch.update(doc(db, ATTENDANCES_COLLECTION, atendimentoId), {
     materiaisRegistradosEm: deleteField(),
     custoMateriais: deleteField(),
+    materiaisSemValor: deleteField(),
     updatedAt: new Date().toISOString(),
   });
-  await batch.commit();
+  await comConfirmacaoDoServidor(batch.commit(), 'dos materiais');
 }
 
 /**

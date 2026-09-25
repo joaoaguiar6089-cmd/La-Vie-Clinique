@@ -317,6 +317,38 @@ export interface CustoDeMaterialDoPeriodo {
   comMateriais: number;
 }
 
+/** Os atendimentos realizados no período — da profissional, quando há filtro. */
+const realizadosNoPeriodo = (
+  atendimentos: Attendance[],
+  periodo: Periodo,
+  professionalId?: string
+): Attendance[] =>
+  (atendimentos || []).filter(
+    (a) =>
+      ehRealizado(a) &&
+      !!a.data &&
+      a.data >= periodo.de &&
+      a.data <= periodo.ate &&
+      (!professionalId || a.professionalId === professionalId)
+  );
+
+/**
+ * Os atendimentos do período com materiais registrados, do mais recente para o mais antigo — a
+ * lista do Financeiro, os mesmos que o cartão de custo soma. Sai da coleção que já está em memória:
+ * o custo de cada um está no próprio atendimento.
+ */
+export const atendimentosComMateriaisNoPeriodo = (
+  atendimentos: Attendance[],
+  periodo: Periodo,
+  professionalId?: string
+): Attendance[] =>
+  realizadosNoPeriodo(atendimentos, periodo, professionalId)
+    .filter((a) => !!a.materiaisRegistradosEm)
+    .sort(
+      (a, b) =>
+        b.data.localeCompare(a.data) || String(b.hora || '').localeCompare(String(a.hora || ''))
+    );
+
 /**
  * O custo de material do período, somado dos atendimentos — pela **data do atendimento**.
  *
@@ -332,14 +364,7 @@ export const custoDeMaterialNoPeriodo = (
   periodo: Periodo,
   professionalId?: string
 ): CustoDeMaterialDoPeriodo => {
-  const doPeriodo = (atendimentos || []).filter(
-    (a) =>
-      ehRealizado(a) &&
-      !!a.data &&
-      a.data >= periodo.de &&
-      a.data <= periodo.ate &&
-      (!professionalId || a.professionalId === professionalId)
-  );
+  const doPeriodo = realizadosNoPeriodo(atendimentos, periodo, professionalId);
   const comMateriais = doPeriodo.filter((a) => !!a.materiaisRegistradosEm);
   const custo = comMateriais.reduce((soma, a) => soma + (Number(a.custoMateriais) || 0), 0);
   return {

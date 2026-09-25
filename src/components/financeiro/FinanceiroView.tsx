@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
+  ChevronRight,
   Lock,
   Minus,
   PackageOpen,
@@ -10,11 +11,13 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react';
-import { Attendance, Professional, Quote } from '../../types';
-import { formatBRL } from '../../utils/formatters';
+import { Attendance, Procedure, Professional, Quote } from '../../types';
+import { formatBRL, formatDateOnly } from '../../utils/formatters';
 import { hojeISO } from '../../utils/attendances';
+import { MateriaisDoAtendimentoPanel } from '../estoque/MateriaisDoAtendimentoPanel';
 import {
   Periodo,
+  atendimentosComMateriaisNoPeriodo,
   custoDeMaterialNoPeriodo,
   margemDoPeriodo,
   mesAnteriorA,
@@ -47,6 +50,8 @@ interface FinanceiroViewProps {
   quotes: Quote[];
   /** Atendimentos — o custo de material do período sai do total gravado em cada um. */
   atendimentos: Attendance[];
+  /** O catálogo, para o detalhe dos materiais achar o procedimento de cada atendimento. */
+  catalogProcedures: Procedure[];
   professionals: Professional[];
   /** Só administradoras entram. Ver o gate no App. */
   ehAdmin: boolean;
@@ -165,6 +170,92 @@ const RankingDeProcedimentos: React.FC<{
   );
 };
 
+/**
+ * Os atendimentos do período com materiais registrados, e o custo de cada um.
+ *
+ * É o único lugar do sistema onde esse valor aparece por atendimento: o acompanhamento é
+ * preenchido ao lado da paciente e mostra só material e quantidade. O painel inteiro já é restrito
+ * a administradoras. Tocar abre o detalhe com os valores — é ali que se completa o "falta valor"
+ * do material digitado à mão.
+ */
+const MateriaisPorAtendimento: React.FC<{
+  atendimentos: Attendance[];
+  professionals: Professional[];
+  carregando?: boolean;
+  onAbrir: (a: Attendance) => void;
+}> = ({ atendimentos, professionals, carregando, onAbrir }) => {
+  const [limite, setLimite] = useState(10);
+  const visiveis = atendimentos.slice(0, limite);
+
+  return (
+    <div className="glass-card p-4">
+      <h3 className="text-label uppercase tracking-wider font-semibold text-muted">
+        Materiais por atendimento
+      </h3>
+      <p className="text-body text-muted mt-0.5 mb-3">
+        Toque para ver os materiais com os valores, corrigir ou completar o que falta.
+      </p>
+      {carregando ? (
+        <p className="text-body text-muted">Carregando…</p>
+      ) : atendimentos.length === 0 ? (
+        <p className="text-body text-muted">
+          Nenhum atendimento com materiais registrados neste período.
+        </p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {visiveis.map((a) => {
+            const profissional =
+              professionals.find((p) => p.id === a.professionalId)?.name || a.profissionalNome;
+            const semValor = a.materiaisSemValor || 0;
+            return (
+              <li key={a.id}>
+                <button
+                  type="button"
+                  onClick={() => onAbrir(a)}
+                  className="w-full flex items-center gap-3 py-2.5 text-left rounded-lg hover:bg-surface-2 transition-colors"
+                >
+                  <span className="w-12 shrink-0 text-body font-semibold text-brand tabular-nums">
+                    {formatDateOnly(a.data).slice(0, 5)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-body-lg text-ink truncate">{a.pacienteNome}</span>
+                    <span className="block text-body text-muted truncate">
+                      {[a.procedimentoNome, profissional].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-body-lg font-semibold text-ink tabular-nums">
+                      {formatBRL(a.custoMateriais || 0)}
+                    </span>
+                    {semValor > 0 && (
+                      <span
+                        className="inline-block mt-0.5 px-1.5 py-0.5 rounded-xs bg-warn-bg text-warn border border-warn-line text-label font-semibold uppercase tracking-wider"
+                        title={`${semValor} ${semValor === 1 ? 'material' : 'materiais'} sem valor`}
+                      >
+                        Falta valor
+                      </span>
+                    )}
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-muted shrink-0" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {!carregando && atendimentos.length > limite && (
+        <button
+          type="button"
+          onClick={() => setLimite((atual) => atual + 20)}
+          className="mt-2 min-h-[40px] text-body font-semibold text-brand hover:underline"
+        >
+          Mostrar mais ({atendimentos.length - limite})
+        </button>
+      )}
+    </div>
+  );
+};
+
 const Cartao: React.FC<{
   icone: React.ElementType;
   rotulo: string;
@@ -186,6 +277,7 @@ const Cartao: React.FC<{
 export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
   quotes,
   atendimentos,
+  catalogProcedures,
   professionals,
   ehAdmin,
   onVoltar,
@@ -194,6 +286,8 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
   const hoje = hojeISO();
   const [filtro, setFiltro] = useState<FiltroDePeriodo>('mes');
   const [professionalId, setProfessionalId] = useState('');
+  /** O atendimento cujos materiais, com valores, estão abertos. */
+  const [materiaisDe, setMateriaisDe] = useState<Attendance | null>(null);
 
   const periodo = useMemo(() => montarPeriodo(filtro, hoje), [filtro, hoje]);
   const resumo = useMemo(
@@ -205,6 +299,10 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
     [atendimentos, periodo, professionalId]
   );
   const margem = margemDoPeriodo(resumo.faturamento, material.custo);
+  const comMateriais = useMemo(
+    () => atendimentosComMateriaisNoPeriodo(atendimentos, periodo, professionalId || undefined),
+    [atendimentos, periodo, professionalId]
+  );
 
   /**
    * O painel é o único lugar do sistema onde a receita da casa aparece inteira. Numa clínica com
@@ -379,6 +477,15 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
         />
       </div>
 
+      {/* A lista volta ao começo quando o período ou a profissional mudam. */}
+      <MateriaisPorAtendimento
+        key={`${filtro}-${professionalId}`}
+        atendimentos={comMateriais}
+        professionals={professionals}
+        carregando={carregando}
+        onAbrir={setMateriaisDe}
+      />
+
       <BarrasPorMes dados={resumo.porMes} />
       <RankingDeProcedimentos dados={resumo.porProcedimento} />
 
@@ -399,6 +506,18 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
         mês no custo. <strong className="text-ink-soft">Atendimento sem materiais registrados
         conta como custo zero</strong>, por isso o cartão mostra quantos foram registrados.
       </p>
+      <p className="text-body text-muted leading-relaxed">
+        Os valores dos materiais aparecem só aqui. O acompanhamento, preenchido ao lado da
+        paciente, registra material e quantidade sem preço — o custo é calculado com o preço de
+        cada produto no Estoque, e o material digitado à mão fica com{' '}
+        <strong className="text-ink-soft">falta valor</strong> até ser completado na lista acima.
+      </p>
+
+      <MateriaisDoAtendimentoPanel
+        atendimento={materiaisDe}
+        onFechar={() => setMateriaisDe(null)}
+        catalogo={catalogProcedures}
+      />
     </div>
   );
 };

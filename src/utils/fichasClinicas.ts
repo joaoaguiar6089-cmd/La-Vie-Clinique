@@ -97,7 +97,7 @@ export const ROTULOS_DA_FICHA: Record<TipoDeFicha, RotulosDaFicha> = {
 // ==========================================
 
 /**
- * O atendimento aconteceu? — a trava do acompanhamento e dos materiais usados.
+ * O atendimento aconteceu? — a trava do acompanhamento (e dos materiais usados, que vivem nele).
  *
  * São **dois** eixos, e não só a data. A data resolve o óbvio (não se registra o que ainda não
  * aconteceu), mas o corte é `<= hoje` e não `< hoje`: a recepção lança a visita no mesmo dia em
@@ -111,6 +111,14 @@ export const atendimentoAconteceu = (a: Attendance): boolean =>
   !!a.data && a.data <= hojeISO() && ehRealizado(a);
 
 /**
+ * Já há registro da visita — o acompanhamento, os materiais usados, ou os dois? É o que pinta o
+ * caderno de verde: os dois moram no mesmo formulário, e materiais lançados sem nenhuma resposta
+ * também são registro.
+ */
+export const acompanhamentoComRegistro = (a: Attendance): boolean =>
+  !!a.acompanhamentoPreenchidoEm || !!a.materiaisRegistradosEm;
+
+/**
  * O botão de acompanhamento aparece na linha do atendimento?
  *
  * Continua à vista mesmo com a data no futuro, uma vez que exista conteúdo: se alguém corrigir a
@@ -122,7 +130,7 @@ export const atendimentoAconteceu = (a: Attendance): boolean =>
  * linha já diz o que foi preenchido.
  */
 export const acompanhamentoVisivel = (a: Attendance): boolean =>
-  !!a.acompanhamentoPreenchidoEm || atendimentoAconteceu(a);
+  acompanhamentoComRegistro(a) || atendimentoAconteceu(a);
 
 // ==========================================
 // O ALVO DE UMA FICHA
@@ -148,6 +156,11 @@ export interface AlvoDaFicha {
   data: string;
   professionalId?: string;
   profissionalNome?: string;
+  /**
+   * O atendimento já tem materiais registrados? `false` dispensa a leitura deles ao abrir o
+   * acompanhamento; ausente = não se sabe (a ficha veio da lista de registros) e a leitura é feita.
+   */
+  materiaisRegistrados?: boolean;
 }
 
 export const alvoDoAtendimento = (a: Attendance): AlvoDaFicha => ({
@@ -160,6 +173,7 @@ export const alvoDoAtendimento = (a: Attendance): AlvoDaFicha => ({
   data: a.data,
   professionalId: a.professionalId,
   profissionalNome: a.profissionalNome,
+  materiaisRegistrados: !!a.materiaisRegistradosEm,
 });
 
 export const alvoDoRegistro = (r: EvaluationRecord): AlvoDaFicha => ({
