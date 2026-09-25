@@ -19,7 +19,6 @@ import {
   margemUnitaria,
   produtoEmUso,
   quantidadeComUnidade,
-  totaisDoConsumoPadrao,
 } from '../../utils/estoque';
 import {
   deleteProdutoDeEstoque,
@@ -41,7 +40,8 @@ type Aba = 'produtos' | 'consumo';
 
 /**
  * A seção de Estoque: os materiais com o que custam e o que é repassado à cliente, e o consumo
- * padrão de cada procedimento.
+ * padrão de cada procedimento — este só em materiais e quantidades, sem valor: a quantidade muda
+ * de uma sessão para outra, e o custo que vale é o registrado em cada atendimento.
  *
  * Sem saldo, por enquanto — é o cadastro de custos. O uso registrado em cada atendimento já fica
  * gravado, então ligar a baixa automática depois não exige refazer nada.
@@ -194,7 +194,7 @@ export const EstoqueModule: React.FC<EstoqueModuleProps> = ({ catalogProcedures 
             <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">
               {aba === 'produtos'
                 ? 'Os materiais que a clínica usa, com o valor comprado e o valor repassado à cliente — os dois por unidade de uso (U, ml, seringa…).'
-                : 'O que cada procedimento costuma gastar por sessão. O registro de materiais do atendimento e o custo estimado do orçamento abrem preenchidos com esta lista.'}
+                : 'Os materiais e as quantidades que cada procedimento costuma usar por sessão. O registro de materiais do atendimento e o custo estimado do orçamento abrem preenchidos com esta lista, e é lá que o custo é calculado.'}
             </p>
           </div>
           {aba === 'produtos' && (
@@ -274,7 +274,16 @@ export const EstoqueModule: React.FC<EstoqueModuleProps> = ({ catalogProcedures 
                       )}
                     </p>
                     <p className="text-body text-gray-400">
-                      {[p.marca, `por ${p.unidade}`].filter(Boolean).join(' · ')}
+                      {[
+                        p.marca,
+                        `por ${p.unidade}`,
+                        p.caixa &&
+                          `caixa com ${quantidadeComUnidade(p.caixa.unidades, '')}${
+                            p.caixa.custo > 0 ? ` (${formatBRL(p.caixa.custo)})` : ''
+                          }`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </p>
                   </div>
                   <div className="text-right tabular-nums min-w-[120px]">
@@ -346,40 +355,34 @@ export const EstoqueModule: React.FC<EstoqueModuleProps> = ({ catalogProcedures 
               </h4>
               <div className="bg-card rounded-sm border border-white/70 shadow-xs overflow-hidden divide-y divide-gray-100">
                 {procs.map((p) => {
-                  const consumo = consumos.find((c) => c.procedureId === p.id);
-                  const totais = totaisDoConsumoPadrao(consumo, produtos);
-                  const itens = consumo?.itens || [];
+                  const itens = consumos.find((c) => c.procedureId === p.id)?.itens || [];
+                  // Produto excluído do estoque sai da lista, como sai da sugestão do atendimento.
+                  const materiais = itens.flatMap((i) => {
+                    const produto = produtos.find((x) => x.id === i.produtoId);
+                    return produto ? [{ produto, quantidade: i.quantidade }] : [];
+                  });
                   return (
                     <div key={p.id} className="p-4 sm:px-5 flex flex-wrap items-center gap-3">
                       <div className="flex-1 min-w-[180px]">
                         <p className="text-sm text-ink">{p.title}</p>
-                        {itens.length === 0 ? (
+                        {materiais.length === 0 ? (
                           <p className="text-body text-gray-400">Sem consumo configurado</p>
                         ) : (
-                          <p className="text-body text-gray-500 line-clamp-2">
-                            {itens
-                              .map((i) => {
-                                const produto = produtos.find((x) => x.id === i.produtoId);
-                                return produto
-                                  ? `${produto.nome} ${quantidadeComUnidade(i.quantidade, produto.unidade)}`
-                                  : null;
-                              })
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </p>
+                          <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                            {materiais.map(({ produto, quantidade }, i) => (
+                              <li
+                                key={i}
+                                className="inline-flex items-baseline gap-1.5 px-2 py-0.5 rounded-full bg-surface border border-line text-body text-ink-soft"
+                              >
+                                <span className="font-semibold text-ink tabular-nums">
+                                  {quantidadeComUnidade(quantidade, produto.unidade)}
+                                </span>
+                                {produto.nome}
+                              </li>
+                            ))}
+                          </ul>
                         )}
                       </div>
-                      {itens.length > 0 && (
-                        <div className="text-right tabular-nums">
-                          <p className="text-sm font-semibold text-ink">{formatBRL(totais.custo)}</p>
-                          <p className="text-body text-gray-400">
-                            custo por sessão
-                            {totais.valorCliente > 0
-                              ? ` · cliente ${formatBRL(totais.valorCliente)}`
-                              : ''}
-                          </p>
-                        </div>
-                      )}
                       <button
                         type="button"
                         onClick={() => setConfigurando(p)}

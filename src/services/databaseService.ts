@@ -56,6 +56,7 @@ import {
 } from '../utils/evaluations';
 import { paraArray } from '../utils/firestoreShapes';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../utils/fichasClinicas';
+import { caixaLida } from '../utils/estoque';
 import {
   montarEspelhoPublico,
   serializarAreas,
@@ -2556,6 +2557,7 @@ function subscribeToProdutosDeEstoqueDireto(
           unidade: String(bruto.unidade || 'un'),
           custoUnitario: numeroLido(bruto.custoUnitario),
           valorCliente: numeroLido(bruto.valorCliente),
+          caixa: caixaLida(bruto.caixa),
         });
       });
       items.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -2586,11 +2588,20 @@ export function subscribeToProdutosDeEstoque(
 }
 
 export async function saveProdutoDeEstoque(produto: ProdutoDeEstoque): Promise<void> {
-  await setDoc(
-    doc(db, STOCK_PRODUCTS_COLLECTION, produto.id),
-    cleanForFirestore({ ...produto, updatedAt: new Date().toISOString() }),
-    { merge: true }
-  );
+  const dataToSave: Record<string, unknown> = cleanForFirestore({
+    ...produto,
+    updatedAt: new Date().toISOString(),
+  });
+  /**
+   * Os opcionais que o cadastro pode apagar — desmarcar "caixa com unidades", limpar a marca.
+   * A gravação é `merge: true`, onde campo ausente é campo preservado: sem o sentinela, a caixa
+   * antiga continuaria no banco e voltaria marcada na próxima edição. Entra depois da limpeza,
+   * que transformaria o sentinela num `{}`.
+   */
+  (['caixa', 'marca', 'observacoes'] as const).forEach((campo) => {
+    if (produto[campo] === undefined) dataToSave[campo] = deleteField();
+  });
+  await setDoc(doc(db, STOCK_PRODUCTS_COLLECTION, produto.id), dataToSave, { merge: true });
 }
 
 /**

@@ -19,8 +19,11 @@ interface EditorDeMateriaisProps {
   produtos: ProdutoDeEstoque[];
   /** Oferece "Outro material…", digitado à mão. Desligado no consumo padrão, que é só do estoque. */
   permitirAvulso?: boolean;
-  /** Mostra e deixa editar os valores unitários. Desligado no consumo padrão, que é só quantidade. */
-  editarValores?: boolean;
+  /**
+   * Mostra os valores: os unitários, editáveis, e o custo de cada linha. Desligado no consumo
+   * padrão, que é só material e quantidade — o custo de verdade é o de cada atendimento.
+   */
+  mostrarValores?: boolean;
   /** Mostra a linha de totais embaixo. */
   mostrarTotais?: boolean;
   /** Oferece, nas linhas avulsas, "cadastrar este material no estoque ao salvar". */
@@ -39,8 +42,9 @@ const OUTRO = '__outro__';
  * A lista de materiais: produto, quantidade, valores e total de cada linha.
  *
  * O mesmo editor serve ao consumo padrão do procedimento, ao registro de materiais do
- * atendimento e ao custo estimado do orçamento — três telas que precisam fazer a mesma conta do
- * mesmo jeito. "Adicionar material" é uma lista suspensa dos produtos do estoque, com a opção de
+ * atendimento e ao custo estimado do orçamento — três telas que precisam das mesmas linhas, e as
+ * duas últimas da mesma conta, feita do mesmo jeito. No consumo padrão ficam só material e
+ * quantidade. "Adicionar material" é uma lista suspensa dos produtos do estoque, com a opção de
  * digitar outro.
  */
 export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
@@ -48,7 +52,7 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
   onChange,
   produtos,
   permitirAvulso = true,
-  editarValores = true,
+  mostrarValores = true,
   mostrarTotais = true,
   oferecerCadastro = false,
   idBase,
@@ -156,7 +160,7 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
               </button>
             </div>
 
-            <div className={`grid gap-2 ${editarValores ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
+            <div className={`grid gap-2 ${mostrarValores ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
               <div>
                 <label className={miniLabel} htmlFor={`${id}-qtd`}>
                   Quantidade ({m.unidade || 'un'})
@@ -172,7 +176,7 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
                   className={inputClass}
                 />
               </div>
-              {editarValores && (
+              {mostrarValores && (
                 <>
                   <div>
                     <label className={miniLabel} htmlFor={`${id}-custo`}>
@@ -204,14 +208,14 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
                       className={inputClass}
                     />
                   </div>
+                  <div className="flex flex-col justify-end">
+                    <span className={miniLabel}>Custo da linha</span>
+                    <span className="text-body-lg font-semibold text-ink tabular-nums py-1">
+                      {formatBRL(custoDaLinha(m))}
+                    </span>
+                  </div>
                 </>
               )}
-              <div className="flex flex-col justify-end">
-                <span className={miniLabel}>Custo da linha</span>
-                <span className="text-body-lg font-semibold text-ink tabular-nums py-1">
-                  {formatBRL(custoDaLinha(m))}
-                </span>
-              </div>
             </div>
 
             {!m.produtoId && permitirAvulso && oferecerCadastro && (

@@ -779,6 +779,12 @@ export interface ProdutoDeEstoque {
   custoUnitario: number;
   /** Valor repassado à cliente, por unidade. Só informativo: não entra em total nenhum. */
   valorCliente: number;
+  /**
+   * Comprado em caixa: os valores digitados são os da caixa, e os por unidade acima saem da
+   * divisão — gravados já divididos, para o resto do sistema continuar lendo só a unidade.
+   * Ausente = valores digitados direto por unidade.
+   */
+  caixa?: CaixaDoProduto;
   marca?: string;
   observacoes?: string;
   /**
@@ -789,6 +795,16 @@ export interface ProdutoDeEstoque {
   arquivado?: boolean;
   createdAt: string;
   updatedAt?: string;
+}
+
+/** A caixa de 5 frascos por R$ 500: a sessão gasta frasco, então o custo é R$ 100 por frasco. */
+export interface CaixaDoProduto {
+  /** Quantas unidades de uso vêm numa caixa. */
+  unidades: number;
+  /** Valor comprado da caixa inteira. */
+  custo: number;
+  /** Valor repassado à cliente pela caixa inteira. */
+  valorCliente: number;
 }
 
 /** Uma linha do consumo padrão: qual produto e quanto dele, por sessão. */
