@@ -1,5 +1,6 @@
 import {
   Attendance,
+  CaixaDoProduto,
   ConsumoPadrao,
   CustoDoOrcamento,
   MaterialUsado,
@@ -140,20 +141,6 @@ export const materiaisSugeridos = (
     .filter((m): m is MaterialUsado => !!m);
 };
 
-/** Custo e valor para a cliente de uma sessão do consumo padrão, com os preços de hoje. */
-export const totaisDoConsumoPadrao = (
-  consumo: ConsumoPadrao | undefined,
-  produtos: ProdutoDeEstoque[]
-): TotaisDeMateriais =>
-  totaisDosMateriais(
-    (consumo?.itens || [])
-      .map((item) => {
-        const produto = (produtos || []).find((p) => p.id === item.produtoId);
-        return produto ? linhaDoProduto(produto, numeroValido(item.quantidade)) : null;
-      })
-      .filter((m): m is MaterialUsado => !!m)
-  );
-
 /** O produto aparece em algum consumo padrão? — o que decide entre excluir e arquivar. */
 export const produtoEmUso = (produtoId: string, consumos: ConsumoPadrao[]): boolean =>
   (consumos || []).some((c) => c.itens.some((i) => i.produtoId === produtoId));
@@ -182,6 +169,34 @@ export const precoPorUnidade = (precoDaEmbalagem: number, unidadesNaEmbalagem: n
 };
 
 /**
+ * Os valores por unidade de um produto comprado em caixa: a caixa de 5 frascos por R$ 500 dá
+ * R$ 100 por frasco, e o repasse da caixa se divide do mesmo jeito. Sem unidades na caixa não há
+ * por onde dividir, e os dois saem zero.
+ */
+export const valoresPorUnidadeDaCaixa = (
+  caixa: CaixaDoProduto
+): Pick<ProdutoDeEstoque, 'custoUnitario' | 'valorCliente'> => ({
+  custoUnitario: precoPorUnidade(caixa.custo, caixa.unidades),
+  valorCliente: precoPorUnidade(caixa.valorCliente, caixa.unidades),
+});
+
+/**
+ * A caixa como veio do banco, ou `undefined`. Caixa sem unidades é caixa nenhuma: não há como
+ * dividir, e mostrá-la marcada levaria a gravar zero por unidade.
+ */
+export const caixaLida = (valor: unknown): CaixaDoProduto | undefined => {
+  if (!valor || typeof valor !== 'object') return undefined;
+  const bruta = valor as Record<string, unknown>;
+  const unidades = numeroValido(bruta.unidades);
+  if (!unidades) return undefined;
+  return {
+    unidades,
+    custo: numeroValido(bruta.custo),
+    valorCliente: numeroValido(bruta.valorCliente),
+  };
+};
+
+/**
  * Preço de uma unidade de uso, com até quatro casas: R$ 0,0035 o ml de gel não pode aparecer
  * como R$ 0,00. Totais continuam com duas casas (`formatBRL`).
  */
@@ -207,9 +222,16 @@ export const produtosAtivos = (produtos: ProdutoDeEstoque[]): ProdutoDeEstoque[]
     .filter((p) => !p.arquivado)
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
-/** "2,5 ml", "20 U", "1 seringa" — quantidade e unidade para a tela. */
-export const quantidadeComUnidade = (quantidade: number, unidade: string): string =>
-  `${String(arredondar(numeroValido(quantidade))).replace('.', ',')} ${unidade}`.trim();
+/**
+ * "2,5 ml", "20 U", "1 seringa" — quantidade e unidade para a tela. Unidade que já começa com
+ * número (a seringa inteira, "10 ml") ganha um "×": "1 10 ml" se lê cento e dez.
+ */
+export const quantidadeComUnidade = (quantidade: number, unidade: string): string => {
+  const numero = String(arredondar(numeroValido(quantidade))).replace('.', ',');
+  const nome = (unidade || '').trim();
+  if (!nome) return numero;
+  return /^\d/.test(nome) ? `${numero} × ${nome}` : `${numero} ${nome}`;
+};
 
 // ==========================================
 // CUSTO ESTIMADO DO ORÇAMENTO

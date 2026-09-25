@@ -1,6 +1,6 @@
 /**
- * Confere as contas do estoque: custo de cada linha, totais, o consumo padrão virando linhas e o
- * preço congelado no registro.
+ * Confere as contas do estoque: custo de cada linha, totais, o consumo padrão virando linhas, a
+ * caixa dividida por unidade e o preço congelado no registro.
  *
  * Existe porque um erro aqui não aparece em lugar nenhum: o custo errado de um atendimento só
  * vira problema no fim do mês, somado no Financeiro, quando já não se sabe de onde ele veio.
@@ -12,6 +12,8 @@ import { clonarItens } from '../src/utils/quoteFactory';
 import { custoDeMaterialNoPeriodo, margemDoPeriodo, periodoDoMes } from '../src/utils/indicadores';
 import {
   arredondar,
+  caixaLida,
+  custoDaLinha,
   linhaDoProduto,
   linhasParaGravar,
   margemUnitaria,
@@ -20,8 +22,9 @@ import {
   montarCustoDoOrcamento,
   precoPorUnidade,
   produtoEmUso,
-  totaisDoConsumoPadrao,
+  quantidadeComUnidade,
   totaisDosMateriais,
+  valoresPorUnidadeDaCaixa,
 } from '../src/utils/estoque';
 
 let falhas = 0;
@@ -90,7 +93,32 @@ const dezSessoes = materiaisSugeridos(
 );
 ok('pacote de 10 sessões consome 10 vezes', dezSessoes[0]?.quantidade === 300, String(dezSessoes[0]?.quantidade));
 ok('produto excluído some da sugestão', materiaisSugeridos({ procedureId: 'botox', procedimentoNome: 'Botox' }, consumos, [toxina], catalogo).length === 1);
-ok('custo por sessão do consumo padrão', totaisDoConsumoPadrao(consumos[0], produtos).custo === 240.7);
+ok('quantidade com unidade', quantidadeComUnidade(2.5, 'ml') === '2,5 ml' && quantidadeComUnidade(20, 'U') === '20 U');
+ok('unidade que começa com número ganha o ×', quantidadeComUnidade(1, '10 ml') === '1 × 10 ml', quantidadeComUnidade(1, '10 ml'));
+ok('sem unidade, só o número', quantidadeComUnidade(5, '') === '5');
+
+console.log('== caixa com unidades');
+const caixa = valoresPorUnidadeDaCaixa({ unidades: 5, custo: 500, valorCliente: 750 });
+ok('caixa de 5 por R$ 500 dá R$ 100 por frasco', caixa.custoUnitario === 100, String(caixa.custoUnitario));
+ok('repasse da caixa também sai por frasco', caixa.valorCliente === 150, String(caixa.valorCliente));
+ok(
+  'caixa sem repasse não inventa valor',
+  valoresPorUnidadeDaCaixa({ unidades: 5, custo: 500, valorCliente: 0 }).valorCliente === 0
+);
+ok(
+  'caixa sem unidades não divide',
+  valoresPorUnidadeDaCaixa({ unidades: 0, custo: 500, valorCliente: 750 }).custoUnitario === 0
+);
+const frasco: ProdutoDeEstoque = {
+  ...produto('frasco', 0, 0, 'frasco'),
+  ...valoresPorUnidadeDaCaixa({ unidades: 3, custo: 500, valorCliente: 0 }),
+};
+ok('divisão quebrada guarda quatro casas', frasco.custoUnitario === 166.6667, String(frasco.custoUnitario));
+ok('a caixa inteira gasta volta a fechar em R$ 500', custoDaLinha(linhaDoProduto(frasco, 3)) === 500);
+ok('um frasco na sessão custa a divisão', custoDaLinha(linhaDoProduto(frasco, 1)) === 166.67);
+ok('caixa lida do banco', JSON.stringify(caixaLida({ unidades: '5', custo: 500 })) === JSON.stringify({ unidades: 5, custo: 500, valorCliente: 0 }));
+ok('caixa sem unidades no banco é caixa nenhuma', caixaLida({ unidades: 0, custo: 500 }) === undefined);
+ok('produto sem caixa', caixaLida(undefined) === undefined && caixaLida(null) === undefined && caixaLida('x') === undefined);
 
 console.log('== preço congelado');
 const linha = linhaDoProduto(toxina, 20);

@@ -1,13 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Check, Copy, Loader2 } from 'lucide-react';
 import { ConsumoPadrao, Procedure, ProdutoDeEstoque } from '../../types';
-import { formatBRL } from '../../utils/formatters';
-import {
-  LinhaDeMaterial,
-  linhaDoProduto,
-  linhasParaGravar,
-  totaisDosMateriais,
-} from '../../utils/estoque';
+import { LinhaDeMaterial, linhaDoProduto, linhasParaGravar } from '../../utils/estoque';
 import { saveConsumosPadrao } from '../../services/databaseService';
 import { SidePanel } from '../common/SidePanel';
 import { EditorDeMateriais } from './EditorDeMateriais';
@@ -38,7 +32,8 @@ const linhasDoConsumo = (
  *
  * É daqui que o registro de materiais do atendimento e o custo estimado do orçamento abrem
  * preenchidos. Só produtos do estoque e só quantidades — o preço é sempre o do produto no dia em
- * que o consumo é usado.
+ * que o consumo é usado. Nem mostra valor: a quantidade muda de uma sessão para outra, e o custo
+ * que vale é o registrado em cada atendimento.
  *
  * As treze áreas do laser gastam praticamente o mesmo por sessão, então "aplicar a toda a
  * categoria" grava o mesmo consumo em todas de uma vez.
@@ -97,8 +92,6 @@ export const ConsumoPadraoPanel: React.FC<ConsumoPadraoPanelProps> = ({
   );
 
   if (!procedimento) return null;
-
-  const totais = totaisDosMateriais(linhas);
 
   const copiar = (procedureId: string) => {
     setCopiarDe(procedureId);
@@ -161,8 +154,9 @@ export const ConsumoPadraoPanel: React.FC<ConsumoPadraoPanelProps> = ({
     >
       <div className="p-4 sm:p-6 space-y-5">
         <p className="text-body text-muted -mt-1">
-          O que uma sessão deste procedimento costuma gastar. O registro de materiais do atendimento
-          e o custo estimado do orçamento abrem com esta lista — dá para ajustar em cada um.
+          Os materiais e as quantidades que uma sessão deste procedimento costuma usar. O registro
+          de materiais do atendimento e o custo estimado do orçamento abrem com esta lista — dá
+          para ajustar em cada um.
         </p>
 
         {erro && (
@@ -206,23 +200,9 @@ export const ConsumoPadraoPanel: React.FC<ConsumoPadraoPanelProps> = ({
           }}
           produtos={produtos}
           permitirAvulso={false}
-          editarValores={false}
+          mostrarValores={false}
           mostrarTotais={false}
         />
-
-        {linhas.length > 0 && (
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-2 border-t border-line">
-            <span className="text-body text-muted">
-              Valor para a cliente: <strong className="text-ink">{formatBRL(totais.valorCliente)}</strong>
-            </span>
-            <span className="text-body-lg text-ink">
-              Custo por sessão, hoje:{' '}
-              <strong className="font-serif-luxury text-title tabular-nums">
-                {formatBRL(totais.custo)}
-              </strong>
-            </span>
-          </div>
-        )}
 
         {daMesmaCategoria.length > 0 && (
           <label className="flex items-start gap-2 p-3 rounded-xl border border-line bg-surface cursor-pointer">
