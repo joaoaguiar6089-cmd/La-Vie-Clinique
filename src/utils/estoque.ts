@@ -1,10 +1,14 @@
 import {
   Attendance,
   ConsumoPadrao,
+  CustoDoOrcamento,
   MaterialUsado,
   Procedure,
   ProdutoDeEstoque,
+  Quote,
+  QuoteItem,
 } from '../types';
+import { itemSessoes } from './quoteCalc';
 import { procedimentoDoAtendimento } from './evaluations';
 import { atendimentoAconteceu } from './fichasClinicas';
 
@@ -206,3 +210,59 @@ export const produtosAtivos = (produtos: ProdutoDeEstoque[]): ProdutoDeEstoque[]
 /** "2,5 ml", "20 U", "1 seringa" — quantidade e unidade para a tela. */
 export const quantidadeComUnidade = (quantidade: number, unidade: string): string =>
   `${String(arredondar(numeroValido(quantidade))).replace('.', ',')} ${unidade}`.trim();
+
+// ==========================================
+// CUSTO ESTIMADO DO ORÇAMENTO
+// ==========================================
+
+/**
+ * O custo que um item de orçamento abre preenchido: o consumo padrão do procedimento vezes o
+ * número de sessões do item — um pacote de 10 sessões de laser gasta dez vezes o gel de uma.
+ *
+ * O item digitado à mão, fora do catálogo, ainda pode achar o procedimento pelo nome.
+ */
+export const materiaisDoItem = (
+  item: Pick<QuoteItem, 'procedureId' | 'titulo' | 'maisDeUmaSessao' | 'sessoes'>,
+  consumos: ConsumoPadrao[],
+  produtos: ProdutoDeEstoque[],
+  catalogo: Procedure[]
+): MaterialUsado[] =>
+  materiaisSugeridos(
+    { procedureId: item.procedureId, procedimentoNome: item.titulo },
+    consumos,
+    produtos,
+    catalogo,
+    itemSessoes(item as QuoteItem)
+  );
+
+/** O que o formulário do orçamento entrega para gravar o custo: os itens, na ordem, e as linhas. */
+export interface CustoEmEdicao {
+  itens: Pick<QuoteItem, 'id'>[];
+  linhas: Record<string, LinhaDeMaterial[]>;
+}
+
+/**
+ * O documento de custo de um orçamento que acabou de ser salvo.
+ *
+ * Liga as linhas aos itens **pela posição**, e não pelo id: substituir e duplicar geram ids novos
+ * para os itens (`clonarItens`), e a ordem é a única coisa que se mantém entre o formulário e o
+ * orçamento gravado.
+ */
+export const montarCustoDoOrcamento = (salvo: Pick<Quote, 'id' | 'itens'>, custo: CustoEmEdicao): CustoDoOrcamento => {
+  const itens = (salvo.itens || []).map((item, i) => {
+    const doFormulario = custo.itens[i];
+    return {
+      quoteItemId: item.id,
+      materiais: linhasParaGravar((doFormulario && custo.linhas[doFormulario.id]) || []),
+    };
+  });
+  const todas = itens.flatMap((i) => i.materiais);
+  const totais = totaisDosMateriais(todas);
+  return {
+    id: salvo.id,
+    quoteId: salvo.id,
+    itens: itens.filter((i) => i.materiais.length > 0),
+    custoTotal: totais.custo,
+    valorClienteTotal: totais.valorCliente,
+  };
+};

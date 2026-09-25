@@ -40,6 +40,7 @@ import {
   ProdutoDeEstoque,
   ConsumoPadrao,
   MateriaisDoAtendimento,
+  CustoDoOrcamento,
 } from '../types';
 import { formatQuoteNumber, statusAntesDoDesfecho } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
@@ -114,6 +115,9 @@ const STOCK_PRODUCTS_COLLECTION = 'stock_products';
 const PROCEDURE_CONSUMPTION_COLLECTION = 'procedure_consumption';
 // Um documento por atendimento, com o id dele.
 const ATTENDANCE_MATERIALS_COLLECTION = 'attendance_materials';
+// Custo estimado de material de cada orçamento, com o id dele. Fica fora de `quotes` de
+// propósito: aquela coleção é pública pelo link da cliente, e custo e margem não podem ir junto.
+const QUOTE_COSTS_COLLECTION = 'quote_costs';
 
 /** As coleções de cada tipo de ficha clínica. Ver `utils/fichasClinicas.ts`. */
 const COLECOES_DA_FICHA: Record<
@@ -1847,9 +1851,46 @@ export async function cancelarQuote(quoteId: string): Promise<void> {
   });
 }
 
-/** Exclusão de rascunho ou orçamento cancelado. */
+/**
+ * Exclusão de rascunho ou orçamento cancelado — e do custo estimado dele.
+ *
+ * O custo sai depois, e fora do mesmo lote: se a regra de `quote_costs` ainda não tiver sido
+ * publicada, a exclusão do orçamento não pode falhar por causa dele. Um custo órfão só ocupa
+ * espaço; um orçamento que não sai da lista é um problema na frente da equipe.
+ */
 export async function deleteQuote(quoteId: string): Promise<void> {
   await deleteDoc(doc(db, QUOTES_COLLECTION, quoteId));
+  await deleteDoc(doc(db, QUOTE_COSTS_COLLECTION, quoteId)).catch((e) =>
+    console.warn('O orçamento saiu, mas o custo estimado dele não:', e)
+  );
+}
+
+/** O custo estimado de um orçamento, ou `null`. Leitura direta: o id é o do orçamento. */
+export async function getCustoDoOrcamento(quoteId: string): Promise<CustoDoOrcamento | null> {
+  const snap = await getDoc(doc(db, QUOTE_COSTS_COLLECTION, quoteId));
+  if (!snap.exists()) return null;
+  const bruto = snap.data() as Record<string, unknown>;
+  return {
+    id: snap.id,
+    quoteId: String(bruto.quoteId || snap.id),
+    itens: paraArray<CustoDoOrcamento['itens'][number]>(bruto.itens).map((i) => ({
+      quoteItemId: i.quoteItemId,
+      materiais: paraArray<CustoDoOrcamento['itens'][number]['materiais'][number]>(i.materiais),
+    })),
+    custoTotal: Number(bruto.custoTotal) || 0,
+    valorClienteTotal: Number(bruto.valorClienteTotal) || 0,
+    updatedAt: bruto.updatedAt as string | undefined,
+  };
+}
+
+/** Grava o custo estimado. Sem linha nenhuma, apaga: custo vazio é a ausência dele. */
+export async function saveCustoDoOrcamento(custo: CustoDoOrcamento): Promise<void> {
+  const ref = doc(db, QUOTE_COSTS_COLLECTION, custo.quoteId);
+  if (custo.itens.length === 0) {
+    await deleteDoc(ref);
+    return;
+  }
+  await setDoc(ref, cleanForFirestore({ ...custo, id: custo.quoteId, updatedAt: new Date().toISOString() }));
 }
 
 /**

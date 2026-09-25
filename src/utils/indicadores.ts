@@ -1,5 +1,5 @@
 import { Attendance, Procedure, Quote } from '../types';
-import { DataISO, hojeISO, instanteDoAtendimento } from './attendances';
+import { DataISO, ehRealizado, hojeISO, instanteDoAtendimento } from './attendances';
 import { minutosDoHHMM } from './agenda';
 import { itemValorFinal, resolveQuoteStatus } from './quoteCalc';
 
@@ -304,6 +304,66 @@ export interface ResumoFinanceiro {
  * atendimento não guarda preço nenhum e o catálogo guarda só o preço de hoje, o que faria o
  * faturamento de março mudar sozinho num reajuste de abril.
  */
+// ==========================================
+// CUSTO DE MATERIAL E MARGEM
+// ==========================================
+
+export interface CustoDeMaterialDoPeriodo {
+  /** Soma do custo de material dos atendimentos do período, pelo total gravado em cada um. */
+  custo: number;
+  /** Atendimentos realizados no período. */
+  realizados: number;
+  /** Dos realizados, quantos têm materiais registrados — o quanto dá para confiar no custo. */
+  comMateriais: number;
+}
+
+/**
+ * O custo de material do período, somado dos atendimentos — pela **data do atendimento**.
+ *
+ * Sai de `Attendance.custoMateriais`, o total gravado junto com os materiais, e não das linhas:
+ * a coleção de atendimentos já está em memória, e somar as linhas custaria uma leitura por
+ * atendimento. O preço de cada linha foi congelado no registro, então reajustar um produto não
+ * muda o custo de um mês fechado — a mesma garantia que o faturamento tem.
+ *
+ * Com filtro de profissional, conta só os atendimentos dela.
+ */
+export const custoDeMaterialNoPeriodo = (
+  atendimentos: Attendance[],
+  periodo: Periodo,
+  professionalId?: string
+): CustoDeMaterialDoPeriodo => {
+  const doPeriodo = (atendimentos || []).filter(
+    (a) =>
+      ehRealizado(a) &&
+      !!a.data &&
+      a.data >= periodo.de &&
+      a.data <= periodo.ate &&
+      (!professionalId || a.professionalId === professionalId)
+  );
+  const comMateriais = doPeriodo.filter((a) => !!a.materiaisRegistradosEm);
+  const custo = comMateriais.reduce((soma, a) => soma + (Number(a.custoMateriais) || 0), 0);
+  return {
+    custo: Math.round(custo * 100) / 100,
+    realizados: doPeriodo.length,
+    comMateriais: comMateriais.length,
+  };
+};
+
+/**
+ * Faturamento menos custo de material. `percentual` é sobre o faturamento — `null` sem
+ * faturamento, porque "margem de -100%" num mês sem pagamento nenhum não diz nada.
+ */
+export const margemDoPeriodo = (
+  faturamento: number,
+  custoDeMaterial: number
+): { valor: number; percentual: number | null } => {
+  const valor = Math.round((faturamento - custoDeMaterial) * 100) / 100;
+  return {
+    valor,
+    percentual: faturamento > 0 ? Math.round((valor / faturamento) * 100) : null,
+  };
+};
+
 export const resumoFinanceiro = (
   quotes: Quote[],
   periodo: Periodo,

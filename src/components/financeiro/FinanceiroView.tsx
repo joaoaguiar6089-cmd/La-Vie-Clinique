@@ -4,15 +4,19 @@ import {
   ArrowUpRight,
   Lock,
   Minus,
+  PackageOpen,
+  PiggyBank,
   Receipt,
   TrendingUp,
   Wallet,
 } from 'lucide-react';
-import { Professional, Quote } from '../../types';
+import { Attendance, Professional, Quote } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { hojeISO } from '../../utils/attendances';
 import {
   Periodo,
+  custoDeMaterialNoPeriodo,
+  margemDoPeriodo,
   mesAnteriorA,
   mesAtual,
   nomeDoMes,
@@ -41,6 +45,8 @@ import {
 
 interface FinanceiroViewProps {
   quotes: Quote[];
+  /** Atendimentos — o custo de material do período sai do total gravado em cada um. */
+  atendimentos: Attendance[];
   professionals: Professional[];
   /** Só administradoras entram. Ver o gate no App. */
   ehAdmin: boolean;
@@ -179,6 +185,7 @@ const Cartao: React.FC<{
 
 export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
   quotes,
+  atendimentos,
   professionals,
   ehAdmin,
   onVoltar,
@@ -193,6 +200,11 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
     () => resumoFinanceiro(quotes, periodo, professionalId || undefined, hoje),
     [quotes, periodo, professionalId, hoje]
   );
+  const material = useMemo(
+    () => custoDeMaterialNoPeriodo(atendimentos, periodo, professionalId || undefined),
+    [atendimentos, periodo, professionalId]
+  );
+  const margem = margemDoPeriodo(resumo.faturamento, material.custo);
 
   /**
    * O painel é o único lugar do sistema onde a receita da casa aparece inteira. Numa clínica com
@@ -337,6 +349,36 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
         />
       </div>
 
+      {/* Custo de material e margem. Linha própria: é outra conta, com outra data — ver a nota. */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <Cartao
+          icone={PackageOpen}
+          rotulo="Custo de material"
+          valor={carregando ? '—' : formatBRL(material.custo)}
+          detalhe={
+            <span className={material.comMateriais < material.realizados ? 'text-warn' : 'text-muted'}>
+              {material.realizados === 0
+                ? 'nenhum atendimento no período'
+                : `${material.comMateriais} de ${material.realizados} atendimento${
+                    material.realizados === 1 ? '' : 's'
+                  } com materiais`}
+            </span>
+          }
+        />
+        <Cartao
+          icone={PiggyBank}
+          rotulo="Margem"
+          valor={carregando ? '—' : formatBRL(margem.valor)}
+          detalhe={
+            <span className={margem.valor < 0 ? 'text-danger' : 'text-muted'}>
+              {margem.percentual === null
+                ? 'sem faturamento no período'
+                : `${margem.percentual}% do faturamento`}
+            </span>
+          }
+        />
+      </div>
+
       <BarrasPorMes dados={resumo.porMes} />
       <RankingDeProcedimentos dados={resumo.porProcedimento} />
 
@@ -348,6 +390,14 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
         tem preço gravado, e usar o preço do catálogo faria o faturamento de um mês fechado mudar
         sozinho a cada reajuste. <strong className="text-ink-soft">Atendimento realizado sem
         orçamento emitido não entra nesta conta.</strong>
+      </p>
+      <p className="text-body text-muted leading-relaxed">
+        O custo de material soma os materiais registrados nos atendimentos, pela{' '}
+        <strong className="text-ink-soft">data do atendimento</strong>, com o preço do dia em que
+        foram registrados. A margem é o faturamento menos esse custo — datas diferentes de
+        propósito: um pacote pago em março e feito até junho entra em março no faturamento e mês a
+        mês no custo. <strong className="text-ink-soft">Atendimento sem materiais registrados
+        conta como custo zero</strong>, por isso o cartão mostra quantos foram registrados.
       </p>
     </div>
   );
