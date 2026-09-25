@@ -248,7 +248,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <ItemDaFolha
             icone={Wallet}
             rotulo="Financeiro"
-            descricao="Faturamento, ticket médio e conversão"
+            descricao="Faturamento, margem e custo de material"
             onClick={() => ir('financeiro')}
           />
         )}

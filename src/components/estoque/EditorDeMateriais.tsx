@@ -21,7 +21,8 @@ interface EditorDeMateriaisProps {
   permitirAvulso?: boolean;
   /**
    * Mostra os valores: os unitários, editáveis, e o custo de cada linha. Desligado no consumo
-   * padrão, que é só material e quantidade — o custo de verdade é o de cada atendimento.
+   * padrão, que é só material e quantidade, e no acompanhamento, preenchido ao lado da paciente —
+   * as linhas continuam carregando o preço, só não o mostram.
    */
   mostrarValores?: boolean;
   /** Mostra a linha de totais embaixo. */
@@ -41,11 +42,11 @@ const OUTRO = '__outro__';
 /**
  * A lista de materiais: produto, quantidade, valores e total de cada linha.
  *
- * O mesmo editor serve ao consumo padrão do procedimento, ao registro de materiais do
- * atendimento e ao custo estimado do orçamento — três telas que precisam das mesmas linhas, e as
- * duas últimas da mesma conta, feita do mesmo jeito. No consumo padrão ficam só material e
- * quantidade. "Adicionar material" é uma lista suspensa dos produtos do estoque, com a opção de
- * digitar outro.
+ * O mesmo editor serve ao consumo padrão do procedimento, aos materiais do atendimento (no
+ * acompanhamento e no detalhe do Financeiro) e ao custo estimado do orçamento — telas que precisam
+ * das mesmas linhas, e com valores, da mesma conta, feita do mesmo jeito. No consumo padrão e no
+ * acompanhamento ficam só material e quantidade. "Adicionar material" é uma lista suspensa dos
+ * produtos do estoque, com a opção de digitar outro.
  */
 export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
   itens,
@@ -217,6 +218,14 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
                 </>
               )}
             </div>
+
+            {/* No acompanhamento não há campo de valor: o material de fora do estoque entra sem
+                preço, e o Financeiro avisa que falta completar. */}
+            {!m.produtoId && permitirAvulso && !mostrarValores && (
+              <p className="text-body text-muted">
+                O valor deste material é completado depois, no Financeiro.
+              </p>
+            )}
 
             {!m.produtoId && permitirAvulso && oferecerCadastro && (
               <label className="flex items-center gap-2 text-body text-ink-soft cursor-pointer">

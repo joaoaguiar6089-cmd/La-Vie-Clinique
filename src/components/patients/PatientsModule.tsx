@@ -43,7 +43,6 @@ import { PatientDetailView } from './PatientDetailView';
 import { NewPatientModal } from './NewPatientModal';
 import { AttendanceFormModal, ModoDoFormulario } from './AttendanceFormModal';
 import { FichaFillModal } from '../fichas/FichaFillModal';
-import { MateriaisDoAtendimentoPanel } from '../estoque/MateriaisDoAtendimentoPanel';
 import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { salvarAtendimento } from '../../services/attendanceWorkflow';
 
@@ -84,10 +83,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   pedido,
   onPedidoAtendido,
 }) => {
-  /** Visita cujo acompanhamento está aberto. */
+  /** Visita cujo acompanhamento (com os materiais usados) está aberto. */
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
-  /** Visita cujos materiais usados estão abertos. */
-  const [materiaisDe, setMateriaisDe] = useState<Attendance | null>(null);
   /** Avaliações da paciente aberta — lidas só enquanto a página dela está na tela. */
   const [avaliacoes, setAvaliacoes] = useState<EvaluationRecord[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -406,7 +403,6 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
             abrirFormulario({ modo: 'confirmacao', atendimento: a })
           }
           onAcompanhamentoAtendimento={setAcompanhando}
-          onMateriaisAtendimento={setMateriaisDe}
           onFaltouAtendimento={(a) => marcarStatus(a, 'faltou')}
           onRemarcarAtendimento={handleRemarcar}
           onAdicionarSessao={(planoId) => abrirFormulario({ modo: 'novo', planoFixoId: planoId })}
@@ -435,12 +431,6 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           modo={formAtendimento?.modo || 'novo'}
           planoFixoId={formAtendimento?.planoFixoId}
           onSalvar={handleSalvarAtendimento}
-        />
-
-        <MateriaisDoAtendimentoPanel
-          atendimento={materiaisDe}
-          onFechar={() => setMateriaisDe(null)}
-          catalogo={catalogProcedures}
         />
 
         {acompanhando && (

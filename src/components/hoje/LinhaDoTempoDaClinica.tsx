@@ -35,7 +35,6 @@ import { useAcoesDeOrcamento } from '../quotes/useAcoesDeOrcamento';
 import { AcoesDaLinha, ItemDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoTempo';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
 import { FichaFillModal } from '../fichas/FichaFillModal';
-import { MateriaisDoAtendimentoPanel } from '../estoque/MateriaisDoAtendimentoPanel';
 import { SkeletonLinhas } from '../common/Skeleton';
 
 interface LinhaDoTempoDaClinicaProps {
@@ -99,7 +98,6 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
   const [anamneseAberta, setAnamneseAberta] = useState<AnamnesisRecord | null>(null);
   const [avaliacaoAberta, setAvaliacaoAberta] = useState<EvaluationRecord | null>(null);
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
-  const [materiaisDe, setMateriaisDe] = useState<Attendance | null>(null);
 
   const acoesDeOrcamento = useAcoesDeOrcamento({
     clinic,
@@ -163,7 +161,6 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
     onVerAnamnese: setAnamneseAberta,
     onVerAvaliacao: setAvaliacaoAberta,
     onAcompanhamento: setAcompanhando,
-    onMateriais: setMateriaisDe,
   };
 
   /** O toque no título: a ficha, a prévia, ou — no atendimento — a página da paciente. */
@@ -358,12 +355,6 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
           clinicProfile={clinic}
         />
       )}
-
-      <MateriaisDoAtendimentoPanel
-        atendimento={materiaisDe}
-        onFechar={() => setMateriaisDe(null)}
-        catalogo={catalogProcedures}
-      />
     </section>
   );
 };

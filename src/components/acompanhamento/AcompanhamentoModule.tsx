@@ -104,7 +104,7 @@ export const AcompanhamentoModule: React.FC<AcompanhamentoModuleProps> = ({
       {aba === 'registros' ? (
         <ListaDeFichas
           tipo="acompanhamento"
-          descricao="O registro de cada atendimento: foto, respostas e o que importar daquela sessão. É preenchido pelo ícone de acompanhamento na linha do atendimento — na ficha da paciente, na agenda ou na tela Hoje."
+          descricao="O registro de cada atendimento: foto, respostas e o que importar daquela sessão — e, embaixo, os materiais usados. É preenchido pelo ícone de acompanhamento na linha do atendimento — na ficha da paciente, na agenda ou na tela Hoje."
           onAbrir={setAberto}
         />
       ) : (

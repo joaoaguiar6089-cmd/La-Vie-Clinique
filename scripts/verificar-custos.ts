@@ -1,25 +1,43 @@
 /**
  * Confere as contas do estoque: custo de cada linha, totais, o consumo padrão virando linhas, a
- * caixa dividida por unidade e o preço congelado no registro.
+ * caixa dividida por unidade e o preço congelado no registro — e o "Uso de material?" do
+ * acompanhamento: o que ele grava ou apaga, e a lista do Financeiro que mostra o custo.
  *
  * Existe porque um erro aqui não aparece em lugar nenhum: o custo errado de um atendimento só
  * vira problema no fim do mês, somado no Financeiro, quando já não se sabe de onde ele veio.
  *
  *   npx tsx scripts/verificar-custos.ts
  */
-import { Attendance, ConsumoPadrao, Procedure, ProdutoDeEstoque, QuoteItem } from '../src/types';
+import {
+  AnamnesisQuestion,
+  Attendance,
+  ConsumoPadrao,
+  Procedure,
+  ProdutoDeEstoque,
+  QuoteItem,
+} from '../src/types';
 import { clonarItens } from '../src/utils/quoteFactory';
-import { custoDeMaterialNoPeriodo, margemDoPeriodo, periodoDoMes } from '../src/utils/indicadores';
+import {
+  atendimentosComMateriaisNoPeriodo,
+  custoDeMaterialNoPeriodo,
+  margemDoPeriodo,
+  periodoDoMes,
+} from '../src/utils/indicadores';
+import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../src/utils/fichasClinicas';
+import { fichaTemConteudo } from '../src/utils/evaluations';
 import {
   arredondar,
   caixaLida,
   custoDaLinha,
   linhaDoProduto,
   linhasParaGravar,
+  linhasSemValor,
   margemUnitaria,
   materiaisDoItem,
   materiaisSugeridos,
   montarCustoDoOrcamento,
+  montarMateriaisDoAtendimento,
+  planoDosMateriais,
   precoPorUnidade,
   produtoEmUso,
   quantidadeComUnidade,
@@ -191,6 +209,85 @@ ok(
 );
 ok('margem = faturamento − custo', margemDoPeriodo(1000, 241.75).valor === 758.25 && margemDoPeriodo(1000, 241.75).percentual === 76);
 ok('sem faturamento a margem não vira percentual', margemDoPeriodo(0, 50).percentual === null);
+
+console.log('== lista do Financeiro');
+const lista = atendimentosComMateriaisNoPeriodo(
+  [
+    at('a', '2026-09-02', { hora: '09:00', materiaisRegistradosEm: 'x', custoMateriais: 10, professionalId: 'k' }),
+    at('b', '2026-09-10', { hora: '14:00', materiaisRegistradosEm: 'x', custoMateriais: 5 }),
+    at('b2', '2026-09-10', { hora: '16:00', materiaisRegistradosEm: 'x', custoMateriais: 7 }),
+    at('c', '2026-09-12'), // sem materiais
+    at('d', '2026-09-15', { status: 'faltou', materiaisRegistradosEm: 'x', custoMateriais: 99 }),
+    at('e', '2026-08-30', { materiaisRegistradosEm: 'x', custoMateriais: 50 }), // fora do mês
+  ],
+  periodo
+);
+ok('só os realizados do mês com materiais', lista.map((a) => a.id).join() === 'b2,b,a', lista.map((a) => a.id).join());
+ok(
+  'a lista soma o mesmo que o cartão de custo',
+  lista.reduce((s, a) => s + (a.custoMateriais || 0), 0) ===
+    custoDeMaterialNoPeriodo([...lista, at('c', '2026-09-12')], periodo).custo
+);
+ok(
+  'filtro por profissional na lista',
+  atendimentosComMateriaisNoPeriodo(lista, periodo, 'k').map((a) => a.id).join() === 'a'
+);
+
+console.log('== uso de material no acompanhamento');
+const linhaBotox = linhaDoProduto(toxina, 20);
+const avulsa = { nome: 'Fio PDO', unidade: 'fio', quantidade: 4, custoUnitario: 0, valorCliente: 0 };
+const vazia = { nome: '', unidade: 'un', quantidade: 1, custoUnitario: 0, valorCliente: 0 };
+const plano = (usou: boolean, linhas: typeof avulsa[], existia: boolean, pronto = true) =>
+  planoDosMateriais({ usou, linhas, existia, pronto });
+const gravar = plano(true, [linhaBotox, avulsa], false);
+ok('marcado com linhas grava', gravar.acao === 'gravar' && gravar.itens.length === 2);
+ok('desmarcado com registro apaga', plano(false, [linhaBotox], true).acao === 'apagar');
+ok('desmarcado sem registro não faz nada', plano(false, [linhaBotox], false).acao === 'manter');
+ok('marcado só com linha vazia apaga o que existia', plano(true, [vazia], true).acao === 'apagar');
+ok('marcado só com linha vazia, sem registro, não grava', plano(true, [vazia], false).acao === 'manter');
+ok(
+  'registro que não foi lido nunca é gravado nem apagado',
+  plano(true, [linhaBotox], true, false).acao === 'manter' && plano(false, [], true, false).acao === 'manter'
+);
+ok('material digitado à mão fica sem valor', linhasSemValor([linhaBotox, avulsa]) === 1);
+ok('produto com preço não falta valor', linhasSemValor([linhaBotox]) === 0);
+
+const alvoDoTeste = {
+  atendimentoId: 'atd-1',
+  pacienteId: 'p',
+  pacienteNome: 'P',
+  procedureId: 'botox',
+  procedimentoNome: 'Botox',
+  data: '2026-09-02',
+};
+const materiaisGravados = montarMateriaisDoAtendimento(alvoDoTeste, [linhaBotox, avulsa], null, '2026-09-02T10:00:00Z');
+ok('o registro tem o id do atendimento', materiaisGravados.id === 'atd-1' && materiaisGravados.atendimentoId === 'atd-1');
+ok('o registro soma o custo das linhas', materiaisGravados.custoTotal === 240, String(materiaisGravados.custoTotal));
+const corrigido = montarMateriaisDoAtendimento(alvoDoTeste, [linhaBotox], materiaisGravados, '2026-09-20T10:00:00Z');
+ok('corrigir depois mantém a data do primeiro registro', corrigido.createdAt === '2026-09-02T10:00:00Z');
+
+const passado = '2020-01-10';
+const futuro = '2999-01-10';
+ok('visita que aconteceu mostra o caderno', acompanhamentoVisivel(at('v1', passado)));
+ok('falta sem registro não mostra', !acompanhamentoVisivel(at('v2', passado, { status: 'faltou' })));
+ok(
+  'materiais gravados mantêm o caderno à vista mesmo com a data no futuro',
+  acompanhamentoVisivel(at('v3', futuro, { materiaisRegistradosEm: 'x' }))
+);
+ok(
+  'caderno verde com acompanhamento ou com materiais',
+  acompanhamentoComRegistro(at('v4', passado, { materiaisRegistradosEm: 'x' })) &&
+    acompanhamentoComRegistro(at('v5', passado, { acompanhamentoPreenchidoEm: 'x' })) &&
+    !acompanhamentoComRegistro(at('v6', passado))
+);
+
+const pergunta = { id: 'q1', texto: 'Resposta do tecido', tipo_campo: 'texto_curto', obrigatoria: false, ordem: 1 } as AnamnesisQuestion;
+const ficha = (extra: Partial<Parameters<typeof fichaTemConteudo>[0]>) =>
+  fichaTemConteudo({ perguntas: [pergunta], respostas: {}, ...extra });
+ok('ficha em branco não tem conteúdo', !ficha({}) && !ficha({ respostas: { q1: '   ' }, observacoes: '  ' }));
+ok('resposta é conteúdo', ficha({ respostas: { q1: 'boa' } }));
+ok('observação é conteúdo', ficha({ observacoes: 'retorno em 15 dias' }));
+ok('foto é conteúdo', ficha({ fotoSessaoUrl: 'https://x/foto.jpg' }));
 
 console.log(falhas === 0 ? '\nTUDO OK' : `\n${falhas} FALHA(S)`);
 process.exit(falhas === 0 ? 0 : 1);

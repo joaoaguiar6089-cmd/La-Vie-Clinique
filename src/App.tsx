@@ -866,6 +866,7 @@ function MainCatalogApp() {
             <FinanceiroView
               quotes={quotes}
               atendimentos={attendances}
+              catalogProcedures={procedures}
               professionals={clinic.professionals || []}
               ehAdmin={isAdminUser}
               carregando={atendimentosCarregando}

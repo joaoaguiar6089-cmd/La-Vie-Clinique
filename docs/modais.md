@@ -21,9 +21,9 @@ véu e botão voltar do Android — e, se o formulário foi mexido, **pergunta a
 | `AnamnesisFormFillModal` | larga | ficha clínica inteira, com fotos e mapa corporal |
 | `AttendanceFormModal` | padrão | data, hora, procedimento, plano, profissional, observações |
 | `QuoteFormModal` | larga | cada procedimento é uma linha com valor, desconto e sessões |
-| `FichaFillModal` | larga | avaliação e acompanhamento: perguntas da ficha mais duas imagens anotáveis |
+| `FichaFillModal` | larga | avaliação e acompanhamento: perguntas da ficha mais duas imagens anotáveis; no acompanhamento, os materiais usados (sem valor) |
 | `EmissaoDeAvaliacao` | padrão | paciente, procedimento, data e profissional da avaliação emitida |
-| `MateriaisDoAtendimentoPanel` | padrão | lista de materiais com quantidade, valores e total |
+| `MateriaisDoAtendimentoPanel` | padrão | materiais de um atendimento com quantidade, valores e total — aberto só pelo Financeiro |
 | `ProdutoFormPanel` | padrão | cadastro de produto do estoque, com a conta do preço por unidade |
 | `ConsumoPadraoPanel` | padrão | consumo por sessão de um procedimento |
 

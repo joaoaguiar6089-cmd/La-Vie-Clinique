@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, EyeOff, PackageOpen, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye, EyeOff, PackageOpen, RotateCcw } from 'lucide-react';
 import { ProdutoDeEstoque, QuoteItem } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { LinhaDeMaterial, totaisDosMateriais } from '../../utils/estoque';
@@ -28,6 +28,10 @@ interface CustoDeMaterialDoOrcamentoProps {
  *
  * A margem estimada é o total do orçamento menos o custo de material — o que sobra para
  * honorário, impostos e o resto da clínica.
+ *
+ * Começa fechado, a cada abertura: o orçamento costuma ser montado com a paciente por perto, e
+ * custo e margem não são para ela ver. Fechado, nenhum número aparece; a conta continua sendo
+ * feita e gravada do mesmo jeito, porque o estado mora no formulário.
  */
 export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProps> = ({
   itens,
@@ -38,6 +42,7 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
   onRecalcular,
 }) => {
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const [visivel, setVisivel] = useState(false);
 
   if (itens.length === 0) return null;
 
@@ -56,16 +61,26 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
 
   return (
     <div className="space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
-        <PackageOpen className="w-3.5 h-3.5" />
-        Custo de material
-      </h3>
-      <p className="flex items-center gap-1.5 text-body text-muted -mt-1">
-        <EyeOff className="w-3.5 h-3.5 shrink-0" />
+      <div className="flex items-center justify-between gap-3 pb-1 border-b border-white/60">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
+          <PackageOpen className="w-3.5 h-3.5" />
+          Custo de material
+        </h3>
+        <button
+          type="button"
+          onClick={() => setVisivel((atual) => !atual)}
+          aria-expanded={visivel}
+          className="inline-flex items-center gap-1.5 min-h-[36px] px-2 -mr-2 rounded-lg text-body font-semibold text-brand hover:bg-surface-2 transition-colors"
+        >
+          {visivel ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          {visivel ? 'Esconder' : 'Ver custo e margem'}
+        </button>
+      </div>
+      <p className="text-body text-muted -mt-1">
         Só para a equipe — não soma no total, não sai no PDF nem no link da cliente.
       </p>
 
-      {semEstoque ? (
+      {!visivel ? null : semEstoque ? (
         <p className="text-body text-muted">
           Cadastre os produtos e o consumo por procedimento em <strong>Estoque</strong> para o custo
           vir preenchido aqui.

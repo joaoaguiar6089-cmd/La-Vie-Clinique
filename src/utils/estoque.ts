@@ -1,8 +1,8 @@
 import {
-  Attendance,
   CaixaDoProduto,
   ConsumoPadrao,
   CustoDoOrcamento,
+  MateriaisDoAtendimento,
   MaterialUsado,
   Procedure,
   ProdutoDeEstoque,
@@ -11,7 +11,6 @@ import {
 } from '../types';
 import { itemSessoes } from './quoteCalc';
 import { procedimentoDoAtendimento } from './evaluations';
-import { atendimentoAconteceu } from './fichasClinicas';
 
 /**
  * As contas do estoque: custo de uma linha, totais, e o consumo padrão de um procedimento
@@ -209,12 +208,73 @@ export const formatarPrecoUnitario = (valor: number): string =>
     // Margem pode ser negativa (repasse abaixo do custo) — por isso não passa por `numeroValido`.
   }).format(Number.isFinite(valor) ? valor : 0);
 
+// ==========================================
+// MATERIAIS DO ATENDIMENTO
+// ==========================================
+
 /**
- * O atalho de materiais aparece na linha do atendimento? — depois que a visita aconteceu, ou
- * sempre que já houver registro (mesma regra do acompanhamento: o que está gravado não some).
+ * O documento dos materiais de um atendimento, com os totais das linhas. É o mesmo documento
+ * venha de onde vier — do acompanhamento ou do detalhe no Financeiro. `anterior` guarda a data do
+ * primeiro registro: corrigir depois não muda quando os materiais foram lançados.
  */
-export const materiaisVisiveis = (a: Attendance): boolean =>
-  !!a.materiaisRegistradosEm || atendimentoAconteceu(a);
+export const montarMateriaisDoAtendimento = (
+  alvo: Pick<
+    MateriaisDoAtendimento,
+    'atendimentoId' | 'pacienteId' | 'pacienteNome' | 'procedureId' | 'procedimentoNome' | 'data'
+  >,
+  itens: MaterialUsado[],
+  anterior: Pick<MateriaisDoAtendimento, 'createdAt'> | null,
+  agora: string
+): MateriaisDoAtendimento => {
+  const soma = totaisDosMateriais(itens);
+  return {
+    id: alvo.atendimentoId,
+    atendimentoId: alvo.atendimentoId,
+    pacienteId: alvo.pacienteId,
+    pacienteNome: alvo.pacienteNome,
+    procedureId: alvo.procedureId,
+    procedimentoNome: alvo.procedimentoNome,
+    data: alvo.data,
+    itens,
+    custoTotal: soma.custo,
+    valorClienteTotal: soma.valorCliente,
+    createdAt: anterior?.createdAt || agora,
+  };
+};
+
+/**
+ * Quantas linhas estão sem valor comprado. É o material digitado à mão no acompanhamento — que
+ * não mostra preço — esperando alguém completar o valor no Financeiro.
+ */
+export const linhasSemValor = (itens: MaterialUsado[]): number =>
+  (itens || []).filter((m) => numeroValido(m.custoUnitario) === 0).length;
+
+/** O que o "Uso de material?" do acompanhamento pede ao salvar. */
+export type PlanoDosMateriais =
+  | { acao: 'gravar'; itens: MaterialUsado[] }
+  | { acao: 'apagar' }
+  | { acao: 'manter' };
+
+/**
+ * Marcado com alguma linha válida, grava; desmarcado — ou marcado sem linha nenhuma — apaga o
+ * registro que existia, e sem registro não há o que fazer.
+ *
+ * Nada muda enquanto os materiais não foram lidos (`pronto` falso): gravar ou apagar a partir de
+ * uma lista que não veio do banco passaria por cima do que está registrado.
+ */
+export const planoDosMateriais = (estado: {
+  usou: boolean;
+  linhas: LinhaDeMaterial[];
+  /** Havia materiais gravados quando o formulário abriu. */
+  existia: boolean;
+  /** O registro foi lido — ou se sabia que não havia o que ler. */
+  pronto: boolean;
+}): PlanoDosMateriais => {
+  if (!estado.pronto) return { acao: 'manter' };
+  const itens = estado.usou ? linhasParaGravar(estado.linhas) : [];
+  if (itens.length > 0) return { acao: 'gravar', itens };
+  return estado.existia ? { acao: 'apagar' } : { acao: 'manter' };
+};
 
 /** Os produtos que se oferecem para escolha, em ordem alfabética. */
 export const produtosAtivos = (produtos: ProdutoDeEstoque[]): ProdutoDeEstoque[] =>
