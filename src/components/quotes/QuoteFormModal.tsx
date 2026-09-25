@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  X,
   FileText,
   MessageSquare,
   Sparkles,
@@ -11,8 +10,10 @@ import {
 } from 'lucide-react';
 import {
   ClinicProfile,
+  ConsumoPadrao,
   Patient,
   Procedure,
+  ProdutoDeEstoque,
   Quote,
   QuoteDraft,
   QuoteItem,
@@ -39,14 +40,25 @@ import { QuotePaymentOptionEditor } from './QuotePaymentOptionEditor';
 import { LaserQuoteMapModal } from '../laser/LaserQuoteMapModal';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { SidePanel } from '../common/SidePanel';
-import { getRecordsForPatient } from '../../services/databaseService';
+import {
+  getCustoDoOrcamento,
+  getRecordsForPatient,
+  subscribeToConsumosPadrao,
+  subscribeToProdutosDeEstoque,
+} from '../../services/databaseService';
+import { CustoEmEdicao, LinhaDeMaterial, materiaisDoItem } from '../../utils/estoque';
+import { CustoDeMaterialDoOrcamento } from './CustoDeMaterialDoOrcamento';
 import { isLaserCategory } from '../../utils/templateMatching';
 import { nomeCurtoDaArea } from '../../utils/laserAreas';
 
 interface QuoteFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (draft: QuoteDraft, existing?: Quote) => void | Promise<void>;
+  /**
+   * `custo` só vem quando há custo de material para gravar (ou para apagar): quem salva o
+   * orçamento grava o custo depois, com o id que o orçamento ganhou. Ver `useAcoesDeOrcamento`.
+   */
+  onSave: (draft: QuoteDraft, existing?: Quote, custo?: CustoEmEdicao) => void | Promise<void>;
   quoteToEdit?: Quote | null;
   /** Itens iniciais ao duplicar ou substituir um orçamento — o número é novo, o conteúdo vem pronto. */
   seedFrom?: Quote | null;
@@ -125,6 +137,18 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
+  /**
+   * Custo de material, por item (id do item no formulário). Interno — não entra no documento do
+   * orçamento, que a cliente lê pelo link; é gravado à parte, em `quote_costs`.
+   */
+  const [custos, setCustos] = useState<Record<string, LinhaDeMaterial[]>>({});
+  /** Itens cujo custo já não segue o consumo padrão: veio gravado ou a profissional mexeu. */
+  const [custoFixo, setCustoFixo] = useState<Set<string>>(new Set());
+  /** O orçamento de origem já tinha custo gravado — salvar sem linhas precisa apagá-lo. */
+  const [custoGravadoExistia, setCustoGravadoExistia] = useState(false);
+  const [produtos, setProdutos] = useState<ProdutoDeEstoque[]>([]);
+  const [consumos, setConsumos] = useState<ConsumoPadrao[]>([]);
+
   const base = quoteToEdit || seedFrom || null;
 
   useEffect(() => {
@@ -171,6 +195,9 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     setErrors({});
     setIsSaving(false);
     setAvisoDaAnamnese(null);
+    setCustos({});
+    setCustoFixo(new Set());
+    setCustoGravadoExistia(false);
     // `clinic` e `professionals` mudam de referência a cada sync do perfil e
     // reabririam o formulário zerado no meio da edição — por isso ficam de fora
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,6 +259,62 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, pacienteId, base?.id]);
+
+  // Estoque e consumo padrão, só enquanto o formulário está aberto.
+  useEffect(() => {
+    if (!isOpen) return;
+    const pararProdutos = subscribeToProdutosDeEstoque(setProdutos);
+    const pararConsumos = subscribeToConsumosPadrao(setConsumos);
+    return () => {
+      pararProdutos();
+      pararConsumos();
+    };
+  }, [isOpen]);
+
+  /**
+   * O custo que o orçamento de origem gravou — ao editar, duplicar ou substituir. Os itens do
+   * formulário nascem com os mesmos ids dos de origem, então a ligação é direta. Os itens que
+   * vieram com custo gravado ficam fixos: o consumo padrão de hoje não reescreve a estimativa
+   * feita na emissão.
+   */
+  useEffect(() => {
+    if (!isOpen || !base) return;
+    let cancelado = false;
+    getCustoDoOrcamento(base.id)
+      .then((gravado) => {
+        if (cancelado || !gravado) return;
+        const linhas: Record<string, LinhaDeMaterial[]> = {};
+        gravado.itens.forEach((i) => {
+          linhas[i.quoteItemId] = i.materiais;
+        });
+        setCustos((atual) => ({ ...atual, ...linhas }));
+        setCustoFixo((atual) => new Set([...atual, ...Object.keys(linhas)]));
+        setCustoGravadoExistia(true);
+      })
+      .catch((e) => console.warn('Não foi possível ler o custo estimado do orçamento:', e));
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, base?.id]);
+
+  /**
+   * Itens que ainda seguem o consumo padrão acompanham o formulário: entrou procedimento, mudou o
+   * número de sessões, o custo vem junto. Item que saiu leva o custo com ele.
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+    setCustos((atual) => {
+      const novo: Record<string, LinhaDeMaterial[]> = {};
+      itens.forEach((item) => {
+        novo[item.id] = custoFixo.has(item.id)
+          ? atual[item.id] || []
+          : materiaisDoItem(item, consumos, produtos, procedures);
+      });
+      return novo;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, itens, consumos, produtos, custoFixo]);
 
   // A mensagem acompanha o nome enquanto ninguém a editar à mão
   useEffect(() => {
@@ -397,9 +480,14 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       total: totais.total,
     };
 
+    // Custo só vai junto quando há o que gravar — ou quando havia e agora precisa ser apagado.
+    const temCusto = itens.some((i) => (custos[i.id] || []).length > 0);
+    const custo: CustoEmEdicao | undefined =
+      temCusto || custoGravadoExistia ? { itens, linhas: custos } : undefined;
+
     try {
       setIsSaving(true);
-      await onSave(draft, quoteToEdit || undefined);
+      await onSave(draft, quoteToEdit || undefined, custo);
       onClose();
     } catch (e) {
       setIsSaving(false);
@@ -703,6 +791,25 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
               )}
             </div>
           </div>
+
+          {/* Seção interna — custo de material. Nunca vai para o documento do orçamento. */}
+          <CustoDeMaterialDoOrcamento
+            itens={itens}
+            custos={custos}
+            produtos={produtos}
+            totalDoOrcamento={totais.total}
+            onChange={(itemId, linhas) => {
+              setCustos((atual) => ({ ...atual, [itemId]: linhas }));
+              setCustoFixo((atual) => new Set([...atual, itemId]));
+            }}
+            onRecalcular={(itemId) =>
+              setCustoFixo((atual) => {
+                const novo = new Set(atual);
+                novo.delete(itemId);
+                return novo;
+              })
+            }
+          />
 
           {/* Seção 5 — Pagamento */}
           <div className="space-y-4">

@@ -37,7 +37,7 @@ import { formatBRL, formatDate, formatDateOnly } from '../../utils/formatters';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
-import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
+import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 import { AnamnesisFormFillModal } from '../anamnesis/AnamnesisFormFillModal';
 import { montarEspelhoPublico } from '../../utils/laserAreas';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
@@ -175,6 +175,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
     clinic,
     procedures: catalogProcedures,
     patients: todosPacientes,
+    onErro: (mensagem) => setConfirmacao(aviso('Nem tudo foi salvo', mensagem, 'perigo')),
   });
   const [emitindoAvaliacao, setEmitindoAvaliacao] = useState(false);
   const [avaliacaoAberta, setAvaliacaoAberta] = useState<EvaluationRecord | null>(null);

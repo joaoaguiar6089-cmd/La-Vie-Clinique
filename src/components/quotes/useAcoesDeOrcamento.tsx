@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { ClinicProfile, Patient, Procedure, Quote, QuoteDraft } from '../../types';
 import { montarEspelhoPublico } from '../../utils/laserAreas';
 import { marcarComoEnviadoSeRascunho, salvarOrcamento } from '../../services/quoteWorkflow';
+import { saveCustoDoOrcamento } from '../../services/databaseService';
+import { CustoEmEdicao, montarCustoDoOrcamento } from '../../utils/estoque';
 import { QuoteFormModal } from './QuoteFormModal';
 import { QuotePreviewModal } from './QuotePreviewModal';
 import { QuoteShareModal } from './QuoteShareModal';
@@ -55,8 +57,23 @@ export const useAcoesDeOrcamento = ({
   /** Mapa corporal do catálogo, para a página das áreas contratadas no PDF. */
   const mapaDoLaser = useMemo(() => montarEspelhoPublico(procedures, clinic), [procedures, clinic]);
 
-  const salvar = async (draft: QuoteDraft, existente?: Quote) => {
-    await salvarOrcamento(draft, { existente, substituindo: formulario?.substituindo });
+  /**
+   * O orçamento primeiro, o custo depois — o custo precisa do id que o orçamento ganha, e das
+   * posições dos itens gravados. Se só o custo falhar, o orçamento continua salvo e a tela diz o
+   * que ficou para trás, em vez de fazer a profissional salvar o orçamento de novo (o que, num
+   * orçamento novo, criaria outro número).
+   */
+  const salvar = async (draft: QuoteDraft, existente?: Quote, custo?: CustoEmEdicao) => {
+    const salvo = await salvarOrcamento(draft, { existente, substituindo: formulario?.substituindo });
+    if (!custo) return;
+    try {
+      await saveCustoDoOrcamento(montarCustoDoOrcamento(salvo, custo));
+    } catch (e) {
+      onErro?.(
+        `O orçamento ${salvo.numero} foi salvo, mas o custo de material não: ${(e as Error).message}. ` +
+          'Se for erro de permissão, publique as regras novas do Firebase.'
+      );
+    }
   };
 
   const aoCompartilhar = async (quote: Quote) => {

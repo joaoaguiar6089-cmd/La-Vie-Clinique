@@ -136,6 +136,14 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // Custo estimado de material de cada orçamento, com o ID dele. Mora aqui, e não dentro do
+    // orçamento, por causa da regra de `quotes` lá em cima: aquela coleção é legível sem login,
+    // pelo link da cliente — custo e margem gravados nela estariam à vista dela no navegador.
+    // Esta aqui é só da equipe.
+    match /quote_costs/{quoteId} {
+      allow read, write: if request.auth != null;
+    }
+
     // Qualquer coleção não prevista acima fica fechada por padrão (nega tudo), em vez do
     // catch-all aberto anterior — reduz a superfície de dados expostos sem querer.
     match /{document=**} {

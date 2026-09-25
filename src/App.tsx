@@ -865,6 +865,7 @@ function MainCatalogApp() {
           ) : currentView === 'financeiro' ? (
             <FinanceiroView
               quotes={quotes}
+              atendimentos={attendances}
               professionals={clinic.professionals || []}
               ehAdmin={isAdminUser}
               carregando={atendimentosCarregando}

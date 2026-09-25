@@ -7,13 +7,17 @@
  *
  *   npx tsx scripts/verificar-custos.ts
  */
-import { ConsumoPadrao, Procedure, ProdutoDeEstoque } from '../src/types';
+import { Attendance, ConsumoPadrao, Procedure, ProdutoDeEstoque, QuoteItem } from '../src/types';
+import { clonarItens } from '../src/utils/quoteFactory';
+import { custoDeMaterialNoPeriodo, margemDoPeriodo, periodoDoMes } from '../src/utils/indicadores';
 import {
   arredondar,
   linhaDoProduto,
   linhasParaGravar,
   margemUnitaria,
+  materiaisDoItem,
   materiaisSugeridos,
+  montarCustoDoOrcamento,
   precoPorUnidade,
   produtoEmUso,
   totaisDoConsumoPadrao,
@@ -104,6 +108,61 @@ const gravadas = linhasParaGravar([
 ok('linhas vazias saem', gravadas.length === 2, String(gravadas.length));
 ok('a marca de edição não vai para o banco', gravadas.every((g) => !('cadastrarNoEstoque' in g)));
 ok('produto em uso não pode ser excluído', produtoEmUso('toxina', consumos) && !produtoEmUso('fio', consumos));
+
+console.log('== orçamento');
+const item = (id: string, procedureId: string, titulo: string, sessoes = 1): QuoteItem => ({
+  id,
+  procedureId,
+  categoria: 'Injetáveis',
+  titulo,
+  valorTabela: 1000,
+  temDesconto: false,
+  maisDeUmaSessao: sessoes > 1,
+  sessoes,
+  detalhes: [],
+});
+const itens = [item('i1', 'botox', 'Botox'), item('i2', 'laser-axila', 'Depilação a Laser - Axilas', 10)];
+ok('item de 10 sessões multiplica o consumo', materiaisDoItem(itens[1], consumos, produtos, catalogo)[0]?.quantidade === 300);
+const linhas = {
+  i1: materiaisDoItem(itens[0], consumos, produtos, catalogo),
+  i2: materiaisDoItem(itens[1], consumos, produtos, catalogo),
+};
+// Substituir clona os itens com ids novos, na mesma ordem — é pela posição que o custo acha o item.
+const clonados = clonarItens(itens);
+const custo = montarCustoDoOrcamento({ id: 'q-novo', itens: clonados }, { itens, linhas });
+ok('ids novos depois de clonar', clonados[0].id !== 'i1' && clonados[1].id !== 'i2');
+ok(
+  'custo ligado aos itens novos pela posição',
+  custo.itens[0].quoteItemId === clonados[0].id && custo.itens[1].quoteItemId === clonados[1].id
+);
+ok('total do custo do orçamento', custo.custoTotal === arredondar(240.7 + 300 * 0.0035), String(custo.custoTotal));
+ok('custo guarda o id do orçamento', custo.quoteId === 'q-novo' && custo.id === 'q-novo');
+const semLinhas = montarCustoDoOrcamento({ id: 'q2', itens: [item('x', 'peeling', 'Peeling')] }, { itens: [{ id: 'x' }], linhas: {} });
+ok('orçamento sem material não grava item vazio', semLinhas.itens.length === 0 && semLinhas.custoTotal === 0);
+
+console.log('== financeiro');
+const at = (id: string, data: string, extra: Partial<Attendance> = {}): Attendance => ({
+  id, pacienteId: 'p', pacienteNome: 'P', data, procedimentoNome: 'Botox', createdAt: data, ...extra,
+});
+const periodo = periodoDoMes('2026-09');
+const material = custoDeMaterialNoPeriodo(
+  [
+    at('a', '2026-09-02', { materiaisRegistradosEm: 'x', custoMateriais: 240.7, professionalId: 'k' }),
+    at('b', '2026-09-10', { materiaisRegistradosEm: 'x', custoMateriais: 1.05 }),
+    at('c', '2026-09-12'), // realizado sem materiais
+    at('d', '2026-09-15', { status: 'faltou', materiaisRegistradosEm: 'x', custoMateriais: 99 }), // falta não conta
+    at('e', '2026-08-30', { materiaisRegistradosEm: 'x', custoMateriais: 50 }), // fora do mês
+  ],
+  periodo
+);
+ok('custo do mês soma só os realizados do mês', material.custo === 241.75, String(material.custo));
+ok('cobertura: 2 de 3 realizados com materiais', material.comMateriais === 2 && material.realizados === 3);
+ok(
+  'filtro por profissional',
+  custoDeMaterialNoPeriodo([at('a', '2026-09-02', { materiaisRegistradosEm: 'x', custoMateriais: 10, professionalId: 'k' }), at('b', '2026-09-03', { materiaisRegistradosEm: 'x', custoMateriais: 5 })], periodo, 'k').custo === 10
+);
+ok('margem = faturamento − custo', margemDoPeriodo(1000, 241.75).valor === 758.25 && margemDoPeriodo(1000, 241.75).percentual === 76);
+ok('sem faturamento a margem não vira percentual', margemDoPeriodo(0, 50).percentual === null);
 
 console.log(falhas === 0 ? '\nTUDO OK' : `\n${falhas} FALHA(S)`);
 process.exit(falhas === 0 ? 0 : 1);

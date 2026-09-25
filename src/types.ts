@@ -831,6 +831,26 @@ export interface MaterialUsado {
 }
 
 /**
+ * O custo estimado de material de um orçamento — interno, só da equipe.
+ *
+ * Mora em coleção própria (`quote_costs`), **nunca** dentro do `Quote`: o orçamento é lido sem
+ * login pelo link da cliente, e custo e margem gravados nele ficariam à vista dela no navegador.
+ * O id é o do orçamento; cada item aponta para o `QuoteItem` pelo id.
+ *
+ * Nasce do consumo padrão de cada procedimento × o número de sessões do item, e é editável. Os
+ * preços ficam congelados como estavam na emissão, como o próprio orçamento.
+ */
+export interface CustoDoOrcamento {
+  /** Igual ao `Quote.id`. */
+  id: string;
+  quoteId: string;
+  itens: { quoteItemId: string; materiais: MaterialUsado[] }[];
+  custoTotal: number;
+  valorClienteTotal: number;
+  updatedAt?: string;
+}
+
+/**
  * Os materiais usados num atendimento.
  *
  * Coleção própria, e não dentro do `Attendance`, pelo mesmo motivo do acompanhamento: a coleção
