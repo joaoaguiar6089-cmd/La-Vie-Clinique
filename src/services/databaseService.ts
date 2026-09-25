@@ -37,6 +37,9 @@ import {
   ConsentTermSection,
   EvaluationTemplate,
   EvaluationRecord,
+  ProdutoDeEstoque,
+  ConsumoPadrao,
+  MateriaisDoAtendimento,
 } from '../types';
 import { formatQuoteNumber, statusAntesDoDesfecho } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
@@ -102,6 +105,15 @@ const EVALUATION_RECORDS_COLLECTION = 'evaluation_records';
 const FOLLOWUP_TEMPLATES_COLLECTION = 'followup_templates';
 const FOLLOWUP_GENERAL_QUESTIONS_COLLECTION = 'followup_general_questions';
 const FOLLOWUP_RECORDS_COLLECTION = 'followup_records';
+
+// Estoque: os produtos com custo e valor repassado, o consumo padrão de cada procedimento e os
+// materiais usados em cada atendimento. Tudo interno da equipe — custo e margem nunca vão para
+// documento que a paciente consiga ler.
+const STOCK_PRODUCTS_COLLECTION = 'stock_products';
+// Um documento por procedimento, com o id dele.
+const PROCEDURE_CONSUMPTION_COLLECTION = 'procedure_consumption';
+// Um documento por atendimento, com o id dele.
+const ATTENDANCE_MATERIALS_COLLECTION = 'attendance_materials';
 
 /** As coleções de cada tipo de ficha clínica. Ver `utils/fichasClinicas.ts`. */
 const COLECOES_DA_FICHA: Record<
@@ -1908,7 +1920,7 @@ export async function saveAttendance(
 }
 
 /**
- * Apaga a visita e o que só existe por causa dela: o acompanhamento.
+ * Apaga a visita e o que só existe por causa dela: o acompanhamento e os materiais usados.
  *
  * Recebe o atendimento inteiro, e não só o id, por causa das marcas: o documento dependente só
  * entra no lote quando a marca diz que ele existe. Apagar às cegas um documento de uma coleção
@@ -1919,6 +1931,9 @@ export async function deleteAttendance(atendimento: Attendance): Promise<void> {
   batch.delete(doc(db, ATTENDANCES_COLLECTION, atendimento.id));
   if (atendimento.acompanhamentoPreenchidoEm) {
     batch.delete(doc(db, FOLLOWUP_RECORDS_COLLECTION, atendimento.id));
+  }
+  if (atendimento.materiaisRegistradosEm) {
+    batch.delete(doc(db, ATTENDANCE_MATERIALS_COLLECTION, atendimento.id));
   }
   await batch.commit();
 }
@@ -2004,11 +2019,14 @@ export async function remarcarAtendimento(
     data: destino.data,
     hora: destino.hora,
     status: 'agendado',
-    // O desfecho, o acompanhamento e a confirmação pertencem à visita que não aconteceu. A
-    // paciente confirmou o horário antigo; o novo nasce a confirmar, como qualquer agendamento.
+    // O desfecho, o acompanhamento, os materiais e a confirmação pertencem à visita que não
+    // aconteceu. A paciente confirmou o horário antigo; o novo nasce a confirmar, como qualquer
+    // agendamento.
     agendadoPara: undefined,
     avaliacaoPreenchidaEm: undefined,
     acompanhamentoPreenchidoEm: undefined,
+    materiaisRegistradosEm: undefined,
+    custoMateriais: undefined,
     confirmadoEm: undefined,
     createdAt: agora,
     updatedAt: agora,
@@ -2427,6 +2445,194 @@ export function subscribeToRegistrosDeFicha(
     onUpdate,
     onError
   );
+}
+
+// ==========================================
+// ESTOQUE
+// ==========================================
+
+/** Número de documento antigo ou digitado pela metade: o que não for número vira zero. */
+const numeroLido = (valor: unknown): number => {
+  const n = typeof valor === 'number' ? valor : Number(valor);
+  return Number.isFinite(n) ? n : 0;
+};
+
+function subscribeToProdutosDeEstoqueDireto(
+  onUpdate: (data: ProdutoDeEstoque[]) => void,
+  onError?: (err: Error) => void
+) {
+  return onSnapshot(
+    collection(db, STOCK_PRODUCTS_COLLECTION),
+    (snapshot) => {
+      const items: ProdutoDeEstoque[] = [];
+      snapshot.forEach((docSnap) => {
+        const bruto = docSnap.data() as Record<string, unknown>;
+        items.push({
+          ...(bruto as unknown as ProdutoDeEstoque),
+          id: docSnap.id,
+          nome: String(bruto.nome || 'Produto sem nome'),
+          unidade: String(bruto.unidade || 'un'),
+          custoUnitario: numeroLido(bruto.custoUnitario),
+          valorCliente: numeroLido(bruto.valorCliente),
+        });
+      });
+      items.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Estoque offline/cota diária atingida.');
+      } else {
+        console.error('Stock products subscription error:', error);
+      }
+      if (onError) onError(error);
+    }
+  );
+}
+
+/** Os produtos do estoque, arquivados inclusive — quem lista decide se os mostra. */
+export function subscribeToProdutosDeEstoque(
+  onUpdate: (data: ProdutoDeEstoque[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<ProdutoDeEstoque[]>(
+    STOCK_PRODUCTS_COLLECTION,
+    subscribeToProdutosDeEstoqueDireto,
+    onUpdate,
+    onError
+  );
+}
+
+export async function saveProdutoDeEstoque(produto: ProdutoDeEstoque): Promise<void> {
+  await setDoc(
+    doc(db, STOCK_PRODUCTS_COLLECTION, produto.id),
+    cleanForFirestore({ ...produto, updatedAt: new Date().toISOString() }),
+    { merge: true }
+  );
+}
+
+/**
+ * Exclusão de verdade — só para produto que nenhum consumo padrão usa (a tela confere). O
+ * histórico dos atendimentos não depende do produto: cada linha guardou nome e preço do dia.
+ */
+export async function deleteProdutoDeEstoque(produtoId: string): Promise<void> {
+  await deleteDoc(doc(db, STOCK_PRODUCTS_COLLECTION, produtoId));
+}
+
+function subscribeToConsumosPadraoDireto(
+  onUpdate: (data: ConsumoPadrao[]) => void,
+  onError?: (err: Error) => void
+) {
+  return onSnapshot(
+    collection(db, PROCEDURE_CONSUMPTION_COLLECTION),
+    (snapshot) => {
+      const items: ConsumoPadrao[] = [];
+      snapshot.forEach((docSnap) => {
+        const bruto = docSnap.data() as Record<string, unknown>;
+        items.push({
+          id: docSnap.id,
+          procedureId: String(bruto.procedureId || docSnap.id),
+          itens: paraArray<{ produtoId: string; quantidade: unknown }>(bruto.itens)
+            .filter((i) => i && i.produtoId)
+            .map((i) => ({ produtoId: i.produtoId, quantidade: numeroLido(i.quantidade) })),
+          updatedAt: bruto.updatedAt as string | undefined,
+        });
+      });
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Consumo por procedimento offline/cota diária atingida.');
+      } else {
+        console.error('Procedure consumption subscription error:', error);
+      }
+      if (onError) onError(error);
+    }
+  );
+}
+
+export function subscribeToConsumosPadrao(
+  onUpdate: (data: ConsumoPadrao[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<ConsumoPadrao[]>(
+    PROCEDURE_CONSUMPTION_COLLECTION,
+    subscribeToConsumosPadraoDireto,
+    onUpdate,
+    onError
+  );
+}
+
+/**
+ * Grava o consumo padrão de um ou mais procedimentos, num lote só — "aplicar a toda a
+ * categoria" grava as treze áreas do laser de uma vez, ou nenhuma.
+ *
+ * Consumo vazio apaga o documento: um procedimento sem material configurado é a ausência dele,
+ * e um documento com lista vazia seria só mais uma leitura cobrada em toda abertura.
+ */
+export async function saveConsumosPadrao(consumos: ConsumoPadrao[]): Promise<void> {
+  const batch = writeBatch(db);
+  const agora = new Date().toISOString();
+  consumos.forEach((c) => {
+    const ref = doc(db, PROCEDURE_CONSUMPTION_COLLECTION, c.procedureId);
+    if (c.itens.length === 0) {
+      batch.delete(ref);
+    } else {
+      batch.set(
+        ref,
+        cleanForFirestore({ id: c.procedureId, procedureId: c.procedureId, itens: c.itens, updatedAt: agora })
+      );
+    }
+  });
+  await batch.commit();
+}
+
+/** Os materiais registrados num atendimento, ou `null`. Leitura direta: o id é o do atendimento. */
+export async function getMateriaisDoAtendimento(
+  atendimentoId: string
+): Promise<MateriaisDoAtendimento | null> {
+  const snap = await getDoc(doc(db, ATTENDANCE_MATERIALS_COLLECTION, atendimentoId));
+  if (!snap.exists()) return null;
+  const bruto = snap.data() as Record<string, unknown>;
+  return {
+    ...(bruto as unknown as MateriaisDoAtendimento),
+    id: snap.id,
+    itens: paraArray<MateriaisDoAtendimento['itens'][number]>(bruto.itens),
+    custoTotal: numeroLido(bruto.custoTotal),
+    valorClienteTotal: numeroLido(bruto.valorClienteTotal),
+  };
+}
+
+/**
+ * Grava os materiais e, no mesmo lote, a marca e o total no atendimento. O lote existe para as
+ * duas coisas não divergirem: um custo no atendimento que não bate com as linhas faria o
+ * Financeiro somar um número que ninguém consegue conferir.
+ */
+export async function saveMateriaisDoAtendimento(registro: MateriaisDoAtendimento): Promise<void> {
+  const agora = new Date().toISOString();
+  const batch = writeBatch(db);
+  batch.set(
+    doc(db, ATTENDANCE_MATERIALS_COLLECTION, registro.atendimentoId),
+    cleanForFirestore({ ...registro, id: registro.atendimentoId, updatedAt: agora })
+  );
+  batch.update(doc(db, ATTENDANCES_COLLECTION, registro.atendimentoId), {
+    materiaisRegistradosEm: registro.createdAt || agora,
+    custoMateriais: registro.custoTotal,
+    updatedAt: agora,
+  });
+  await comConfirmacaoDoServidor(batch.commit(), 'dos materiais');
+}
+
+/** O inverso de `saveMateriaisDoAtendimento`: apaga as linhas, a marca e o total. */
+export async function deleteMateriaisDoAtendimento(atendimentoId: string): Promise<void> {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, ATTENDANCE_MATERIALS_COLLECTION, atendimentoId));
+  batch.update(doc(db, ATTENDANCES_COLLECTION, atendimentoId), {
+    materiaisRegistradosEm: deleteField(),
+    custoMateriais: deleteField(),
+    updatedAt: new Date().toISOString(),
+  });
+  await batch.commit();
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   Link2Off,
   Lock,
   NotebookPen,
+  PackageOpen,
   Pencil,
   Plus,
   RotateCcw,
@@ -19,6 +20,8 @@ import {
 import { Attendance, SessionPlan } from '../../types';
 import { formatDateOnly } from '../../utils/formatters';
 import { acompanhamentoVisivel } from '../../utils/fichasClinicas';
+import { materiaisVisiveis } from '../../utils/estoque';
+import { formatBRL } from '../../utils/formatters';
 import {
   ehPendente,
   ehPendenteAtrasado,
@@ -41,6 +44,8 @@ interface AttendancesTabProps {
   onConfirmar: (a: Attendance) => void;
   /** Abre o acompanhamento (o registro pós-atendimento) desta visita. */
   onAcompanhamento: (a: Attendance) => void;
+  /** Abre os materiais usados nesta visita. */
+  onMateriais: (a: Attendance) => void;
   onFaltou: (a: Attendance) => void;
   /** Marca como remarcado e abre um agendamento novo com os dados copiados. */
   onRemarcar: (a: Attendance) => void;
@@ -133,6 +138,7 @@ const LinhaDeAtendimento: React.FC<{
   onRemarcar: (a: Attendance) => void;
   /** Abre o acompanhamento desta visita. */
   onAcompanhamento: (a: Attendance) => void;
+  onMateriais: (a: Attendance) => void;
 }> = ({
   atendimento,
   rotuloDaSessao,
@@ -143,6 +149,7 @@ const LinhaDeAtendimento: React.FC<{
   onFaltou,
   onRemarcar,
   onAcompanhamento,
+  onMateriais,
 }) => (
   <div
     className={
@@ -203,6 +210,26 @@ const LinhaDeAtendimento: React.FC<{
           }
         >
           <NotebookPen className="w-4 h-4" />
+        </button>
+      )}
+
+      {materiaisVisiveis(atendimento) && (
+        <button
+          type="button"
+          onClick={() => onMateriais(atendimento)}
+          title={
+            atendimento.materiaisRegistradosEm
+              ? `Materiais usados — custo ${formatBRL(atendimento.custoMateriais || 0)}`
+              : 'Registrar materiais usados'
+          }
+          aria-label={`Materiais usados no atendimento de ${atendimento.procedimentoNome}`}
+          className={
+            atendimento.materiaisRegistradosEm
+              ? 'p-2 text-emerald-600 hover:text-emerald-700 transition-colors'
+              : acaoClass
+          }
+        >
+          <PackageOpen className="w-4 h-4" />
         </button>
       )}
 
@@ -268,6 +295,7 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
   onExcluir,
   onConfirmar,
   onAcompanhamento,
+  onMateriais,
   onFaltou,
   onRemarcar,
   onAdicionarSessao,
@@ -318,6 +346,7 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
               onExcluir={onExcluir}
               onConfirmar={onConfirmar}
               onAcompanhamento={onAcompanhamento}
+              onMateriais={onMateriais}
               onFaltou={onFaltou}
               onRemarcar={onRemarcar}
             />
@@ -412,6 +441,7 @@ export const AttendancesTab: React.FC<AttendancesTabProps> = ({
                         onExcluir={onExcluir}
                         onConfirmar={onConfirmar}
                         onAcompanhamento={onAcompanhamento}
+                        onMateriais={onMateriais}
                         onFaltou={onFaltou}
                         onRemarcar={onRemarcar}
                       />

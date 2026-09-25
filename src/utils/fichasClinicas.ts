@@ -187,6 +187,18 @@ export const novoIdDeAvaliacao = (): string =>
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
   }`;
 
+/**
+ * O que sai junto quando o atendimento é excluído, para a frase de confirmação: ", junto com o
+ * acompanhamento e os materiais registrados". Vazio quando não há nada.
+ */
+export const dependentesDoAtendimento = (a: Attendance): string => {
+  const partes = [
+    a.acompanhamentoPreenchidoEm ? 'o acompanhamento' : '',
+    a.materiaisRegistradosEm ? 'os materiais registrados' : '',
+  ].filter(Boolean);
+  return partes.length > 0 ? `, junto com ${partes.join(' e ')}` : '';
+};
+
 /** A paciente do cadastro por trás de uma ficha — o gênero dela escolhe o mapa anatômico. */
 export const pacienteDaFicha = (
   alvo: Pick<AlvoDaFicha, 'pacienteId'>,

@@ -9,6 +9,7 @@ import {
   LogOut,
   MoreHorizontal,
   NotebookPen,
+  Package,
   Plus,
   Receipt,
   Settings,
@@ -115,6 +116,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     currentView === 'anamnesis' ||
     currentView === 'evaluations' ||
     currentView === 'acompanhamento' ||
+    currentView === 'estoque' ||
     currentView === 'quotes' ||
     currentView === 'financeiro';
 
@@ -235,6 +237,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           rotulo="Acompanhamento"
           descricao="Depois do atendimento"
           onClick={() => ir('acompanhamento')}
+        />
+        <ItemDaFolha
+          icone={Package}
+          rotulo="Estoque"
+          descricao="Produtos e consumo por procedimento"
+          onClick={() => ir('estoque')}
         />
         {ehAdmin && (
           <ItemDaFolha

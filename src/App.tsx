@@ -12,6 +12,7 @@ import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntr
 import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { EvaluationsModule } from './components/evaluations/EvaluationsModule';
 import { AcompanhamentoModule } from './components/acompanhamento/AcompanhamentoModule';
+import { EstoqueModule } from './components/estoque/EstoqueModule';
 import { AgendaModule } from './components/agenda/AgendaModule';
 import { agendamentosAtrasados } from './utils/agenda';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
@@ -925,31 +926,42 @@ function MainCatalogApp() {
               pedido={currentView === 'patients' ? pedido : null}
               onPedidoAtendido={() => setPedido(null)}
             />
-          ) : currentView === 'anamnesis' ? (
-            <AnamnesisModule
-              clinicProfile={clinic}
-              catalogProcedures={procedures}
-              templates={anamnesisTemplates}
-              openRequest={anamnesisRequest}
-              onOpenRequestHandled={() => setAnamnesisRequest(null)}
-            />
-          ) : currentView === 'evaluations' ? (
-            <EvaluationsModule
-              clinicProfile={clinic}
-              catalogProcedures={procedures}
-              fichas={evaluationTemplates}
-              pacientes={allPatients}
-              professionals={clinic.professionals || []}
-              gerais={evaluationGerais}
-              currentProfessionalId={currentProfessional?.id}
-            />
-          ) : currentView === 'acompanhamento' ? (
-            <AcompanhamentoModule
-              clinicProfile={clinic}
-              catalogProcedures={procedures}
-              pacientes={allPatients}
-              professionals={clinic.professionals || []}
-            />
+          ) : currentView === 'anamnesis' ||
+            currentView === 'evaluations' ||
+            currentView === 'acompanhamento' ||
+            currentView === 'estoque' ? (
+            /* As seções em abas não têm moldura própria — sem esta, os cartões encostavam na
+               barra lateral. Mesma largura e respiro da Agenda e dos Orçamentos. */
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+              {currentView === 'anamnesis' ? (
+                <AnamnesisModule
+                  clinicProfile={clinic}
+                  catalogProcedures={procedures}
+                  templates={anamnesisTemplates}
+                  openRequest={anamnesisRequest}
+                  onOpenRequestHandled={() => setAnamnesisRequest(null)}
+                />
+              ) : currentView === 'evaluations' ? (
+                <EvaluationsModule
+                  clinicProfile={clinic}
+                  catalogProcedures={procedures}
+                  fichas={evaluationTemplates}
+                  pacientes={allPatients}
+                  professionals={clinic.professionals || []}
+                  gerais={evaluationGerais}
+                  currentProfessionalId={currentProfessional?.id}
+                />
+              ) : currentView === 'acompanhamento' ? (
+                <AcompanhamentoModule
+                  clinicProfile={clinic}
+                  catalogProcedures={procedures}
+                  pacientes={allPatients}
+                  professionals={clinic.professionals || []}
+                />
+              ) : (
+                <EstoqueModule catalogProcedures={procedures} />
+              )}
+            </div>
           ) : (
             <QuotesPanel
               clinic={clinic}

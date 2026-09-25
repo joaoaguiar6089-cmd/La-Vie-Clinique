@@ -4,6 +4,8 @@ import {
   Check,
   CheckCheck,
   MessageCircle,
+  NotebookPen,
+  PackageOpen,
   Pencil,
   Stethoscope,
   Trash2,
@@ -22,6 +24,9 @@ import {
 } from '../../utils/agenda';
 import { ROTULO_DO_STATUS, ehPendente } from '../../utils/attendances';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
+import { acompanhamentoVisivel } from '../../utils/fichasClinicas';
+import { materiaisVisiveis } from '../../utils/estoque';
+import { formatBRL } from '../../utils/formatters';
 
 /**
  * O que um cartão da grade abre.
@@ -45,6 +50,10 @@ interface AgendaDetalheModalProps {
   onExcluir: (a: Attendance) => void;
   /** Liga/desliga o "confirmado" — o toque que a recepção dá depois de a paciente responder. */
   onAlternarConfirmacao: (a: Attendance, confirmado: boolean) => void;
+  /** O registro pós-atendimento — o mesmo atalho da linha do atendimento na ficha da paciente. */
+  onAcompanhamento: (a: Attendance) => void;
+  /** Os materiais usados, com o custo. */
+  onMateriais: (a: Attendance) => void;
 }
 
 const acaoBase =
@@ -63,6 +72,8 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
   onRemarcar,
   onExcluir,
   onAlternarConfirmacao,
+  onAcompanhamento,
+  onMateriais,
 }) => {
   const inicioMin = minutosDoHHMM(atendimento.hora);
   const duracao = duracaoDoAtendimento(atendimento, catalogo);
@@ -172,6 +183,42 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
                 <CheckCheck className="w-4 h-4" />
                 {confirmado ? 'Confirmado — desmarcar' : 'Marcar como confirmado'}
               </button>
+            </div>
+          )}
+
+          {/* Depois que a visita aconteceu: o registro dela e o que ela gastou. Verde = preenchido. */}
+          {(acompanhamentoVisivel(atendimento) || materiaisVisiveis(atendimento)) && (
+            <div className="grid grid-cols-2 gap-2">
+              {acompanhamentoVisivel(atendimento) && (
+                <button
+                  type="button"
+                  onClick={() => onAcompanhamento(atendimento)}
+                  className={`${acaoBase} border ${
+                    atendimento.acompanhamentoPreenchidoEm
+                      ? 'bg-ok-bg text-ok border-ok-line'
+                      : 'bg-card text-ink border-line hover:border-brand'
+                  }`}
+                >
+                  <NotebookPen className="w-4 h-4" />
+                  Acompanhamento
+                </button>
+              )}
+              {materiaisVisiveis(atendimento) && (
+                <button
+                  type="button"
+                  onClick={() => onMateriais(atendimento)}
+                  className={`${acaoBase} border ${
+                    atendimento.materiaisRegistradosEm
+                      ? 'bg-ok-bg text-ok border-ok-line'
+                      : 'bg-card text-ink border-line hover:border-brand'
+                  }`}
+                >
+                  <PackageOpen className="w-4 h-4" />
+                  {atendimento.materiaisRegistradosEm
+                    ? `Materiais · ${formatBRL(atendimento.custoMateriais || 0)}`
+                    : 'Materiais'}
+                </button>
+              )}
             </div>
           )}
 

@@ -45,6 +45,9 @@ import { AgendaSemanaStrip } from './AgendaSemanaStrip';
 import { AgendaDiaMobile } from './AgendaDiaMobile';
 import { AgendaFiltros } from './AgendaFiltros';
 import { AgendaDetalheModal } from './AgendaDetalheModal';
+import { FichaFillModal } from '../fichas/FichaFillModal';
+import { MateriaisDoAtendimentoPanel } from '../estoque/MateriaisDoAtendimentoPanel';
+import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { SkeletonAgenda } from '../common/Skeleton';
 
 /**
@@ -122,6 +125,8 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   const [formulario, setFormulario] = useState<EstadoDoFormulario | null>(null);
   const [pacienteDoForm, setPacienteDoForm] = useState<Patient | null>(null);
   const [detalhe, setDetalhe] = useState<Attendance | null>(null);
+  const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
+  const [materiaisDe, setMateriaisDe] = useState<Attendance | null>(null);
   const [arrastando, setArrastando] = useState<Attendance | null>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -409,7 +414,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
       textoConfirmar: 'Excluir',
       mensagem:
         `O registro de ${a.pacienteNome} em ${dataCurta(a.data)} será apagado` +
-        (a.acompanhamentoPreenchidoEm ? ', junto com o acompanhamento preenchido' : '') +
+        dependentesDoAtendimento(a) +
         '. Não tem volta.',
       onConfirmar: async () => {
         try {
@@ -563,8 +568,35 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
           onRemarcar={abrirRemarcacao}
           onExcluir={pedirExclusao}
           onAlternarConfirmacao={alternarConfirmacao}
+          onAcompanhamento={(a) => {
+            setDetalhe(null);
+            setAcompanhando(a);
+          }}
+          onMateriais={(a) => {
+            setDetalhe(null);
+            setMateriaisDe(a);
+          }}
         />
       )}
+
+      {acompanhando && (
+        <FichaFillModal
+          tipo="acompanhamento"
+          isOpen
+          onClose={() => setAcompanhando(null)}
+          alvo={alvoDoAtendimento(acompanhando)}
+          paciente={pacientes.find((p) => p.id === acompanhando.pacienteId)}
+          catalogo={catalogProcedures}
+          professionals={professionals}
+          clinicProfile={clinic}
+        />
+      )}
+
+      <MateriaisDoAtendimentoPanel
+        atendimento={materiaisDe}
+        onFechar={() => setMateriaisDe(null)}
+        catalogo={catalogProcedures}
+      />
 
       <AttendanceFormModal
         isOpen={!!formulario}

@@ -47,7 +47,8 @@ import { PatientDetailView } from './PatientDetailView';
 import { NewPatientModal } from './NewPatientModal';
 import { AttendanceFormModal, ModoDoFormulario } from './AttendanceFormModal';
 import { FichaFillModal } from '../fichas/FichaFillModal';
-import { alvoDoAtendimento } from '../../utils/fichasClinicas';
+import { MateriaisDoAtendimentoPanel } from '../estoque/MateriaisDoAtendimentoPanel';
+import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { salvarAtendimento } from '../../services/attendanceWorkflow';
 
 interface PatientsModuleProps {
@@ -89,6 +90,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
 }) => {
   /** Visita cujo acompanhamento está aberto. */
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
+  /** Visita cujos materiais usados estão abertos. */
+  const [materiaisDe, setMateriaisDe] = useState<Attendance | null>(null);
   /** Avaliações da paciente aberta — lidas só enquanto a página dela está na tela. */
   const [avaliacoes, setAvaliacoes] = useState<EvaluationRecord[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -308,7 +311,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
     setConfirmacao({
       titulo: 'Excluir este atendimento?',
       mensagem: `${a.procedimentoNome} — ${a.data.split('-').reverse().join('/')}.\n\nO registro e as observações${
-        a.acompanhamentoPreenchidoEm ? ', e o acompanhamento preenchido,' : ''
+        dependentesDoAtendimento(a) ? `${dependentesDoAtendimento(a)},` : ''
       } somem para sempre. Se ele fazia parte de um plano, as sessões seguintes são renumeradas sozinhas.`,
       textoConfirmar: 'Excluir atendimento',
       onConfirmar: async () => {
@@ -427,6 +430,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
             abrirFormulario({ modo: 'confirmacao', atendimento: a })
           }
           onAcompanhamentoAtendimento={setAcompanhando}
+          onMateriaisAtendimento={setMateriaisDe}
           onFaltouAtendimento={(a) => marcarStatus(a, 'faltou')}
           onRemarcarAtendimento={handleRemarcar}
           onAdicionarSessao={(planoId) => abrirFormulario({ modo: 'novo', planoFixoId: planoId })}
@@ -455,6 +459,12 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           modo={formAtendimento?.modo || 'novo'}
           planoFixoId={formAtendimento?.planoFixoId}
           onSalvar={handleSalvarAtendimento}
+        />
+
+        <MateriaisDoAtendimentoPanel
+          atendimento={materiaisDe}
+          onFechar={() => setMateriaisDe(null)}
+          catalogo={catalogProcedures}
         />
 
         {acompanhando && (
