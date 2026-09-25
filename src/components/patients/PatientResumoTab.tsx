@@ -1,12 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  AlertTriangle,
-  CalendarCheck,
-  CalendarPlus,
-  ClipboardCheck,
-  ClipboardList,
-  Receipt,
-} from 'lucide-react';
+import { AlertTriangle, CalendarPlus } from 'lucide-react';
 import {
   AnamnesisRecord,
   Attendance,
@@ -24,6 +17,7 @@ import {
   progressoDosPlanos,
 } from '../../utils/pacienteResumo';
 import { BeforeAfterCompare } from './BeforeAfterCompare';
+import { AcoesDaLinha, ItemDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoTempo';
 
 /**
  * A aba Resumo da ficha da paciente.
@@ -42,26 +36,11 @@ interface PatientResumoTabProps {
   /** Avaliações emitidas para ela — entram na linha do tempo. */
   avaliacoes: EvaluationRecord[];
   catalogProcedures: Procedure[];
-  onAbrirFicha: (record: AnamnesisRecord) => void;
-  onAbrirAvaliacao: (registro: EvaluationRecord) => void;
-  onAbrirOrcamento: (quote: Quote) => void;
+  /** Os atalhos da linha do tempo — os mesmos da linha da clínica, na tela Hoje. */
+  acoes: AcoesDaLinha;
   onIrParaAba: (aba: 'atendimentos' | 'anamneses' | 'orcamentos') => void;
   onAgendarSessao: (plano: SessionPlan) => void;
 }
-
-const ICONE_DA_LINHA = {
-  atendimento: CalendarCheck,
-  anamnese: ClipboardList,
-  avaliacao: ClipboardCheck,
-  orcamento: Receipt,
-} as const;
-
-const ROTULO_DA_LINHA = {
-  atendimento: 'Atendimento',
-  anamnese: 'Anamnese',
-  avaliacao: 'Avaliação',
-  orcamento: 'Orçamento',
-} as const;
 
 export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
   records,
@@ -70,9 +49,7 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
   quotes,
   avaliacoes,
   catalogProcedures,
-  onAbrirFicha,
-  onAbrirAvaliacao,
-  onAbrirOrcamento,
+  acoes,
   onIrParaAba,
   onAgendarSessao,
 }) => {
@@ -91,9 +68,9 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
   );
 
   const abrirItem = (item: ItemDaLinha) => {
-    if (item.tipo === 'anamnese') onAbrirFicha(item.ref);
-    else if (item.tipo === 'avaliacao') onAbrirAvaliacao(item.ref);
-    else if (item.tipo === 'orcamento') onAbrirOrcamento(item.ref);
+    if (item.tipo === 'anamnese') acoes.onVerAnamnese(item.ref);
+    else if (item.tipo === 'avaliacao') acoes.onVerAvaliacao(item.ref);
+    else if (item.tipo === 'orcamento') acoes.orcamento.abrirPrevia(item.ref);
     else onIrParaAba('atendimentos');
   };
 
@@ -238,40 +215,16 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
             </p>
           </div>
         ) : (
-          <ol className="relative border-l border-line ml-3 space-y-1">
-            {linha.map((item) => {
-              const Icone = ICONE_DA_LINHA[item.tipo];
-              return (
-                <li key={`${item.tipo}-${item.id}`} className="relative pl-6">
-                  <span
-                    aria-hidden
-                    className="absolute -left-[9px] top-4 w-[18px] h-[18px] rounded-full bg-card border border-line flex items-center justify-center"
-                  >
-                    <Icone className="w-2.5 h-2.5 text-brand" />
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => abrirItem(item)}
-                    className="w-full text-left py-2.5 px-3 rounded-lg hover:bg-surface-2 transition-colors"
-                  >
-                    <span className="flex items-baseline gap-2">
-                      <span className="text-body font-semibold text-brand tabular-nums shrink-0">
-                        {formatDateOnly(item.data)}
-                      </span>
-                      <span className="text-label uppercase tracking-wider text-muted">
-                        {ROTULO_DA_LINHA[item.tipo]}
-                      </span>
-                    </span>
-                    <span className="block text-body-lg text-ink truncate">{item.titulo}</span>
-                    {item.profissional && (
-                      <span className="block text-body text-muted truncate">
-                        {item.profissional}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
+          <ol className="relative border-l border-line ml-3 space-y-0.5">
+            {linha.map((item) => (
+              <ItemDaLinhaDoTempo
+                key={`${item.tipo}-${item.id}`}
+                item={item}
+                acoes={acoes}
+                mostrarData
+                onAbrir={abrirItem}
+              />
+            ))}
           </ol>
         )}
       </section>

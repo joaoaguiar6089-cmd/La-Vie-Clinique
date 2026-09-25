@@ -221,6 +221,23 @@ export const isQuoteEditavel = (quote: Pick<Quote, "status">): boolean =>
   quote.status === "rascunho";
 
 /**
+ * Se o orçamento pode ser substituído por um novo, com número próprio.
+ *
+ * Só depois de enviado (antes disso, edita-se o rascunho), só se ninguém o substituiu ainda, e
+ * nunca cancelado ou pago — pago não se substitui: o dinheiro entrou por este, com este número.
+ * Mora aqui porque a tela de Orçamentos, a página da paciente e a linha do tempo da tela Hoje
+ * oferecem o mesmo botão.
+ */
+export const podeSubstituir = (
+  quote: Pick<Quote, "status" | "dataValidade" | "substituidoPor">
+): boolean => {
+  const status = resolveQuoteStatus(quote);
+  return (
+    !isQuoteEditavel(quote) && !quote.substituidoPor && status !== "cancelado" && status !== "pago"
+  );
+};
+
+/**
  * Se a profissional ainda pode dizer como terminou: a cliente pagou ou recusou.
  *
  * Vale para rascunho e enviado — inclusive o enviado que passou da validade, porque um Pix que

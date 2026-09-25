@@ -12,6 +12,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import {
+  AnamnesisTemplate,
   Attendance,
   ClinicProfile,
   Patient,
@@ -41,14 +42,16 @@ import {
 import { agendamentosAtrasados } from '../../utils/agenda';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
 import { SkeletonLinhas } from '../common/Skeleton';
+import { LinhaDoTempoDaClinica } from './LinhaDoTempoDaClinica';
 
 /**
  * A tela inicial: "o que eu preciso fazer agora?".
  *
  * Todo número desta tela sai das coleções que o `App` já assina — atendimentos, pacientes,
- * orçamentos e catálogo. **Nenhuma leitura nova no Firestore**, o que é também o motivo de ela
+ * orçamentos e catálogo. **Nenhuma leitura da coleção inteira**, o que é também o motivo de ela
  * poder ser a primeira tela depois do login: se ela custasse um snapshot, todo mundo pagaria
- * por ele todo dia, inclusive quem só entrou para abrir o catálogo.
+ * por ele todo dia, inclusive quem só entrou para abrir o catálogo. A única leitura própria é a
+ * da linha do tempo — anamneses e avaliações dos últimos 30 dias, e só elas.
  *
  * A ordem da tela é a ordem da pergunta: primeiro o dia (quem vem agora), depois o que está
  * represado (agendamentos sem desfecho, confirmações de amanhã), e só então os números do mês.
@@ -56,6 +59,8 @@ import { SkeletonLinhas } from '../common/Skeleton';
  *
  * Avaliação e acompanhamento não entram nas pendências: as duas fichas são opcionais, e cobrar
  * todo atendimento por elas treinava a equipe a ignorar o contador.
+ *
+ * Por último, a linha do tempo da clínica: consulta, e não tarefa — por isso depois de tudo.
  */
 
 interface HojeViewProps {
@@ -64,6 +69,8 @@ interface HojeViewProps {
   atendimentos: Attendance[];
   pacientes: Patient[];
   quotes: Quote[];
+  /** Fichas-modelo de anamnese — a ficha aberta pela linha do tempo resolve o termo por elas. */
+  templatesAnamnese: AnamnesisTemplate[];
   professionalLogada?: Professional | null;
   carregando?: boolean;
   onAbrirBusca: () => void;
@@ -143,6 +150,7 @@ export const HojeView: React.FC<HojeViewProps> = ({
   atendimentos,
   pacientes,
   quotes,
+  templatesAnamnese,
   professionalLogada,
   carregando,
   onAbrirBusca,
@@ -372,9 +380,19 @@ export const HojeView: React.FC<HojeViewProps> = ({
               onClick={onIrParaAgenda}
             />
           )}
-
         </section>
       )}
+
+      <LinhaDoTempoDaClinica
+        clinic={clinic}
+        catalogProcedures={catalogProcedures}
+        atendimentos={atendimentos}
+        pacientes={pacientes}
+        quotes={quotes}
+        templatesAnamnese={templatesAnamnese}
+        carregando={carregando}
+        onAbrirPaciente={onAbrirPaciente}
+      />
     </div>
   );
 };
