@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { buildPublicLink } from '../../utils/publicLinks';
+import { AvisoLinkFechado } from '../common/AvisoLinkFechado';
 import { AnamnesisTemplate, Patient, ClinicProfile } from '../../types';
 import {
   X,
@@ -281,6 +282,9 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
                   </>
                 )}
               </button>
+            </div>
+            <div className="mt-2">
+              <AvisoLinkFechado link={shareableUrl} />
             </div>
           </div>
 

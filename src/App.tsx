@@ -48,6 +48,7 @@ import {
   saveClinicProfileToDb,
   publicarMapaCorporalDoLaser,
   publicarEspelhoPublicoSeMudou,
+  salvarEnderecoPublicoDaClinica,
   replaceAllProceduresWithOfficialPdfCatalog,
   subscribeToAnamnesisTemplates,
   subscribeToEvaluationTemplates,
@@ -62,6 +63,11 @@ import {
 import { DEFAULT_PROCEDURE_TEMPLATES } from './data/anamnesisInitialData';
 import { onAuthChange, logout, type User } from './services/authService';
 import { firebaseConfig } from './lib/firebase';
+import {
+  enderecoPublicoDaJanela,
+  motivoEnderecoFechado,
+  normalizarEnderecoPublico,
+} from './utils/publicLinks';
 
 /**
  * Endereço do banco no console do Firebase, montado a partir da configuração em vez de escrito à
@@ -146,6 +152,7 @@ function MainCatalogApp() {
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const publicProfilePublishedRef = useRef(false);
   const firebaseClinicSyncedPhotoRef = useRef(false);
+  const enderecoPublicoAprendidoRef = useRef(false);
 
   useEffect(() => {
     if (syncStatus === 'error') {
@@ -364,6 +371,26 @@ function MainCatalogApp() {
                 publicarEspelhoPublicoSeMudou(enrichedClinic).catch((err) =>
                   console.warn('Não foi possível publicar o espelho público da clínica:', err)
                 );
+              }
+
+              // O painel aprende o endereço publicado sozinho. Os links de orçamento e de ficha
+              // saíam pedindo senha porque a base era o endereço de desenvolvimento do AI Studio —
+              // o da aba em que a equipe trabalha — e o campo "Endereço público" ficava em branco
+              // (ou com esse mesmo endereço). Basta abrir o site publicado uma vez, já logada,
+              // para os links passarem a sair certos também de dentro do AI Studio.
+              //
+              // Só grava quando o configurado não serve: um domínio próprio preenchido à mão
+              // nunca é trocado pelo endereço técnico da hospedagem.
+              if (!enderecoPublicoAprendidoRef.current) {
+                const daJanela = enderecoPublicoDaJanela();
+                const configurado = normalizarEnderecoPublico(firebaseClinic.publicBaseUrl);
+                const configuradoServe = !!configurado && !motivoEnderecoFechado(configurado);
+                if (daJanela && !configuradoServe && daJanela !== configurado) {
+                  enderecoPublicoAprendidoRef.current = true;
+                  salvarEnderecoPublicoDaClinica(daJanela).catch((err) =>
+                    console.warn('Não foi possível gravar o endereço público da clínica:', err)
+                  );
+                }
               }
             }
             setSyncStatus('synced');

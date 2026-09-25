@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Copy, Check, MessageCircle, Lock } from 'lucide-react';
 import { ClinicProfile, Quote } from '../../types';
 import { buildPublicLink } from '../../utils/publicLinks';
+import { AvisoLinkFechado } from '../common/AvisoLinkFechado';
 
 interface QuoteShareModalProps {
   quote: Quote | null;
@@ -77,6 +78,8 @@ export const QuoteShareModal: React.FC<QuoteShareModalProps> = ({
             A cliente abre esse link no celular, sem login e sem instalar nada. O link é secreto:
             só quem recebe consegue abrir.
           </p>
+
+          <AvisoLinkFechado link={link} />
 
           <div className="flex items-stretch gap-2">
             <input
