@@ -205,6 +205,20 @@ contatos da clínica.
 - A distribuição é feita por **medição real de altura no DOM** (render escondido,
   mede, monta as páginas) — nunca por estimativa.
 
+**Comprovante de pagamento:** orçamento pago com comprovante anexado ganha, no fim
+(depois do manequim do laser, se houver), uma página por folha do comprovante:
+cabeçalho reduzido → "Comprovante de pagamento" com "Pago em DD/MM/AAAA" → a folha,
+inteira e sem distorção, no espaço que sobra. Foto é uma folha; PDF é uma folha por
+página, até 6. Entra na numeração "N/total" e vale para a prévia do painel e para o
+PDF que a cliente baixa pelo link.
+- Fica fora do `paginar()`, como o manequim: a paginação medida continua só do orçamento.
+- O arquivo é baixado e convertido em imagem (data URL) **antes** da exportação, em
+  `usePaginasDoComprovante`. O PDF é desenhado pelo pdf.js (build `legacy`,
+  carregado só quando há comprovante em PDF). "Baixar PDF" espera o comprovante carregar.
+- Se o comprovante não carregar (arquivo apagado, HEIC fora do Safari, rede), a
+  prévia mostra uma faixa com o motivo e o link do arquivo, e o PDF sai sem ele —
+  nunca com um retângulo cinza no lugar.
+
 **Detalhes finos:**
 - A contagem de sessões só aparece **quando for mais de 1**.
 - O rótulo "A partir de" (`isStartingPrice`) do catálogo é **ignorado** no orçamento —
@@ -267,6 +281,7 @@ Quatro parâmetros, com os valores do design como padrão:
 | `src/components/quotes/ProcedureSearchAdd.tsx` | busca no catálogo para adicionar |
 | `src/components/quotes/QuotePrintable.tsx` | páginas A4 + paginação medida |
 | `src/components/quotes/QuotePreviewModal.tsx` | prévia e download do PDF |
+| `src/components/quotes/usePaginasDoComprovante.ts` | comprovante (foto ou PDF) convertido nas folhas do fim do PDF |
 | `src/components/quotes/QuoteShareModal.tsx` | link, WhatsApp e marcação de enviado |
 | `src/components/quotes/QuoteDesfecho.tsx` | status na lista, "Pagou/Recusou" e folha de pagamento com comprovante |
 | `src/services/comprovantes.ts` | envio do comprovante ao Storage (`orcamentos/<id>/comprovantes/`) |

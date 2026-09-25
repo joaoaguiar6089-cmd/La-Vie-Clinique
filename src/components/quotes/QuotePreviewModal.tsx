@@ -4,6 +4,7 @@ import { ClinicProfile, LaserBodyMap, Quote } from '../../types';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
 import { montarSnapshotClinica, SNAPSHOT_CLINICA_PADRAO } from '../../utils/quoteFactory';
 import { QuotePrintable } from './QuotePrintable';
+import { usePaginasDoComprovante } from './usePaginasDoComprovante';
 
 interface QuotePreviewModalProps {
   quote: Quote | null;
@@ -44,6 +45,9 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
   const [erro, setErro] = useState<string | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const paginasRef = useRef<HTMLDivElement>(null);
+  // Antes do `return null` abaixo: hooks não podem depender de haver orçamento aberto
+  const comprovante = usePaginasDoComprovante(quote?.comprovante);
+  const carregandoComprovante = comprovante.estado === 'carregando';
 
   useEffect(() => {
     if (!quote) return;
@@ -90,13 +94,14 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
           <button
             type="button"
             onClick={baixarPdf}
-            disabled={exportando}
+            disabled={exportando || carregandoComprovante}
+            title={carregandoComprovante ? 'Aguarde o comprovante carregar' : undefined}
             className="px-5 py-2.5 bg-brand text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-brand-hover transition-colors disabled:opacity-50 flex items-center gap-2"
           >
-            {exportando ? (
+            {exportando || carregandoComprovante ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Gerando...
+                {exportando ? 'Gerando...' : 'Comprovante...'}
               </>
             ) : (
               <>
@@ -123,6 +128,31 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
         </div>
       )}
 
+      {/* O PDF sai sem o comprovante — quem baixa precisa saber antes de mandar para alguém */}
+      {comprovante.estado === 'erro' && quote.comprovante && (
+        <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 text-xs text-amber-800 flex items-center gap-2 shrink-0">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>
+            O comprovante não entrou no PDF: {comprovante.mensagem}.{' '}
+            <a
+              href={quote.comprovante.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-semibold"
+            >
+              Abrir o comprovante
+            </a>
+          </span>
+        </div>
+      )}
+      {comprovante.estado === 'pronto' && comprovante.paginasOmitidas > 0 && (
+        <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 text-xs text-amber-800 flex items-center gap-2 shrink-0">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          O comprovante tem mais folhas do que cabem no orçamento; entraram só as{' '}
+          {comprovante.paginas.length} primeiras.
+        </div>
+      )}
+
       <div ref={areaRef} className="flex-1 overflow-auto p-6 flex justify-center">
         <div
           style={{
@@ -136,6 +166,7 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
             <QuotePrintable
               quote={quote}
               mapaCorporal={mapaCorporal}
+              paginasDoComprovante={comprovante.estado === 'pronto' ? comprovante.paginas : undefined}
               clinic={
                 quote.clinica ||
                 (clinic ? montarSnapshotClinica(clinic) : SNAPSHOT_CLINICA_PADRAO)

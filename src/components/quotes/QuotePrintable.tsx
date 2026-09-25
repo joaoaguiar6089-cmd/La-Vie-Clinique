@@ -12,6 +12,7 @@ import {
 import { isLaserCategory } from '../../utils/templateMatching';
 import { nomeCurtoDaArea } from '../../utils/laserAreas';
 import { LaserBodyMapView } from '../laser/LaserBodyMapView';
+import { PaginaDoComprovante } from './usePaginasDoComprovante';
 
 /** A4 a 96dpi — mesma métrica que o exportElementAsPDF já usa no catálogo. */
 const PAGE_W = 794;
@@ -24,6 +25,9 @@ const GAP = 13;
 const ALTURA_RODAPE_PAGINACAO = 18;
 const CONTENT_W = PAGE_W - PAD_X * 2;
 const ALTURA_UTIL = PAGE_H - PAD_TOP - PAD_BOTTOM - ALTURA_RODAPE_PAGINACAO;
+/** Espaço da folha do comprovante: a página útil menos o cabeçalho compacto e o título. */
+const CAIXA_COMPROVANTE_W = CONTENT_W;
+const CAIXA_COMPROVANTE_H = ALTURA_UTIL - 110;
 
 const BRONZE = '#A67C52';
 const PRETO = '#1A1A1A';
@@ -519,6 +523,11 @@ interface QuotePrintableProps {
    * congelados em `quote.clinica` justamente por não serem.
    */
   mapaCorporal?: LaserBodyMap | null;
+  /**
+   * Folhas do comprovante de pagamento, já baixadas (`usePaginasDoComprovante`). Entram no fim,
+   * uma página do orçamento para cada folha. Vazio ou ausente: sem páginas de comprovante.
+   */
+  paginasDoComprovante?: PaginaDoComprovante[];
   /** Chamado quando as páginas já estão montadas e o elemento pode virar PDF. */
   onReady?: () => void;
 }
@@ -527,6 +536,7 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
   quote,
   clinic,
   mapaCorporal,
+  paginasDoComprovante = [],
   onReady,
 }) => {
   const [layout, setLayout] = useState<PaginaLayout[] | null>(null);
@@ -597,6 +607,24 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
   useEffect(() => {
     if (layout && onReady) onReady();
   }, [layout, onReady]);
+
+  const paginasDoMapa = temPaginaDoMapa ? 1 : 0;
+  const totalDePaginas = (layout?.length ?? 0) + paginasDoMapa + paginasDoComprovante.length;
+
+  const numeroDaPagina = (numero: number) => (
+    <div
+      style={{
+        position: 'absolute',
+        right: PAD_X,
+        bottom: PAD_BOTTOM / 2,
+        fontSize: 9,
+        color: '#8A857C',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {numero}/{totalDePaginas}
+    </div>
+  );
 
   const estiloPagina: React.CSSProperties = {
     width: PAGE_W,
@@ -688,18 +716,7 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
             </>
           )}
 
-          <div
-            style={{
-              position: 'absolute',
-              right: PAD_X,
-              bottom: PAD_BOTTOM / 2,
-              fontSize: 9,
-              color: '#8A857C',
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {indice + 1}/{layout.length + (temPaginaDoMapa ? 1 : 0)}
-          </div>
+          {numeroDaPagina(indice + 1)}
         </div>
       ))}
 
@@ -779,20 +796,75 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
           <div style={{ flex: 1 }} />
           <RodapeLegal clinic={clinic} />
 
-          <div
-            style={{
-              position: 'absolute',
-              right: PAD_X,
-              bottom: PAD_BOTTOM / 2,
-              fontSize: 9,
-              color: '#8A857C',
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {layout.length + 1}/{layout.length + 1}
-          </div>
+          {numeroDaPagina(layout.length + 1)}
         </div>
       )}
+
+      {/*
+        Comprovante de pagamento — uma página por folha, depois de tudo. Mesma lógica do manequim:
+        fica fora do `paginar()`, que continua medindo só o orçamento.
+      */}
+      {layout &&
+        paginasDoComprovante.map((folha, i) => {
+          // Cabe inteira na caixa, sem distorcer: a menor das duas escalas
+          const escala = Math.min(CAIXA_COMPROVANTE_W / folha.largura, CAIXA_COMPROVANTE_H / folha.altura);
+          const numero = layout.length + paginasDoMapa + i + 1;
+          return (
+            <div key={i} data-pdf-page={numero} style={estiloPagina}>
+              <CabecalhoCompacto quote={quote} />
+
+              <div style={{ textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    fontSize: 20,
+                    color: PRETO,
+                    lineHeight: 1.15,
+                  }}
+                >
+                  Comprovante de pagamento
+                </div>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    marginTop: 3,
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    letterSpacing: '.14em',
+                    color: BRONZE,
+                    fontWeight: 600,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {[
+                    quote.pagoEm ? `Pago em ${dataCurta(quote.pagoEm)}` : null,
+                    paginasDoComprovante.length > 1
+                      ? `folha ${i + 1} de ${paginasDoComprovante.length}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </div>
+
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+                <img
+                  src={folha.src}
+                  alt={`Comprovante de pagamento, folha ${i + 1}`}
+                  style={{
+                    width: Math.floor(folha.largura * escala),
+                    height: Math.floor(folha.altura * escala),
+                    border: `1px solid ${HAIRLINE}`,
+                    background: '#FFFFFF',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {numeroDaPagina(numero)}
+            </div>
+          );
+        })}
     </div>
   );
 };
