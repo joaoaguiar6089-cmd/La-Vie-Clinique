@@ -1513,6 +1513,47 @@ export function subscribeToAnamnesisRecords(
 }
 
 /**
+ * As anamneses a partir de uma data — a linha do tempo da tela Hoje.
+ *
+ * Não é a coleção inteira de propósito: a tela Hoje é a primeira depois do login, e a linha dela
+ * mostra no máximo 30 dias. Assinar tudo faria todo mundo pagar a história inteira da clínica
+ * todo dia, inclusive quem só abriu o app para ver a agenda.
+ *
+ * `dataAtendimento` fica em "YYYY-MM-DD" ou em ISO completo, conforme a origem da ficha — os dois
+ * começam pela data e ordenam como texto, então a comparação vale para ambos.
+ */
+export function subscribeToAnamnesisRecordsDesde(
+  desde: string,
+  onUpdate: (data: AnamnesisRecord[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<AnamnesisRecord[]>(
+    `anamnesis_records:desde:${desde}`,
+    (dados, erro) =>
+      onSnapshot(
+        query(collection(db, ANAMNESIS_RECORDS_COLLECTION), where('dataAtendimento', '>=', desde)),
+        (snapshot) => {
+          const items: AnamnesisRecord[] = [];
+          snapshot.forEach((docSnap) => {
+            items.push({ ...(docSnap.data() as AnamnesisRecord), id: docSnap.id });
+          });
+          dados(items);
+        },
+        (error) => {
+          if (isQuotaOrOfflineError(error)) {
+            console.warn('Anamnesis records (desde) offline/cota diária atingida.');
+          } else {
+            console.error('Anamnesis records (desde) subscription error:', error);
+          }
+          erro(error);
+        }
+      ),
+    onUpdate,
+    onError
+  );
+}
+
+/**
  * Save or update an Anamnesis Record
  */
 export async function saveAnamnesisRecord(record: AnamnesisRecord): Promise<void> {

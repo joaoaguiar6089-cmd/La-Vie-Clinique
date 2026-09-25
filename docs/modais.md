@@ -23,6 +23,9 @@ véu e botão voltar do Android — e, se o formulário foi mexido, **pergunta a
 | `QuoteFormModal` | larga | cada procedimento é uma linha com valor, desconto e sessões |
 | `FichaFillModal` | larga | avaliação e acompanhamento: perguntas da ficha mais duas imagens anotáveis |
 | `EmissaoDeAvaliacao` | padrão | paciente, procedimento, data e profissional da avaliação emitida |
+| `MateriaisDoAtendimentoPanel` | padrão | lista de materiais com quantidade, valores e total |
+| `ProdutoFormPanel` | padrão | cadastro de produto do estoque, com a conta do preço por unidade |
+| `ConsumoPadraoPanel` | padrão | consumo por sessão de um procedimento |
 
 ## Página
 
@@ -38,6 +41,7 @@ acaba no meio da tela, onde a mão não chega sem trocar a pegada do aparelho.
 
 - `ConfirmDialog` — toda confirmação e todo aviso do sistema (ver abaixo)
 - Os sheets de **Criar** e **Mais** da barra de navegação inferior
+- O **⋯** de cada item da linha do tempo, no celular (`ItemDaLinhaDoTempo`)
 - `AgendaDetalheModal`, `NewPatientModal`, `QuoteShareModal`, `ShareAnamnesisLinkModal`
 
 ## Continua diálogo centralizado

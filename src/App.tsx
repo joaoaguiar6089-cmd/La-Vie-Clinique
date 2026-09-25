@@ -848,6 +848,7 @@ function MainCatalogApp() {
               atendimentos={attendances}
               pacientes={allPatients}
               quotes={quotes}
+              templatesAnamnese={anamnesisTemplates}
               professionalLogada={currentProfessional}
               carregando={atendimentosCarregando}
               onAbrirBusca={() => setBuscaAberta(true)}

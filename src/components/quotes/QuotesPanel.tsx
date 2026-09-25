@@ -18,26 +18,18 @@ import {
   PedidoDeNavegacao,
   Procedure,
   Quote,
-  QuoteDraft,
   QuoteStatus,
 } from '../../types';
 import { formatBRL, formatDate } from '../../utils/formatters';
-import { resolveQuoteStatus, isQuoteEditavel } from '../../utils/quoteCalc';
+import { resolveQuoteStatus, isQuoteEditavel, podeSubstituir } from '../../utils/quoteCalc';
 import {
   subscribeToQuotes,
   subscribeToPatients,
-  createQuote,
-  updateQuote,
-  replaceQuote,
   deleteQuote,
   cancelarQuote,
-  markQuoteAsSent,
 } from '../../services/databaseService';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
-import { QuoteFormModal } from './QuoteFormModal';
-import { QuotePreviewModal } from './QuotePreviewModal';
-import { montarEspelhoPublico } from '../../utils/laserAreas';
-import { QuoteShareModal } from './QuoteShareModal';
+import { useAcoesDeOrcamento } from './useAcoesDeOrcamento';
 import { QUOTE_STATUS_LABEL, QuoteDesfecho } from './QuoteDesfecho';
 import { SkeletonLista } from '../common/Skeleton';
 
@@ -55,12 +47,6 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
   pedido,
   onPedidoAtendido,
 }) => {
-  /** Mapa corporal do catálogo, para a página das áreas contratadas no PDF. */
-  const mapaDoLaser = useMemo(
-    () => montarEspelhoPublico(catalogProcedures, clinic),
-    [catalogProcedures, clinic]
-  );
-
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [erro, setErro] = useState<string | null>(null);
@@ -68,13 +54,14 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
   const [quotaAtingida, setQuotaAtingida] = useState(false);
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | QuoteStatus>('todos');
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [quoteToEdit, setQuoteToEdit] = useState<Quote | null>(null);
-  const [seedFrom, setSeedFrom] = useState<Quote | null>(null);
-  const [modoSubstituicao, setModoSubstituicao] = useState<Quote | null>(null);
-  const [quoteNaPrevia, setQuoteNaPrevia] = useState<Quote | null>(null);
-  const [quoteParaCompartilhar, setQuoteParaCompartilhar] = useState<Quote | null>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
+
+  const acoes = useAcoesDeOrcamento({
+    clinic,
+    procedures: catalogProcedures,
+    patients,
+    onErro: setErro,
+  });
 
   useEffect(() => {
     const unsubQuotes = subscribeToQuotes(
@@ -117,20 +104,9 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
     });
   }, [quotes, busca, filtroStatus]);
 
-  const handleCompartilhado = async (quote: Quote) => {
-    if (quote.status !== 'rascunho') return;
-    try {
-      await markQuoteAsSent(quote.id);
-    } catch (e) {
-      setErro(`O link foi compartilhado, mas o status não mudou: ${(e as Error).message}`);
-    }
-  };
-
   const abrirNovo = () => {
-    setQuoteToEdit(null);
-    setSeedFrom(null);
-    setModoSubstituicao(null);
-    setIsFormOpen(true);
+    setErro(null);
+    acoes.abrirNovo();
   };
 
   /**
@@ -148,43 +124,11 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
     if (pedido.quoteId) {
       const achado = quotes.find((q) => q.id === pedido.quoteId);
       if (!achado) return;
-      setQuoteNaPrevia(achado);
+      acoes.abrirPrevia(achado);
     }
     onPedidoAtendido?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedido?.nonce, quotes]);
-
-  const abrirEdicao = (quote: Quote) => {
-    setQuoteToEdit(quote);
-    setSeedFrom(null);
-    setModoSubstituicao(null);
-    setIsFormOpen(true);
-  };
-
-  const abrirDuplicacao = (quote: Quote) => {
-    setQuoteToEdit(null);
-    setSeedFrom(quote);
-    setModoSubstituicao(null);
-    setIsFormOpen(true);
-  };
-
-  const abrirSubstituicao = (quote: Quote) => {
-    setQuoteToEdit(null);
-    setSeedFrom(quote);
-    setModoSubstituicao(quote);
-    setIsFormOpen(true);
-  };
-
-  const handleSave = async (draft: QuoteDraft, existing?: Quote) => {
-    setErro(null);
-    if (existing) {
-      await updateQuote(existing, draft);
-    } else if (modoSubstituicao) {
-      await replaceQuote(modoSubstituicao, draft);
-    } else {
-      await createQuote(draft);
-    }
-  };
 
   const handleCancelar = async (quote: Quote) => {
     try {
@@ -343,7 +287,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
                 <div className="flex items-center gap-0.5 ml-auto">
                   <button
                     type="button"
-                    onClick={() => setQuoteParaCompartilhar(quote)}
+                    onClick={() => acoes.abrirCompartilhamento(quote)}
                     aria-label={`Compartilhar ${quote.numero}`}
                     title="Compartilhar link com a cliente"
                     className="p-2 text-gray-400 hover:text-brand transition-colors"
@@ -353,7 +297,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setQuoteNaPrevia(quote)}
+                    onClick={() => acoes.abrirPrevia(quote)}
                     aria-label={`Visualizar ${quote.numero}`}
                     title="Visualizar — o botão de salvar PDF fica dentro da prévia"
                     className="p-2 text-gray-400 hover:text-brand transition-colors"
@@ -364,7 +308,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
                   {editavel && (
                     <button
                       type="button"
-                      onClick={() => abrirEdicao(quote)}
+                      onClick={() => acoes.abrirEdicao(quote)}
                       aria-label={`Editar ${quote.numero}`}
                       title="Editar rascunho"
                       className="p-2 text-gray-400 hover:text-brand transition-colors"
@@ -374,10 +318,10 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
                   )}
 
                   {/* Pago não se substitui: o dinheiro entrou por este, com este número */}
-                  {!editavel && !substituido && status !== 'cancelado' && status !== 'pago' && (
+                  {podeSubstituir(quote) && (
                     <button
                       type="button"
-                      onClick={() => abrirSubstituicao(quote)}
+                      onClick={() => acoes.abrirSubstituicao(quote)}
                       aria-label={`Substituir ${quote.numero}`}
                       title="Substituir — cria um novo com número próprio"
                       className="p-2 text-gray-400 hover:text-brand transition-colors"
@@ -388,7 +332,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => abrirDuplicacao(quote)}
+                    onClick={() => acoes.abrirDuplicacao(quote)}
                     aria-label={`Duplicar ${quote.numero}`}
                     title="Duplicar para outra cliente"
                     className="p-2 text-gray-400 hover:text-brand transition-colors"
@@ -460,30 +404,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
         </div>
       )}
 
-      <QuoteFormModal
-        isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        onSave={handleSave}
-        quoteToEdit={quoteToEdit}
-        seedFrom={seedFrom}
-        procedures={catalogProcedures}
-        patients={patients}
-        clinic={clinic}
-      />
-
-      <QuotePreviewModal
-        quote={quoteNaPrevia}
-        clinic={clinic}
-        mapaCorporal={mapaDoLaser}
-        onClose={() => setQuoteNaPrevia(null)}
-      />
-
-      <QuoteShareModal
-        quote={quoteParaCompartilhar}
-        clinic={clinic}
-        onClose={() => setQuoteParaCompartilhar(null)}
-        onCompartilhado={handleCompartilhado}
-      />
+      {acoes.modais}
 
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>

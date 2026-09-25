@@ -87,6 +87,11 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /**
+   * A ficha pode existir mas não pôde ser lida. O formulário não abre em branco nesse caso:
+   * salvar gravaria respostas vazias por cima das que estavam lá.
+   */
+  const [leituraFalhou, setLeituraFalhou] = useState(false);
   const [registro, setRegistro] = useState<EvaluationRecord | null>(null);
 
   const [respostas, setRespostas] = useState<Record<string, any>>({});
@@ -163,6 +168,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     let cancelado = false;
 
     setErro(null);
+    setLeituraFalhou(false);
     setAnotando(null);
 
     const aplicar = (existente: EvaluationRecord | null) => {
@@ -192,7 +198,10 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
         aplicar(existente);
       } catch (e) {
         console.error(e);
-        if (!cancelado) setErro(`Não foi possível carregar ${rotulos.artigo} ${rotulos.minusculo}. Tente de novo.`);
+        if (!cancelado) {
+          setErro(`Não foi possível carregar ${rotulos.artigo} ${rotulos.minusculo}. Feche e tente de novo.`);
+          setLeituraFalhou(true);
+        }
       } finally {
         if (!cancelado) setCarregando(false);
       }
@@ -322,7 +331,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     Imprimir usa o que está **gravado**, não o rascunho na tela: o documento impresso precisa
     corresponder ao que o prontuário guarda. Por isso só aparece depois do primeiro salvamento.
   */
-  const rodape = carregando ? null : (
+  const rodape = carregando || leituraFalhou ? null : (
     <div className="flex items-center justify-between gap-3">
       {registro ? (
         <button
@@ -382,6 +391,11 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
           {carregando ? (
             <div className="flex items-center justify-center py-16 text-gray-400">
               <Loader2 className="w-5 h-5 animate-spin" />
+            </div>
+          ) : leituraFalhou ? (
+            <div className="flex items-start gap-2 text-[13px] text-danger bg-danger-bg border border-danger-line rounded-xl px-3.5 py-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{erro}</span>
             </div>
           ) : (
             <>

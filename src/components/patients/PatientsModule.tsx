@@ -10,7 +10,6 @@ import {
   PedidoDeNavegacao,
   Procedure,
   Quote,
-  QuoteDraft,
   SessionPlan,
 } from '../../types';
 import {
@@ -29,9 +28,6 @@ import {
   deleteAttendance,
   saveSessionPlan,
   deleteSessionPlan,
-  createQuote,
-  updateQuote,
-  markQuoteAsSent,
 } from '../../services/databaseService';
 import {
   chaveDoNome,
@@ -216,24 +212,6 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
         }
       : undefined;
   }, [doPacienteAberto.fichas]);
-
-  const handleSalvarOrcamento = async (draft: QuoteDraft, existing?: Quote) => {
-    if (existing) {
-      await updateQuote(existing, draft);
-    } else {
-      await createQuote(draft);
-    }
-  };
-
-  /** O 1º compartilhamento do link tira o orçamento de rascunho e trava a edição. */
-  const handleOrcamentoCompartilhado = async (quote: Quote) => {
-    if (quote.status !== 'rascunho') return;
-    try {
-      await markQuoteAsSent(quote.id);
-    } catch (e) {
-      console.warn('Link compartilhado, mas o status não mudou:', e);
-    }
-  };
 
   const abrirCadastro = (nomeInicial?: string) => {
     setNomeDoCadastro(nomeInicial);
@@ -421,8 +399,6 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           onSalvarPaciente={savePatient}
           onSalvarFicha={saveAnamnesisRecord}
           onExcluirFicha={deleteAnamnesisRecord}
-          onSalvarOrcamento={handleSalvarOrcamento}
-          onOrcamentoCompartilhado={handleOrcamentoCompartilhado}
           onNovoAtendimento={() => abrirFormulario({ modo: 'novo' })}
           onEditarAtendimento={(a) => abrirFormulario({ modo: 'edicao', atendimento: a })}
           onExcluirAtendimento={pedirExclusaoDeAtendimento}

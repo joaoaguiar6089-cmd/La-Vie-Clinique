@@ -61,6 +61,11 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
   const [mexida, setMexida] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /**
+   * O registro existe mas não pôde ser lido. Nada de editar a partir do consumo padrão nesse
+   * caso: salvar gravaria a lista sugerida por cima do que já estava registrado.
+   */
+  const [leituraFalhou, setLeituraFalhou] = useState(false);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
 
   useEffect(() => {
@@ -88,6 +93,7 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
     setMexida(false);
     setSalvando(false);
     setErro(null);
+    setLeituraFalhou(false);
 
     // Sem a marca, não há registro: poupa a leitura e vai direto para o consumo padrão.
     if (!atendimento.materiaisRegistradosEm) {
@@ -103,8 +109,10 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
       })
       .catch((e) => {
         if (cancelado) return;
-        setErro(`Não foi possível carregar os materiais: ${(e as Error).message}`);
-        setRegistroPronto(true);
+        setErro(
+          `Não foi possível carregar os materiais registrados (${(e as Error).message.replace(/\.$/, '')}). Feche e tente de novo quando a conexão voltar.`
+        );
+        setLeituraFalhou(true);
       });
     return () => {
       cancelado = true;
@@ -199,7 +207,7 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
       },
     });
 
-  const rodape = carregando ? null : (
+  const rodape = carregando || leituraFalhou ? null : (
     <div className="flex items-center justify-between gap-3">
       {registro ? (
         <button
@@ -253,7 +261,7 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
           </div>
         )}
 
-        {carregando ? (
+        {leituraFalhou ? null : carregando ? (
           <div className="flex items-center justify-center py-16 text-gray-400">
             <Loader2 className="w-5 h-5 animate-spin" />
           </div>

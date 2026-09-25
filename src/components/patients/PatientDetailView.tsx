@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ClipboardCheck,
   ClipboardList,
+  Copy,
   Images,
   LayoutList,
   Eye,
@@ -15,6 +16,7 @@ import {
   MessageCircle,
   Plus,
   Receipt,
+  RefreshCw,
   Share2,
   Unlock,
   Trash2,
@@ -29,7 +31,6 @@ import {
   Patient,
   Procedure,
   Quote,
-  QuoteDraft,
   SessionPlan,
 } from '../../types';
 import { formatBRL, formatDate, formatDateOnly } from '../../utils/formatters';
@@ -40,9 +41,8 @@ import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { AnamnesisFormFillModal } from '../anamnesis/AnamnesisFormFillModal';
 import { montarEspelhoPublico } from '../../utils/laserAreas';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
-import { QuoteFormModal } from '../quotes/QuoteFormModal';
-import { QuotePreviewModal } from '../quotes/QuotePreviewModal';
-import { QuoteShareModal } from '../quotes/QuoteShareModal';
+import { useAcoesDeOrcamento } from '../quotes/useAcoesDeOrcamento';
+import { podeSubstituir } from '../../utils/quoteCalc';
 import { QuoteDesfecho } from '../quotes/QuoteDesfecho';
 import { PatientPersonalDataCard } from './PatientPersonalDataCard';
 import { AttendancesTab, contarAtendimentosRealizados } from './AttendancesTab';
@@ -84,8 +84,6 @@ interface PatientDetailViewProps {
   onSalvarPaciente: (patient: Patient) => Promise<void>;
   onSalvarFicha: (record: AnamnesisRecord) => Promise<void>;
   onExcluirFicha: (recordId: string) => Promise<void>;
-  onSalvarOrcamento: (draft: QuoteDraft, existing?: Quote) => Promise<void>;
-  onOrcamentoCompartilhado: (quote: Quote) => void;
   /** Tudo o que a aba de atendimentos faz mora no módulo — aqui só a tela. */
   onNovoAtendimento: () => void;
   onEditarAtendimento: (a: Attendance) => void;
@@ -143,8 +141,6 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   onSalvarPaciente,
   onSalvarFicha,
   onExcluirFicha,
-  onSalvarOrcamento,
-  onOrcamentoCompartilhado,
   onNovoAtendimento,
   onEditarAtendimento,
   onExcluirAtendimento,
@@ -174,9 +170,12 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
 
   const [fichaModalAberto, setFichaModalAberto] = useState(false);
   const [fichaAberta, setFichaAberta] = useState<AnamnesisRecord | null>(null);
-  const [orcamentoModalAberto, setOrcamentoModalAberto] = useState(false);
-  const [orcamentoNaPrevia, setOrcamentoNaPrevia] = useState<Quote | null>(null);
-  const [orcamentoParaCompartilhar, setOrcamentoParaCompartilhar] = useState<Quote | null>(null);
+  /** Novo, visualizar, compartilhar, duplicar, substituir — as mesmas ações da tela de Orçamentos. */
+  const acoesDeOrcamento = useAcoesDeOrcamento({
+    clinic,
+    procedures: catalogProcedures,
+    patients: todosPacientes,
+  });
   const [emitindoAvaliacao, setEmitindoAvaliacao] = useState(false);
   const [avaliacaoAberta, setAvaliacaoAberta] = useState<EvaluationRecord | null>(null);
 
@@ -206,7 +205,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
       setEmitindoAvaliacao(true);
     } else {
       setAba('orcamentos');
-      setOrcamentoModalAberto(true);
+      acoesDeOrcamento.abrirNovo(patient);
     }
   };
 
@@ -415,9 +414,13 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           quotes={quotes}
           avaliacoes={avaliacoes}
           catalogProcedures={catalogProcedures}
-          onAbrirFicha={setFichaAberta}
-          onAbrirAvaliacao={setAvaliacaoAberta}
-          onAbrirOrcamento={setOrcamentoNaPrevia}
+          acoes={{
+            orcamento: acoesDeOrcamento,
+            onVerAnamnese: setFichaAberta,
+            onVerAvaliacao: setAvaliacaoAberta,
+            onAcompanhamento: onAcompanhamentoAtendimento,
+            onMateriais: onMateriaisAtendimento,
+          }}
           onIrParaAba={setAba}
           onAgendarSessao={(plano) => {
             setAba('atendimentos');
@@ -652,7 +655,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                 <div className="flex items-center gap-0.5 ml-auto">
                   <button
                     type="button"
-                    onClick={() => setOrcamentoParaCompartilhar(orcamento)}
+                    onClick={() => acoesDeOrcamento.abrirCompartilhamento(orcamento)}
                     aria-label={`Compartilhar ${orcamento.numero}`}
                     title="Compartilhar link com a cliente"
                     className="p-2 text-gray-400 hover:text-brand transition-colors"
@@ -662,12 +665,34 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setOrcamentoNaPrevia(orcamento)}
+                    onClick={() => acoesDeOrcamento.abrirPrevia(orcamento)}
                     aria-label={`Visualizar ${orcamento.numero}`}
                     title="Visualizar — o botão de salvar PDF fica dentro da prévia"
                     className="p-2 text-gray-400 hover:text-brand transition-colors"
                   >
                     <Eye className="w-4 h-4" />
+                  </button>
+
+                  {podeSubstituir(orcamento) && (
+                    <button
+                      type="button"
+                      onClick={() => acoesDeOrcamento.abrirSubstituicao(orcamento)}
+                      aria-label={`Substituir ${orcamento.numero}`}
+                      title="Substituir — cria um novo com número próprio"
+                      className="p-2 text-gray-400 hover:text-brand transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => acoesDeOrcamento.abrirDuplicacao(orcamento)}
+                    aria-label={`Duplicar ${orcamento.numero}`}
+                    title="Duplicar"
+                    className="p-2 text-gray-400 hover:text-brand transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -711,32 +736,8 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           );
         })()}
 
-      {/* Novo orçamento — já com este paciente escolhido */}
-      <QuoteFormModal
-        isOpen={orcamentoModalAberto}
-        onClose={() => setOrcamentoModalAberto(false)}
-        onSave={onSalvarOrcamento}
-        quoteToEdit={null}
-        seedFrom={null}
-        initialPatient={patient}
-        procedures={catalogProcedures}
-        patients={todosPacientes}
-        clinic={clinic}
-      />
-
-      <QuotePreviewModal
-        mapaCorporal={mapaDoLaser}
-        quote={orcamentoNaPrevia}
-        clinic={clinic}
-        onClose={() => setOrcamentoNaPrevia(null)}
-      />
-
-      <QuoteShareModal
-        quote={orcamentoParaCompartilhar}
-        clinic={clinic}
-        onClose={() => setOrcamentoParaCompartilhar(null)}
-        onCompartilhado={onOrcamentoCompartilhado}
-      />
+      {/* Formulário, prévia e compartilhamento de orçamento. */}
+      {acoesDeOrcamento.modais}
 
       {/* Nova avaliação — já com esta paciente escolhida. Sempre montado: é ele que guarda a
           ficha em preenchimento depois de o painel de emissão fechar. */}
