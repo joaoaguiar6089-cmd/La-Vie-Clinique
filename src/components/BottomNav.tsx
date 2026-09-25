@@ -8,6 +8,7 @@ import {
   Home,
   LogOut,
   MoreHorizontal,
+  NotebookPen,
   Plus,
   Receipt,
   Settings,
@@ -49,8 +50,6 @@ interface BottomNavProps {
   onLogout: () => void;
   /** Agendamentos vencidos sem desfecho — o selo da Agenda. */
   agendamentosPendentesCount?: number;
-  /** Avaliações a preencher — o selo de Mais, porque a tela mora lá dentro. */
-  avaliacoesPendentesCount?: number;
   /** O Financeiro só entra no sheet para administradoras. */
   ehAdmin?: boolean;
 }
@@ -105,7 +104,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onOpenExport,
   onLogout,
   agendamentosPendentesCount,
-  avaliacoesPendentesCount,
   ehAdmin,
 }) => {
   const [criarAberto, setCriarAberto] = useState(false);
@@ -116,6 +114,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     currentView === 'procedures' ||
     currentView === 'anamnesis' ||
     currentView === 'evaluations' ||
+    currentView === 'acompanhamento' ||
     currentView === 'quotes' ||
     currentView === 'financeiro';
 
@@ -174,7 +173,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             icone={MoreHorizontal}
             rotulo="Mais"
             ativo={emMais}
-            contador={avaliacoesPendentesCount || undefined}
             onClick={() => setMaisAberto(true)}
           />
         </div>
@@ -219,6 +217,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           rotulo="Procedimentos"
           onClick={() => ir('procedures')}
         />
+        {/* Os documentos da paciente, na ordem da jornada. */}
+        <ItemDaFolha icone={Receipt} rotulo="Orçamentos" onClick={() => ir('quotes')} />
         <ItemDaFolha
           icone={ClipboardList}
           rotulo="Anamneses"
@@ -227,10 +227,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <ItemDaFolha
           icone={ClipboardCheck}
           rotulo="Fichas de avaliação"
-          contador={avaliacoesPendentesCount || undefined}
+          descricao="Antes do procedimento"
           onClick={() => ir('evaluations')}
         />
-        <ItemDaFolha icone={Receipt} rotulo="Orçamentos" onClick={() => ir('quotes')} />
+        <ItemDaFolha
+          icone={NotebookPen}
+          rotulo="Acompanhamento"
+          descricao="Depois do atendimento"
+          onClick={() => ir('acompanhamento')}
+        />
         {ehAdmin && (
           <ItemDaFolha
             icone={Wallet}

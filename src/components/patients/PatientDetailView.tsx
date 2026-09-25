@@ -5,6 +5,7 @@ import {
   CalendarClock,
   CalendarPlus,
   ChevronDown,
+  ClipboardCheck,
   ClipboardList,
   Images,
   LayoutList,
@@ -24,6 +25,7 @@ import {
   AnamnesisTemplate,
   Attendance,
   ClinicProfile,
+  EvaluationRecord,
   Patient,
   Procedure,
   Quote,
@@ -54,6 +56,9 @@ import {
 } from '../../utils/pacienteResumo';
 import { PatientResumoTab } from './PatientResumoTab';
 import { BeforeAfterCompare } from './BeforeAfterCompare';
+import { EmissaoDeAvaliacao } from '../evaluations/EmissaoDeAvaliacao';
+import { FichaFillModal } from '../fichas/FichaFillModal';
+import { alvoDoRegistro } from '../../utils/fichasClinicas';
 
 interface PatientDetailViewProps {
   patient: Patient;
@@ -65,12 +70,16 @@ interface PatientDetailViewProps {
   atendimentos: Attendance[];
   /** Planos de sessão dele — quem agrupa os atendimentos na aba. */
   planos: SessionPlan[];
+  /** Avaliações emitidas para ela, das mais recentes para as mais antigas. */
+  avaliacoes: EvaluationRecord[];
   /** Cadastro completo — o formulário de ficha precisa dele para a busca de paciente. */
   todosPacientes: Patient[];
   templates: AnamnesisTemplate[];
   generalQuestions: AnamnesisQuestion[];
   clinic: ClinicProfile;
   catalogProcedures: Procedure[];
+  /** Profissional logada — já vem escolhida ao emitir uma avaliação. */
+  currentProfessionalId?: string;
   onVoltar: () => void;
   onSalvarPaciente: (patient: Patient) => Promise<void>;
   onSalvarFicha: (record: AnamnesisRecord) => Promise<void>;
@@ -82,8 +91,8 @@ interface PatientDetailViewProps {
   onEditarAtendimento: (a: Attendance) => void;
   onExcluirAtendimento: (a: Attendance) => void;
   onConfirmarAtendimento: (a: Attendance) => void;
-  /** Abre a ficha de avaliação de uma visita já realizada. */
-  onAvaliarAtendimento: (a: Attendance) => void;
+  /** Abre o acompanhamento (o registro pós-atendimento) de uma visita já realizada. */
+  onAcompanhamentoAtendimento: (a: Attendance) => void;
   onFaltouAtendimento: (a: Attendance) => void;
   onRemarcarAtendimento: (a: Attendance) => void;
   onAdicionarSessao: (planoId: string) => void;
@@ -103,8 +112,8 @@ interface PatientDetailViewProps {
  */
 type Aba = 'resumo' | 'atendimentos' | 'fotos' | 'orcamentos' | 'anamneses';
 
-/** As três coisas que o menu "Novo" cria. */
-type TipoNovo = 'atendimento' | 'anamnese' | 'orcamento';
+/** O que o menu "Novo" cria — na ordem da jornada da paciente. */
+type TipoNovo = 'orcamento' | 'anamnese' | 'avaliacao' | 'atendimento';
 
 /** A data de atendimento pode estar em "YYYY-MM-DD" ou em ISO completo, conforme a origem da ficha. */
 const formatarDataAtendimento = (valor: string): string =>
@@ -121,11 +130,13 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   quotes,
   atendimentos,
   planos,
+  avaliacoes,
   todosPacientes,
   templates,
   generalQuestions,
   clinic,
   catalogProcedures,
+  currentProfessionalId,
   onVoltar,
   onSalvarPaciente,
   onSalvarFicha,
@@ -136,7 +147,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   onEditarAtendimento,
   onExcluirAtendimento,
   onConfirmarAtendimento,
-  onAvaliarAtendimento,
+  onAcompanhamentoAtendimento,
   onFaltouAtendimento,
   onRemarcarAtendimento,
   onAdicionarSessao,
@@ -163,6 +174,8 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   const [orcamentoModalAberto, setOrcamentoModalAberto] = useState(false);
   const [orcamentoNaPrevia, setOrcamentoNaPrevia] = useState<Quote | null>(null);
   const [orcamentoParaCompartilhar, setOrcamentoParaCompartilhar] = useState<Quote | null>(null);
+  const [emitindoAvaliacao, setEmitindoAvaliacao] = useState(false);
+  const [avaliacaoAberta, setAvaliacaoAberta] = useState<EvaluationRecord | null>(null);
 
   useEffect(() => {
     if (!menuNovoAberto) return;
@@ -184,6 +197,10 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
     } else if (tipo === 'anamnese') {
       setAba('anamneses');
       setFichaModalAberto(true);
+    } else if (tipo === 'avaliacao') {
+      // A avaliação aparece na linha do tempo do Resumo, que é onde ela mora nesta página.
+      setAba('resumo');
+      setEmitindoAvaliacao(true);
     } else {
       setAba('orcamentos');
       setOrcamentoModalAberto(true);
@@ -235,9 +252,10 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
               .join(' · ')}
           </p>
           <p className="text-label text-muted mt-0.5">
-            {totalAtendimentos} atendimento{totalAtendimentos === 1 ? '' : 's'} ·{' '}
-            {records.length} anamnese{records.length === 1 ? '' : 's'} · {quotes.length} orçamento
-            {quotes.length === 1 ? '' : 's'}
+            {quotes.length} orçamento{quotes.length === 1 ? '' : 's'} · {records.length} anamnese
+            {records.length === 1 ? '' : 's'} · {avaliacoes.length} avaliaç
+            {avaliacoes.length === 1 ? 'ão' : 'ões'} · {totalAtendimentos} atendimento
+            {totalAtendimentos === 1 ? '' : 's'}
           </p>
         </div>
       </div>
@@ -304,9 +322,10 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           >
             {(
               [
-                { tipo: 'atendimento' as const, icone: CalendarClock, rotulo: 'Atendimento' },
-                { tipo: 'anamnese' as const, icone: ClipboardList, rotulo: 'Anamnese' },
                 { tipo: 'orcamento' as const, icone: Receipt, rotulo: 'Orçamento' },
+                { tipo: 'anamnese' as const, icone: ClipboardList, rotulo: 'Anamnese' },
+                { tipo: 'avaliacao' as const, icone: ClipboardCheck, rotulo: 'Avaliação' },
+                { tipo: 'atendimento' as const, icone: CalendarClock, rotulo: 'Atendimento' },
               ]
             ).map(({ tipo, icone: Icone, rotulo }) => (
               <button
@@ -391,8 +410,10 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           atendimentos={atendimentos}
           planos={planos}
           quotes={quotes}
+          avaliacoes={avaliacoes}
           catalogProcedures={catalogProcedures}
           onAbrirFicha={setFichaAberta}
+          onAbrirAvaliacao={setAvaliacaoAberta}
           onAbrirOrcamento={setOrcamentoNaPrevia}
           onIrParaAba={setAba}
           onAgendarSessao={(plano) => {
@@ -451,7 +472,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           onEditar={onEditarAtendimento}
           onExcluir={onExcluirAtendimento}
           onConfirmar={onConfirmarAtendimento}
-          onAvaliar={onAvaliarAtendimento}
+          onAcompanhamento={onAcompanhamentoAtendimento}
           onFaltou={onFaltouAtendimento}
           onRemarcar={onRemarcarAtendimento}
           onAdicionarSessao={onAdicionarSessao}
@@ -712,6 +733,32 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         onClose={() => setOrcamentoParaCompartilhar(null)}
         onCompartilhado={onOrcamentoCompartilhado}
       />
+
+      {/* Nova avaliação — já com esta paciente escolhida. Sempre montado: é ele que guarda a
+          ficha em preenchimento depois de o painel de emissão fechar. */}
+      <EmissaoDeAvaliacao
+        aberto={emitindoAvaliacao}
+        onFechar={() => setEmitindoAvaliacao(false)}
+        pacientes={todosPacientes}
+        catalogo={catalogProcedures}
+        professionals={clinic.professionals || []}
+        clinic={clinic}
+        professionalIdPadrao={currentProfessionalId}
+        pacienteInicial={patient}
+      />
+
+      {avaliacaoAberta && (
+        <FichaFillModal
+          tipo="avaliacao"
+          isOpen
+          onClose={() => setAvaliacaoAberta(null)}
+          alvo={alvoDoRegistro(avaliacaoAberta)}
+          paciente={patient}
+          catalogo={catalogProcedures}
+          professionals={clinic.professionals || []}
+          clinicProfile={clinic}
+        />
+      )}
 
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>

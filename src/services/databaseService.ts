@@ -51,6 +51,7 @@ import {
   planejarMigracao,
 } from '../utils/evaluations';
 import { paraArray } from '../utils/firestoreShapes';
+import { ROTULOS_DA_FICHA, TipoDeFicha } from '../utils/fichasClinicas';
 import {
   montarEspelhoPublico,
   serializarAreas,
@@ -87,13 +88,37 @@ const COUNTERS_COLLECTION = 'counters';
 const ATTENDANCES_COLLECTION = 'attendances';
 const SESSION_PLANS_COLLECTION = 'session_plans';
 
-// Fichas de avaliação — o que a profissional responde DEPOIS do atendimento. Ao contrário de
+// Fichas de avaliação — o que a profissional avalia ANTES do procedimento. Ao contrário de
 // `patients` e `anamnesis_records`, estas três exigem login nas regras: a paciente preenche a
 // própria anamnese sem conta, mas nunca enxerga avaliação nenhuma.
 const EVALUATION_TEMPLATES_COLLECTION = 'evaluation_templates';
 const EVALUATION_GENERAL_QUESTIONS_COLLECTION = 'evaluation_general_questions';
-// Um documento por atendimento, com o id DO atendimento — ver `EvaluationRecord`.
+// Id próprio por avaliação emitida; as antigas, de quando havia uma por visita, têm o do atendimento.
 const EVALUATION_RECORDS_COLLECTION = 'evaluation_records';
+
+// Acompanhamento — o registro DEPOIS de cada atendimento. Mesmo formato e mesmas regras da
+// avaliação, em coleções próprias: o acompanhamento de uma visita tem o id dela, e dividir a
+// coleção com a avaliação faria ele colidir com a avaliação antiga da mesma visita.
+const FOLLOWUP_TEMPLATES_COLLECTION = 'followup_templates';
+const FOLLOWUP_GENERAL_QUESTIONS_COLLECTION = 'followup_general_questions';
+const FOLLOWUP_RECORDS_COLLECTION = 'followup_records';
+
+/** As coleções de cada tipo de ficha clínica. Ver `utils/fichasClinicas.ts`. */
+const COLECOES_DA_FICHA: Record<
+  TipoDeFicha,
+  { modelos: string; gerais: string; registros: string }
+> = {
+  avaliacao: {
+    modelos: EVALUATION_TEMPLATES_COLLECTION,
+    gerais: EVALUATION_GENERAL_QUESTIONS_COLLECTION,
+    registros: EVALUATION_RECORDS_COLLECTION,
+  },
+  acompanhamento: {
+    modelos: FOLLOWUP_TEMPLATES_COLLECTION,
+    gerais: FOLLOWUP_GENERAL_QUESTIONS_COLLECTION,
+    registros: FOLLOWUP_RECORDS_COLLECTION,
+  },
+};
 
 // Marcador das migrações que valem para a clínica inteira (e não para uma ficha só, como
 // `AnamnesisTemplate.migracoesAplicadas`). Mora no banco, e não no localStorage, porque a
@@ -1882,8 +1907,20 @@ export async function saveAttendance(
   await comConfirmacaoDoServidor(setDoc(docRef, dataToSave, { merge: true }), 'do atendimento');
 }
 
-export async function deleteAttendance(attendanceId: string): Promise<void> {
-  await deleteDoc(doc(db, ATTENDANCES_COLLECTION, attendanceId));
+/**
+ * Apaga a visita e o que só existe por causa dela: o acompanhamento.
+ *
+ * Recebe o atendimento inteiro, e não só o id, por causa das marcas: o documento dependente só
+ * entra no lote quando a marca diz que ele existe. Apagar às cegas um documento de uma coleção
+ * cuja regra ainda não foi publicada derrubaria o lote inteiro — e a visita junto.
+ */
+export async function deleteAttendance(atendimento: Attendance): Promise<void> {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, ATTENDANCES_COLLECTION, atendimento.id));
+  if (atendimento.acompanhamentoPreenchidoEm) {
+    batch.delete(doc(db, FOLLOWUP_RECORDS_COLLECTION, atendimento.id));
+  }
+  await batch.commit();
 }
 
 /**
@@ -1967,10 +2004,11 @@ export async function remarcarAtendimento(
     data: destino.data,
     hora: destino.hora,
     status: 'agendado',
-    // O desfecho, a avaliação e a confirmação pertencem à visita que não aconteceu. A paciente
-    // confirmou o horário antigo; o novo nasce a confirmar, como qualquer agendamento.
+    // O desfecho, o acompanhamento e a confirmação pertencem à visita que não aconteceu. A
+    // paciente confirmou o horário antigo; o novo nasce a confirmar, como qualquer agendamento.
     agendadoPara: undefined,
     avaliacaoPreenchidaEm: undefined,
+    acompanhamentoPreenchidoEm: undefined,
     confirmadoEm: undefined,
     createdAt: agora,
     updatedAt: agora,
@@ -2019,11 +2057,15 @@ export async function deleteSessionPlan(
 }
 
 // ==========================================
-// FICHAS DE AVALIAÇÃO
+// FICHAS CLÍNICAS: AVALIAÇÃO E ACOMPANHAMENTO
 // ==========================================
+//
+// As duas fichas usam os mesmos formatos e as mesmas funções, cada uma nas suas coleções
+// (`COLECOES_DA_FICHA`). As funções com "Evaluation" no nome continuam existindo como atalho da
+// avaliação, porque é por elas que a instalação das fichas padrão e a migração antiga chegam aqui.
 
 /**
- * Põe uma ficha de avaliação lida do banco numa forma em que as telas possam confiar.
+ * Põe uma ficha-modelo lida do banco numa forma em que as telas possam confiar.
  *
  * Mesmo cuidado de `normalizarTemplateLido`, e pela mesma razão: campo que deveria ser array
  * volta como mapa de chaves numéricas em backup reimportado e em gravação antiga, e o TypeScript
@@ -2041,11 +2083,23 @@ function normalizarFichaAvaliacaoLida(f: EvaluationTemplate): EvaluationTemplate
   };
 }
 
-function subscribeToEvaluationTemplatesDireto(
+/** Mesmo cuidado, para a ficha preenchida. */
+function normalizarRegistroDeFichaLido(id: string, dados: unknown): EvaluationRecord {
+  const bruto = (dados || {}) as Record<string, unknown>;
+  return {
+    ...(bruto as unknown as EvaluationRecord),
+    id,
+    perguntasSnapshot: paraArray<AnamnesisQuestion>(bruto.perguntasSnapshot),
+    respostas: (bruto.respostas as Record<string, any>) || {},
+  };
+}
+
+function subscribeToFichasModeloDireto(
+  tipo: TipoDeFicha,
   onUpdate: (data: EvaluationTemplate[]) => void,
   onError?: (err: Error) => void
 ) {
-  const colRef = collection(db, EVALUATION_TEMPLATES_COLLECTION);
+  const colRef = collection(db, COLECOES_DA_FICHA[tipo].modelos);
   return onSnapshot(
     colRef,
     (snapshot) => {
@@ -2063,12 +2117,26 @@ function subscribeToEvaluationTemplatesDireto(
     },
     (error) => {
       if (isQuotaOrOfflineError(error)) {
-        console.warn('Evaluation templates subscription offline/cota diaria atingida.');
+        console.warn(`Fichas-modelo (${tipo}) offline/cota diária atingida.`);
       } else {
-        console.error('Evaluation templates subscription error:', error);
+        console.error(`Fichas-modelo (${tipo}) subscription error:`, error);
       }
       if (onError) onError(error);
     }
+  );
+}
+
+/** As fichas-modelo de um tipo, numa assinatura compartilhada. */
+export function subscribeToFichasModelo(
+  tipo: TipoDeFicha,
+  onUpdate: (data: EvaluationTemplate[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<EvaluationTemplate[]>(
+    COLECOES_DA_FICHA[tipo].modelos,
+    (dados, erro) => subscribeToFichasModeloDireto(tipo, dados, erro),
+    onUpdate,
+    onError
   );
 }
 
@@ -2076,12 +2144,7 @@ export function subscribeToEvaluationTemplates(
   onUpdate: (data: EvaluationTemplate[]) => void,
   onError?: (err: Error) => void
 ) {
-  return subscribeShared<EvaluationTemplate[]>(
-    'evaluation_templates',
-    subscribeToEvaluationTemplatesDireto,
-    onUpdate,
-    onError
-  );
+  return subscribeToFichasModelo('avaliacao', onUpdate, onError);
 }
 
 /**
@@ -2092,15 +2155,15 @@ export function subscribeToEvaluationTemplates(
  * devolve intacta a URL que já é do Storage, o que torna salvar de novo sem mexer nas fotos uma
  * operação sem upload nenhum.
  */
-export async function saveEvaluationTemplate(ficha: EvaluationTemplate): Promise<void> {
-  const pasta = `avaliacoes/${ficha.id}`;
+export async function saveFichaModelo(tipo: TipoDeFicha, ficha: EvaluationTemplate): Promise<void> {
+  const pasta = `${ROTULOS_DA_FICHA[tipo].pastaDoStorage}/${ficha.id}`;
   const [modelo, feminino, masculino] = await Promise.all([
     subirImagemOuManter(ficha.fotoModeloUrl || '', pasta),
     subirImagemOuManter(ficha.fotoModeloFemininoUrl || '', pasta),
     subirImagemOuManter(ficha.fotoModeloMasculinoUrl || '', pasta),
   ]);
 
-  const docRef = doc(db, EVALUATION_TEMPLATES_COLLECTION, ficha.id);
+  const docRef = doc(db, COLECOES_DA_FICHA[tipo].modelos, ficha.id);
   await setDoc(
     docRef,
     cleanForFirestore({
@@ -2114,17 +2177,26 @@ export async function saveEvaluationTemplate(ficha: EvaluationTemplate): Promise
   );
 }
 
-export async function deleteEvaluationTemplate(fichaId: string): Promise<void> {
-  await deleteDoc(doc(db, EVALUATION_TEMPLATES_COLLECTION, fichaId));
+export async function saveEvaluationTemplate(ficha: EvaluationTemplate): Promise<void> {
+  await saveFichaModelo('avaliacao', ficha);
 }
 
-// ---- Perguntas gerais de avaliação (valem para todo procedimento) ----
+export async function deleteFichaModelo(tipo: TipoDeFicha, fichaId: string): Promise<void> {
+  await deleteDoc(doc(db, COLECOES_DA_FICHA[tipo].modelos, fichaId));
+}
 
-function subscribeToEvaluationGeneralQuestionsDireto(
+export async function deleteEvaluationTemplate(fichaId: string): Promise<void> {
+  await deleteFichaModelo('avaliacao', fichaId);
+}
+
+// ---- Perguntas gerais (valem para todo procedimento) ----
+
+function subscribeToPerguntasGeraisDaFichaDireto(
+  tipo: TipoDeFicha,
   onUpdate: (data: AnamnesisQuestion[]) => void,
   onError?: (err: Error) => void
 ) {
-  const q = query(collection(db, EVALUATION_GENERAL_QUESTIONS_COLLECTION), orderBy('ordem', 'asc'));
+  const q = query(collection(db, COLECOES_DA_FICHA[tipo].gerais), orderBy('ordem', 'asc'));
   return onSnapshot(
     q,
     (snapshot) => {
@@ -2136,12 +2208,25 @@ function subscribeToEvaluationGeneralQuestionsDireto(
     },
     (error) => {
       if (isQuotaOrOfflineError(error)) {
-        console.warn('Evaluation general questions subscription offline/cota diaria atingida.');
+        console.warn(`Perguntas gerais (${tipo}) offline/cota diária atingida.`);
       } else {
-        console.error('Evaluation general questions subscription error:', error);
+        console.error(`Perguntas gerais (${tipo}) subscription error:`, error);
       }
       if (onError) onError(error);
     }
+  );
+}
+
+export function subscribeToPerguntasGeraisDaFicha(
+  tipo: TipoDeFicha,
+  onUpdate: (data: AnamnesisQuestion[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<AnamnesisQuestion[]>(
+    COLECOES_DA_FICHA[tipo].gerais,
+    (dados, erro) => subscribeToPerguntasGeraisDaFichaDireto(tipo, dados, erro),
+    onUpdate,
+    onError
   );
 }
 
@@ -2149,68 +2234,75 @@ export function subscribeToEvaluationGeneralQuestions(
   onUpdate: (data: AnamnesisQuestion[]) => void,
   onError?: (err: Error) => void
 ) {
-  return subscribeShared<AnamnesisQuestion[]>(
-    'evaluation_general_questions',
-    subscribeToEvaluationGeneralQuestionsDireto,
-    onUpdate,
-    onError
-  );
+  return subscribeToPerguntasGeraisDaFicha('avaliacao', onUpdate, onError);
 }
 
-export async function saveEvaluationGeneralQuestion(question: AnamnesisQuestion): Promise<void> {
-  const docRef = doc(db, EVALUATION_GENERAL_QUESTIONS_COLLECTION, question.id);
+export async function savePerguntaGeralDaFicha(
+  tipo: TipoDeFicha,
+  question: AnamnesisQuestion
+): Promise<void> {
+  const docRef = doc(db, COLECOES_DA_FICHA[tipo].gerais, question.id);
   await setDoc(docRef, cleanForFirestore(question), { merge: true });
 }
 
-export async function saveAllEvaluationGeneralQuestions(
+export async function saveTodasPerguntasGeraisDaFicha(
+  tipo: TipoDeFicha,
   questions: AnamnesisQuestion[]
 ): Promise<void> {
   const batch = writeBatch(db);
   questions.forEach((q) => {
-    batch.set(doc(db, EVALUATION_GENERAL_QUESTIONS_COLLECTION, q.id), cleanForFirestore(q), {
+    batch.set(doc(db, COLECOES_DA_FICHA[tipo].gerais, q.id), cleanForFirestore(q), {
       merge: true,
     });
   });
   await batch.commit();
 }
 
-export async function deleteEvaluationGeneralQuestion(questionId: string): Promise<void> {
-  await deleteDoc(doc(db, EVALUATION_GENERAL_QUESTIONS_COLLECTION, questionId));
+export async function deletePerguntaGeralDaFicha(
+  tipo: TipoDeFicha,
+  questionId: string
+): Promise<void> {
+  await deleteDoc(doc(db, COLECOES_DA_FICHA[tipo].gerais, questionId));
 }
 
-// ---- Avaliações preenchidas ----
+// ---- Fichas preenchidas ----
 
 /**
- * A avaliação de um atendimento, ou `null`.
+ * Uma ficha preenchida, ou `null`.
  *
- * Leitura direta por id — o documento **é** o atendimento (ver `EvaluationRecord`), então não há
- * query nem índice envolvido. É o que permite carregar a avaliação só quando alguém abre a ficha,
- * mantendo o peso dela fora de `subscribeToAttendances`, que baixa a coleção inteira em toda
- * sessão.
+ * Leitura direta por id — no acompanhamento o id **é** o do atendimento (ver `EvaluationRecord`),
+ * então não há query nem índice envolvido. É o que permite carregar a ficha só quando alguém a
+ * abre, mantendo o peso dela fora de `subscribeToAttendances`, que baixa a coleção inteira em
+ * toda sessão.
  */
-export async function getEvaluationRecord(
-  atendimentoId: string
+export async function getRegistroDeFicha(
+  tipo: TipoDeFicha,
+  registroId: string
 ): Promise<EvaluationRecord | null> {
-  const snap = await getDoc(doc(db, EVALUATION_RECORDS_COLLECTION, atendimentoId));
+  const snap = await getDoc(doc(db, COLECOES_DA_FICHA[tipo].registros, registroId));
   if (!snap.exists()) return null;
-  const bruto = snap.data() as unknown as Record<string, unknown>;
-  return {
-    ...(snap.data() as EvaluationRecord),
-    id: snap.id,
-    perguntasSnapshot: paraArray<AnamnesisQuestion>(bruto.perguntasSnapshot),
-    respostas: (bruto.respostas as Record<string, any>) || {},
-  };
+  return normalizarRegistroDeFichaLido(snap.id, snap.data());
 }
 
 /**
- * Grava a avaliação e acende a marca no atendimento, no mesmo lote.
+ * Grava a ficha preenchida.
  *
- * O lote existe para as duas coisas não divergirem: avaliação gravada com o atendimento sem marca
- * viraria uma ficha preenchida que continua aparecendo na fila de pendentes para sempre, e a marca
- * sem a avaliação seria um selo de "avaliada" que abre vazio.
+ * No acompanhamento, a marca no atendimento acende no mesmo lote. O lote existe para as duas
+ * coisas não divergirem: a ficha gravada com o atendimento sem marca apareceria como não
+ * preenchida para sempre, e a marca sem a ficha seria um ícone verde que abre vazio.
+ *
+ * A avaliação não tem atendimento — nem as antigas, que tinham, voltam a mexer nele: a marca
+ * antiga (`avaliacaoPreenchidaEm`) não é mais lida por ninguém.
  */
-export async function saveEvaluationRecord(registro: EvaluationRecord): Promise<void> {
-  const pasta = `avaliacoes/registros/${registro.atendimentoId}`;
+export async function saveRegistroDeFicha(
+  tipo: TipoDeFicha,
+  registro: EvaluationRecord
+): Promise<void> {
+  if (tipo === 'acompanhamento' && !registro.atendimentoId) {
+    throw new Error('Acompanhamento sem atendimento não pode ser gravado.');
+  }
+
+  const pasta = `${ROTULOS_DA_FICHA[tipo].pastaDoStorage}/registros/${registro.id}`;
   const [modelo, modeloAnotada, sessao, sessaoAnotada] = await Promise.all([
     subirImagemOuManter(registro.fotoModeloUrl || '', pasta),
     subirImagemOuManter(registro.fotoModeloAnotadaUrl || '', pasta),
@@ -2222,10 +2314,9 @@ export async function saveEvaluationRecord(registro: EvaluationRecord): Promise<
   const batch = writeBatch(db);
 
   batch.set(
-    doc(db, EVALUATION_RECORDS_COLLECTION, registro.atendimentoId),
+    doc(db, COLECOES_DA_FICHA[tipo].registros, registro.id),
     cleanForFirestore({
       ...registro,
-      id: registro.atendimentoId,
       fotoModeloUrl: modelo || undefined,
       fotoModeloAnotadaUrl: modeloAnotada || undefined,
       fotoSessaoUrl: sessao || undefined,
@@ -2236,23 +2327,106 @@ export async function saveEvaluationRecord(registro: EvaluationRecord): Promise<
     { merge: true }
   );
 
-  batch.update(doc(db, ATTENDANCES_COLLECTION, registro.atendimentoId), {
-    avaliacaoPreenchidaEm: registro.preenchidoEm || agora,
-    updatedAt: agora,
-  });
+  if (tipo === 'acompanhamento' && registro.atendimentoId) {
+    batch.update(doc(db, ATTENDANCES_COLLECTION, registro.atendimentoId), {
+      acompanhamentoPreenchidoEm: registro.preenchidoEm || agora,
+      updatedAt: agora,
+    });
+  }
 
   await batch.commit();
 }
 
-/** Apaga a avaliação e apaga a marca no atendimento — o inverso exato de `saveEvaluationRecord`. */
-export async function deleteEvaluationRecord(atendimentoId: string): Promise<void> {
+/** Apaga a ficha — e, no acompanhamento, a marca no atendimento. O inverso de `saveRegistroDeFicha`. */
+export async function deleteRegistroDeFicha(
+  tipo: TipoDeFicha,
+  registro: Pick<EvaluationRecord, 'id' | 'atendimentoId'>
+): Promise<void> {
   const batch = writeBatch(db);
-  batch.delete(doc(db, EVALUATION_RECORDS_COLLECTION, atendimentoId));
-  batch.update(doc(db, ATTENDANCES_COLLECTION, atendimentoId), {
-    avaliacaoPreenchidaEm: deleteField(),
-    updatedAt: new Date().toISOString(),
-  });
+  batch.delete(doc(db, COLECOES_DA_FICHA[tipo].registros, registro.id));
+  if (tipo === 'acompanhamento' && registro.atendimentoId) {
+    batch.update(doc(db, ATTENDANCES_COLLECTION, registro.atendimentoId), {
+      acompanhamentoPreenchidoEm: deleteField(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
   await batch.commit();
+}
+
+/**
+ * Filtro das fichas preenchidas: por paciente (a página dela), a partir de uma data (a lista da
+ * seção e a linha do tempo da tela Hoje), ou tudo.
+ */
+export interface FiltroDeFichas {
+  pacienteId?: string;
+  /** YYYY-MM-DD. Compara com `dataAtendimento`, que fica em texto e ordena como texto. */
+  desde?: string;
+}
+
+function subscribeToRegistrosDeFichaDireto(
+  tipo: TipoDeFicha,
+  filtro: FiltroDeFichas,
+  onUpdate: (data: EvaluationRecord[]) => void,
+  onError?: (err: Error) => void
+) {
+  const colRef = collection(db, COLECOES_DA_FICHA[tipo].registros);
+  // Um filtro por vez: paciente e data juntos pediriam índice composto, e nenhuma tela precisa
+  // dos dois — a página da paciente quer a história inteira dela.
+  const alvo = filtro.pacienteId
+    ? query(colRef, where('pacienteId', '==', filtro.pacienteId))
+    : filtro.desde
+      ? query(colRef, where('dataAtendimento', '>=', filtro.desde))
+      : colRef;
+
+  return onSnapshot(
+    alvo,
+    (snapshot) => {
+      const items: EvaluationRecord[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push(normalizarRegistroDeFichaLido(docSnap.id, docSnap.data()));
+      });
+      items.sort(
+        (a, b) =>
+          (b.dataAtendimento || '').localeCompare(a.dataAtendimento || '') ||
+          (b.createdAt || '').localeCompare(a.createdAt || '')
+      );
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn(`Fichas preenchidas (${tipo}) offline/cota diária atingida.`);
+      } else {
+        console.error(`Fichas preenchidas (${tipo}) subscription error:`, error);
+      }
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * As fichas preenchidas de um tipo, numa assinatura compartilhada por filtro.
+ *
+ * Nunca a coleção inteira sem pedir: a ficha carrega respostas, snapshot das perguntas e o JSON
+ * das anotações, e quem abre a lista quer quase sempre só a história recente. "Tudo" existe, mas
+ * é escolha explícita de quem está na tela.
+ */
+export function subscribeToRegistrosDeFicha(
+  tipo: TipoDeFicha,
+  filtro: FiltroDeFichas,
+  onUpdate: (data: EvaluationRecord[]) => void,
+  onError?: (err: Error) => void
+) {
+  const chave = filtro.pacienteId
+    ? `paciente:${filtro.pacienteId}`
+    : filtro.desde
+      ? `desde:${filtro.desde}`
+      : 'tudo';
+  return subscribeShared<EvaluationRecord[]>(
+    `${COLECOES_DA_FICHA[tipo].registros}:${chave}`,
+    (dados, erro) => subscribeToRegistrosDeFichaDireto(tipo, filtro, dados, erro),
+    onUpdate,
+    onError
+  );
 }
 
 /**

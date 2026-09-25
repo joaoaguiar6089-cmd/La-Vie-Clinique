@@ -240,6 +240,7 @@ export type AppView =
   | 'patients'
   | 'anamnesis'
   | 'evaluations'
+  | 'acompanhamento'
   | 'quotes'
   | 'financeiro'
   | 'settings';
@@ -725,13 +726,21 @@ export interface Attendance {
    */
   confirmadoEm?: string; // ISO
   /**
-   * Marca de que existe `EvaluationRecord` para esta visita — só o instante, nunca o conteúdo.
-   *
-   * Está aqui para a lista mostrar o selo de "avaliada" e para a fila de pendentes se montar sem
-   * uma leitura por linha. O peso da avaliação (respostas, snapshot, URLs de foto) fica de fora
-   * de propósito: `subscribeToAttendances` baixa esta coleção inteira em toda sessão.
+   * **Legado.** Marcava que a visita tinha `EvaluationRecord`, do tempo em que a avaliação era uma
+   * por atendimento. A avaliação virou ficha pré-procedimento, emitida pela própria seção e sem
+   * vínculo com a visita — este campo não é mais escrito nem lido. Fica no tipo porque os
+   * documentos antigos ainda o carregam.
    */
   avaliacaoPreenchidaEm?: string; // ISO
+  /**
+   * Marca de que existe acompanhamento (o registro pós-atendimento) para esta visita — só o
+   * instante, nunca o conteúdo.
+   *
+   * Mesma técnica que a avaliação usava: está aqui para a linha do atendimento pintar o ícone de
+   * verde sem uma leitura por linha. O peso do acompanhamento (respostas, snapshot, URLs de foto)
+   * fica de fora de propósito: `subscribeToAttendances` baixa esta coleção inteira em toda sessão.
+   */
+  acompanhamentoPreenchidoEm?: string; // ISO
   createdAt: string;
   updatedAt?: string;
 }
@@ -741,19 +750,24 @@ export interface Attendance {
 // ==========================================
 
 /**
- * Perguntas que a profissional responde **depois** do atendimento.
+ * As duas fichas clínicas que a profissional preenche, e que dividem os mesmos formatos:
  *
- * Nasceu de dentro da anamnese, onde vivia como `publicoAlvo: 'medico'`, e saiu de lá por um
- * motivo de cardinalidade: a anamnese é **uma por caso** e a avaliação é **uma por sessão**. Numa
- * paciente com plano de 10 sessões de laser, deixar a avaliação presa à anamnese obrigaria a criar
- * uma anamnese nova a cada sessão — dez fichas de histórico de saúde idênticas — ou a sobrescrever
- * a avaliação da sessão anterior. As duas saídas perdem informação clínica.
+ * - **Ficha de avaliação** — a avaliação **antes** do procedimento. É emitida pela própria seção,
+ *   para uma paciente e um procedimento, e preenchida no sistema ou impressa em branco. Não tem
+ *   vínculo com atendimento nenhum.
+ * - **Acompanhamento** — o registro **depois** de cada atendimento: foto, respostas e o que mais
+ *   importar daquela sessão. Um por atendimento, com o id dele.
  *
- * O vínculo é com o `Attendance`, e a regra de liberação está em `utils/evaluations.ts`.
+ * A ordem da jornada é Orçamento → Anamnese → Avaliação → Atendimento → Acompanhamento.
+ *
+ * Os dois tipos usam `EvaluationTemplate` e `EvaluationRecord`, cada um em coleções próprias (ver
+ * `COLECOES_DA_FICHA` em `databaseService.ts`) e com o vocabulário em `utils/fichasClinicas.ts`.
+ * Uma ficha só com um campo `tipo` misturaria os dois no mesmo gerenciador — e o acompanhamento
+ * de uma visita que já teve a avaliação antiga (id = atendimento) colidiria com ela.
  */
 
 /**
- * O modelo: quais perguntas a clínica faz ao avaliar determinado procedimento.
+ * O modelo: quais perguntas a clínica faz ao avaliar (ou acompanhar) determinado procedimento.
  *
  * O vínculo é **plural** de propósito. A depilação a laser tem treze áreas no catálogo e uma
  * única avaliação (fototipo, cor e espessura do pelo não mudam de buço para axila): ligar por
@@ -791,11 +805,13 @@ export interface EvaluationTemplate {
 }
 
 /**
- * A avaliação de **um** atendimento.
+ * Uma ficha preenchida — avaliação ou acompanhamento.
  *
- * O `id` é o próprio `atendimentoId`. Isso resolve duas coisas de uma vez: a busca vira um
- * `getDoc` direto, sem query nem índice, e "uma avaliação por atendimento" deixa de ser uma regra
- * que alguém precisa lembrar de aplicar — passa a ser impossível de violar.
+ * - **Avaliação**: `id` próprio (`aval-<uuid>`), sem atendimento. As avaliações do tempo em que
+ *   eram uma por visita continuam com `id` = `atendimentoId`, e seguem abrindo normalmente: para a
+ *   lista e a linha do tempo, elas são avaliações como qualquer outra.
+ * - **Acompanhamento**: `id` = `atendimentoId`. A busca vira um `getDoc` direto, e "um
+ *   acompanhamento por atendimento" passa a ser impossível de violar.
  *
  * Mora em coleção própria, e não dentro do `Attendance`, porque `subscribeToAttendances` assina a
  * coleção **inteira**: respostas e URLs de foto dentro do atendimento seriam baixadas por toda a
@@ -803,16 +819,17 @@ export interface EvaluationTemplate {
  * do Firestore aqui é por KB gravado.
  */
 export interface EvaluationRecord {
-  /** Igual ao `Attendance.id` que esta avaliação descreve. */
   id: string;
-  atendimentoId: string;
+  /** Obrigatório no acompanhamento. Na avaliação, só nas antigas (uma por visita). */
+  atendimentoId?: string;
   pacienteId: string;
   /** Espelham o momento do registro, como fazem a ficha e o orçamento. */
   pacienteNome: string;
   pacienteGenero?: PatientGender;
   procedureId?: string;
   procedimentoNome: string;
-  dataAtendimento: string; // YYYY-MM-DD, copiada do atendimento
+  /** YYYY-MM-DD. No acompanhamento, a data da visita; na avaliação, a data em que foi feita. */
+  dataAtendimento: string;
   professionalId?: string;
   profissionalNome?: string;
   templateId?: string;

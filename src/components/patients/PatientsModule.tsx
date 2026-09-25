@@ -5,7 +5,7 @@ import {
   AnamnesisTemplate,
   Attendance,
   ClinicProfile,
-  EvaluationTemplate,
+  EvaluationRecord,
   Patient,
   PedidoDeNavegacao,
   Procedure,
@@ -20,6 +20,7 @@ import {
   subscribeToGeneralQuestions,
   subscribeToAttendances,
   subscribeToSessionPlans,
+  subscribeToRegistrosDeFicha,
   savePatient,
   deletePatient,
   saveAnamnesisRecord,
@@ -45,7 +46,8 @@ import { PatientsListView } from './PatientsListView';
 import { PatientDetailView } from './PatientDetailView';
 import { NewPatientModal } from './NewPatientModal';
 import { AttendanceFormModal, ModoDoFormulario } from './AttendanceFormModal';
-import { EvaluationFillModal } from '../evaluations/EvaluationFillModal';
+import { FichaFillModal } from '../fichas/FichaFillModal';
+import { alvoDoAtendimento } from '../../utils/fichasClinicas';
 import { salvarAtendimento } from '../../services/attendanceWorkflow';
 
 interface PatientsModuleProps {
@@ -53,10 +55,7 @@ interface PatientsModuleProps {
   catalogProcedures: Procedure[];
   /** Assinadas no App — o catálogo e a anamnese também precisam delas. */
   templates: AnamnesisTemplate[];
-  /** Fichas de avaliação e suas perguntas gerais, assinadas no App junto com o contador do menu. */
-  fichasAvaliacao: EvaluationTemplate[];
-  avaliacaoGerais: AnamnesisQuestion[];
-  /** Profissional logada, para o formulário de atendimento já vir preenchido com ela. */
+  /** Profissional logada, para os formulários já virem preenchidos com ela. */
   currentProfessionalId?: string;
   /** Pedido vindo da busca global ou da tela Hoje: abrir a ficha de alguém, cadastrar alguém. */
   pedido?: PedidoDeNavegacao | null;
@@ -84,14 +83,14 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   clinic,
   catalogProcedures,
   templates,
-  fichasAvaliacao,
-  avaliacaoGerais,
   currentProfessionalId,
   pedido,
   onPedidoAtendido,
 }) => {
-  /** Visita cuja ficha de avaliação está aberta. */
-  const [avaliando, setAvaliando] = useState<Attendance | null>(null);
+  /** Visita cujo acompanhamento está aberto. */
+  const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
+  /** Avaliações da paciente aberta — lidas só enquanto a página dela está na tela. */
+  const [avaliacoes, setAvaliacoes] = useState<EvaluationRecord[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [records, setRecords] = useState<AnamnesisRecord[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -158,6 +157,20 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   }, [pacienteAbertoId, patients, linhas]);
 
   const idsCadastrados = useMemo(() => new Set(patients.map((p) => p.id)), [patients]);
+
+  /**
+   * As avaliações dela, por consulta por paciente — e não a coleção inteira, que carrega
+   * respostas e anotações de todo mundo. Quem ainda não tem cadastro não tem avaliação: emitir
+   * uma pede o cadastro antes.
+   */
+  const pacienteAbertoCadastrado = !!pacienteAberto && idsCadastrados.has(pacienteAberto.id);
+  useEffect(() => {
+    if (!pacienteAberto || !pacienteAbertoCadastrado) {
+      setAvaliacoes([]);
+      return;
+    }
+    return subscribeToRegistrosDeFicha('avaliacao', { pacienteId: pacienteAberto.id }, setAvaliacoes);
+  }, [pacienteAberto?.id, pacienteAbertoCadastrado]);
 
   /** O cadastro dele ainda não existe — o formulário de atendimento avisa que vai criá-lo. */
   const cadastroSeraCriado = !!pacienteAberto && !idsCadastrados.has(pacienteAberto.id);
@@ -294,11 +307,13 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   const pedirExclusaoDeAtendimento = (a: Attendance) => {
     setConfirmacao({
       titulo: 'Excluir este atendimento?',
-      mensagem: `${a.procedimentoNome} — ${a.data.split('-').reverse().join('/')}.\n\nO registro e as observações somem para sempre. Se ele fazia parte de um plano, as sessões seguintes são renumeradas sozinhas.`,
+      mensagem: `${a.procedimentoNome} — ${a.data.split('-').reverse().join('/')}.\n\nO registro e as observações${
+        a.acompanhamentoPreenchidoEm ? ', e o acompanhamento preenchido,' : ''
+      } somem para sempre. Se ele fazia parte de um plano, as sessões seguintes são renumeradas sozinhas.`,
       textoConfirmar: 'Excluir atendimento',
       onConfirmar: async () => {
         try {
-          await deleteAttendance(a.id);
+          await deleteAttendance(a);
           setErro(null);
         } catch (e) {
           setErro(`Não foi possível excluir o atendimento: ${(e as Error).message}`);
@@ -392,11 +407,13 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           quotes={doPacienteAberto.orcamentos}
           atendimentos={doPacienteAberto.atendimentos}
           planos={doPacienteAberto.planos}
+          avaliacoes={avaliacoes}
           todosPacientes={patients}
           templates={templates}
           generalQuestions={generalQuestions}
           clinic={clinic}
           catalogProcedures={catalogProcedures}
+          currentProfessionalId={currentProfessionalId}
           onVoltar={() => setPacienteAbertoId(null)}
           onSalvarPaciente={savePatient}
           onSalvarFicha={saveAnamnesisRecord}
@@ -409,7 +426,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           onConfirmarAtendimento={(a) =>
             abrirFormulario({ modo: 'confirmacao', atendimento: a })
           }
-          onAvaliarAtendimento={setAvaliando}
+          onAcompanhamentoAtendimento={setAcompanhando}
           onFaltouAtendimento={(a) => marcarStatus(a, 'faltou')}
           onRemarcarAtendimento={handleRemarcar}
           onAdicionarSessao={(planoId) => abrirFormulario({ modo: 'novo', planoFixoId: planoId })}
@@ -440,14 +457,13 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           onSalvar={handleSalvarAtendimento}
         />
 
-        {avaliando && (
-          <EvaluationFillModal
+        {acompanhando && (
+          <FichaFillModal
+            tipo="acompanhamento"
             isOpen
-            onClose={() => setAvaliando(null)}
-            atendimento={avaliando}
+            onClose={() => setAcompanhando(null)}
+            alvo={alvoDoAtendimento(acompanhando)}
             paciente={pacienteAberto}
-            fichas={fichasAvaliacao}
-            gerais={avaliacaoGerais}
             catalogo={catalogProcedures}
             professionals={clinic.professionals || []}
             clinicProfile={clinic}

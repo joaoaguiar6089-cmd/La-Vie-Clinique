@@ -15,12 +15,23 @@ import {
 } from '../anamnesis/printableQuestionBlocks';
 import { QuestionFieldRenderer } from '../anamnesis/QuestionFieldRenderer';
 import { perguntasDaAvaliacao } from '../../utils/evaluations';
+import { ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
 import { formatDateOnly } from '../../utils/formatters';
 
-interface PrintableEvaluationSheetProps {
+/** O que já se sabe da folha em branco emitida para uma paciente — sai impresso no lugar da linha. */
+export interface CabecalhoDaFicha {
+  pacienteNome: string;
+  procedimentoNome: string;
+  /** YYYY-MM-DD. */
+  data: string;
+  profissionalNome?: string;
+}
+
+interface PrintableFichaSheetProps {
+  tipo: TipoDeFicha;
   ficha?: EvaluationTemplate | null;
   /**
-   * A avaliação preenchida. **Ausente = folha em branco**, gerada direto da ficha-modelo para
+   * A ficha preenchida. **Ausente = folha em branco**, gerada direto da ficha-modelo para
    * preencher à caneta.
    *
    * É o mesmo componente nos dois casos de propósito: as duas folhas precisam sair iguais, e a
@@ -28,26 +39,34 @@ interface PrintableEvaluationSheetProps {
    * componentes divergiriam em detalhe até deixarem de parecer da mesma clínica.
    */
   registro?: EvaluationRecord | null;
+  /**
+   * Só na folha em branco: a emissão para uma paciente já sabe nome, procedimento, data e
+   * profissional, e não faz sentido deixá-los para a caneta. Ausente = linhas em branco.
+   */
+  cabecalho?: CabecalhoDaFicha;
   gerais: AnamnesisQuestion[];
   clinicProfile: ClinicProfile;
   onClose: () => void;
 }
 
-export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> = ({
+export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
+  tipo,
   ficha,
   registro,
+  cabecalho,
   gerais,
   clinicProfile,
   onClose,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [gerandoPdf, setGerandoPdf] = useState(false);
+  const rotulos = ROTULOS_DA_FICHA[tipo];
 
   const emBranco = !registro;
 
   /**
    * Preenchida, as perguntas vêm do **snapshot** do registro, não da ficha-modelo atual: é isso
-   * que impede uma pergunta reescrita hoje de mudar o sentido de uma avaliação de meses atrás.
+   * que impede uma pergunta reescrita hoje de mudar o sentido de uma ficha de meses atrás.
    * Em branco não há snapshot, então a ficha-modelo é a fonte.
    */
   const perguntas = useMemo(
@@ -55,7 +74,8 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
     [registro, gerais, ficha]
   );
 
-  const titulo = registro?.procedimentoNome || ficha?.nome || 'Avaliação';
+  const titulo =
+    registro?.procedimentoNome || cabecalho?.procedimentoNome || ficha?.nome || rotulos.curto;
 
   const fotoModelo = registro
     ? registro.fotoModeloAnotadaUrl || registro.fotoModeloUrl
@@ -72,10 +92,11 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
     setGerandoPdf(true);
     try {
       const slug = titulo.toLowerCase().replace(/\s+/g, '-');
-      const prefixo = emBranco ? 'avaliacao-em-branco' : 'avaliacao';
+      const base = tipo === 'avaliacao' ? 'avaliacao' : 'acompanhamento';
+      const prefixo = emBranco ? `${base}-em-branco` : base;
       await exportElementAsPDF(contentRef.current, `${prefixo}-${slug}.pdf`);
     } catch (err) {
-      console.error('Erro ao gerar PDF da avaliação:', err);
+      console.error('Erro ao gerar PDF da ficha:', err);
     } finally {
       setGerandoPdf(false);
     }
@@ -89,7 +110,7 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="w-2.5 h-2.5 rounded-full bg-brand-light shrink-0" />
             <span className="font-serif-luxury text-sm tracking-wide truncate">
-              {emBranco ? 'Avaliação em Branco' : 'Ficha de Avaliação'} — {titulo}
+              {emBranco ? `${rotulos.curto} em branco` : rotulos.nome} — {titulo}
             </span>
           </div>
 
@@ -131,7 +152,7 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
           <div className="flex items-start justify-between gap-6 mb-6 pb-4 border-b-2 border-ink">
             <div>
               <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-ink leading-tight">
-                Avaliação - {titulo} - La Vie Clinique
+                {rotulos.curto} - {titulo} - La Vie Clinique
               </h2>
               <p className="text-xs font-semibold text-ink mt-1.5">
                 {clinicProfile.name || 'La Vie Clinique'}
@@ -158,10 +179,10 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
           </div>
 
           {/* Identificação */}
-          {emBranco ? (
+          {emBranco && !cabecalho ? (
             <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-6">
               <IdentField label="Paciente" />
-              <IdentField label="Data do atendimento" />
+              <IdentField label={rotulos.rotuloDaData} />
               <IdentField label="Procedimento" />
               <IdentField label="Profissional responsável" />
             </div>
@@ -171,14 +192,18 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
                 <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider block">
                   Paciente
                 </span>
-                <span className="font-semibold text-ink">{registro?.pacienteNome}</span>
+                <span className="font-semibold text-ink">
+                  {registro?.pacienteNome || cabecalho?.pacienteNome}
+                </span>
               </div>
               <div>
                 <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider block">
-                  Data do atendimento
+                  {rotulos.rotuloDaData}
                 </span>
                 <span className="font-semibold text-ink">
-                  {formatDateOnly(registro!.dataAtendimento)}
+                  {formatDateOnly(
+                    (registro?.dataAtendimento || cabecalho?.data || '').slice(0, 10)
+                  )}
                 </span>
               </div>
               <div>
@@ -186,7 +211,7 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
                   Procedimento
                 </span>
                 <span className="font-semibold text-ink">
-                  {registro?.procedimentoNome}
+                  {registro?.procedimentoNome || cabecalho?.procedimentoNome}
                 </span>
               </div>
               <div>
@@ -194,7 +219,7 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
                   Profissional responsável
                 </span>
                 <span className="font-semibold text-ink">
-                  {registro?.profissionalNome || '—'}
+                  {registro?.profissionalNome || cabecalho?.profissionalNome || '—'}
                 </span>
               </div>
             </div>
@@ -204,8 +229,8 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
           {perguntas.length > 0 && (
             <div className="mb-6">
               <SectionHeading
-                title="Avaliação Clínica"
-                hint={emBranco ? 'Preenchido pela equipe após o atendimento' : undefined}
+                title={tipo === 'avaliacao' ? 'Avaliação Clínica' : 'Registro do Atendimento'}
+                hint={emBranco ? rotulos.dicaDaFolhaEmBranco : undefined}
               />
               {emBranco
                 ? perguntas.map((q, idx) => (
@@ -244,11 +269,11 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
           {/* Foto da sessão */}
           {fotoSessao && (
             <div className="mb-6 page-break-inside-avoid">
-              <SectionHeading title="Foto desta Sessão" />
+              <SectionHeading title={rotulos.rotuloDaFoto} />
               <div className="border border-gray-200 rounded-sm bg-white p-3 flex justify-center">
                 <img
                   src={fotoSessao}
-                  alt="Foto da sessão"
+                  alt={rotulos.rotuloDaFoto}
                   className="block w-full h-auto object-contain rounded-xs"
                   style={{ maxHeight: '620px' }}
                 />
@@ -258,7 +283,7 @@ export const PrintableEvaluationSheet: React.FC<PrintableEvaluationSheetProps> =
 
           {/* Observações */}
           <div className="mb-6 page-break-inside-avoid">
-            <SectionHeading title="Observações da Avaliação" />
+            <SectionHeading title={rotulos.rotuloDasObservacoes} />
             {emBranco ? (
               <RuledLines count={5} />
             ) : registro?.observacoes ? (

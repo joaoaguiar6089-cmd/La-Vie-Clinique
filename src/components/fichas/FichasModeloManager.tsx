@@ -23,8 +23,10 @@ import {
 import { ProcedureMultiSelect } from '../ProcedureMultiSelect';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { downscaleImage } from '../../utils/imageCompressor';
+import { ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
 
-interface EvaluationTemplatesManagerProps {
+interface FichasModeloManagerProps {
+  tipo: TipoDeFicha;
   fichas: EvaluationTemplate[];
   catalogo: Procedure[];
   onSalvar: (ficha: EvaluationTemplate) => Promise<void>;
@@ -55,8 +57,8 @@ const inputClass =
   'w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-ink focus:outline-hidden focus:border-brand';
 const labelClass = 'block text-xs font-semibold text-gray-800 mb-1';
 
-const fichaVazia = (): EvaluationTemplate => ({
-  id: `aval-${Date.now()}`,
+const fichaVazia = (tipo: TipoDeFicha): EvaluationTemplate => ({
+  id: `${tipo === 'avaliacao' ? 'aval' : 'acomp'}-${Date.now()}`,
   nome: '',
   procedureIds: [],
   categorias: [],
@@ -65,14 +67,17 @@ const fichaVazia = (): EvaluationTemplate => ({
 });
 
 /**
- * Onde a clínica define o que perguntar ao avaliar cada procedimento.
+ * Onde a clínica define o que perguntar em cada procedimento — na avaliação (antes) ou no
+ * acompanhamento (depois do atendimento). O mesmo gerenciador serve aos dois tipos; muda só o
+ * vocabulário, que vem de `ROTULOS_DA_FICHA`.
  *
  * O vínculo é plural — procedimentos e/ou categorias inteiras — porque a depilação a laser tem
- * treze áreas no catálogo e uma avaliação só: fototipo e características do pelo não mudam de
- * buço para axila. Sem isso, a equipe teria que cadastrar treze fichas idênticas e mantê-las em
+ * treze áreas no catálogo e uma ficha só: fototipo e características do pelo não mudam de buço
+ * para axila. Sem isso, a equipe teria que cadastrar treze fichas idênticas e mantê-las em
  * sincronia à mão, que é exatamente o problema que aposentar as treze fichas de anamnese resolveu.
  */
-export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProps> = ({
+export const FichasModeloManager: React.FC<FichasModeloManagerProps> = ({
+  tipo,
   fichas,
   catalogo,
   onSalvar,
@@ -81,6 +86,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
   criarPara,
   onCriarParaConsumido,
 }) => {
+  const rotulos = ROTULOS_DA_FICHA[tipo];
   const [draft, setDraft] = useState<EvaluationTemplate | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
@@ -108,18 +114,18 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
   /** O atalho vindo do preenchimento abre o editor já com o procedimento amarrado. */
   useEffect(() => {
     if (!criarPara) return;
-    const nova = fichaVazia();
+    const nova = fichaVazia(tipo);
     const proc = criarPara.procedureId
       ? catalogo.find((p) => p.id === criarPara.procedureId)
       : undefined;
     setDraft({
       ...nova,
-      nome: `Avaliação — ${proc?.title || criarPara.procedimentoNome}`,
+      nome: `${rotulos.curto} — ${proc?.title || criarPara.procedimentoNome}`,
       procedureIds: proc ? [proc.id] : [],
     });
     setErro('');
     onCriarParaConsumido?.();
-  }, [criarPara, catalogo, onCriarParaConsumido]);
+  }, [criarPara, catalogo, onCriarParaConsumido, tipo, rotulos.curto]);
 
   const resumoDoVinculo = (f: EvaluationTemplate): string => {
     const partes: string[] = [];
@@ -136,7 +142,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
         .filter(Boolean) as string[];
       partes.push(nomes.length === 1 ? nomes[0] : `${f.procedureIds.length} procedimentos`);
     }
-    return partes.length > 0 ? partes.join(' · ') : 'Sem vínculo — não abre em atendimento nenhum';
+    return partes.length > 0 ? partes.join(' · ') : 'Sem vínculo — não vale para procedimento nenhum';
   };
 
   // ---- Perguntas ----
@@ -191,7 +197,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
     const nova: AnamnesisQuestion = {
       // O id de pergunta existente NUNCA é regerado: as respostas já gravadas apontam para ele,
       // e trocá-lo desligaria silenciosamente a resposta correspondente em todo o histórico.
-      id: qIndex !== null ? draft.perguntas[qIndex].id : `avq-${Date.now()}`,
+      id: qIndex !== null ? draft.perguntas[qIndex].id : `${rotulos.prefixoDePergunta}-${Date.now()}`,
       texto: qTexto.trim(),
       tipo_campo: qTipo,
       obrigatoria: qObrigatoria,
@@ -269,9 +275,10 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
     setConfirmacao({
       titulo: `Excluir "${f.nome}"?`,
       mensagem:
-        'As avaliações já preenchidas com esta ficha não mudam — elas guardam as próprias ' +
-        'perguntas. O que se perde é o modelo, e os atendimentos futuros deste procedimento ' +
-        'passam a abrir só com observações.',
+        `${rotulos.artigo === 'a' ? 'As' : 'Os'} ${rotulos.plural} já preenchid${rotulos.artigo}s ` +
+        'com esta ficha não mudam — ' +
+        'guardam as próprias perguntas. O que se perde é o modelo, e as próximas fichas deste ' +
+        'procedimento passam a abrir só com observações.',
       textoConfirmar: 'Excluir',
       tom: 'perigo',
       onConfirmar: () => {
@@ -325,19 +332,17 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-brand" />
             <h3 className="font-serif-luxury text-xl font-medium text-ink">
-              Fichas-modelo de Avaliação
+              {rotulos.tituloDosModelos}
             </h3>
           </div>
           <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">
-            O que a profissional responde <strong>depois</strong> do atendimento. Cada ficha vale
-            para um ou mais procedimentos — ou para uma categoria inteira — e é preenchida uma vez
-            por visita realizada.
+            {rotulos.descricaoDosModelos}
           </p>
         </div>
         <button
           type="button"
           onClick={() => {
-            setDraft(fichaVazia());
+            setDraft(fichaVazia(tipo));
             setErro('');
           }}
           className="w-full md:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover shadow-xs active:scale-95 transition-all"
@@ -351,7 +356,9 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
       {fichas.length === 0 ? (
         <div className="bg-white/50 rounded-sm border border-white/70 p-10 text-center">
           <ClipboardCheck className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm text-gray-500">Nenhuma ficha de avaliação cadastrada ainda.</p>
+          <p className="text-sm text-gray-500">
+            Nenhuma ficha-modelo de {rotulos.minusculo} cadastrada ainda.
+          </p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -405,9 +412,9 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                 <span className="px-1.5 py-0.5 rounded-xs bg-brand/10 text-brand font-semibold">
                   {f.perguntas.length} perguntas
                 </span>
-                {f.temFotoSessao && (
+                {(f.temFotoSessao || tipo === 'acompanhamento') && (
                   <span className="px-1.5 py-0.5 rounded-xs bg-gray-100 text-gray-600 font-medium">
-                    Foto da sessão
+                    {rotulos.rotuloDaFoto}
                   </span>
                 )}
                 {(f.fotoModeloUrl || f.fotoModeloFemininoUrl || f.fotoModeloMasculinoUrl) && (
@@ -437,7 +444,9 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
             <div className="bg-surface w-full sm:max-w-2xl sm:rounded-sm shadow-xl min-h-screen sm:min-h-0 sm:my-8">
               <div className="sticky top-0 z-10 bg-ink px-5 py-4 flex items-center justify-between">
                 <h3 className="font-serif-luxury text-lg text-white">
-                  {fichas.some((f) => f.id === draft.id) ? 'Editar ficha' : 'Nova ficha de avaliação'}
+                  {fichas.some((f) => f.id === draft.id)
+                    ? 'Editar ficha'
+                    : `Nova ficha de ${rotulos.minusculo}`}
                 </h3>
                 <button
                   onClick={() => setDraft(null)}
@@ -464,7 +473,7 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                     id="ficha-nome"
                     value={draft.nome}
                     onChange={(e) => setDraft({ ...draft, nome: e.target.value })}
-                    placeholder="Ex: Avaliação — Depilação a Laser"
+                    placeholder={`Ex: ${rotulos.curto} — Depilação a Laser`}
                     className={inputClass}
                   />
                 </div>
@@ -625,20 +634,26 @@ export const EvaluationTemplatesManager: React.FC<EvaluationTemplatesManagerProp
                     <FotoSlot rotulo="Única (reserva)" campo="fotoModeloUrl" />
                   </div>
 
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-ink pt-1">
-                    <input
-                      type="checkbox"
-                      checked={draft.temFotoSessao}
-                      onChange={(e) => setDraft({ ...draft, temFotoSessao: e.target.checked })}
-                      className="accent-brand w-4 h-4 rounded-xs"
-                    />
-                    <span>
-                      Pedir foto desta sessão
-                      <span className="text-gray-400 ml-1">
-                        (registro de evolução, uma por atendimento)
+                  {/* No acompanhamento a foto do atendimento aparece sempre — é o registro da
+                      sessão. Só a avaliação escolhe se pede foto. */}
+                  {tipo === 'avaliacao' ? (
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-ink pt-1">
+                      <input
+                        type="checkbox"
+                        checked={draft.temFotoSessao}
+                        onChange={(e) => setDraft({ ...draft, temFotoSessao: e.target.checked })}
+                        className="accent-brand w-4 h-4 rounded-xs"
+                      />
+                      <span>
+                        Pedir {rotulos.rotuloDaFoto.toLowerCase()}
+                        <span className="text-gray-400 ml-1">({rotulos.dicaDaFoto.toLowerCase()})</span>
                       </span>
-                    </span>
-                  </label>
+                    </label>
+                  ) : (
+                    <p className="text-label text-gray-400 pt-1">
+                      A {rotulos.rotuloDaFoto.toLowerCase()} aparece sempre no acompanhamento.
+                    </p>
+                  )}
                 </div>
               </div>
 

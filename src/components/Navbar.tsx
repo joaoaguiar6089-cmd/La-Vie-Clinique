@@ -12,6 +12,7 @@ import {
   PanelLeftClose,
   CalendarDays,
   Home,
+  NotebookPen,
   Search,
   Wallet,
 } from 'lucide-react';
@@ -26,6 +27,7 @@ const VIEW_LABEL: Record<AppView, string> = {
   patients: 'Pacientes',
   anamnesis: 'Anamneses',
   evaluations: 'Fichas de Avaliação',
+  acompanhamento: 'Acompanhamento',
   quotes: 'Orçamentos',
   financeiro: 'Financeiro',
   settings: 'Configurações',
@@ -39,14 +41,11 @@ interface NavbarProps {
   clinic: ClinicProfile;
   proceduresCount: number;
   /**
-   * Atendimentos que já aconteceram e ainda não foram avaliados. É o único contador do menu além
-   * do catálogo, e existe porque é trabalho represado: a ficha de avaliação só pode ser escrita
-   * depois da visita, então ninguém a preenche sem ser lembrado de que ela está aberta.
-   */
-  avaliacoesPendentesCount?: number;
-  /**
-   * Agendamentos cuja data passou sem ninguém marcar o desfecho. Mesma natureza do contador acima —
-   * trabalho represado que não aparece sozinho — e some quando é zero, pela mesma razão.
+   * Agendamentos cuja data passou sem ninguém marcar o desfecho — trabalho represado que não
+   * aparece sozinho. Some quando é zero: um selo aceso sem nada para fazer treina a equipe a
+   * ignorá-lo.
+   *
+   * Avaliação e acompanhamento não têm contador: as duas fichas são opcionais.
    */
   agendamentosPendentesCount?: number;
   /** O Financeiro só aparece no menu para administradoras. */
@@ -64,7 +63,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettings,
   clinic,
   proceduresCount,
-  avaliacoesPendentesCount,
   agendamentosPendentesCount,
   ehAdmin,
   currentProfessionalName,
@@ -143,6 +141,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         scrollToTop();
       },
     },
+    // Os documentos da paciente, na ordem da jornada: orçamento, anamnese, avaliação (antes do
+    // procedimento) e acompanhamento (depois do atendimento).
+    {
+      id: 'quotes' as const,
+      label: 'Orçamentos',
+      icon: Receipt,
+      active: currentView === 'quotes',
+      count: undefined,
+      onClick: () => {
+        onSelectView('quotes');
+        scrollToTop();
+      },
+    },
     {
       id: 'anamnesis' as const,
       label: 'Anamneses',
@@ -159,21 +170,20 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: 'Fichas de Avaliação',
       icon: ClipboardCheck,
       active: currentView === 'evaluations',
-      // Zero não vira "0" no menu: um selo aceso sem nada para fazer treina a equipe a ignorá-lo.
-      count: avaliacoesPendentesCount || undefined,
+      count: undefined,
       onClick: () => {
         onSelectView('evaluations');
         scrollToTop();
       },
     },
     {
-      id: 'quotes' as const,
-      label: 'Orçamentos',
-      icon: Receipt,
-      active: currentView === 'quotes',
+      id: 'acompanhamento' as const,
+      label: 'Acompanhamento',
+      icon: NotebookPen,
+      active: currentView === 'acompanhamento',
       count: undefined,
       onClick: () => {
-        onSelectView('quotes');
+        onSelectView('acompanhamento');
         scrollToTop();
       },
     },

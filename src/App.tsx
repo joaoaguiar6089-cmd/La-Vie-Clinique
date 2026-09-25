@@ -11,8 +11,8 @@ import { PatientsModule } from './components/patients/PatientsModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
 import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { EvaluationsModule } from './components/evaluations/EvaluationsModule';
+import { AcompanhamentoModule } from './components/acompanhamento/AcompanhamentoModule';
 import { AgendaModule } from './components/agenda/AgendaModule';
-import { filaDePendentes } from './utils/evaluations';
 import { agendamentosAtrasados } from './utils/agenda';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -186,10 +186,10 @@ function MainCatalogApp() {
   const [templatesCarregando, setTemplatesCarregando] = useState(false);
 
   /**
-   * Fichas de avaliação, atendimentos e pacientes sobem para cá — e não para dentro da tela de
-   * avaliação — porque o contador do menu lateral precisa da fila de pendentes estando o usuário
-   * em qualquer tela. As assinaturas são compartilhadas (`subscribeShared`), então quem já as
-   * consumia adiante continua sem pagar leitura nova.
+   * Atendimentos e pacientes sobem para cá porque a tela Hoje, a agenda e o selo da agenda no
+   * menu precisam deles estando o usuário em qualquer tela. As fichas de avaliação vêm junto
+   * porque a seção delas as recebe prontas. As assinaturas são compartilhadas
+   * (`subscribeShared`), então quem já as consumia adiante continua sem pagar leitura nova.
    */
   const [evaluationTemplates, setEvaluationTemplates] = useState<EvaluationTemplate[]>([]);
   const [evaluationGerais, setEvaluationGerais] = useState<AnamnesisQuestion[]>([]);
@@ -472,11 +472,6 @@ function MainCatalogApp() {
     ];
     return () => unsubs.forEach((u) => u());
   }, [authUser]);
-
-  const avaliacoesPendentes = useMemo(
-    () => filaDePendentes(attendances).length,
-    [attendances]
-  );
 
   /** Agendamentos que já passaram e continuam sem desfecho — o selo da Agenda no menu. */
   const agendamentosPendentes = useMemo(
@@ -797,7 +792,6 @@ function MainCatalogApp() {
         onOpenSettings={() => navegar({ view: 'settings' })}
         clinic={clinic}
         proceduresCount={procedures.length}
-        avaliacoesPendentesCount={avaliacoesPendentes}
         agendamentosPendentesCount={agendamentosPendentes}
         ehAdmin={isAdminUser}
         currentProfessionalName={currentProfessional?.name}
@@ -818,7 +812,6 @@ function MainCatalogApp() {
         }}
         onLogout={logout}
         agendamentosPendentesCount={agendamentosPendentes}
-        avaliacoesPendentesCount={avaliacoesPendentes}
         ehAdmin={isAdminUser}
       />
 
@@ -859,7 +852,6 @@ function MainCatalogApp() {
               onAbrirBusca={() => setBuscaAberta(true)}
               onNovoAgendamento={() => navegar({ view: 'agenda', criarNovo: true })}
               onIrParaAgenda={() => navegar({ view: 'agenda' })}
-              onIrParaAvaliacoes={() => navegar({ view: 'evaluations' })}
               onIrParaOrcamentos={() => navegar({ view: 'quotes' })}
               onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
               onConfirmar={(a) =>
@@ -929,8 +921,6 @@ function MainCatalogApp() {
               clinic={clinic}
               catalogProcedures={procedures}
               templates={anamnesisTemplates}
-              fichasAvaliacao={evaluationTemplates}
-              avaliacaoGerais={evaluationGerais}
               currentProfessionalId={currentProfessional?.id}
               pedido={currentView === 'patients' ? pedido : null}
               onPedidoAtendido={() => setPedido(null)}
@@ -948,11 +938,17 @@ function MainCatalogApp() {
               clinicProfile={clinic}
               catalogProcedures={procedures}
               fichas={evaluationTemplates}
-              atendimentos={attendances}
               pacientes={allPatients}
               professionals={clinic.professionals || []}
               gerais={evaluationGerais}
-              carregando={atendimentosCarregando}
+              currentProfessionalId={currentProfessional?.id}
+            />
+          ) : currentView === 'acompanhamento' ? (
+            <AcompanhamentoModule
+              clinicProfile={clinic}
+              catalogProcedures={procedures}
+              pacientes={allPatients}
+              professionals={clinic.professionals || []}
             />
           ) : (
             <QuotesPanel

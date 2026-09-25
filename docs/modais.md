@@ -21,7 +21,8 @@ véu e botão voltar do Android — e, se o formulário foi mexido, **pergunta a
 | `AnamnesisFormFillModal` | larga | ficha clínica inteira, com fotos e mapa corporal |
 | `AttendanceFormModal` | padrão | data, hora, procedimento, plano, profissional, observações |
 | `QuoteFormModal` | larga | cada procedimento é uma linha com valor, desconto e sessões |
-| `EvaluationFillModal` | larga | perguntas da ficha mais duas imagens anotáveis |
+| `FichaFillModal` | larga | avaliação e acompanhamento: perguntas da ficha mais duas imagens anotáveis |
+| `EmissaoDeAvaliacao` | padrão | paciente, procedimento, data e profissional da avaliação emitida |
 
 ## Página
 
@@ -46,7 +47,7 @@ Sem mudança, porque não são formulário nem escolha: são **superfície de tr
 
 `ImageCropperModal`, `PhotoAnnotationEditor`, `LaserAreasManagerModal`, `LaserQuoteMapModal`,
 `ProcedureDetailModal`, `ShareExportModal`, `QuotePreviewModal`, `ProcedureMultiSelect`,
-`ProcedureTemplatesManager`, `GeneralQuestionsManager`, `EvaluationTemplatesManager`,
+`ProcedureTemplatesManager`, `GeneralQuestionsManager`, `FichasModeloManager`,
 `OrientationImageCard`, e os componentes de impressão (`Printable*`, `BlankAnamnesisSheet`),
 que são a folha A4 na tela.
 

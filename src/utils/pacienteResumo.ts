@@ -2,6 +2,7 @@ import {
   AnamnesisQuestion,
   AnamnesisRecord,
   Attendance,
+  EvaluationRecord,
   Patient,
   Procedure,
   Quote,
@@ -241,19 +242,22 @@ export const fotosDaPaciente = (records: AnamnesisRecord[]): FotoDaPaciente[] =>
 export type ItemDaLinha =
   | { tipo: 'atendimento'; id: string; data: string; titulo: string; profissional?: string; ref: Attendance }
   | { tipo: 'anamnese'; id: string; data: string; titulo: string; profissional?: string; ref: AnamnesisRecord }
+  | { tipo: 'avaliacao'; id: string; data: string; titulo: string; profissional?: string; ref: EvaluationRecord }
   | { tipo: 'orcamento'; id: string; data: string; titulo: string; profissional?: string; ref: Quote };
 
 /**
  * Tudo o que aconteceu com esta paciente, do mais recente para o mais antigo.
  *
- * Uma linha só, e não três listas: a pergunta que a profissional faz ao abrir a ficha é "o que
- * andou acontecendo aqui", e a resposta atravessa os três tipos de documento. As abas continuam
- * existindo para quando a pergunta é sobre um tipo específico.
+ * Uma linha só, e não quatro listas: a pergunta que a profissional faz ao abrir a ficha é "o que
+ * andou acontecendo aqui", e a resposta atravessa os tipos de documento da jornada — orçamento,
+ * anamnese, avaliação e atendimento. As abas continuam existindo para quando a pergunta é sobre um
+ * tipo específico.
  */
 export const linhaDoTempo = (
   atendimentos: Attendance[],
   records: AnamnesisRecord[],
-  quotes: Quote[]
+  quotes: Quote[],
+  avaliacoes: EvaluationRecord[] = []
 ): ItemDaLinha[] => {
   const itens: ItemDaLinha[] = [
     ...atendimentos.map((a) => ({
@@ -272,6 +276,14 @@ export const linhaDoTempo = (
       profissional: r.profissionalNome,
       ref: r,
     })),
+    ...avaliacoes.map((r) => ({
+      tipo: 'avaliacao' as const,
+      id: r.id,
+      data: (r.dataAtendimento || r.createdAt || '').slice(0, 10),
+      titulo: r.procedimentoNome,
+      profissional: r.profissionalNome,
+      ref: r,
+    })),
     ...quotes.map((q) => ({
       tipo: 'orcamento' as const,
       id: q.id,
@@ -284,5 +296,20 @@ export const linhaDoTempo = (
 
   return itens
     .filter((i) => !!i.data)
-    .sort((a, b) => b.data.localeCompare(a.data) || a.tipo.localeCompare(b.tipo));
+    .sort(
+      (a, b) =>
+        b.data.localeCompare(a.data) || ETAPA_DA_JORNADA[b.tipo] - ETAPA_DA_JORNADA[a.tipo]
+    );
+};
+
+/**
+ * A ordem da jornada da paciente: Orçamento → Anamnese → Avaliação → Atendimento. É ela que
+ * desempata o mesmo dia — a linha vai do mais recente para o mais antigo, então a etapa mais
+ * adiantada da jornada fica em cima.
+ */
+export const ETAPA_DA_JORNADA: Record<ItemDaLinha['tipo'], number> = {
+  orcamento: 0,
+  anamnese: 1,
+  avaliacao: 2,
+  atendimento: 3,
 };
