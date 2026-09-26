@@ -21,7 +21,7 @@ import React from 'react';
  */
 
 const inputBase =
-  'w-full glass-input px-3 py-2 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden';
+  'w-full min-w-0 bg-transparent border-0 p-0 text-[16px] font-semibold text-ink tabular-nums placeholder:text-muted placeholder:font-medium focus:outline-none';
 
 /** "17092026" -> "17/09/2026". Só insere separador, não valida nada. */
 export const mascararData = (bruto: string): string => {
@@ -85,6 +85,10 @@ interface CampoProps {
   ajuda?: string;
 }
 
+/**
+ * O campo no desenho preenchido dos formulários — rótulo dentro da caixa, sem contorno, e o
+ * contorno preto só em foco (o mesmo do `CampoTinta`).
+ */
 const Campo: React.FC<CampoProps & { placeholder: string; mascara: (v: string) => string }> = ({
   id,
   label,
@@ -98,29 +102,31 @@ const Campo: React.FC<CampoProps & { placeholder: string; mascara: (v: string) =
 }) => (
   <div>
     <label
-      className="block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1"
       htmlFor={id}
+      className={`block rounded-[14px] px-3.5 pt-2 pb-2.5 min-h-[56px] cursor-text transition-colors focus-within:bg-card focus-within:ring-2 focus-within:ring-ink ${
+        erro ? 'bg-danger-bg ring-2 ring-danger' : 'bg-line-soft'
+      }`}
     >
-      {label}
+      <span className="block text-[12px] font-semibold text-ink-soft leading-tight mb-0.5">{label}</span>
+      <input
+        id={id}
+        type="text"
+        /* `inputMode="numeric"` sobe o teclado de números no celular sem virar `type="number"`,
+           que traria as setinhas e aceitaria "e" e sinal de menos. */
+        inputMode="numeric"
+        autoComplete="off"
+        autoFocus={autoFocus}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(mascara(e.target.value))}
+        aria-invalid={!!erro}
+        className={inputBase}
+      />
     </label>
-    <input
-      id={id}
-      type="text"
-      /* `inputMode="numeric"` sobe o teclado de números no celular sem virar `type="number"`,
-         que traria as setinhas e aceitaria "e" e sinal de menos. */
-      inputMode="numeric"
-      autoComplete="off"
-      autoFocus={autoFocus}
-      value={value}
-      placeholder={placeholder}
-      onChange={(e) => onChange(mascara(e.target.value))}
-      aria-invalid={!!erro}
-      className={`${inputBase} ${erro ? 'border-red-300' : ''}`}
-    />
     {erro ? (
-      <p className="mt-1 text-body text-red-600">{erro}</p>
+      <p className="mt-1 px-1 text-[13px] font-medium text-danger">{erro}</p>
     ) : ajuda ? (
-      <p className="mt-1 text-body text-gray-400">{ajuda}</p>
+      <p className="mt-1 px-1 text-[13px] text-ink-soft">{ajuda}</p>
     ) : null}
   </div>
 );

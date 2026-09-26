@@ -5,13 +5,14 @@ import {
   Check,
   DoorClosed,
   Link2Off,
+  Loader2,
   UserPlus,
   Users,
-  X,
 } from 'lucide-react';
 import {
   AgendaSala,
   Attendance,
+  ClinicProfile,
   Patient,
   Procedure,
   Professional,
@@ -31,6 +32,7 @@ import {
   agoraHHMM,
   DataISO,
   ehDataFutura,
+  ehRealizado,
   hojeISO,
   mesmoProcedimento,
   numeroDaSessao,
@@ -40,14 +42,33 @@ import {
 } from '../../utils/attendances';
 import {
   AGENDA_DEFAULTS,
+  almocoDoDia,
   conflitosDe,
   conflitosDeSala,
+  corDaProfissional,
+  deslocarDias,
   duracaoDoProcedimento,
+  expedienteDoDia,
   hhmmDeMinutos,
+  intervaloDaGrade,
   intervaloDoAtendimento,
+  mensagemDeConfirmacao,
+  minutosDoHHMM,
 } from '../../utils/agenda';
 import { resolveQuoteStatus } from '../../utils/quoteCalc';
+import { formatDateShortYear } from '../../utils/formatters';
+import { buildWhatsAppUrl } from '../../utils/whatsapp';
 import { SidePanel } from '../common/SidePanel';
+import {
+  Avatar,
+  AvisoTinta,
+  BotaoPrincipal,
+  CampoTinta,
+  INPUT_TINTA,
+  Interruptor,
+  PilulasDeEscolha,
+  RotuloTinta,
+} from '../common/Tinta';
 
 /**
  * `novo` nasce em branco; `edicao` corrige um registro; `confirmacao` é o "compareceu" de um
@@ -79,13 +100,18 @@ interface AttendanceFormModalProps {
    */
   sementeDataHora?: { data: DataISO; hora?: string };
   /**
-   * Todos os atendimentos da clínica, para o aviso de choque de horário. Ausente = sem aviso (a
-   * aba do paciente só tem os dele, e conflito é pergunta sobre a agenda inteira).
+   * Todos os atendimentos da clínica, para o aviso de choque de horário e para os horários livres
+   * do "Quando". Ausente = sem aviso e sem a lista de horários.
    */
   atendimentosDaClinica?: Attendance[];
   /**
+   * A clínica: o expediente (os dias que abrem e os horários livres do "Quando") e o modelo da
+   * mensagem de confirmação no WhatsApp. Ausente = só os campos digitados.
+   */
+  clinic?: ClinicProfile;
+  /**
    * Salas e equipamentos da clínica. Lista vazia = a clínica não usa o conceito, e o campo
-   * inteiro some do formulário em vez de virar um select com uma opção só.
+   * inteiro some do formulário em vez de virar uma escolha com uma opção só.
    */
   salas?: AgendaSala[];
   /** Se o cadastro dele ainda não existe — o formulário avisa que vai criar ao salvar. */
@@ -120,21 +146,53 @@ interface AttendanceFormModalProps {
   ) => Promise<void>;
 }
 
-const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
+const DIAS_DA_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
-const TITULO: Record<ModoDoFormulario, string> = {
-  novo: 'Novo atendimento',
-  edicao: 'Editar atendimento',
-  confirmacao: 'Confirmar atendimento',
+/** "ter, 29/09" — o dia no botão de agendar. */
+const diaCurto = (data: DataISO): string => {
+  const d = new Date(`${data}T12:00:00`);
+  return `${DIAS_DA_SEMANA[d.getDay()]}, ${data.slice(8, 10)}/${data.slice(5, 7)}`;
 };
+
+/** "Dra. Karoline Ferreira" → "Dra. Karoline" — o bastante numa pílula. */
+const rotuloCurtoDaProfissional = (nome: string): string => {
+  const m = /^(Dra?\.?)\s+(\S+)/i.exec(nome.trim());
+  if (m) return `${m[1].replace(/\.?$/, '.')} ${m[2]}`;
+  return nome.trim().split(/\s+/)[0] || nome;
+};
+
+/** A escolha de mandar a confirmação no WhatsApp fica lembrada no aparelho. */
+const CHAVE_DA_CONFIRMACAO = 'lavie:agendar-confirmar-whatsapp';
+
+const lerPreferenciaDeConfirmacao = (): boolean => {
+  try {
+    return localStorage.getItem(CHAVE_DA_CONFIRMACAO) === '1';
+  } catch {
+    return false;
+  }
+};
+
+/** Uma linha do "Quando": horário livre, ocupado ou a pausa do almoço. */
+type LinhaDoDia =
+  | { tipo: 'livre'; minuto: number; hora: string; ate: string }
+  | { tipo: 'ocupado'; minuto: number; hora: string; atendimento: Attendance }
+  | { tipo: 'almoco'; minuto: number; hora: string; ate: string };
+
+/** Quantas linhas do dia aparecem antes do "mostrar o dia inteiro". */
+const LINHAS_VISIVEIS = 6;
 
 /**
  * Formulário de uma visita.
  *
- * A natureza do registro sai da data e é mostrada em tempo real no alto: data depois de hoje =
+ * A natureza do registro sai da data e é mostrada em tempo real: data depois de hoje =
  * agendamento (nasce "agendado" e exige hora); hoje ou antes = atendimento realizado. Quem
  * decide isso é o momento de criar — editar a data depois não transforma um no outro, senão um
  * agendamento resolvido semanas atrás voltaria a pedir desfecho.
+ *
+ * No redesign, o agendamento se escolhe tocando: os próximos dias abertos em blocos, e os
+ * horários do dia numa lista com o que está livre e o que está ocupado — o valor calculado
+ * ("termina às 11:00") aparece enquanto se escolhe, e o botão de baixo diz o que vai acontecer.
+ * Os campos digitados continuam logo abaixo, para a data que não está nos próximos dias.
  */
 export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   isOpen,
@@ -143,6 +201,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   selecaoDePaciente,
   sementeDataHora,
   atendimentosDaClinica,
+  clinic,
   salas,
   cadastroSeraCriado,
   atendimentos,
@@ -175,6 +234,8 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   const [erros, setErros] = useState<Record<string, string>>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [diaInteiro, setDiaInteiro] = useState(false);
+  const [enviarConfirmacao, setEnviarConfirmacao] = useState(lerPreferenciaDeConfirmacao);
 
   // Cada abertura recomeça do zero: sobras do preenchimento anterior virariam o atendimento de
   // uma paciente lançado na página de outra.
@@ -187,6 +248,8 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     setTotalSessoes('');
     setDesvinculado(false);
     setDuracaoTocada(false);
+    setDiaInteiro(false);
+    setEnviarConfirmacao(lerPreferenciaDeConfirmacao());
 
     if (atendimento) {
       // A semente da grade vence a data do registro-modelo: é ela que carrega o horário clicado.
@@ -215,7 +278,28 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   }, [isOpen, atendimento, professionalIdPadrao, sementeDataHora]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dataISO = dataParaISO(data);
-  const seraAgendamento = modo === 'novo' && !!dataISO && ehDataFutura(dataISO);
+  /**
+   * Vira agendamento o que ainda vai acontecer: data depois de hoje, ou hoje num horário que
+   * ainda não chegou — o encaixe da tarde marcado de manhã, pelo horário livre da tela Hoje. Hoje
+   * na hora de agora (o padrão ao abrir) continua sendo a visita que acabou de acontecer.
+   */
+  const seraAgendamento =
+    modo === 'novo' &&
+    !!dataISO &&
+    (ehDataFutura(dataISO) ||
+      (dataISO === hojeISO() && horaValida(hora) && !!hora.trim() && hora.trim() > agoraHHMM()));
+
+  /**
+   * A busca de paciente fica aberta enquanto se escolhe — digitar um nome já cria o cadastro
+   * provisório lá no módulo, e sem isto o campo sumiria na primeira letra. Fecha ao escolher
+   * alguém da lista; "Trocar" reabre.
+   */
+  const [escolhendoPaciente, setEscolhendoPaciente] = useState(false);
+  useEffect(() => {
+    if (isOpen) setEscolhendoPaciente(!!selecaoDePaciente && !patient);
+    // Só na abertura: depois, quem decide é o toque na lista e o "Trocar".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   /** Quanto o catálogo diz que este procedimento leva. `undefined` para procedimento digitado. */
   const duracaoSugerida = useMemo(
@@ -350,12 +434,119 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     return undefined;
   }, [quotes, procedimento]);
 
+  /**
+   * O "Quando" de tocar: só para marcar horário — o agendamento novo e a edição de um que ainda
+   * não aconteceu. Lançar uma visita passada ou confirmar um comparecimento é com os campos
+   * digitados, que continuam logo abaixo.
+   */
+  const mostrarSeletor =
+    !!clinic &&
+    (modo === 'novo' || (modo === 'edicao' && atendimento?.status === 'agendado'));
+
+  /** Os próximos cinco dias em que a clínica abre, a partir de hoje — e o dia escolhido, se for outro. */
+  const diasSugeridos = useMemo(() => {
+    if (!mostrarSeletor || !clinic) return [];
+    const hoje = hojeISO();
+    const lista: DataISO[] = [];
+    for (let i = 0; lista.length < 5 && i < 30; i++) {
+      const dia = deslocarDias(hoje, i);
+      if (expedienteDoDia(clinic, dia)) lista.push(dia);
+    }
+    if (dataISO && !lista.includes(dataISO)) {
+      lista.pop();
+      lista.push(dataISO);
+      lista.sort();
+    }
+    return lista;
+  }, [mostrarSeletor, clinic, dataISO]);
+
+  /**
+   * Os horários do dia escolhido, em ordem de relógio: livre (até quando), ocupado (por quem) e o
+   * almoço. Com uma profissional escolhida, a lista é a agenda **dela** — é a pergunta que se faz
+   * ao marcar: "a Karoline tem horário às 10?".
+   */
+  const linhasDoDia = useMemo((): LinhaDoDia[] => {
+    if (!mostrarSeletor || !clinic || !dataISO) return [];
+    const expediente = expedienteDoDia(clinic, dataISO);
+    if (!expediente) return [];
+    const passo = intervaloDaGrade(clinic);
+    const almoco = almocoDoDia(clinic, dataISO);
+    const ehHoje = dataISO === hojeISO();
+    const agora = new Date();
+    const minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+
+    const ocupados = (atendimentosDaClinica || [])
+      .filter(
+        (a) =>
+          a.data === dataISO &&
+          a.status !== 'faltou' &&
+          a.status !== 'remarcado' &&
+          (modo === 'novo' || a.id !== atendimento?.id) &&
+          (!professionalId || a.professionalId === professionalId)
+      )
+      .map((a) => ({ atendimento: a, intervalo: intervaloDoAtendimento(a, procedures) }))
+      .filter(
+        (o): o is { atendimento: Attendance; intervalo: { inicioMin: number; fimMin: number } } =>
+          !!o.intervalo
+      );
+
+    const linhas: LinhaDoDia[] = [];
+    const jaListados = new Set<string>();
+    let almocoListado = false;
+    for (let m = expediente.abreMin; m + passo <= expediente.fechaMin; m += passo) {
+      if (ehHoje && m < minutosAgora) continue;
+      const fim = m + passo;
+      if (almoco && m < almoco.fimMin && almoco.inicioMin < fim) {
+        if (!almocoListado) {
+          almocoListado = true;
+          linhas.push({
+            tipo: 'almoco',
+            minuto: m,
+            hora: hhmmDeMinutos(Math.max(m, almoco.inicioMin)),
+            ate: hhmmDeMinutos(almoco.fimMin),
+          });
+        }
+        continue;
+      }
+      const ocupando = ocupados.find((o) => m < o.intervalo.fimMin && o.intervalo.inicioMin < fim);
+      if (ocupando) {
+        if (!jaListados.has(ocupando.atendimento.id)) {
+          jaListados.add(ocupando.atendimento.id);
+          linhas.push({ tipo: 'ocupado', minuto: m, hora: hhmmDeMinutos(m), atendimento: ocupando.atendimento });
+        }
+        continue;
+      }
+      // Livre até o próximo compromisso, o almoço ou o fim do expediente — o que vier antes.
+      const limites = [
+        expediente.fechaMin,
+        ...ocupados.filter((o) => o.intervalo.inicioMin >= fim).map((o) => o.intervalo.inicioMin),
+      ];
+      if (almoco && almoco.inicioMin >= fim) limites.push(almoco.inicioMin);
+      linhas.push({ tipo: 'livre', minuto: m, hora: hhmmDeMinutos(m), ate: hhmmDeMinutos(Math.min(...limites)) });
+    }
+    return linhas;
+  }, [mostrarSeletor, clinic, dataISO, atendimentosDaClinica, professionalId, procedures, modo, atendimento]);
+
+  /** A última vez que a paciente veio — o que o cartão do cabeçalho mostra sob o nome. */
+  const ultimaVisita = useMemo(() => {
+    const hoje = hojeISO();
+    return atendimentos
+      .filter((a) => ehRealizado(a) && a.data <= hoje)
+      .map((a) => a.data)
+      .sort()
+      .pop();
+  }, [atendimentos]);
+
   if (!isOpen) return null;
 
   const ligarPlano = (ligado: boolean) => {
     setCriarPlano(ligado);
     if (ligado && !totalSessoes && sugestaoDeSessoes) setTotalSessoes(String(sugestaoDeSessoes));
   };
+
+  const contatoDaPaciente = patient?.contato;
+  const podeConfirmarNoWhatsApp =
+    modo === 'novo' && seraAgendamento && !!clinic && !!buildWhatsAppUrl(contatoDaPaciente);
 
   const validar = (): Record<string, string> => {
     const novos: Record<string, string> = {};
@@ -386,6 +577,12 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     const novos = validar();
     setErros(novos);
     if (Object.keys(novos).length > 0 || !patient) return;
+
+    /* A aba do WhatsApp abre **agora**, ainda dentro do toque: o navegador do celular só deixa
+       abrir janela como resposta direta a um toque, e depois do `await` isso já não vale. Ela
+       nasce em branco e recebe o endereço quando a gravação confirma — ou fecha, se falhar. */
+    const confirmarNoWhatsApp = podeConfirmarNoWhatsApp && enviarConfirmacao;
+    const janela = confirmarNoWhatsApp ? window.open('', '_blank') : null;
 
     setSalvando(true);
     setErroGeral(null);
@@ -448,303 +645,446 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
       await onSalvar(registro, planoNovo, {
         limparConfirmacao: !!atendimento?.confirmadoEm && horarioMudou,
       });
+
+      if (confirmarNoWhatsApp && clinic) {
+        const link = buildWhatsAppUrl(
+          contatoDaPaciente,
+          mensagemDeConfirmacao(clinic, registro, procedures)
+        );
+        if (link && janela) janela.location.href = link;
+        else if (link) window.open(link, '_blank', 'noopener,noreferrer');
+      }
       onClose();
     } catch (e) {
+      janela?.close();
       setErroGeral(`Não foi possível salvar: ${(e as Error).message}`);
     } finally {
       setSalvando(false);
     }
   };
 
-  /* O rodapé é montado fora do JSX principal porque o `SidePanel` o recebe por prop: ele
-     precisa ficar fixo abaixo da área que rola, e não no fim do conteúdo rolável. */
-  const rodape = (
-    <div className="flex items-center justify-end gap-3">
-      <button
-        type="button"
-        onClick={onClose}
-        disabled={salvando}
-        className="min-h-[44px] px-4 text-body font-semibold uppercase tracking-widest text-muted hover:text-ink transition-colors disabled:opacity-50"
-      >
-        Cancelar
-      </button>
-      <button
-        type="button"
-        onClick={salvar}
-        disabled={salvando || !patient || conflitosSala.length > 0}
-        className="flex items-center gap-2 min-h-[44px] px-5 rounded-xl bg-brand text-white text-body font-semibold uppercase tracking-widest transition-colors disabled:opacity-60"
-      >
-        <Check className="w-4 h-4" />
-        {salvando ? 'Salvando...' : seraAgendamento ? 'Agendar' : 'Salvar'}
-      </button>
+  const titulo =
+    modo === 'confirmacao'
+      ? 'Confirmar atendimento'
+      : modo === 'edicao'
+      ? 'Editar atendimento'
+      : seraAgendamento
+      ? 'Novo agendamento'
+      : 'Novo atendimento';
+
+  /** O botão diz o que vai acontecer — "Agendar · ter, 29/09 às 10:00". */
+  const textoDoBotao = salvando
+    ? 'Salvando…'
+    : modo === 'confirmacao'
+    ? 'Confirmar comparecimento'
+    : modo === 'edicao'
+    ? 'Salvar alterações'
+    : seraAgendamento
+    ? `Agendar${dataISO ? ` · ${diaCurto(dataISO)}` : ''}${hora.trim() ? ` às ${hora.trim()}` : ''}`
+    : 'Salvar atendimento';
+
+  /* A paciente no cabeçalho preto: quem é, e quando veio pela última vez. "Trocar" só existe
+     quando a paciente foi escolhida aqui (fluxo da agenda). */
+  const cabecalho = patient && !escolhendoPaciente ? (
+    <div className="flex items-center gap-3 rounded-2xl bg-cream/8 px-3 py-2.5">
+      <Avatar nome={patient.nome} tamanho={38} tom="ouro" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[15px] font-bold text-white truncate">{patient.nome}</p>
+        <p className="text-[12px] text-cream/75 truncate">
+          {cadastroSeraCriado
+            ? 'O cadastro é criado ao salvar'
+            : ultimaVisita
+            ? `Última visita ${formatDateShortYear(ultimaVisita)}`
+            : 'Primeira visita'}
+        </p>
+      </div>
+      {selecaoDePaciente && (
+        <button
+          type="button"
+          onClick={() => {
+            setEscolhendoPaciente(true);
+            selecaoDePaciente.onSelecionar({ nome: '' });
+          }}
+          className="shrink-0 min-h-[40px] px-2 text-[13px] font-semibold text-brand-pale hover:text-white transition-colors"
+        >
+          Trocar
+        </button>
+      )}
     </div>
-  );
+  ) : undefined;
+
+  const linhasVisiveis = (() => {
+    if (diaInteiro || linhasDoDia.length <= LINHAS_VISIVEIS) return linhasDoDia;
+    // A janela começa um horário antes do escolhido, para ele não abrir colado no topo.
+    const escolhido = linhasDoDia.findIndex((l) => l.hora === hora.trim());
+    const inicio = Math.max(0, Math.min(escolhido - 1, linhasDoDia.length - LINHAS_VISIVEIS));
+    return linhasDoDia.slice(inicio, inicio + LINHAS_VISIVEIS);
+  })();
 
   return (
     <SidePanel
       aberto={isOpen}
       onFechar={onClose}
-      titulo={TITULO[modo]}
-      sobretitulo={patient?.nome || 'Escolha a paciente'}
+      titulo={titulo}
+      sobretitulo={selecaoDePaciente ? 'Agenda' : 'Pacientes'}
+      cabecalho={cabecalho}
       bloqueado={salvando}
-      rodape={rodape}
+      rodape={
+        <BotaoPrincipal
+          onClick={salvar}
+          disabled={salvando || !patient || conflitosSala.length > 0}
+        >
+          {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          {textoDoBotao}
+        </BotaoPrincipal>
+      }
     >
-      <div className="p-4 sm:p-5 space-y-4">
-          {erroGeral && (
-            <div className="px-3 py-2 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              {erroGeral}
-            </div>
-          )}
+      <div className="px-5 sm:px-6 py-5 flex flex-col gap-4">
+        {erroGeral && (
+          <AvisoTinta tom="erro" icone={AlertCircle}>
+            {erroGeral}
+          </AvisoTinta>
+        )}
 
-          {/* Quem só existe como nome num orçamento ganha o cadastro aqui, sem parar a recepção
-              para preencher formulário com a cliente na frente. */}
-          {cadastroSeraCriado && (
-            <div className="px-3 py-2 rounded-sm bg-brand/10 border border-brand/25 text-xs text-brand-hover flex items-start gap-2">
-              <UserPlus className="w-3.5 h-3.5 shrink-0 mt-px" />
-              <span>O cadastro de {patient?.nome} será criado ao salvar este atendimento.</span>
-            </div>
-          )}
+        {/* Quem só existe como nome num orçamento ganha o cadastro aqui, sem parar a recepção
+            para preencher formulário com a cliente na frente. */}
+        {cadastroSeraCriado && (
+          <AvisoTinta icone={UserPlus}>
+            O cadastro de {patient?.nome} será criado ao salvar este atendimento.
+          </AvisoTinta>
+        )}
 
-          {/* Fluxo da agenda: o horário veio primeiro, a paciente vem aqui. */}
-          {selecaoDePaciente && (
-            <div>
-              <PatientSearchSelect
-                patients={selecaoDePaciente.pacientes}
-                pacienteId={patient?.id}
-                pacienteNome={patient?.nome || ''}
-                onSelect={selecaoDePaciente.onSelecionar}
-              />
-              {erros.paciente && (
-                <p className="mt-1 text-body text-red-600">{erros.paciente}</p>
-              )}
-            </div>
-          )}
-
-          {/* A natureza do registro, ao vivo — some a dúvida de "isso vai virar agendamento?" */}
-          {seraAgendamento && (
-            <div className="px-3 py-2 rounded-sm bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
-              <CalendarClock className="w-3.5 h-3.5 shrink-0 mt-px" />
-              <span>
-                Data no futuro — será salvo como <strong>agendamento</strong>, e você marca
-                compareceu, faltou ou remarcou depois.
-              </span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-3 gap-3">
-            <MaskedDateInput
-              id="atendimento-data"
-              label="Data *"
-              value={data}
-              onChange={setData}
-              erro={erros.data}
-              autoFocus={!selecaoDePaciente}
-            />
-            <MaskedTimeInput
-              id="atendimento-hora"
-              label={seraAgendamento ? 'Hora *' : 'Hora'}
-              value={hora}
-              onChange={setHora}
-              erro={erros.hora}
-              ajuda={seraAgendamento ? undefined : 'Opcional'}
-            />
-            {/* A duração é o que dá altura ao cartão na agenda e o que deixa ver buraco livre.
-                Vem do catálogo e fica editável — a mesma sessão leva tempos diferentes. */}
-            <div>
-              <label className={labelClass} htmlFor="atendimento-duracao">
-                Duração
-              </label>
-              <div className="relative">
-                <input
-                  id="atendimento-duracao"
-                  type="text"
-                  inputMode="numeric"
-                  value={duracao}
-                  onChange={(e) => {
-                    setDuracaoTocada(true);
-                    setDuracao(e.target.value.replace(/\D/g, '').slice(0, 3));
-                  }}
-                  placeholder={String(AGENDA_DEFAULTS.duracaoMin)}
-                  className="w-full glass-input pl-3 pr-9 py-2 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
-                />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-body text-gray-400 pointer-events-none">
-                  min
-                </span>
-              </div>
-              {erros.duracao ? (
-                <p className="mt-1 text-body text-red-600">{erros.duracao}</p>
-              ) : (
-                terminaAs && <p className="mt-1 text-body text-gray-400">até {terminaAs}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Aviso, não trava: quem decide abrir um encaixe é a clínica, não o formulário. */}
-          {conflitos.length > 0 && (
-            <div className="px-3 py-2 rounded-sm bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
-              <Users className="w-3.5 h-3.5 shrink-0 mt-px" />
-              <span>
-                <strong>Choque de horário.</strong>{' '}
-                {conflitos[0].profissionalNome || 'A profissional'} já tem {conflitos[0].pacienteNome}{' '}
-                às {conflitos[0].hora}
-                {conflitos.length > 1 && ' e mais ' + (conflitos.length - 1)}. Dá para salvar assim
-                mesmo, se for encaixe.
-              </span>
-            </div>
-          )}
-
-          {/* Sala/equipamento. Só aparece quando a clínica cadastrou alguma. */}
-          {!!salas?.length && (
-            <div>
-              <label className={labelClass} htmlFor="atendimento-sala">
-                Sala / equipamento
-              </label>
-              <select
-                id="atendimento-sala"
-                value={salaId}
-                onChange={(e) => setSalaId(e.target.value)}
-                className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
-              >
-                <option value="">Nenhuma</option>
-                {salas.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Trava, não aviso: ver `conflitosSala`. */}
-          {conflitosSala.length > 0 && (
-            <div className="px-3 py-2 rounded-sm bg-danger-bg border border-danger-line text-body text-danger flex items-start gap-2">
-              <DoorClosed className="w-3.5 h-3.5 shrink-0 mt-px" />
-              <span>
-                <strong>Sala ocupada.</strong> {conflitosSala[0].pacienteNome} já está nesta sala
-                às {conflitosSala[0].hora}
-                {conflitosSala.length > 1 && ' (e mais ' + (conflitosSala.length - 1) + ')'}. Troque
-                o horário ou a sala para salvar.
-              </span>
-            </div>
-          )}
-
-          <ProcedureSearchSelect
-            procedures={procedures}
-            procedureId={procedimento.procedureId}
-            nome={procedimento.procedimentoNome}
-            onSelect={setProcedimento}
-            erro={erros.procedimento}
-          />
-
-          {/* Plano: ou o vínculo detectado, ou a oferta de criar um. Nunca os dois — digitar um
-              total novo enquanto existe plano aberto não teria significado claro (criaria um
-              segundo plano paralelo ou mexeria nas outras sessões sem avisar). */}
-          {planoVinculado ? (
-            <div className="px-3 py-2.5 rounded-sm bg-white/70 border border-brand/25 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-label font-semibold uppercase tracking-wider text-brand">
-                  Plano em andamento
-                </p>
-                <p className="text-xs text-ink truncate">
-                  {planoVinculado.procedimentoNome} —{' '}
-                  <strong className="tabular-nums">
-                    {posicaoNoPlano?.numero}ª de {posicaoNoPlano?.total}
-                  </strong>
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDesvinculado(true)}
-                className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-body font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
-              >
-                <Link2Off className="w-3.5 h-3.5" />
-                Desvincular
-              </button>
-            </div>
-          ) : (
-            <div className="px-3 py-2.5 rounded-sm bg-white/50 border border-white/80">
-              <label className="flex items-start gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={criarPlano}
-                  onChange={(e) => ligarPlano(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-brand"
-                />
-                <span className="min-w-0">
-                  <span className="block text-xs font-medium text-ink">
-                    Plano de sessões
-                  </span>
-                  <span className="block text-body text-gray-400">
-                    Para pacotes contínuos — as sessões seguintes entram neste plano sozinhas.
-                  </span>
-                </span>
-              </label>
-
-              {criarPlano && (
-                <div className="mt-3 pl-7">
-                  <label className={labelClass} htmlFor="atendimento-total-sessoes">
-                    Total de sessões
-                  </label>
-                  <input
-                    id="atendimento-total-sessoes"
-                    type="text"
-                    inputMode="numeric"
-                    value={totalSessoes}
-                    onChange={(e) => setTotalSessoes(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                    placeholder="10"
-                    className="w-24 glass-input px-3 py-2 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
-                  />
-                  {erros.plano && <p className="mt-1 text-body text-red-600">{erros.plano}</p>}
-                  {!erros.plano && sugestaoDeSessoes && (
-                    <p className="mt-1 text-body text-gray-400">
-                      Sugerido pelo orçamento pago desta cliente.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
+        {/* Fluxo da agenda: o horário veio primeiro, a paciente vem aqui. */}
+        {selecaoDePaciente && (escolhendoPaciente || !patient) && (
           <div>
-            <span className={labelClass}>Quem atendeu</span>
-            {professionals.length === 0 ? (
-              <p className="text-xs text-gray-400">
-                Nenhuma profissional cadastrada nas configurações da clínica.
-              </p>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                {professionals.map((p) => (
+            <PatientSearchSelect
+              patients={selecaoDePaciente.pacientes}
+              pacienteId={patient?.id}
+              pacienteNome={patient?.nome || ''}
+              onSelect={(escolha) => {
+                selecaoDePaciente.onSelecionar(escolha);
+                if (escolha.id) setEscolhendoPaciente(false);
+              }}
+            />
+            {erros.paciente && (
+              <p className="mt-1 px-1 text-[13px] font-medium text-danger">{erros.paciente}</p>
+            )}
+          </div>
+        )}
+
+        <ProcedureSearchSelect
+          procedures={procedures}
+          procedureId={procedimento.procedureId}
+          nome={procedimento.procedimentoNome}
+          onSelect={setProcedimento}
+          erro={erros.procedimento}
+        />
+
+        <div>
+          <RotuloTinta>Profissional</RotuloTinta>
+          {professionals.length === 0 ? (
+            <p className="text-[13px] text-ink-soft">
+              Nenhuma profissional cadastrada nas configurações da clínica.
+            </p>
+          ) : (
+            <PilulasDeEscolha
+              rotulo="Profissional"
+              opcoes={professionals.map((p) => ({
+                id: p.id,
+                rotulo: rotuloCurtoDaProfissional(p.name),
+                cor: corDaProfissional(p.id),
+              }))}
+              valor={professionalId}
+              onMudar={setProfessionalId}
+              permiteDesmarcar
+            />
+          )}
+        </div>
+
+        {/* QUANDO — os dias e os horários de tocar. */}
+        {mostrarSeletor && (
+          <div>
+            <RotuloTinta>Quando</RotuloTinta>
+            <div className="grid grid-cols-5 gap-1.5">
+              {diasSugeridos.map((dia) => {
+                const ativo = dia === dataISO;
+                const d = new Date(`${dia}T12:00:00`);
+                return (
                   <button
-                    key={p.id}
+                    key={dia}
                     type="button"
-                    onClick={() => setProfessionalId(professionalId === p.id ? '' : p.id)}
-                    className={`px-3 py-2 rounded-sm text-xs font-medium border transition-colors ${
-                      professionalId === p.id
-                        ? 'bg-ink text-white border-ink'
-                        : 'bg-white/70 text-gray-600 border-gray-200 hover:border-brand/40'
+                    aria-pressed={ativo}
+                    aria-label={diaCurto(dia)}
+                    onClick={() => {
+                      setData(isoParaData(dia));
+                      setDiaInteiro(false);
+                    }}
+                    className={`h-[58px] rounded-[14px] flex flex-col items-center justify-center transition-colors ${
+                      ativo ? 'bg-ink text-white' : 'bg-line-soft text-ink hover:bg-[#E6E2DA]'
                     }`}
                   >
-                    {p.name}
+                    <span className={`text-[12px] font-medium ${ativo ? 'text-white/80' : 'text-ink-soft'}`}>
+                      {dia === hojeISO() ? 'hoje' : DIAS_DA_SEMANA[d.getDay()]}
+                    </span>
+                    <span className="text-[17px] font-bold tabular-nums leading-tight">{d.getDate()}</span>
                   </button>
-                ))}
+                );
+              })}
+            </div>
+
+            {dataISO && clinic && !expedienteDoDia(clinic, dataISO) ? (
+              <p className="mt-2 px-1 text-[13px] text-ink-soft">
+                A clínica não abre neste dia — encaixe continua possível pelo horário digitado abaixo.
+              </p>
+            ) : dataISO && linhasDoDia.length === 0 ? (
+              <p className="mt-2 px-1 text-[13px] text-ink-soft">
+                Nenhum horário sobrando neste dia{professionalId ? ' para esta profissional' : ''}.
+              </p>
+            ) : (
+              <div className="flex flex-col mt-1.5">
+                {linhasVisiveis.map((linha) => {
+                  if (linha.tipo === 'almoco') {
+                    return (
+                      <div
+                        key={`almoco-${linha.hora}`}
+                        className="h-12 flex items-center justify-between border-b border-ink/8 text-[15px] font-semibold text-muted"
+                      >
+                        <span className="tabular-nums">{linha.hora}</span>
+                        <span className="text-[13px] font-medium">almoço até {linha.ate}</span>
+                      </div>
+                    );
+                  }
+                  if (linha.tipo === 'ocupado') {
+                    const a = linha.atendimento;
+                    return (
+                      <div
+                        key={`ocupado-${a.id}`}
+                        className="h-12 flex items-center justify-between gap-3 border-b border-ink/8 text-[15px] font-semibold text-muted"
+                      >
+                        <span className="line-through tabular-nums">{linha.hora}</span>
+                        <span className="text-[13px] font-medium truncate">
+                          ocupado · {a.profissionalNome ? rotuloCurtoDaProfissional(a.profissionalNome) : a.pacienteNome}
+                        </span>
+                      </div>
+                    );
+                  }
+                  const escolhido = linha.hora === hora.trim();
+                  return escolhido ? (
+                    <button
+                      key={`livre-${linha.hora}`}
+                      type="button"
+                      aria-pressed
+                      className="h-[52px] my-1 px-3.5 rounded-[14px] bg-ink text-white flex items-center justify-between text-[15px] font-bold"
+                    >
+                      <span className="tabular-nums">
+                        {linha.hora}
+                        {terminaAs ? ` – ${terminaAs}` : ''}
+                      </span>
+                      <Check className="w-[18px] h-[18px]" />
+                    </button>
+                  ) : (
+                    <button
+                      key={`livre-${linha.hora}`}
+                      type="button"
+                      onClick={() => setHora(linha.hora)}
+                      className="h-12 flex items-center justify-between gap-3 border-b border-ink/8 text-[15px] font-semibold text-ink text-left hover:bg-line-soft/60 transition-colors"
+                    >
+                      <span className="tabular-nums">{linha.hora}</span>
+                      <span className="text-[13px] font-medium text-ink-soft">livre até {linha.ate}</span>
+                    </button>
+                  );
+                })}
+                {linhasDoDia.length > LINHAS_VISIVEIS && (
+                  <button
+                    type="button"
+                    onClick={() => setDiaInteiro((v) => !v)}
+                    className="self-start mt-1 min-h-[40px] text-[14px] font-semibold text-ink underline underline-offset-2"
+                  >
+                    {diaInteiro ? 'Mostrar menos horários' : `Mostrar o dia inteiro (${linhasDoDia.length} horários)`}
+                  </button>
+                )}
               </div>
             )}
           </div>
+        )}
 
+        {/* A data, a hora e a duração digitadas — o caminho de sempre, e o único para a data que
+            não está nos próximos dias ou para a visita que já aconteceu. */}
+        <div>
+          {mostrarSeletor && <RotuloTinta>Ou digite a data e a hora</RotuloTinta>}
+          <div className="grid grid-cols-3 gap-2">
+            <MaskedDateInput
+              id="atendimento-data"
+              label="Data"
+              value={data}
+              onChange={setData}
+              erro={erros.data}
+              autoFocus={!selecaoDePaciente && !mostrarSeletor}
+            />
+            <MaskedTimeInput
+              id="atendimento-hora"
+              label={seraAgendamento ? 'Hora' : 'Hora (opcional)'}
+              value={hora}
+              onChange={setHora}
+              erro={erros.hora}
+            />
+            {/* A duração é o que dá altura ao cartão na agenda e o que deixa ver buraco livre.
+                Vem do catálogo e fica editável — a mesma sessão leva tempos diferentes. */}
+            <CampoTinta
+              rotulo="Duração"
+              htmlFor="atendimento-duracao"
+              erro={erros.duracao}
+              ajuda={!erros.duracao && terminaAs ? `até ${terminaAs}` : undefined}
+              sufixo={<span className="text-[13px] font-semibold text-ink-soft shrink-0">min</span>}
+              className="[&>label]:px-3.5"
+            >
+              <input
+                id="atendimento-duracao"
+                type="text"
+                inputMode="numeric"
+                value={duracao}
+                onChange={(e) => {
+                  setDuracaoTocada(true);
+                  setDuracao(e.target.value.replace(/\D/g, '').slice(0, 3));
+                }}
+                placeholder={String(AGENDA_DEFAULTS.duracaoMin)}
+                className={`${INPUT_TINTA} tabular-nums`}
+              />
+            </CampoTinta>
+          </div>
+        </div>
+
+        {/* A natureza do registro, ao vivo — some a dúvida de "isso vai virar agendamento?" */}
+        {seraAgendamento && !mostrarSeletor && (
+          <AvisoTinta tom="alerta" icone={CalendarClock}>
+            Data no futuro — será salvo como <strong>agendamento</strong>, e você marca
+            compareceu, faltou ou remarcou depois.
+          </AvisoTinta>
+        )}
+
+        {/* Aviso, não trava: quem decide abrir um encaixe é a clínica, não o formulário. */}
+        {conflitos.length > 0 && (
+          <AvisoTinta tom="alerta" icone={Users}>
+            <strong>Choque de horário.</strong>{' '}
+            {conflitos[0].profissionalNome || 'A profissional'} já tem {conflitos[0].pacienteNome}{' '}
+            às {conflitos[0].hora}
+            {conflitos.length > 1 && ' e mais ' + (conflitos.length - 1)}. Dá para salvar assim
+            mesmo, se for encaixe.
+          </AvisoTinta>
+        )}
+
+        {/* Sala/equipamento. Só aparece quando a clínica cadastrou alguma. */}
+        {!!salas?.length && (
           <div>
-            <label className={labelClass} htmlFor="atendimento-observacoes">
-              Observações
-            </label>
-            <textarea
-              id="atendimento-observacoes"
-              value={observacoes}
-              onChange={(e) => setObservacoes(e.target.value)}
-              rows={3}
-              placeholder="Parâmetros usados, reação da paciente, o que combinar para a próxima"
-              className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink resize-y focus:outline-hidden"
+            <RotuloTinta>Sala ou equipamento</RotuloTinta>
+            <PilulasDeEscolha
+              rotulo="Sala ou equipamento"
+              opcoes={salas.map((s) => ({ id: s.id, rotulo: s.nome }))}
+              valor={salaId}
+              onMudar={setSalaId}
+              permiteDesmarcar
             />
           </div>
+        )}
+
+        {/* Trava, não aviso: ver `conflitosSala`. */}
+        {conflitosSala.length > 0 && (
+          <AvisoTinta tom="erro" icone={DoorClosed}>
+            <strong>Sala ocupada.</strong> {conflitosSala[0].pacienteNome} já está nesta sala às{' '}
+            {conflitosSala[0].hora}
+            {conflitosSala.length > 1 && ' (e mais ' + (conflitosSala.length - 1) + ')'}. Troque o
+            horário ou a sala para salvar.
+          </AvisoTinta>
+        )}
+
+        {/* Plano: ou o vínculo detectado, ou a oferta de criar um. Nunca os dois — digitar um
+            total novo enquanto existe plano aberto não teria significado claro (criaria um
+            segundo plano paralelo ou mexeria nas outras sessões sem avisar). */}
+        {planoVinculado ? (
+          <div className="rounded-2xl bg-card border border-ink/10 px-4 py-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[12px] font-semibold text-ink-soft">Plano em andamento</p>
+              <p className="text-[15px] font-bold text-ink truncate">
+                {planoVinculado.procedimentoNome} ·{' '}
+                <span className="tabular-nums">
+                  {posicaoNoPlano?.numero}ª de {posicaoNoPlano?.total}
+                </span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDesvinculado(true)}
+              className="shrink-0 inline-flex items-center gap-1.5 h-10 px-3 rounded-full text-[13px] font-semibold text-ink-soft hover:text-danger hover:bg-danger-bg transition-colors"
+            >
+              <Link2Off className="w-4 h-4" />
+              Desvincular
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-card border border-ink/10 px-4 py-3.5 flex flex-col gap-3">
+            <Interruptor
+              ligado={criarPlano}
+              onMudar={ligarPlano}
+              rotulo="Plano de sessões"
+              descricao="Para pacotes contínuos — as sessões seguintes entram neste plano sozinhas."
+            />
+            {criarPlano && (
+              <CampoTinta
+                rotulo="Total de sessões"
+                htmlFor="atendimento-total-sessoes"
+                erro={erros.plano}
+                ajuda={sugestaoDeSessoes ? 'Sugerido pelo orçamento pago desta cliente.' : undefined}
+                className="max-w-[200px]"
+              >
+                <input
+                  id="atendimento-total-sessoes"
+                  type="text"
+                  inputMode="numeric"
+                  value={totalSessoes}
+                  onChange={(e) => setTotalSessoes(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                  placeholder="10"
+                  className={`${INPUT_TINTA} tabular-nums`}
+                />
+              </CampoTinta>
+            )}
+          </div>
+        )}
+
+        <CampoTinta rotulo="Observações" htmlFor="atendimento-observacoes">
+          <textarea
+            id="atendimento-observacoes"
+            value={observacoes}
+            onChange={(e) => setObservacoes(e.target.value)}
+            rows={2}
+            placeholder="Parâmetros usados, reação da paciente, o que combinar para a próxima"
+            className={`${INPUT_TINTA} resize-y leading-snug font-medium`}
+          />
+        </CampoTinta>
+
+        {/* A confirmação sai no mesmo gesto de agendar, quando a pessoa quer. A escolha fica
+            lembrada neste aparelho. */}
+        {modo === 'novo' && seraAgendamento && !!clinic && (
+          <Interruptor
+            ligado={podeConfirmarNoWhatsApp && enviarConfirmacao}
+            disabled={!podeConfirmarNoWhatsApp}
+            onMudar={(ligado) => {
+              setEnviarConfirmacao(ligado);
+              try {
+                localStorage.setItem(CHAVE_DA_CONFIRMACAO, ligado ? '1' : '0');
+              } catch {
+                // Sem armazenamento, a escolha vale só para este agendamento.
+              }
+            }}
+            rotulo="Enviar confirmação no WhatsApp"
+            descricao={
+              podeConfirmarNoWhatsApp
+                ? 'Abre a conversa com a mensagem de confirmação pronta, logo depois de agendar.'
+                : patient
+                ? 'Sem telefone no cadastro desta paciente.'
+                : 'Escolha a paciente primeiro.'
+            }
+          />
+        )}
       </div>
     </SidePanel>
   );

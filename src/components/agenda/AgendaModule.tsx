@@ -616,6 +616,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         }
         sementeDataHora={formulario?.semente}
         atendimentosDaClinica={atendimentos}
+        clinic={clinic}
         salas={salasDaClinica(clinic)}
         cadastroSeraCriado={cadastroSeraCriado}
         atendimentos={doPacienteDoForm.atendimentos}

@@ -422,6 +422,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           onClose={() => setFormAtendimento(null)}
           patient={pacienteAberto}
           atendimentosDaClinica={attendances}
+          clinic={clinic}
           salas={salasDaClinica(clinic)}
           cadastroSeraCriado={cadastroSeraCriado}
           atendimentos={doPacienteAberto.atendimentos}

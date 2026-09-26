@@ -16,6 +16,8 @@ import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
 import { isDuplicateIdentQuestion } from '../../utils/anamnesisQuestions';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
+import { PerguntaAPergunta, PerguntaDoFluxo } from './PerguntaAPergunta';
+import { BotaoPrincipal } from '../common/Tinta';
 import { OrientationImageCard } from './OrientationImageCard';
 import { ConsentTermView } from './ConsentTermView';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
@@ -26,8 +28,9 @@ import { SidePanel } from '../common/SidePanel';
 import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 import { listarNomesDeAreas, montarEspelhoPublico } from '../../utils/laserAreas';
 import {
-  X,
+  ArrowRight,
   Camera,
+  ClipboardList,
   User,
   FileText,
   CheckCircle2,
@@ -180,6 +183,8 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
   // ao fechar a folha de compartilhamento, para dar tempo de copiar, conferir e mandar de novo.
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [linkFoiCompartilhado, setLinkFoiCompartilhado] = useState(false);
+  /** O modo pergunta a pergunta, por cima do formulário — ver `PerguntaAPergunta`. */
+  const [fluxoAberto, setFluxoAberto] = useState(false);
 
   // O modal devolve `null` quando fechado, mas nunca desmonta — o componente fica sempre no JSX
   // do módulo. Isso congela os valores iniciais dos useState na primeira montagem: sem sincronizar
@@ -194,6 +199,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
     }
     setAreasConfirmadas(new Set(initialAreaLaserId ? [initialAreaLaserId] : []));
     setLinkFoiCompartilhado(false);
+    setFluxoAberto(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialTemplateId, initialPatientId, initialAreaLaserId]);
 
@@ -461,45 +467,78 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
     }
   };
 
+  /**
+   * As perguntas que a paciente responde, na ordem do formulário: as gerais primeiro (o histórico
+   * de saúde), as do procedimento depois. As que "não vão ao paciente" ficam de fora — são da
+   * profissional, e ela as responde no formulário.
+   */
+  const perguntasDoFluxo: PerguntaDoFluxo[] = [
+    ...extraGeneralQuestions
+      .filter((q) => (q.publicoAlvo || 'paciente') !== 'medico')
+      .map((q) => ({
+        pergunta: q,
+        grupo: 'Histórico de saúde',
+        valor: respostasGerais[q.id],
+        onResponder: (v: unknown) => handleGeneralAnswerChange(q.id, v),
+      })),
+    ...(currentTemplate?.perguntasEspecificas || [])
+      .filter((q) => (q.publicoAlvo || 'paciente') !== 'medico')
+      .map((q) => ({
+        pergunta: q,
+        grupo: currentTemplate.procedimentoNome,
+        valor: respostasEspecificas[q.id],
+        onResponder: (v: unknown) => handleSpecificAnswerChange(q.id, v),
+      })),
+  ];
+  const respondidasNoFluxo = perguntasDoFluxo.filter((p) =>
+    Array.isArray(p.valor) ? p.valor.length > 0 : p.valor !== undefined && p.valor !== null && p.valor !== ''
+  ).length;
+  const nomeDaPaciente =
+    patientMode === 'new'
+      ? newPatientName.trim()
+      : patients.find((p) => p.id === selectedPatientId)?.nome || '';
+
   return (
     <SidePanel
       aberto
       onFechar={onClose}
-      titulo="Nova ficha de anamnese"
-      sobretitulo={clinicProfile.name || 'La Vie Clinique'}
+      titulo="Preencher anamnese"
+      sobretitulo="Fichas clínicas"
+      subtitulo={
+        currentTemplate
+          ? `${nomeDaPaciente || 'Paciente a escolher'} · ${currentTemplate.procedimentoNome}`
+          : undefined
+      }
       largura="larga"
       bloqueado={isSaving}
       /* Escolher a paciente ou a ficha-modelo passa por `change`; anexar foto, não. */
-      alterado={!!fotoUrl}
+      alterado={!!fotoUrl || respondidasNoFluxo > 0}
       rodape={
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => setIsShareOpen(true)}
-            className="w-full sm:w-auto h-[48px] px-4 rounded-xl border border-line text-body-lg font-semibold text-ink-soft hover:border-brand hover:text-brand transition-colors whitespace-nowrap flex items-center justify-center gap-2"
+        <div className="flex flex-col sm:flex-row-reverse sm:items-center gap-2">
+          <BotaoPrincipal
+            onClick={() => handleSaveForm(true)}
+            disabled={isSaving}
+            icone={Printer}
+            className="sm:w-auto sm:flex-1"
           >
-            <Share2 className="w-[18px] h-[18px] shrink-0" />
-            Link pro paciente
-          </button>
-
-          <div className="w-full sm:w-auto flex items-center gap-2.5">
+            {isSaving ? 'Processando…' : 'Salvar e gerar PDF'}
+          </BotaoPrincipal>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
             <button
               type="button"
               disabled={isSaving}
               onClick={() => handleSaveForm(false)}
-              className="flex-1 sm:flex-initial h-[48px] px-5 rounded-xl bg-card border border-line text-body-lg font-semibold text-ink hover:border-brand hover:text-brand transition-colors disabled:opacity-50 whitespace-nowrap"
+              className="h-12 px-5 rounded-full border border-ink/15 text-[14px] font-semibold text-ink hover:border-ink/40 transition-colors disabled:opacity-50 whitespace-nowrap"
             >
-              {isSaving ? 'Gravando...' : 'Salvar ficha'}
+              {isSaving ? 'Gravando…' : 'Salvar ficha'}
             </button>
-
             <button
               type="button"
-              disabled={isSaving}
-              onClick={() => handleSaveForm(true)}
-              className="flex-1 sm:flex-initial h-[48px] px-6 rounded-xl bg-ink text-brand-light text-body-lg font-semibold flex items-center justify-center gap-2 shadow-xs active:scale-97 transition-all disabled:opacity-50 whitespace-nowrap"
+              onClick={() => setIsShareOpen(true)}
+              className="h-12 px-4 rounded-full border border-ink/15 text-[14px] font-semibold text-ink hover:border-ink/40 transition-colors whitespace-nowrap flex items-center justify-center gap-2"
             >
-              <Printer className="w-4 h-4" />
-              {isSaving ? 'Processando...' : 'Salvar e gerar PDF'}
+              <Share2 className="w-4 h-4 shrink-0" />
+              Link pro paciente
             </button>
           </div>
         </div>
@@ -778,6 +817,32 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
             )}
           </div>
 
+          {/* O caminho para responder com a paciente ao lado: uma pergunta por tela. As respostas
+              caem neste mesmo formulário, que continua valendo para revisar e completar. */}
+          {perguntasDoFluxo.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setFluxoAberto(true)}
+              className="w-full rounded-[20px] bg-ink text-white p-4 flex items-center gap-3.5 text-left hover:bg-black transition-colors"
+            >
+              <ClipboardList className="w-[22px] h-[22px] shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-bold">
+                  {respondidasNoFluxo === 0
+                    ? 'Preencher com a paciente'
+                    : respondidasNoFluxo < perguntasDoFluxo.length
+                    ? 'Continuar com a paciente'
+                    : 'Revisar com a paciente'}
+                </span>
+                <span className="block text-[12px] text-cream/75">
+                  pergunta a pergunta · {respondidasNoFluxo} de {perguntasDoFluxo.length}{' '}
+                  {perguntasDoFluxo.length === 1 ? 'respondida' : 'respondidas'}
+                </span>
+              </span>
+              <ArrowRight className="w-[18px] h-[18px] shrink-0 text-brand-light" />
+            </button>
+          )}
+
           {/* TERMO DE CONSENTIMENTO — logo abaixo das perguntas gerais, como no formulário online */}
           {consentSections && <ConsentTermView sections={consentSections} />}
 
@@ -1042,6 +1107,14 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           onShared={() => setLinkFoiCompartilhado(true)}
         />
       )}
+
+      <PerguntaAPergunta
+        aberto={fluxoAberto}
+        perguntas={perguntasDoFluxo}
+        contexto={[nomeDaPaciente, currentTemplate?.procedimentoNome].filter(Boolean).join(' · ')}
+        onFechar={() => setFluxoAberto(false)}
+        onConcluir={() => setFluxoAberto(false)}
+      />
 
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </SidePanel>

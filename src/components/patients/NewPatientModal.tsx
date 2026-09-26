@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, UserPlus, X } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { Patient } from '../../types';
 import { PatientFields, PatientFormValues, VALORES_VAZIOS, formToPatient } from './PatientFields';
+import { SidePanel } from '../common/SidePanel';
+import { AvisoTinta, BotaoPrincipal } from '../common/Tinta';
 
 interface NewPatientModalProps {
   isOpen: boolean;
@@ -28,6 +30,9 @@ const chaveDoNome = (nome: string): string =>
  *
  * Só o nome é obrigatório: quem cadastra na recepção muitas vezes tem apenas o nome e o telefone
  * na mão, e o resto chega depois — pela própria anamnese ou pelo quadro de dados pessoais.
+ *
+ * No redesign ele deixou de ser uma caixa no meio da tela e passou a ser um formulário de tela
+ * cheia (painel lateral no desktop), como os outros quatro de criação.
  */
 export const NewPatientModal: React.FC<NewPatientModalProps> = ({
   isOpen,
@@ -40,6 +45,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
   const [form, setForm] = useState<PatientFormValues>({ ...VALORES_VAZIOS });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [erroNome, setErroNome] = useState<string | undefined>(undefined);
 
   // Cada abertura começa em branco — reaproveitar o que sobrou da última seria cadastrar
   // um paciente com os dados de outro.
@@ -47,12 +53,14 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
     if (!isOpen) return;
     setForm({ ...VALORES_VAZIOS, nome: nomeInicial || '' });
     setErro(null);
+    setErroNome(undefined);
     setSalvando(false);
   }, [isOpen, nomeInicial]);
 
-  if (!isOpen) return null;
-
-  const alterar = (patch: Partial<PatientFormValues>) => setForm((atual) => ({ ...atual, ...patch }));
+  const alterar = (patch: Partial<PatientFormValues>) => {
+    setForm((atual) => ({ ...atual, ...patch }));
+    if (patch.nome !== undefined) setErroNome(undefined);
+  };
 
   const homonimo = form.nome.trim()
     ? patients.find((p) => chaveDoNome(p.nome) === chaveDoNome(form.nome))
@@ -60,7 +68,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
 
   const salvar = async () => {
     if (!form.nome.trim()) {
-      setErro('O nome do paciente é obrigatório.');
+      setErroNome('O nome da paciente é obrigatório.');
       return;
     }
     setSalvando(true);
@@ -78,79 +86,53 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center sm:p-4 animate-fadeIn"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="novo-paciente-titulo"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !salvando) onClose();
-      }}
+    <SidePanel
+      aberto={isOpen}
+      onFechar={onClose}
+      titulo="Nova paciente"
+      sobretitulo="Pacientes"
+      subtitulo="Só o nome é obrigatório. O resto ela completa ao preencher a primeira anamnese."
+      bloqueado={salvando}
+      rodape={
+        <BotaoPrincipal onClick={salvar} disabled={salvando}>
+          {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
+          {salvando ? 'Cadastrando…' : 'Cadastrar paciente'}
+        </BotaoPrincipal>
+      }
     >
-      <div className="w-full sm:max-w-lg max-h-[88vh] overflow-y-auto bg-surface rounded-t-2xl sm:rounded-card shadow-2xl sm:border sm:border-line animate-slideUpSheet sm:animate-none pb-area-segura sm:pb-0">
-        <div className="bg-ink px-6 py-4 flex items-start justify-between gap-3 sticky top-0 z-10">
-          <div>
-            <p className="text-label font-semibold uppercase tracking-widest text-brand">
-              Cadastro
-            </p>
-            <h2 id="novo-paciente-titulo" className="text-lg text-white font-serif-luxury">
-              Novo paciente
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={salvando}
-            aria-label="Fechar"
-            className="text-white/60 hover:text-white transition-colors disabled:opacity-40"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+      <form
+        className="px-5 sm:px-6 py-5 flex flex-col gap-3.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          salvar();
+        }}
+      >
+        {erro && (
+          <AvisoTinta tom="erro" icone={AlertCircle}>
+            {erro}
+          </AvisoTinta>
+        )}
 
-        <div className="p-6 space-y-4">
-          {erro && (
-            <div className="px-3 py-2 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              {erro}
-            </div>
-          )}
+        {/* Aviso, não impedimento: homônimos existem, e quem está na recepção sabe distinguir. */}
+        {homonimo && (
+          <AvisoTinta tom="alerta" icone={AlertCircle}>
+            Já existe um cadastro com esse nome
+            {homonimo.contato ? ` (${homonimo.contato})` : ''}. Confira se não é a mesma pessoa antes
+            de continuar.
+          </AvisoTinta>
+        )}
 
-          {/* Aviso, não impedimento: homônimos existem, e quem está na recepção sabe distinguir. */}
-          {homonimo && (
-            <div className="px-3 py-2 rounded-sm bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
-              <span>
-                Já existe um cadastro com esse nome
-                {homonimo.contato ? ` (${homonimo.contato})` : ''}. Confira se não é a mesma pessoa
-                antes de continuar.
-              </span>
-            </div>
-          )}
+        <PatientFields
+          values={form}
+          onChange={alterar}
+          idPrefix="paciente-novo"
+          autoFocus
+          erroNome={erroNome}
+        />
 
-          <PatientFields values={form} onChange={alterar} idPrefix="paciente-novo" autoFocus />
-        </div>
-
-        <div className="px-6 py-4 bg-white/50 border-t border-white/70 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={salvando}
-            className="px-4 py-2.5 text-xs font-semibold uppercase tracking-widest text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={salvar}
-            disabled={salvando}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest hover:bg-brand-hover transition-colors disabled:opacity-60"
-          >
-            <UserPlus className="w-4 h-4" />
-            {salvando ? 'Cadastrando...' : 'Cadastrar paciente'}
-          </button>
-        </div>
-      </div>
-    </div>
+        {/* Enter no teclado do celular envia o formulário, como o botão de baixo. */}
+        <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
+      </form>
+    </SidePanel>
   );
 };

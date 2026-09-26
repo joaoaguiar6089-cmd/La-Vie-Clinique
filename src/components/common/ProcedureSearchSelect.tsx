@@ -59,32 +59,33 @@ export const ProcedureSearchSelect: React.FC<ProcedureSearchSelectProps> = ({
   return (
     <div ref={containerRef} className="relative">
       <label
-        className="block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1"
         htmlFor="atendimento-procedimento"
+        className={`flex items-center gap-2.5 rounded-[14px] px-4 pt-2 pb-2.5 min-h-[56px] cursor-text transition-colors focus-within:bg-card focus-within:ring-2 focus-within:ring-ink ${
+          erro ? 'bg-danger-bg ring-2 ring-danger' : 'bg-line-soft'
+        }`}
       >
-        Procedimento *
-      </label>
-
-      <div className="relative">
-        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-        <input
-          id="atendimento-procedimento"
-          type="text"
-          value={nome}
-          onChange={(e) => {
-            // Digitar desfaz o vínculo com o catálogo: vira procedimento livre até que a pessoa
-            // escolha um da lista de novo.
-            onSelect({ procedureId: undefined, procedimentoNome: e.target.value });
-            setIsOpen(true);
-          }}
-          onFocus={() => setIsOpen(true)}
-          placeholder="Buscar no catálogo ou digitar"
-          aria-invalid={!!erro}
-          className={`w-full glass-input pl-8 pr-8 py-2 rounded-sm text-sm text-ink focus:outline-hidden ${
-            erro ? 'border-red-300' : ''
-          }`}
-        />
-        {nome && (
+        <span className="min-w-0 flex-1">
+          <span className="block text-[12px] font-semibold text-ink-soft leading-tight mb-0.5">
+            Procedimento
+          </span>
+          <input
+            id="atendimento-procedimento"
+            type="text"
+            value={nome}
+            onChange={(e) => {
+              // Digitar desfaz o vínculo com o catálogo: vira procedimento livre até que a pessoa
+              // escolha um da lista de novo.
+              onSelect({ procedureId: undefined, procedimentoNome: e.target.value });
+              setIsOpen(true);
+            }}
+            onFocus={() => setIsOpen(true)}
+            placeholder="Buscar no catálogo ou digitar"
+            aria-invalid={!!erro}
+            autoComplete="off"
+            className="w-full min-w-0 bg-transparent border-0 p-0 text-[16px] font-semibold text-ink placeholder:text-muted placeholder:font-medium focus:outline-none"
+          />
+        </span>
+        {nome ? (
           <button
             type="button"
             onClick={() => {
@@ -92,29 +93,31 @@ export const ProcedureSearchSelect: React.FC<ProcedureSearchSelectProps> = ({
               setIsOpen(false);
             }}
             aria-label="Limpar procedimento"
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            className="w-9 h-9 -mr-2 shrink-0 rounded-full flex items-center justify-center text-ink-soft hover:text-ink hover:bg-black/5"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
+        ) : (
+          <Search className="w-[18px] h-[18px] shrink-0 text-ink-soft" aria-hidden />
         )}
-      </div>
+      </label>
 
       {erro ? (
-        <p className="mt-1 text-body text-red-600">{erro}</p>
+        <p className="mt-1 px-1 text-[13px] font-medium text-danger">{erro}</p>
       ) : selecionado ? (
-        <p className="mt-1 text-body text-brand flex items-center gap-1">
-          <Check className="w-3 h-3" />
+        <p className="mt-1 px-1 text-[13px] text-ink-soft flex items-center gap-1">
+          <Check className="w-3.5 h-3.5 text-ok" />
           {selecionado.category}
         </p>
       ) : nome.trim() ? (
-        <p className="mt-1 text-body text-gray-400">Fora do catálogo — registrado como digitado</p>
+        <p className="mt-1 px-1 text-[13px] text-ink-soft">Fora do catálogo — registrado como digitado</p>
       ) : null}
 
       {isOpen && (
-        <div className="absolute z-30 mt-1 w-full bg-white rounded-sm border border-gray-200 shadow-xl overflow-hidden">
-          <div className="max-h-56 overflow-y-auto">
+        <div className="absolute z-30 mt-1.5 w-full bg-card rounded-2xl border border-ink/10 shadow-[0_12px_30px_rgba(26,26,26,.16)] overflow-hidden">
+          <div className="max-h-64 overflow-y-auto py-1">
             {matches.length === 0 ? (
-              <p className="text-center text-xs text-gray-400 py-5">
+              <p className="text-center text-[14px] text-ink-soft py-5 px-4">
                 Nada no catálogo com esse nome — pode registrar como está.
               </p>
             ) : (
@@ -126,10 +129,10 @@ export const ProcedureSearchSelect: React.FC<ProcedureSearchSelectProps> = ({
                     onSelect({ procedureId: p.id, procedimentoNome: p.title });
                     setIsOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 hover:bg-surface transition-colors flex items-center justify-between gap-3"
+                  className="w-full text-left min-h-[48px] px-4 py-2 hover:bg-line-soft transition-colors flex items-center justify-between gap-3"
                 >
-                  <span className="text-xs text-ink truncate">{p.title}</span>
-                  <span className="text-label text-gray-400 shrink-0 truncate max-w-[40%]">
+                  <span className="text-[15px] font-semibold text-ink truncate">{p.title}</span>
+                  <span className="text-[12px] text-ink-soft shrink-0 truncate max-w-[40%]">
                     {p.category}
                   </span>
                 </button>
