@@ -70,19 +70,32 @@ export function useVoltarFecha(aberto: boolean, fechar: () => void): void {
   }, [aberto]);
 }
 
+/** Quantos painéis estão travando a rolagem agora, e o `overflow` do body antes do primeiro. */
+let travas = 0;
+let overflowAntesDaTrava = '';
+
 /**
  * Trava a rolagem da página enquanto um painel está aberto.
  *
  * Sem isto, rolar dentro do painel "vaza" para a página atrás dele assim que a lista do painel
  * chega ao fim — e, no iOS, a página atrás fica deslocada quando o painel fecha.
+ *
+ * É uma contagem, e não "guardar o valor de antes e devolver": com dois painéis abertos ao mesmo
+ * tempo (um formulário e a confirmação dele, por exemplo), o segundo guardaria "travado" como o
+ * valor de antes; se o primeiro fechasse antes dele, a página continuava travada depois que os
+ * dois fechavam — e a rolagem só voltava recarregando o app.
  */
 export function useTravarRolagem(aberto: boolean): void {
   useEffect(() => {
     if (!aberto || typeof document === 'undefined') return;
-    const anterior = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (travas === 0) {
+      overflowAntesDaTrava = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+    travas += 1;
     return () => {
-      document.body.style.overflow = anterior;
+      travas = Math.max(0, travas - 1);
+      if (travas === 0) document.body.style.overflow = overflowAntesDaTrava;
     };
   }, [aberto]);
 }

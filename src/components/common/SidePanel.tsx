@@ -159,8 +159,10 @@ export const SidePanel: React.FC<SidePanelProps> = ({
             </button>
           </header>
 
+          {/* `overscroll-contain`: chegar ao fim do formulário não passa o arrasto para a página
+              de trás — no tablet, era o que fazia o painel "travar" e a lista atrás se mexer. */}
           <div
-            className="flex-1 min-h-0 overflow-y-auto"
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
             onInput={() => setMexido(true)}
             onChange={() => setMexido(true)}
           >
