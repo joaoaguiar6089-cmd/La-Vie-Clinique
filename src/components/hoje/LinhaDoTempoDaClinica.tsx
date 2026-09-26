@@ -340,6 +340,12 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
           catalogo={catalogProcedures}
           professionals={clinic.professionals || []}
           clinicProfile={clinic}
+          onMontarOrcamento={(avaliacao) =>
+            acoesDeOrcamento.abrirDaAvaliacao(
+              avaliacao,
+              pacientes.find((p) => p.id === avaliacao.pacienteId)
+            )
+          }
         />
       )}
 

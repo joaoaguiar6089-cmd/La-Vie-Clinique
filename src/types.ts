@@ -480,6 +480,21 @@ export interface QuoteItem {
   maisDeUmaSessao: boolean;
   sessoes: number; // 1 quando maisDeUmaSessao = false. Informativo: NÃO multiplica o valor
   detalhes: QuoteItemDetail[];
+  /**
+   * "Calcular por consumo de produto": o `valorTabela` deixa de vir do catálogo e passa a ser a
+   * soma do valor repassado à cliente de cada produto × quantidade — o orçamento personalizado,
+   * montado a partir do que o procedimento vai gastar naquela paciente.
+   *
+   * As linhas (produto, quantidade, custo, repasse) moram em `quote_costs`, como o custo estimado
+   * de sempre. Aqui fica só o interruptor.
+   */
+  calculadoPorConsumo?: boolean;
+  /**
+   * Os nomes dos produtos do consumo, para o documento da cliente — **só os nomes**. Quantidade e
+   * valores ficam de fora de propósito: este documento é lido sem login pelo link, e a cliente
+   * pode mostrá-lo à concorrência.
+   */
+  produtosDoConsumo?: string[];
 }
 
 export type PaymentMethod = 'pix' | 'cartao' | 'dinheiro';
@@ -783,7 +798,10 @@ export interface ProdutoDeEstoque {
   unidade: string;
   /** Valor comprado — quanto a unidade custa para a clínica. */
   custoUnitario: number;
-  /** Valor repassado à cliente, por unidade. Só informativo: não entra em total nenhum. */
+  /**
+   * Valor repassado à cliente, por unidade. Só entra em total no item de orçamento marcado
+   * "calcular por consumo de produto" (`QuoteItem.calculadoPorConsumo`); fora dele é informativo.
+   */
   valorCliente: number;
   /**
    * Comprado em caixa: os valores digitados são os da caixa, e os por unidade acima saem da
@@ -954,6 +972,15 @@ export interface EvaluationTemplate {
   updatedAt?: string;
 }
 
+/** Uma foto da sessão, com a versão anotada e o estado do editor de anotação. */
+export interface FotoDaSessao {
+  url: string;
+  /** Versão "achatada" com as anotações, usada na tela e no PDF. */
+  anotadaUrl?: string;
+  /** Estado do canvas (JSON do Fabric.js), para reabrir e continuar anotando. */
+  anotacoesJson?: string;
+}
+
 /**
  * Uma ficha preenchida — avaliação ou acompanhamento.
  *
@@ -995,10 +1022,30 @@ export interface EvaluationRecord {
   fotoModeloUrl?: string;
   fotoModeloAnotadaUrl?: string;
   fotoModeloAnotacoesJson?: string;
-  /** Foto daquela sessão — o registro de evolução, tirado na clínica. */
+  /**
+   * As fotos daquela sessão — o registro de evolução, tirado na clínica. Uma sessão costuma pedir
+   * mais de um ângulo (frente, perfil, detalhe), e cada foto se anota à parte.
+   *
+   * Presente = é a fonte de verdade, mesmo vazia (foi assim que a última foto foi removida).
+   * Ausente = ficha de antes da lista, que só tinha `fotoSessaoUrl`. Ler sempre por
+   * `fotosDaSessao()`, que resolve os dois casos.
+   */
+  fotosSessao?: FotoDaSessao[];
+  /**
+   * **Legado** — a foto única de antes da lista. Continua sendo gravada como espelho da primeira
+   * foto, para uma aba antiga do app ainda aberta em outro aparelho não mostrar a ficha sem foto.
+   */
   fotoSessaoUrl?: string;
   fotoSessaoAnotadaUrl?: string;
   fotoSessaoAnotacoesJson?: string;
+  /**
+   * Só na avaliação: os produtos do estoque que o procedimento deve consumir, com a quantidade
+   * estimada e o preço do dia congelado — é o que pré-preenche o orçamento "por consumo".
+   *
+   * Pode morar aqui porque `evaluation_records` exige login. Nunca vai para a anamnese nem para o
+   * orçamento: os dois são lidos sem login pelo link da paciente.
+   */
+  consumoEstimado?: MaterialUsado[];
   /**
    * Nota clínica da avaliação. **Não** é o `Attendance.observacoes`, que é a nota da recepção
    * escrita ao lançar a visita ("chegou atrasada, trocou de procedimento") — e que é baixada com

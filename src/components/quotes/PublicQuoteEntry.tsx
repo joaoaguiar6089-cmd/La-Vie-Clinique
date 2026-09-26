@@ -228,6 +228,15 @@ export const PublicQuoteEntry: React.FC = () => {
                 {item.profissionalNome && (
                   <p className="text-xs text-ink-soft mt-0.5">com {item.profissionalNome}</p>
                 )}
+                {/* Só os nomes: quantidade e valor dos produtos nunca chegam à cliente. */}
+                {(item.produtosDoConsumo || []).length > 0 && (
+                  <p className="text-xs text-ink-soft mt-1 leading-snug">
+                    <span className="text-label uppercase tracking-[.14em] text-brand mr-1.5">
+                      Produtos
+                    </span>
+                    {(item.produtosDoConsumo || []).join(' · ')}
+                  </p>
+                )}
 
                 <div className="flex items-baseline gap-2 mt-2">
                   {comDesconto && (

@@ -704,7 +704,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                 />
 
                 {areasSelecionadas.size > 0 && (
-                  <p className="text-[13px] text-ink mt-3 bg-[#FCE4EF] border border-[#F3C6DC] rounded-xl px-3 py-2 leading-snug">
+                  <p className="text-[13px] text-ink mt-3 bg-[#E4F5EA] border border-[#BFE3CB] rounded-xl px-3 py-2 leading-snug">
                     <strong>{areasSelecionadas.size}</strong>{' '}
                     {areasSelecionadas.size === 1 ? 'área escolhida' : 'áreas escolhidas'}:{' '}
                     {nomesDasAreasSelecionadas}

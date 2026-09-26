@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ClinicProfile, Patient, Procedure, Quote, QuoteDraft } from '../../types';
+import { ClinicProfile, EvaluationRecord, Patient, Procedure, Quote, QuoteDraft } from '../../types';
 import { montarEspelhoPublico } from '../../utils/laserAreas';
 import { marcarComoEnviadoSeRascunho, salvarOrcamento } from '../../services/quoteWorkflow';
 import { saveCustoDoOrcamento } from '../../services/databaseService';
@@ -22,10 +22,17 @@ interface FormularioAberto {
   seedFrom: Quote | null;
   substituindo: Quote | null;
   initialPatient?: Patient | null;
+  /** A ficha de avaliação cujo consumo estimado pré-preenche o orçamento novo. */
+  avaliacao?: EvaluationRecord | null;
 }
 
 export interface AcoesDeOrcamento {
   abrirNovo: (paciente?: Patient | null) => void;
+  /**
+   * Orçamento novo a partir de uma ficha de avaliação: a paciente, o procedimento e o consumo
+   * estimado dela, com o item já "calculado por consumo de produto".
+   */
+  abrirDaAvaliacao: (avaliacao: EvaluationRecord, paciente?: Patient | null) => void;
   abrirEdicao: (quote: Quote) => void;
   abrirDuplicacao: (quote: Quote) => void;
   abrirSubstituicao: (quote: Quote) => void;
@@ -93,6 +100,7 @@ export const useAcoesDeOrcamento = ({
         quoteToEdit={formulario?.quoteToEdit || null}
         seedFrom={formulario?.seedFrom || null}
         initialPatient={formulario?.initialPatient}
+        avaliacaoDeOrigem={formulario?.avaliacao || null}
         procedures={procedures}
         patients={patients}
         clinic={clinic}
@@ -115,6 +123,14 @@ export const useAcoesDeOrcamento = ({
   return {
     abrirNovo: (paciente) =>
       setFormulario({ quoteToEdit: null, seedFrom: null, substituindo: null, initialPatient: paciente }),
+    abrirDaAvaliacao: (avaliacao, paciente) =>
+      setFormulario({
+        quoteToEdit: null,
+        seedFrom: null,
+        substituindo: null,
+        initialPatient: paciente,
+        avaliacao,
+      }),
     abrirEdicao: (quote) => setFormulario({ quoteToEdit: quote, seedFrom: null, substituindo: null }),
     abrirDuplicacao: (quote) => setFormulario({ quoteToEdit: null, seedFrom: quote, substituindo: null }),
     abrirSubstituicao: (quote) =>

@@ -34,6 +34,22 @@ const FOLGA_LATERAL_DO_ANEL = 0.3;
 /** Respiro entre a borda da figura e o botão mais próximo, em fração da largura do contêiner. */
 const FOLGA_ENTRE_BOTAO_E_FIGURA = 0.035;
 
+/**
+ * O verde da área escolhida — na tela, na anamnese impressa e no PDF do orçamento, que usam todos
+ * este componente. Verde lê-se de relance como "está no pedido", ao lado do vermelho tracejado das
+ * áreas só disponíveis.
+ *
+ * Em hex e rgba, e não em classe do Tailwind: os PDFs saem do DOM pelo html2canvas, que lê hex
+ * sem tradução (ver `index.css`).
+ */
+const VERDE_DA_AREA = {
+  traco: '#2E9E5B',
+  preenchimento: 'rgba(38,166,88,.38)',
+};
+
+/** Chip e botão do anel da área escolhida — o mesmo verde, em classe literal para o Tailwind achar. */
+const CLASSE_BOTAO_ESCOLHIDO = 'bg-[#E4F5EA] border-[#2E9E5B] text-[#1D5E38] font-semibold';
+
 export interface AreaExibida {
   /** Identidade estável da área na tela — na prática o `procedureId`. */
   chave: string;
@@ -336,7 +352,7 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
             }}
             className={`px-2 py-1.5 rounded-xs text-[11.5px] leading-tight text-left transition-colors border flex items-baseline justify-between gap-1.5 ${
               ativa
-                ? 'bg-[#FCE4EF] border-[#D6317F] text-[#8E1A54] font-semibold'
+                ? CLASSE_BOTAO_ESCOLHIDO
                 : 'bg-white border-gray-200 text-ink'
             }`}
           >
@@ -409,13 +425,13 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
                 <line x1="0" y1="0" x2="0" y2="7" stroke="#C0392B" strokeWidth="2.2" opacity="0.5" />
               </pattern>
               <pattern
-                id="hachura-laser-rosa"
+                id="hachura-laser-verde"
                 width="7"
                 height="7"
                 patternTransform="rotate(45)"
                 patternUnits="userSpaceOnUse"
               >
-                <line x1="0" y1="0" x2="0" y2="7" stroke="#D6317F" strokeWidth="2.4" opacity="0.6" />
+                <line x1="0" y1="0" x2="0" y2="7" stroke={VERDE_DA_AREA.traco} strokeWidth="2.4" opacity="0.6" />
               </pattern>
             </defs>
 
@@ -427,7 +443,7 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
 
               const cor =
                 estado === 'selecionada'
-                  ? { base: 'rgba(233,78,156,.30)', hachura: 'url(#hachura-laser-rosa)', traco: '#D6317F' }
+                  ? { base: VERDE_DA_AREA.preenchimento, hachura: 'url(#hachura-laser-verde)', traco: VERDE_DA_AREA.traco }
                   : estado === 'alheia'
                     ? { base: 'rgba(120,120,120,.16)', hachura: 'none', traco: '#A9A9A9' }
                     : { base: 'rgba(214,69,69,.20)', hachura: 'url(#hachura-laser-vermelha)', traco: '#C0392B' };
@@ -533,7 +549,7 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
                 y1={p.y}
                 x2={ancora.x}
                 y2={ancora.y}
-                stroke={ativa ? '#D6317F' : '#C9C0B2'}
+                stroke={ativa ? VERDE_DA_AREA.traco : '#C9C0B2'}
                 // Com `non-scaling-stroke` a espessura é lida em pixels da viewport, e não nas
                 // unidades do viewBox 0–1 — um valor fracionário aqui desenharia uma linha de
                 // 0,002 pixel, ou seja, nada.
@@ -599,7 +615,7 @@ export const LaserBodyMapView: React.FC<LaserBodyMapViewProps> = ({
               }}
               className={`absolute z-10 px-2.5 py-1.5 rounded-sm border text-[12px] leading-tight max-w-[150px] transition-colors shadow-[0_1px_4px_rgba(0,0,0,.06)] ${onMoverBotao ? 'cursor-grab active:cursor-grabbing touch-none' : ''} ${
                 ativa
-                  ? 'bg-[#FCE4EF] border-[#D6317F] text-[#8E1A54] font-semibold'
+                  ? CLASSE_BOTAO_ESCOLHIDO
                   : 'bg-white border-gray-200 text-ink hover:border-danger'
               }`}
               style={{

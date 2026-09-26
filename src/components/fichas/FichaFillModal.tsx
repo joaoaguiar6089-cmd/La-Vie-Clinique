@@ -5,6 +5,7 @@ import {
   ClinicProfile,
   EvaluationRecord,
   EvaluationTemplate,
+  FotoDaSessao,
   Patient,
   Procedure,
   Professional,
@@ -14,6 +15,8 @@ import { PhotoAnnotationEditor } from '../anamnesis/PhotoAnnotationEditor';
 import {
   fichaDeAvaliacaoPara,
   fichaTemConteudo,
+  fotosDaSessao,
+  MAX_FOTOS_DA_SESSAO,
   perguntasDaAvaliacao,
   perguntasRespondidas,
 } from '../../utils/evaluations';
@@ -36,6 +39,7 @@ import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PrintableFichaSheet } from './PrintableFichaSheet';
 import { SidePanel } from '../common/SidePanel';
 import { SecaoUsoDeMaterial, useUsoDeMaterial } from '../estoque/UsoDeMaterial';
+import { SecaoConsumoEstimado, useConsumoEstimado } from '../estoque/ConsumoEstimado';
 
 interface FichaFillModalProps {
   tipo: TipoDeFicha;
@@ -53,12 +57,21 @@ interface FichaFillModalProps {
   onSalvou?: () => void;
   /** "Cadastrar ficha para este procedimento" — leva ao gerenciador. */
   onCadastrarFicha?: (alvo: { procedureId?: string; procedimentoNome: string }) => void;
+  /**
+   * Só na avaliação: "Pré-preencher orçamento com este consumo". Recebe a ficha **já salva** — o
+   * formulário grava e fecha antes, porque o orçamento abre em outro painel e um painel dentro do
+   * outro ficaria preso nele. Ausente = o link não aparece.
+   */
+  onMontarOrcamento?: (registro: EvaluationRecord) => void;
 }
 
 const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
 
-/** Qual foto está no editor de anotação. `null` = editor fechado. */
-type AlvoAnotacao = 'modelo' | 'sessao' | null;
+/**
+ * Qual foto está no editor de anotação: o mapa, ou a foto da sessão naquela posição da lista.
+ * `null` = editor fechado — e é contra `null` que se compara, porque a primeira foto é o 0.
+ */
+type AlvoAnotacao = 'modelo' | number | null;
 
 /**
  * O formulário das duas fichas clínicas: a **avaliação** (antes do procedimento, emitida pela
@@ -88,6 +101,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   clinicProfile,
   onSalvou,
   onCadastrarFicha,
+  onMontarOrcamento,
 }) => {
   const rotulos = ROTULOS_DA_FICHA[tipo];
 
@@ -115,9 +129,10 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   const [fotoModeloGravada, setFotoModeloGravada] = useState('');
   const [fotoModeloAnotadaUrl, setFotoModeloAnotadaUrl] = useState('');
   const [fotoModeloAnotacoesJson, setFotoModeloAnotacoesJson] = useState<string | undefined>();
-  const [fotoSessaoUrl, setFotoSessaoUrl] = useState('');
-  const [fotoSessaoAnotadaUrl, setFotoSessaoAnotadaUrl] = useState('');
-  const [fotoSessaoAnotacoesJson, setFotoSessaoAnotacoesJson] = useState<string | undefined>();
+  const [fotos, setFotos] = useState<FotoDaSessao[]>([]);
+  const [enviandoFotos, setEnviandoFotos] = useState(false);
+  /** Anexar, remover ou anotar uma foto não gera `input`/`change` no painel. */
+  const [mexeuNasFotos, setMexeuNasFotos] = useState(false);
   const [anotando, setAnotando] = useState<AlvoAnotacao>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [imprimindo, setImprimindo] = useState(false);
@@ -160,8 +175,8 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   const fotoModeloUrl =
     fotoModeloGravada || (ficha ? resolveTemplatePhoto(ficha, paciente?.genero) || '' : '');
 
-  /** O acompanhamento é o registro da sessão: a foto aparece sempre. Na avaliação, se o modelo pedir. */
-  const pedeFoto = tipo === 'acompanhamento' || !!ficha?.temFotoSessao || !!fotoSessaoUrl;
+  /** O acompanhamento é o registro da sessão: as fotos aparecem sempre. Na avaliação, se o modelo pedir. */
+  const pedeFoto = tipo === 'acompanhamento' || !!ficha?.temFotoSessao || fotos.length > 0;
 
   const profissional = useMemo(
     () => professionals.find((p) => p.id === alvo.professionalId),
@@ -179,14 +194,13 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     setErro(null);
     setLeituraFalhou(false);
     setAnotando(null);
+    setMexeuNasFotos(false);
 
     const aplicar = (existente: EvaluationRecord | null) => {
       setRegistro(existente);
       setRespostas(existente?.respostas || {});
       setObservacoes(existente?.observacoes || '');
-      setFotoSessaoUrl(existente?.fotoSessaoUrl || '');
-      setFotoSessaoAnotadaUrl(existente?.fotoSessaoAnotadaUrl || '');
-      setFotoSessaoAnotacoesJson(existente?.fotoSessaoAnotacoesJson);
+      setFotos(fotosDaSessao(existente));
       setFotoModeloAnotadaUrl(existente?.fotoModeloAnotadaUrl || '');
       setFotoModeloAnotacoesJson(existente?.fotoModeloAnotacoesJson);
       setFotoModeloGravada(existente?.fotoModeloUrl || '');
@@ -228,6 +242,13 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   }, [isOpen, tipo, alvo.registroId]);
 
   const uso = useUsoDeMaterial(alvo, catalogo, isOpen && tipo === 'acompanhamento');
+  // O registro só vale depois de lido: antes disso, `null` quer dizer "ainda não sei", não "não há".
+  const consumo = useConsumoEstimado(
+    alvo,
+    catalogo,
+    isOpen && tipo === 'avaliacao',
+    carregando ? undefined : registro
+  );
 
   if (!isOpen) return null;
 
@@ -235,22 +256,47 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     setRespostas((prev) => ({ ...prev, [questionId]: valor }));
   };
 
-  const handleFotoSessao = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  /**
+   * Uma ou várias fotos de uma vez — a galeria do celular deixa marcar várias. Sobem uma por vez,
+   * e cada uma entra na lista assim que chega: se a quinta falhar, as quatro primeiras já estão lá.
+   */
+  const handleFotosSessao = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const arquivos: File[] = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    if (arquivos.length === 0) return;
+
+    const cabem = MAX_FOTOS_DA_SESSAO - fotos.length;
+    if (cabem <= 0) {
+      setErro(`Cada ficha aceita até ${MAX_FOTOS_DA_SESSAO} fotos. Remova uma para enviar outra.`);
+      return;
+    }
+    const aceitos = arquivos.slice(0, cabem);
+
+    setErro(null);
+    setEnviandoFotos(true);
     try {
-      const comprimida = await downscaleImage(file);
-      setFotoSessaoUrl(await subirImagemOuManter(comprimida, `${rotulos.pastaDoStorage}/sessao`));
-      // A anotação antiga descreve a foto antiga; mantê-la colaria rabiscos numa imagem que não
-      // é mais aquela.
-      setFotoSessaoAnotadaUrl('');
-      setFotoSessaoAnotacoesJson(undefined);
+      for (const arquivo of aceitos) {
+        const comprimida = await downscaleImage(arquivo);
+        const url = await subirImagemOuManter(comprimida, `${rotulos.pastaDoStorage}/sessao`);
+        setFotos((atual) => [...atual, { url }]);
+        setMexeuNasFotos(true);
+      }
+      if (aceitos.length < arquivos.length) {
+        setErro(
+          `Cada ficha aceita até ${MAX_FOTOS_DA_SESSAO} fotos — entraram só as primeiras ${aceitos.length}.`
+        );
+      }
     } catch (err) {
       console.error(err);
       setErro('Falha ao processar a foto.');
     } finally {
-      e.target.value = '';
+      setEnviandoFotos(false);
     }
+  };
+
+  const removerFoto = (indice: number) => {
+    setFotos((atual) => atual.filter((_, i) => i !== indice));
+    setMexeuNasFotos(true);
   };
 
   const handleSalvarAnotacao = async (dataUrl: string, annotationsJson: string) => {
@@ -258,14 +304,18 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     if (anotando === 'modelo') {
       setFotoModeloAnotadaUrl(url);
       setFotoModeloAnotacoesJson(annotationsJson);
-    } else {
-      setFotoSessaoAnotadaUrl(url);
-      setFotoSessaoAnotacoesJson(annotationsJson);
+    } else if (typeof anotando === 'number') {
+      const indice = anotando;
+      setFotos((atual) =>
+        atual.map((f, i) => (i === indice ? { ...f, anotadaUrl: url, anotacoesJson: annotationsJson } : f))
+      );
+      setMexeuNasFotos(true);
     }
     setAnotando(null);
   };
 
-  const handleSalvar = async () => {
+  /** `depois` recebe a ficha gravada, com o formulário já fechado — é o caminho do orçamento. */
+  const handleSalvar = async (depois?: (salvo: EvaluationRecord) => void) => {
     setSalvando(true);
     setErro(null);
     const agora = new Date().toISOString();
@@ -281,7 +331,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       fichaTemConteudo({
         perguntas: todasAsPerguntas,
         respostas,
-        fotoSessaoUrl,
+        fotosSessao: fotos,
         fotoModeloAnotadaUrl,
         observacoes,
       });
@@ -291,6 +341,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     }
 
     let etapa: 'ficha' | 'materiais' = 'ficha';
+    let salvo: EvaluationRecord | null = null;
     try {
       if (gravarFicha) {
         const novo: EvaluationRecord = {
@@ -312,9 +363,10 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
           fotoModeloUrl: fotoModeloUrl || undefined,
           fotoModeloAnotadaUrl: fotoModeloAnotadaUrl || undefined,
           fotoModeloAnotacoesJson,
-          fotoSessaoUrl: fotoSessaoUrl || undefined,
-          fotoSessaoAnotadaUrl: fotoSessaoAnotadaUrl || undefined,
-          fotoSessaoAnotacoesJson,
+          // Os campos legados (`fotoSessaoUrl`…) são espelhados da primeira por `saveRegistroDeFicha`.
+          fotosSessao: fotos,
+          // Só a avaliação estima consumo; vazio apaga o que estava gravado.
+          consumoEstimado: tipo === 'avaliacao' ? consumo.paraGravar() : undefined,
           observacoes: observacoes.trim() || undefined,
           preenchidoEm: registro?.preenchidoEm || agora,
           createdAt: registro?.createdAt || agora,
@@ -322,6 +374,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
         await saveRegistroDeFicha(tipo, novo);
         // Se os materiais falharem, a segunda tentativa regrava a ficha com as mesmas datas.
         setRegistro(novo);
+        salvo = novo;
       }
 
       etapa = 'materiais';
@@ -340,12 +393,13 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
 
       onSalvou?.();
       onClose();
+      if (depois && salvo) depois(salvo);
     } catch (e) {
       console.error(e);
       const motivo = (e as Error).message;
       setErro(
         etapa === 'ficha'
-          ? `Não foi possível salvar ${rotulos.artigo} ${rotulos.minusculo}. Tente de novo.`
+          ? `Não foi possível salvar ${rotulos.artigo} ${rotulos.minusculo}: ${motivo}`
           : gravarFicha
           ? `O acompanhamento foi salvo, mas os materiais não: ${motivo} Toque em Salvar de novo.`
           : `Não foi possível salvar os materiais: ${motivo}`
@@ -392,7 +446,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   };
 
   const fotoModeloExibida = fotoModeloAnotadaUrl || fotoModeloUrl;
-  const fotoSessaoExibida = fotoSessaoAnotadaUrl || fotoSessaoUrl;
+  const fotoEmAnotacao = typeof anotando === 'number' ? fotos[anotando] : undefined;
 
   /*
     Imprimir usa o que está **gravado**, não o rascunho na tela: o documento impresso precisa
@@ -430,8 +484,8 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
           Cancelar
         </button>
         <button
-          onClick={handleSalvar}
-          disabled={salvando}
+          onClick={() => handleSalvar()}
+          disabled={salvando || enviandoFotos}
           className="inline-flex items-center gap-2 min-h-[44px] px-5 rounded-xl bg-ink text-white text-body-lg font-semibold transition-colors disabled:opacity-40"
         >
           {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -451,7 +505,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       bloqueado={salvando}
       /* Anotar uma foto, anexar a foto da sessão ou tirar um material da lista não gera
          `input`/`change` no painel. */
-      alterado={!!fotoSessaoUrl || !!fotoModeloAnotadaUrl || !!fotoSessaoAnotadaUrl || uso.mexido}
+      alterado={mexeuNasFotos || !!fotoModeloAnotadaUrl || uso.mexido || consumo.mexido}
       rodape={rodape}
     >
       <div className="bg-card min-h-full">
@@ -545,50 +599,77 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                 </div>
               )}
 
-              {/* Foto */}
+              {/* Fotos da sessão — quantas forem precisas, cada uma anotável à parte */}
               {pedeFoto && (
                 <div className="space-y-2">
-                  <span className={labelClass}>{rotulos.rotuloDaFoto}</span>
-                  {fotoSessaoUrl ? (
-                    <div className="relative rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-surface">
-                      <img
-                        src={fotoSessaoExibida}
-                        alt={rotulos.rotuloDaFoto}
-                        className="w-full object-contain max-h-[420px]"
-                      />
-                      <div className="absolute bottom-3 right-3 flex gap-2">
-                        <button
-                          onClick={() => {
-                            setFotoSessaoUrl('');
-                            setFotoSessaoAnotadaUrl('');
-                            setFotoSessaoAnotacoesJson(undefined);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 text-ink text-[13px] font-semibold shadow-lg hover:bg-white transition-colors"
+                  <span className={labelClass}>
+                    {rotulos.rotuloDasFotos}
+                    {fotos.length > 0 ? ` (${fotos.length})` : ''}
+                  </span>
+                  {fotos.length > 0 && (
+                    <div className={`grid gap-3 ${fotos.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+                      {fotos.map((foto, i) => (
+                        <div
+                          key={`${i}-${foto.url}`}
+                          className="relative rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-surface"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          Remover
-                        </button>
-                        <button
-                          onClick={() => setAnotando('sessao')}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                          {fotoSessaoAnotadaUrl ? 'Editar anotações' : 'Anotar'}
-                        </button>
-                      </div>
+                          <img
+                            src={foto.anotadaUrl || foto.url}
+                            alt={`${rotulos.rotuloDaFoto} ${i + 1}`}
+                            className={`w-full object-contain ${fotos.length > 1 ? 'max-h-[300px]' : 'max-h-[420px]'}`}
+                          />
+                          <div className="absolute bottom-3 right-3 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => removerFoto(i)}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 text-ink text-[13px] font-semibold shadow-lg hover:bg-white transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Remover
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAnotando(i)}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              {foto.anotadaUrl ? 'Editar anotações' : 'Anotar'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border border-dashed border-[rgba(26,26,26,.2)] bg-surface cursor-pointer hover:border-brand transition-colors">
-                      <Camera className="w-6 h-6 text-gray-400" />
+                  )}
+                  {fotos.length < MAX_FOTOS_DA_SESSAO && (
+                    <label
+                      className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[rgba(26,26,26,.2)] bg-surface transition-colors ${
+                        fotos.length === 0 ? 'py-8' : 'py-4'
+                      } ${enviandoFotos ? 'opacity-70' : 'cursor-pointer hover:border-brand'}`}
+                    >
+                      {enviandoFotos ? (
+                        <Loader2 className="w-6 h-6 text-muted animate-spin" />
+                      ) : fotos.length === 0 ? (
+                        <Camera className="w-6 h-6 text-gray-400" />
+                      ) : (
+                        <Plus className="w-5 h-5 text-gray-400" />
+                      )}
                       <span className="text-[13px] font-semibold text-ink-soft">
-                        Enviar {rotulos.rotuloDaFoto.toLowerCase()}
+                        {enviandoFotos
+                          ? 'Enviando…'
+                          : fotos.length === 0
+                          ? `Enviar ${rotulos.rotuloDasFotos.toLowerCase()}`
+                          : 'Adicionar mais fotos'}
                       </span>
-                      <span className="text-[12px] text-gray-400">{rotulos.dicaDaFoto}</span>
+                      {fotos.length === 0 && (
+                        <span className="text-[12px] text-gray-400">{rotulos.dicaDaFoto}</span>
+                      )}
                       <input
                         type="file"
                         accept="image/*"
+                        multiple
+                        disabled={enviandoFotos}
                         className="hidden"
-                        onChange={handleFotoSessao}
+                        onChange={handleFotosSessao}
                       />
                     </label>
                   )}
@@ -612,6 +693,15 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
 
               {/* Só no acompanhamento: material e quantidade, sem valor — o custo fica no Financeiro. */}
               <SecaoUsoDeMaterial uso={uso} />
+
+              {/* Só na avaliação: o consumo estimado, e dele o orçamento já calculado. */}
+              <SecaoConsumoEstimado
+                consumo={consumo}
+                onMontarOrcamento={
+                  onMontarOrcamento ? () => handleSalvar(onMontarOrcamento) : undefined
+                }
+                desabilitado={salvando || enviandoFotos}
+              />
 
               {registro?.preenchidoEm && (
                 <p className="text-[12px] text-gray-400">
@@ -639,13 +729,19 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
 
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
 
-      {anotando && (
+      {(anotando === 'modelo' || fotoEmAnotacao) && (
         <PhotoAnnotationEditor
-          imageUrl={anotando === 'modelo' ? fotoModeloUrl : fotoSessaoUrl}
+          imageUrl={anotando === 'modelo' ? fotoModeloUrl : fotoEmAnotacao?.url || ''}
           initialAnnotationsJson={
-            anotando === 'modelo' ? fotoModeloAnotacoesJson : fotoSessaoAnotacoesJson
+            anotando === 'modelo' ? fotoModeloAnotacoesJson : fotoEmAnotacao?.anotacoesJson
           }
-          title={anotando === 'modelo' ? 'Mapa anatômico' : rotulos.rotuloDaFoto}
+          title={
+            anotando === 'modelo'
+              ? 'Mapa anatômico'
+              : fotos.length > 1 && typeof anotando === 'number'
+              ? `${rotulos.rotuloDaFoto} ${anotando + 1}`
+              : rotulos.rotuloDaFoto
+          }
           onSave={handleSalvarAnotacao}
           onClose={() => setAnotando(null)}
         />

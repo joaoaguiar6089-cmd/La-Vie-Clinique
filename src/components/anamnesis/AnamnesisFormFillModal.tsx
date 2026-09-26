@@ -804,7 +804,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
               />
 
               {areasConfirmadas.size > 0 && (
-                <p className="text-[13px] text-ink bg-[#FCE4EF] border border-[#F3C6DC] rounded-xl px-3 py-2 leading-snug">
+                <p className="text-[13px] text-ink bg-[#E4F5EA] border border-[#BFE3CB] rounded-xl px-3 py-2 leading-snug">
                   <strong>{areasConfirmadas.size}</strong>{' '}
                   {areasConfirmadas.size === 1 ? 'área' : 'áreas'}: {nomesDasAreasConfirmadas}
                 </p>

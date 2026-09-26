@@ -117,7 +117,7 @@ export const LaserAreaPicker: React.FC<LaserAreaPickerProps> = ({
               >
                 {v === 'frente' ? 'Frente' : 'Costas'}
                 {marcadas > 0 && (
-                  <span className={vistaAtiva === v ? 'text-[#D6317F]' : 'text-[#D6317F]'}>
+                  <span className="text-[#1D7A45]">
                     {' '}· {marcadas}
                   </span>
                 )}

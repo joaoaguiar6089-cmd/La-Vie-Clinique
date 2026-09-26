@@ -12,6 +12,7 @@ import {
   AnamnesisQuestion,
   Attendance,
   ConsumoPadrao,
+  FotoDaSessao,
   Procedure,
   ProdutoDeEstoque,
   QuoteItem,
@@ -24,8 +25,9 @@ import {
   periodoDoMes,
 } from '../src/utils/indicadores';
 import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../src/utils/fichasClinicas';
-import { fichaTemConteudo } from '../src/utils/evaluations';
+import { fichaTemConteudo, fotosDaSessao } from '../src/utils/evaluations';
 import {
+  aplicarConsumoNoItem,
   arredondar,
   caixaLida,
   custoDaLinha,
@@ -37,10 +39,12 @@ import {
   materiaisSugeridos,
   montarCustoDoOrcamento,
   montarMateriaisDoAtendimento,
+  nomesDosProdutos,
   planoDosMateriais,
   precoPorUnidade,
   produtoEmUso,
   quantidadeComUnidade,
+  tirarConsumoDoItem,
   totaisDosMateriais,
   valoresPorUnidadeDaCaixa,
 } from '../src/utils/estoque';
@@ -186,6 +190,50 @@ ok('custo guarda o id do orçamento', custo.quoteId === 'q-novo' && custo.id ===
 const semLinhas = montarCustoDoOrcamento({ id: 'q2', itens: [item('x', 'peeling', 'Peeling')] }, { itens: [{ id: 'x' }], linhas: {} });
 ok('orçamento sem material não grava item vazio', semLinhas.itens.length === 0 && semLinhas.custoTotal === 0);
 
+// ---- "Calcular por consumo de produto" ----
+const porConsumo = aplicarConsumoNoItem(itens[0], linhas.i1);
+ok('por consumo: valor = soma do repassado à cliente', porConsumo.valorTabela === 500, String(porConsumo.valorTabela));
+ok('por consumo: marca o item', porConsumo.calculadoPorConsumo === true);
+ok(
+  'por consumo: documento leva só os nomes dos produtos',
+  (porConsumo.produtosDoConsumo || []).join(',') === 'toxina,agulha'
+);
+{
+  // O item é lido sem login pelo link: nada de quantidade nem de preço dentro dele.
+  const texto = JSON.stringify(porConsumo);
+  ok(
+    'por consumo: nada de quantidade nem de valor do produto vaza para o item',
+    !texto.includes('quantidade') && !texto.includes('custoUnitario') && !texto.includes('valorCliente')
+  );
+}
+ok(
+  'nomes sem repetir, sem linha em branco nem sem quantidade',
+  nomesDosProdutos([
+    linhaDoProduto(toxina, 10),
+    linhaDoProduto(toxina, 5),
+    { ...linhaDoProduto(gel, 0) },
+    { nome: '  ', unidade: 'un', quantidade: 1, custoUnitario: 0, valorCliente: 0 },
+  ]).join(',') === 'toxina'
+);
+ok('por consumo sem produto: valor zero e sem lista de nomes', (() => {
+  const vazio = aplicarConsumoNoItem(itens[0], []);
+  return vazio.valorTabela === 0 && vazio.produtosDoConsumo === undefined;
+})());
+{
+  const desligado = tirarConsumoDoItem(porConsumo, [{ ...catalogo[0], promotionalPrice: 900 } as Procedure]);
+  ok(
+    'desligar o consumo volta ao preço do catálogo (promocional quando há)',
+    desligado.valorTabela === 900 && !desligado.calculadoPorConsumo && !desligado.produtosDoConsumo
+  );
+  const avulso = tirarConsumoDoItem({ ...porConsumo, procedureId: undefined, valorTabela: 321 }, catalogo);
+  ok('item fora do catálogo mantém o valor ao desligar', avulso.valorTabela === 321);
+}
+ok(
+  'clonar mantém o consumo marcado e os nomes',
+  clonarItens([porConsumo])[0].calculadoPorConsumo === true &&
+    (clonarItens([porConsumo])[0].produtosDoConsumo || []).length === 2
+);
+
 console.log('== financeiro');
 const at = (id: string, data: string, extra: Partial<Attendance> = {}): Attendance => ({
   id, pacienteId: 'p', pacienteNome: 'P', data, procedimentoNome: 'Botox', createdAt: data, ...extra,
@@ -287,7 +335,43 @@ const ficha = (extra: Partial<Parameters<typeof fichaTemConteudo>[0]>) =>
 ok('ficha em branco não tem conteúdo', !ficha({}) && !ficha({ respostas: { q1: '   ' }, observacoes: '  ' }));
 ok('resposta é conteúdo', ficha({ respostas: { q1: 'boa' } }));
 ok('observação é conteúdo', ficha({ observacoes: 'retorno em 15 dias' }));
-ok('foto é conteúdo', ficha({ fotoSessaoUrl: 'https://x/foto.jpg' }));
+ok('foto é conteúdo', ficha({ fotosSessao: [{ url: 'https://x/foto.jpg' }] }));
+ok('lista de fotos vazia não é conteúdo', !ficha({ fotosSessao: [] }));
+
+// ---- Várias fotos por ficha, lendo também as fichas de antes da lista ----
+ok('ficha sem foto nenhuma → lista vazia', fotosDaSessao({}).length === 0 && fotosDaSessao(null).length === 0);
+{
+  const antiga = fotosDaSessao({
+    fotoSessaoUrl: 'https://x/a.jpg',
+    fotoSessaoAnotadaUrl: 'https://x/a-anotada.jpg',
+    fotoSessaoAnotacoesJson: '{}',
+  });
+  ok(
+    'ficha antiga (foto única) vira lista de uma, com a anotação',
+    antiga.length === 1 &&
+      antiga[0].url === 'https://x/a.jpg' &&
+      antiga[0].anotadaUrl === 'https://x/a-anotada.jpg' &&
+      antiga[0].anotacoesJson === '{}'
+  );
+}
+ok(
+  'lista presente manda sobre o legado — mesmo vazia (a última foto foi removida)',
+  fotosDaSessao({ fotosSessao: [], fotoSessaoUrl: 'https://x/a.jpg' }).length === 0
+);
+ok(
+  'várias fotos, na ordem, sem entradas quebradas',
+  fotosDaSessao({
+    fotosSessao: [{ url: 'https://x/1.jpg' }, { url: '' }, { url: 'https://x/2.jpg' }],
+  })
+    .map((f) => f.url)
+    .join(',') === 'https://x/1.jpg,https://x/2.jpg'
+);
+ok(
+  'lista gravada como mapa de chaves numéricas continua sendo lida',
+  fotosDaSessao({
+    fotosSessao: { 0: { url: 'https://x/1.jpg' }, 1: { url: 'https://x/2.jpg' } } as unknown as FotoDaSessao[],
+  }).length === 2
+);
 
 console.log(falhas === 0 ? '\nTUDO OK' : `\n${falhas} FALHA(S)`);
 process.exit(falhas === 0 ? 0 : 1);

@@ -37,6 +37,8 @@ import {
   ConsentTermSection,
   EvaluationTemplate,
   EvaluationRecord,
+  FotoDaSessao,
+  MaterialUsado,
   ProdutoDeEstoque,
   ConsumoPadrao,
   MateriaisDoAtendimento,
@@ -49,6 +51,7 @@ import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES }
 import { subirImagem, subirImagemOuManter } from './imageStorage';
 import { isLaserCategory } from '../utils/templateMatching';
 import {
+  fotosDaSessao,
   MIGRACAO_AVALIACAO,
   MIGRACAO_FICHAS_PADRAO,
   planejarInstalacaoDeFichasPadrao,
@@ -2193,6 +2196,13 @@ function normalizarRegistroDeFichaLido(id: string, dados: unknown): EvaluationRe
     id,
     perguntasSnapshot: paraArray<AnamnesisQuestion>(bruto.perguntasSnapshot),
     respostas: (bruto.respostas as Record<string, any>) || {},
+    // Ausente continua ausente: é o que diz a `fotosDaSessao()` que a ficha é de antes da lista.
+    fotosSessao:
+      bruto.fotosSessao === undefined || bruto.fotosSessao === null
+        ? undefined
+        : paraArray<FotoDaSessao>(bruto.fotosSessao),
+    consumoEstimado:
+      bruto.consumoEstimado === undefined ? undefined : paraArray<MaterialUsado>(bruto.consumoEstimado),
   };
 }
 
@@ -2405,29 +2415,65 @@ export async function saveRegistroDeFicha(
   }
 
   const pasta = `${ROTULOS_DA_FICHA[tipo].pastaDoStorage}/registros/${registro.id}`;
-  const [modelo, modeloAnotada, sessao, sessaoAnotada] = await Promise.all([
-    subirImagemOuManter(registro.fotoModeloUrl || '', pasta),
-    subirImagemOuManter(registro.fotoModeloAnotadaUrl || '', pasta),
-    subirImagemOuManter(registro.fotoSessaoUrl || '', pasta),
-    subirImagemOuManter(registro.fotoSessaoAnotadaUrl || '', pasta),
+  const [[modelo, modeloAnotada], fotosSessao] = await Promise.all([
+    Promise.all([
+      subirImagemOuManter(registro.fotoModeloUrl || '', pasta),
+      subirImagemOuManter(registro.fotoModeloAnotadaUrl || '', pasta),
+    ]),
+    Promise.all(
+      fotosDaSessao(registro).map(async (foto): Promise<FotoDaSessao> => {
+        const [url, anotadaUrl] = await Promise.all([
+          subirImagemOuManter(foto.url, pasta),
+          subirImagemOuManter(foto.anotadaUrl || '', pasta),
+        ]);
+        return { url, anotadaUrl: anotadaUrl || undefined, anotacoesJson: foto.anotacoesJson };
+      })
+    ),
   ]);
 
   const agora = new Date().toISOString();
-  const batch = writeBatch(db);
+  const primeira = fotosSessao[0];
+  const consumoEstimado = registro.consumoEstimado || [];
 
-  batch.set(
-    doc(db, COLECOES_DA_FICHA[tipo].registros, registro.id),
-    cleanForFirestore({
+  const dados = {
+    ...cleanForFirestore({
       ...registro,
       fotoModeloUrl: modelo || undefined,
       fotoModeloAnotadaUrl: modeloAnotada || undefined,
-      fotoSessaoUrl: sessao || undefined,
-      fotoSessaoAnotadaUrl: sessaoAnotada || undefined,
+      // A lista vai sempre, inclusive vazia: é o que registra que a última foto foi removida.
+      fotosSessao,
       preenchidoEm: registro.preenchidoEm || agora,
       updatedAt: agora,
     }),
-    { merge: true }
-  );
+    /*
+      A gravação é `merge: true`, onde um campo omitido **fica como estava**. Por isso o que pode
+      sumir vai como `deleteField()` — sem isso, "Remover" a foto (ou desmarcar o consumo) só
+      mudava a tela: reabrir a ficha trazia tudo de volta. O `deleteField()` entra depois do
+      `cleanForFirestore`, que desmontaria o sentinela.
+
+      Os campos legados espelham a primeira foto, para uma aba antiga do app ainda aberta.
+    */
+    fotoSessaoUrl: primeira?.url || deleteField(),
+    fotoSessaoAnotadaUrl: primeira?.anotadaUrl || deleteField(),
+    fotoSessaoAnotacoesJson: primeira?.anotacoesJson || deleteField(),
+    consumoEstimado:
+      consumoEstimado.length > 0 ? consumoEstimado.map((m) => cleanForFirestore(m)) : deleteField(),
+  };
+
+  // As fotos vão para o Storage; se ele falhar, cada uma volta em base64 para dentro do documento
+  // — e dez fotos assim estouram o teto de 1 MB. Melhor dizer isso do que deixar o Firestore
+  // recusar com uma mensagem que ninguém entende.
+  const bytes = estimateFirestoreDocBytes(dados);
+  if (bytes > FIRESTORE_DOC_SAFE_BYTES) {
+    throw new Error(
+      `As fotos desta ficha somam ${(bytes / 1024 / 1024).toFixed(2)} MB e ultrapassam o limite ` +
+        `de 1 MB por ficha — o envio ao Firebase Storage não funcionou. Remova alguma foto e salve de novo.`
+    );
+  }
+
+  const batch = writeBatch(db);
+
+  batch.set(doc(db, COLECOES_DA_FICHA[tipo].registros, registro.id), dados, { merge: true });
 
   if (tipo === 'acompanhamento' && registro.atendimentoId) {
     batch.update(doc(db, ATTENDANCES_COLLECTION, registro.atendimentoId), {

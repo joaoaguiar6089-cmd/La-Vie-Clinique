@@ -23,8 +23,10 @@ interface CustoDeMaterialDoOrcamentoProps {
  * O custo de material do orçamento — só para a equipe.
  *
  * Nasce do consumo padrão de cada procedimento vezes o número de sessões do item, e cada linha é
- * editável. Não soma no total, não sai no PDF e não chega ao link da cliente: o documento que ela
- * lê nem carrega estes números (moram em `quote_costs`, fora de `quotes`).
+ * editável. Não soma no total — a não ser no item marcado "calcular por consumo de produto", em
+ * que o repassado à cliente **é** o valor do item —, não sai no PDF e não chega ao link da
+ * cliente: o documento que ela lê nem carrega estes números (moram em `quote_costs`, fora de
+ * `quotes`). Do consumo, a cliente vê só o nome dos produtos.
  *
  * A margem estimada é o total do orçamento menos o custo de material — o que sobra para
  * honorário, impostos e o resto da clínica.
@@ -77,7 +79,8 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
         </button>
       </div>
       <p className="text-body text-muted -mt-1">
-        Só para a equipe — não soma no total, não sai no PDF nem no link da cliente.
+        Só para a equipe — não sai no PDF nem no link da cliente. Só soma no total no item
+        calculado por consumo de produto.
       </p>
 
       {!visivel ? null : semEstoque ? (
@@ -115,6 +118,7 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
                           ? 'Sem material'
                           : `${linhas.length} ${linhas.length === 1 ? 'material' : 'materiais'}`}
                         {sessoes > 1 ? ` · ${sessoes} sessões` : ''}
+                        {item.calculadoPorConsumo ? ' · dá o valor do item' : ''}
                       </span>
                     </span>
                     <span className="text-right tabular-nums shrink-0">

@@ -259,6 +259,23 @@ const BlocoItem: React.FC<{ item: QuoteItem; semSeparador: boolean }> = ({ item,
               com {item.profissionalNome}
             </div>
           )}
+          {/* Só os nomes: quantidade e valor dos produtos nunca chegam ao documento da cliente. */}
+          {(item.produtosDoConsumo || []).length > 0 && (
+            <div style={{ fontSize: 9.5, color: TEXTO_DETALHE, marginTop: 4, lineHeight: 1.45 }}>
+              <span
+                style={{
+                  fontSize: 8,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.14em',
+                  color: BRONZE,
+                  marginRight: 6,
+                }}
+              >
+                Produtos
+              </span>
+              {(item.produtosDoConsumo || []).join(' · ')}
+            </div>
+          )}
         </div>
 
         <div style={{ textAlign: 'right', flexShrink: 0 }}>

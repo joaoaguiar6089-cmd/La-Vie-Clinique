@@ -200,7 +200,7 @@ const LinhaDeAtendimento: React.FC<{
           aria-label={`Acompanhamento do atendimento de ${atendimento.procedimentoNome}`}
           className={
             acompanhamentoComRegistro(atendimento)
-              ? 'p-2 text-emerald-600 hover:text-emerald-700 transition-colors'
+              ? 'p-[7px] rounded-lg bg-ok-bg text-ok border border-ok-line hover:border-ok transition-colors'
               : acaoClass
           }
         >
