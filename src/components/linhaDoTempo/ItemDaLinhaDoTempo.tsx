@@ -46,7 +46,7 @@ interface Atalho {
   detalhe?: string;
   icone: React.ElementType;
   onClick: () => void;
-  /** Já preenchido — o ícone fica verde. */
+  /** Já preenchido — o atalho vira uma pastilha verde, como o botão da agenda. */
   preenchido?: boolean;
   /** Fica à vista também no celular. Os demais vão para o "⋯". */
   principal?: boolean;
@@ -268,8 +268,13 @@ export const ItemDaLinhaDoTempo: React.FC<ItemDaLinhaDoTempoProps> = ({
                   onClick={a.onClick}
                   title={a.detalhe ? `${a.rotulo} — ${a.detalhe}` : a.rotulo}
                   aria-label={`${a.rotulo}: ${item.titulo}`}
-                  className={`${a.principal ? 'inline-flex' : 'hidden sm:inline-flex'} w-10 h-10 items-center justify-center rounded-lg transition-colors hover:bg-card ${
-                    a.preenchido ? 'text-ok' : 'text-muted hover:text-brand'
+                  /* Preenchido = pastilha verde com borda, o mesmo par do botão de acompanhamento
+                     da agenda. Só a cor do ícone mudando (verde-escuro × cinza-escuro) não se
+                     distinguia de relance, e é de relance que a linha do tempo é lida. */
+                  className={`${a.principal ? 'inline-flex' : 'hidden sm:inline-flex'} w-10 h-10 items-center justify-center rounded-lg border transition-colors ${
+                    a.preenchido
+                      ? 'bg-ok-bg text-ok border-ok-line hover:border-ok'
+                      : 'border-transparent text-ink-soft hover:text-brand hover:bg-card'
                   }`}
                 >
                   <IconeDoAtalho className="w-[18px] h-[18px]" />

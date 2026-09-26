@@ -32,8 +32,10 @@ export interface RotulosDaFicha {
   descricaoDosModelos: string;
   /** Rótulo da data no cabeçalho do formulário e do documento impresso. */
   rotuloDaData: string;
-  /** Rótulo do campo de foto. */
+  /** Rótulo do campo de foto, no singular — uma foto, o editor de anotação dela. */
   rotuloDaFoto: string;
+  /** O mesmo no plural — o título da seção, que aceita várias fotos. */
+  rotuloDasFotos: string;
   /** Linha pequena sob o campo de foto vazio. */
   dicaDaFoto: string;
   /** Rótulo e sugestão do campo de observações. */
@@ -61,6 +63,7 @@ export const ROTULOS_DA_FICHA: Record<TipoDeFicha, RotulosDaFicha> = {
       'paciente, preenchida no sistema ou impressa em branco.',
     rotuloDaData: 'Data da avaliação',
     rotuloDaFoto: 'Foto da avaliação',
+    rotuloDasFotos: 'Fotos da avaliação',
     dicaDaFoto: 'Registro do estado inicial, antes do procedimento',
     rotuloDasObservacoes: 'Observações da avaliação',
     dicaDasObservacoes:
@@ -82,7 +85,8 @@ export const ROTULOS_DA_FICHA: Record<TipoDeFicha, RotulosDaFicha> = {
       'e é preenchida uma vez por atendimento realizado.',
     rotuloDaData: 'Data do atendimento',
     rotuloDaFoto: 'Foto do atendimento',
-    dicaDaFoto: 'Registro de evolução — uma por atendimento',
+    rotuloDasFotos: 'Fotos do atendimento',
+    dicaDaFoto: 'Registro de evolução — dá para enviar mais de uma',
     rotuloDasObservacoes: 'Observações do atendimento',
     dicaDasObservacoes:
       'Parâmetros usados, resposta do tecido, intercorrências, orientações dadas, retorno.',

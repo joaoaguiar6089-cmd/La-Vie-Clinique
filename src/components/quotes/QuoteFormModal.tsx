@@ -11,6 +11,7 @@ import {
 import {
   ClinicProfile,
   ConsumoPadrao,
+  EvaluationRecord,
   Patient,
   Procedure,
   ProdutoDeEstoque,
@@ -19,7 +20,7 @@ import {
   QuoteItem,
   QuotePaymentOption,
 } from '../../types';
-import { formatBRL } from '../../utils/formatters';
+import { formatBRL, formatDateOnly } from '../../utils/formatters';
 import {
   calcularOrcamento,
   calcularDataValidade,
@@ -46,10 +47,17 @@ import {
   subscribeToConsumosPadrao,
   subscribeToProdutosDeEstoque,
 } from '../../services/databaseService';
-import { CustoEmEdicao, LinhaDeMaterial, materiaisDoItem } from '../../utils/estoque';
+import {
+  CustoEmEdicao,
+  LinhaDeMaterial,
+  aplicarConsumoNoItem,
+  materiaisDoItem,
+  tirarConsumoDoItem,
+} from '../../utils/estoque';
 import { CustoDeMaterialDoOrcamento } from './CustoDeMaterialDoOrcamento';
 import { isLaserCategory } from '../../utils/templateMatching';
 import { nomeCurtoDaArea } from '../../utils/laserAreas';
+import { procedimentoDoAtendimento } from '../../utils/evaluations';
 
 interface QuoteFormModalProps {
   isOpen: boolean;
@@ -67,6 +75,11 @@ interface QuoteFormModalProps {
    * chama o formulário. Ignorado quando há `quoteToEdit` ou `seedFrom`, que trazem o próprio.
    */
   initialPatient?: Patient | null;
+  /**
+   * A ficha de avaliação que manda montar o orçamento: abre com a paciente, o procedimento e o
+   * consumo estimado dela, e o item já "calculado por consumo de produto". Só em orçamento novo.
+   */
+  avaliacaoDeOrigem?: EvaluationRecord | null;
   procedures: Procedure[];
   patients: Patient[];
   clinic: ClinicProfile;
@@ -106,6 +119,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   quoteToEdit,
   seedFrom,
   initialPatient,
+  avaliacaoDeOrigem,
   procedures,
   patients,
   clinic,
@@ -132,6 +146,8 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   const [confirmarRemocao, setConfirmarRemocao] = useState<QuoteItem | null>(null);
   /** Aviso de que a lista nasceu da ficha de anamnese da paciente. */
   const [avisoDaAnamnese, setAvisoDaAnamnese] = useState<{ quantidade: number; data: string } | null>(null);
+  /** Data (YYYY-MM-DD) da avaliação que pré-preencheu o orçamento, para o aviso. */
+  const [avisoDaAvaliacao, setAvisoDaAvaliacao] = useState<string | null>(null);
   /** Interruptor da página do manequim no PDF. Padrão ligado. */
   const [mostrarMapaCorporal, setMostrarMapaCorporal] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -195,13 +211,19 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     setErrors({});
     setIsSaving(false);
     setAvisoDaAnamnese(null);
+    setAvisoDaAvaliacao(null);
     setCustos({});
-    setCustoFixo(new Set());
+    // O item calculado por consumo nunca segue o consumo padrão sozinho: as linhas dele são as
+    // gravadas em `quote_costs`, que chegam logo abaixo. Seguir o padrão até lá mostraria uma conta
+    // que não é a que deu o valor do item.
+    setCustoFixo(
+      new Set(base ? base.itens.filter((i) => i.calculadoPorConsumo).map((i) => i.id) : [])
+    );
     setCustoGravadoExistia(false);
     // `clinic` e `professionals` mudam de referência a cada sync do perfil e
     // reabririam o formulário zerado no meio da edição — por isso ficam de fora
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, quoteToEdit?.id, seedFrom?.id, initialPatient?.id]);
+  }, [isOpen, quoteToEdit?.id, seedFrom?.id, initialPatient?.id, avaliacaoDeOrigem?.id]);
 
   /**
    * Áreas que a paciente já pediu na ficha de anamnese entram pré-selecionadas.
@@ -215,7 +237,8 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
    * de leitura não faz nada — o orçamento abre vazio, como sempre abriu.
    */
   useEffect(() => {
-    if (!isOpen || base || !pacienteId) return;
+    // Vindo da avaliação, a lista é a que ela estimou — as áreas da anamnese não entram por cima.
+    if (!isOpen || base || !pacienteId || avaliacaoDeOrigem) return;
     let cancelado = false;
 
     (async () => {
@@ -316,6 +339,45 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, itens, consumos, produtos, custoFixo]);
 
+  /**
+   * Orçamento montado a partir da ficha de avaliação: a paciente, "já teve avaliação" com a data
+   * dela, e um item do procedimento avaliado, calculado pelo consumo estimado ali.
+   *
+   * Mora num efeito à parte, declarado **depois** do que acompanha o consumo padrão, e não dentro
+   * do de abertura: na mesma passada os dois rodam, e aquele reescreve `custos` a partir dos itens
+   * da renderização anterior — declarado antes, apagaria as linhas que acabaram de chegar.
+   */
+  useEffect(() => {
+    if (!isOpen || base || !avaliacaoDeOrigem) return;
+    const avaliacao = avaliacaoDeOrigem;
+    const cadastro = initialPatient || patients.find((p) => p.id === avaliacao.pacienteId);
+
+    setPacienteId(avaliacao.pacienteId);
+    setPacienteNome(cadastro?.nome || avaliacao.pacienteNome);
+    setPacienteContato(cadastro?.contato || '');
+    const dia = (avaliacao.dataAtendimento || '').slice(0, 10);
+    setJaTeveAvaliacao(true);
+    setDataAvaliacao(fromDateInput(dia));
+
+    const procedimento = procedimentoDoAtendimento(avaliacao, procedures);
+    const doCatalogo = procedimento
+      ? montarItemDoProcedimento(procedimento, professionals)
+      : { ...montarItemAvulso(), titulo: avaliacao.procedimentoNome };
+    // Quem avaliou costuma ser quem faz — e continua trocável no item.
+    const profissional = professionals.find((p) => p.id === avaliacao.professionalId);
+    const item = profissional
+      ? { ...doCatalogo, professionalId: profissional.id, profissionalNome: profissional.name }
+      : doCatalogo;
+    const linhas = avaliacao.consumoEstimado || [];
+
+    setItens([aplicarConsumoNoItem(item, linhas)]);
+    setCustos({ [item.id]: linhas });
+    setCustoFixo(new Set([item.id]));
+    setAvisoDaAvaliacao(dia);
+    // Só na abertura: o catálogo e a equipe mudam de referência a cada sync e refariam o item.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, avaliacaoDeOrigem?.id, base?.id]);
+
   // A mensagem acompanha o nome enquanto ninguém a editar à mão
   useEffect(() => {
     if (textoEditadoManualmente) return;
@@ -395,6 +457,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   const itemFoiEditado = (item: QuoteItem): boolean =>
     item.temDesconto ||
     item.maisDeUmaSessao ||
+    !!item.calculadoPorConsumo ||
     (item.detalhes || []).some((d) => d.titulo.trim() || d.valor.trim());
 
   const alternarAreaDoLaser = (procedureId: string) => {
@@ -417,6 +480,52 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     setItens((prev) => prev.map((i) => (i.id === item.id ? item : i)));
 
   const removeItem = (id: string) => setItens((prev) => prev.filter((i) => i.id !== id));
+
+  /**
+   * Toda mudança nas linhas de consumo de um item passa por aqui — venha do próprio item ou da
+   * seção de custo de material. Grava as linhas, tira o item do consumo padrão automático e, no
+   * item calculado por consumo, refaz o valor na mesma hora.
+   *
+   * O valor é refeito aqui, no handler, e não num efeito que observe `custos`: o efeito que
+   * acompanha o consumo padrão já reescreve `custos` a cada mudança de `itens`, e os dois juntos
+   * entrariam em laço.
+   */
+  const mudarConsumoDoItem = (itemId: string, linhas: LinhaDeMaterial[]) => {
+    setCustos((atual) => ({ ...atual, [itemId]: linhas }));
+    setCustoFixo((atual) => new Set([...atual, itemId]));
+    setItens((prev) =>
+      prev.map((i) => (i.id === itemId && i.calculadoPorConsumo ? aplicarConsumoNoItem(i, linhas) : i))
+    );
+  };
+
+  /**
+   * Ao ligar, o valor sai das linhas que o item já tem (o consumo padrão × sessões, ou as gravadas);
+   * ao desligar, volta o preço do catálogo. As linhas ficam — continuam sendo o custo estimado.
+   */
+  const alternarConsumoDoItem = (item: QuoteItem, marcado: boolean) => {
+    if (!marcado) {
+      setItens((prev) => prev.map((i) => (i.id === item.id ? tirarConsumoDoItem(i, procedures) : i)));
+      return;
+    }
+    const linhas = custos[item.id] || [];
+    setCustos((atual) => ({ ...atual, [item.id]: linhas }));
+    setCustoFixo((atual) => new Set([...atual, item.id]));
+    setItens((prev) => prev.map((i) => (i.id === item.id ? aplicarConsumoNoItem(i, linhas) : i)));
+  };
+
+  /** No item por consumo, refaz as linhas pelo padrão; nos demais, volta a seguir o padrão. */
+  const recalcularConsumoDoItem = (itemId: string) => {
+    const item = itens.find((i) => i.id === itemId);
+    if (item?.calculadoPorConsumo) {
+      mudarConsumoDoItem(itemId, materiaisDoItem(item, consumos, produtos, procedures));
+      return;
+    }
+    setCustoFixo((atual) => {
+      const novo = new Set(atual);
+      novo.delete(itemId);
+      return novo;
+    });
+  };
 
   const moveItem = (index: number, direction: -1 | 1) => {
     setItens((prev) => {
@@ -678,6 +787,11 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   onChange={updateItem}
                   onRemove={() => removeItem(item.id)}
                   onMove={(direction) => moveItem(index, direction)}
+                  produtos={produtos}
+                  linhasDoConsumo={custos[item.id] || []}
+                  onAlternarConsumo={(marcado) => alternarConsumoDoItem(item, marcado)}
+                  onMudarConsumo={(linhas) => mudarConsumoDoItem(item.id, linhas)}
+                  onRecalcularConsumo={() => recalcularConsumoDoItem(item.id)}
                 />
               ))}
             </div>
@@ -701,8 +815,23 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                 </label>
               )}
 
+              {avisoDaAvaliacao && (
+                <p className="w-full text-body text-ok bg-ok-bg border border-ok-line rounded-sm px-2.5 py-1.5 leading-snug flex items-start justify-between gap-2">
+                  <span>
+                    Preenchido com o consumo estimado na avaliação de{' '}
+                    {formatDateOnly(avisoDaAvaliacao)}. Confira as quantidades no item.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAvisoDaAvaliacao(null)}
+                    className="shrink-0 underline underline-offset-2 hover:no-underline"
+                  >
+                    ok
+                  </button>
+                </p>
+              )}
               {avisoDaAnamnese && (
-                <p className="w-full text-body text-[#8E1A54] bg-[#FDF3F7] border border-[#F3C6DC] rounded-sm px-2.5 py-1.5 leading-snug flex items-start justify-between gap-2">
+                <p className="w-full text-body text-[#1D5E38] bg-[#E4F5EA] border border-[#BFE3CB] rounded-sm px-2.5 py-1.5 leading-snug flex items-start justify-between gap-2">
                   <span>
                     {avisoDaAnamnese.quantidade}{' '}
                     {avisoDaAnamnese.quantidade === 1 ? 'área veio' : 'áreas vieram'} da ficha de{' '}
@@ -798,17 +927,8 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
             custos={custos}
             produtos={produtos}
             totalDoOrcamento={totais.total}
-            onChange={(itemId, linhas) => {
-              setCustos((atual) => ({ ...atual, [itemId]: linhas }));
-              setCustoFixo((atual) => new Set([...atual, itemId]));
-            }}
-            onRecalcular={(itemId) =>
-              setCustoFixo((atual) => {
-                const novo = new Set(atual);
-                novo.delete(itemId);
-                return novo;
-              })
-            }
+            onChange={mudarConsumoDoItem}
+            onRecalcular={recalcularConsumoDoItem}
           />
 
           {/* Seção 5 — Pagamento */}

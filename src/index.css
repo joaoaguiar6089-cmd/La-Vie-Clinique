@@ -31,7 +31,8 @@
 
   /* Texto — os três níveis passam de 4,5:1 sobre `surface`, `card` e
      `surface-2`. O cinza claro de antes (#A8A29A) ficava em 2,4:1: bonito na
-     tela do projetista, invisível no celular da recepção sob a luz da sala. */
+     tela do projetista, invisível no celular da recepção sob a luz da sala.
+     Os `gray-*` do Tailwind seguem a mesma regra — ver abaixo das linhas. */
   --color-ink: #1A1A1A;
   --color-ink-soft: #4A4740;
   --color-muted: #6F6A60;
@@ -40,6 +41,15 @@
   /* Linhas */
   --color-line: #E2DFD8;
   --color-line-soft: #EFEDE7;
+
+  /* Os cinzas do Tailwind, aquecidos e um grau mais escuros. O `text-gray-400`
+     original (#9CA3AF, 2,5:1 sobre o branco) está em ~240 lugares — rótulo,
+     data, dica, ícone — e sumia sob a luz da sala. Trocar aqui corrige todos
+     sem mexer em arquivo nenhum, e sem virar preto: 3,9:1, o bastante para
+     texto de apoio e ícone, ainda um degrau abaixo do `muted`. O 300 (ícone
+     de estado vazio, borda de campo) escurece na mesma proporção. */
+  --color-gray-300: #BDB7AD;
+  --color-gray-400: #858077;
 
   /* Status — cada um com fundo claro, borda e cor de texto legível sobre o fundo */
   --color-ok: #2E6B4F;

@@ -317,6 +317,61 @@ export const materiaisDoItem = (
     itemSessoes(item as QuoteItem)
   );
 
+/**
+ * Os nomes dos produtos de uma lista de consumo — sem repetir e sem linha em branco. É tudo o que
+ * o documento da cliente recebe do consumo: quantidade e valor ficam em `quote_costs`.
+ */
+export const nomesDosProdutos = (linhas: MaterialUsado[]): string[] => {
+  const vistos = new Set<string>();
+  const nomes: string[] = [];
+  linhasParaGravar(linhas).forEach((l) => {
+    const chave = l.nome.toLocaleLowerCase('pt-BR');
+    if (!l.nome || vistos.has(chave)) return;
+    vistos.add(chave);
+    nomes.push(l.nome);
+  });
+  return nomes;
+};
+
+/**
+ * O item de orçamento "calculado por consumo de produto" depois de o consumo mudar: o valor de
+ * tabela é a soma do valor repassado à cliente de cada linha, e o documento leva só os nomes.
+ *
+ * Só esses dois campos saem daqui. A linha com quantidade e preço nunca entra no item: ele é lido
+ * sem login pelo link, e a cliente pode mostrar o orçamento à concorrência.
+ */
+export const aplicarConsumoNoItem = (item: QuoteItem, linhas: MaterialUsado[]): QuoteItem => {
+  const validas = linhasParaGravar(linhas);
+  const nomes = nomesDosProdutos(validas);
+  return {
+    ...item,
+    calculadoPorConsumo: true,
+    valorTabela: totaisDosMateriais(validas).valorCliente,
+    produtosDoConsumo: nomes.length > 0 ? nomes : undefined,
+  };
+};
+
+/**
+ * O item volta a ter preço de tabela: o do catálogo, quando o procedimento ainda existe — senão
+ * fica o valor que estava, para não zerar um item digitado à mão.
+ */
+export const tirarConsumoDoItem = (item: QuoteItem, catalogo: Procedure[]): QuoteItem => {
+  const procedimento = item.procedureId
+    ? (catalogo || []).find((p) => p.id === item.procedureId)
+    : undefined;
+  const doCatalogo = procedimento
+    ? procedimento.promotionalPrice && procedimento.promotionalPrice > 0
+      ? procedimento.promotionalPrice
+      : procedimento.price
+    : undefined;
+  return {
+    ...item,
+    calculadoPorConsumo: undefined,
+    produtosDoConsumo: undefined,
+    valorTabela: typeof doCatalogo === 'number' ? doCatalogo : item.valorTabela,
+  };
+};
+
 /** O que o formulário do orçamento entrega para gravar o custo: os itens, na ordem, e as linhas. */
 export interface CustoEmEdicao {
   itens: Pick<QuoteItem, 'id'>[];

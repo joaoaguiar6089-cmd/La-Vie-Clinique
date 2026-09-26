@@ -14,7 +14,7 @@ import {
   SectionHeading,
 } from '../anamnesis/printableQuestionBlocks';
 import { QuestionFieldRenderer } from '../anamnesis/QuestionFieldRenderer';
-import { perguntasDaAvaliacao } from '../../utils/evaluations';
+import { fotosDaSessao, perguntasDaAvaliacao } from '../../utils/evaluations';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
 import { formatDateOnly } from '../../utils/formatters';
 
@@ -81,9 +81,7 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
     ? registro.fotoModeloAnotadaUrl || registro.fotoModeloUrl
     : ficha?.fotoModeloFemininoUrl || ficha?.fotoModeloUrl || ficha?.fotoModeloMasculinoUrl;
 
-  const fotoSessao = registro
-    ? registro.fotoSessaoAnotadaUrl || registro.fotoSessaoUrl
-    : undefined;
+  const fotosSessao = fotosDaSessao(registro).map((f) => f.anotadaUrl || f.url);
 
   const handlePrint = () => window.print();
 
@@ -266,17 +264,26 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
             </div>
           )}
 
-          {/* Foto da sessão */}
-          {fotoSessao && (
-            <div className="mb-6 page-break-inside-avoid">
-              <SectionHeading title={rotulos.rotuloDaFoto} />
-              <div className="border border-gray-200 rounded-sm bg-white p-3 flex justify-center">
-                <img
-                  src={fotoSessao}
-                  alt={rotulos.rotuloDaFoto}
-                  className="block w-full h-auto object-contain rounded-xs"
-                  style={{ maxHeight: '620px' }}
-                />
+          {/* Fotos da sessão — uma sozinha ocupa a largura; várias vão em duas colunas */}
+          {fotosSessao.length > 0 && (
+            <div className="mb-6">
+              <SectionHeading
+                title={fotosSessao.length > 1 ? rotulos.rotuloDasFotos : rotulos.rotuloDaFoto}
+              />
+              <div className={`grid gap-3 ${fotosSessao.length > 1 ? 'grid-cols-2' : ''}`}>
+                {fotosSessao.map((url, i) => (
+                  <div
+                    key={`${i}-${url}`}
+                    className="border border-gray-200 rounded-sm bg-white p-3 flex justify-center page-break-inside-avoid"
+                  >
+                    <img
+                      src={url}
+                      alt={`${rotulos.rotuloDaFoto} ${i + 1}`}
+                      className="block w-full h-auto object-contain rounded-xs"
+                      style={{ maxHeight: fotosSessao.length > 1 ? '360px' : '620px' }}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           )}

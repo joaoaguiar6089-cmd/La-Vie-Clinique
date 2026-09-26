@@ -23,6 +23,8 @@ import { FichaFillModal } from '../fichas/FichaFillModal';
 import { PrintableFichaSheet } from '../fichas/PrintableFichaSheet';
 import { ListaDeFichas } from '../fichas/ListaDeFichas';
 import { ModuleTabs } from '../common/ModuleTabs';
+import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
+import { useAcoesDeOrcamento } from '../quotes/useAcoesDeOrcamento';
 import { EmissaoDeAvaliacao } from './EmissaoDeAvaliacao';
 
 interface EvaluationsModuleProps {
@@ -65,6 +67,24 @@ export const EvaluationsModule: React.FC<EvaluationsModuleProps> = ({
     procedureId?: string;
     procedimentoNome: string;
   } | null>(null);
+
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
+
+  /**
+   * O orçamento que a avaliação monta a partir do consumo estimado. Abre aqui mesmo, por cima da
+   * lista, como na página da paciente — sair para a tela de Orçamentos perderia o lugar.
+   */
+  const acoesDeOrcamento = useAcoesDeOrcamento({
+    clinic: clinicProfile,
+    procedures: catalogProcedures,
+    patients: pacientes,
+    onErro: (mensagem) => setConfirmacao(aviso('Nem tudo foi salvo', mensagem, 'perigo')),
+  });
+  const montarOrcamento = (avaliacao: EvaluationRecord) =>
+    acoesDeOrcamento.abrirDaAvaliacao(
+      avaliacao,
+      pacientes.find((p) => p.id === avaliacao.pacienteId)
+    );
 
   const irParaCadastroDeFicha = (alvo: { procedureId?: string; procedimentoNome: string }) => {
     setAberta(null);
@@ -145,6 +165,7 @@ export const EvaluationsModule: React.FC<EvaluationsModuleProps> = ({
         clinic={clinicProfile}
         professionalIdPadrao={currentProfessionalId}
         onCadastrarFicha={irParaCadastroDeFicha}
+        onMontarOrcamento={montarOrcamento}
       />
 
       {aberta && (
@@ -158,6 +179,7 @@ export const EvaluationsModule: React.FC<EvaluationsModuleProps> = ({
           professionals={professionals}
           clinicProfile={clinicProfile}
           onCadastrarFicha={irParaCadastroDeFicha}
+          onMontarOrcamento={montarOrcamento}
         />
       )}
 
@@ -170,6 +192,9 @@ export const EvaluationsModule: React.FC<EvaluationsModuleProps> = ({
           onClose={() => setImprimindo(null)}
         />
       )}
+
+      {acoesDeOrcamento.modais}
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>
   );
 };

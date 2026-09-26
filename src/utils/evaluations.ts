@@ -3,7 +3,9 @@ import {
   AnamnesisRecord,
   AnamnesisTemplate,
   Attendance,
+  EvaluationRecord,
   EvaluationTemplate,
+  FotoDaSessao,
   Procedure,
 } from '../types';
 import {
@@ -123,6 +125,36 @@ export const perguntasRespondidas = (
   });
 
 /**
+ * As fotos da sessão de uma ficha, venha ela de antes ou de depois da lista.
+ *
+ * `fotosSessao` presente manda, **mesmo vazio**: é assim que fica gravado que a última foto foi
+ * removida — cair para o campo legado nesse caso ressuscitaria a foto apagada. Ausente, a ficha é
+ * de antes da lista e a foto única vira uma lista de uma.
+ */
+export const fotosDaSessao = (
+  r: Pick<
+    EvaluationRecord,
+    'fotosSessao' | 'fotoSessaoUrl' | 'fotoSessaoAnotadaUrl' | 'fotoSessaoAnotacoesJson'
+  > | null | undefined
+): FotoDaSessao[] => {
+  if (!r) return [];
+  if (r.fotosSessao !== undefined && r.fotosSessao !== null) {
+    return paraArray<FotoDaSessao>(r.fotosSessao).filter((f) => !!f && !!f.url);
+  }
+  if (!r.fotoSessaoUrl) return [];
+  return [
+    {
+      url: r.fotoSessaoUrl,
+      anotadaUrl: r.fotoSessaoAnotadaUrl || undefined,
+      anotacoesJson: r.fotoSessaoAnotacoesJson || undefined,
+    },
+  ];
+};
+
+/** Quantas fotos cabem numa ficha. As URLs são do Storage, mas cada anotação guarda o seu JSON no documento, e o teto dele é 1 MB. */
+export const MAX_FOTOS_DA_SESSAO = 10;
+
+/**
  * A ficha tem alguma coisa escrita — resposta, foto, anotação ou observação?
  *
  * É o que decide se o acompanhamento é gravado quando a profissional só lançou os materiais:
@@ -132,12 +164,12 @@ export const perguntasRespondidas = (
 export const fichaTemConteudo = (ficha: {
   perguntas: AnamnesisQuestion[];
   respostas: Record<string, any>;
-  fotoSessaoUrl?: string;
+  fotosSessao?: FotoDaSessao[];
   fotoModeloAnotadaUrl?: string;
   observacoes?: string;
 }): boolean =>
   perguntasRespondidas(ficha.perguntas, ficha.respostas).length > 0 ||
-  !!ficha.fotoSessaoUrl ||
+  (ficha.fotosSessao || []).length > 0 ||
   !!ficha.fotoModeloAnotadaUrl ||
   !!(ficha.observacoes || '').trim();
 

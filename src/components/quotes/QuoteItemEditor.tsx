@@ -1,8 +1,18 @@
-import React, { useState } from 'react';
-import { Trash2, Plus, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
-import { Professional, QuoteItem, QuoteItemDetail } from '../../types';
+import React, { useEffect, useState } from 'react';
+import {
+  Trash2,
+  Plus,
+  ChevronUp,
+  ChevronDown,
+  AlertCircle,
+  PackageOpen,
+  RotateCcw,
+} from 'lucide-react';
+import { ProdutoDeEstoque, Professional, QuoteItem, QuoteItemDetail } from '../../types';
 import { formatBRL } from '../../utils/formatters';
-import { itemValorFinal, itemDescontoPercentual } from '../../utils/quoteCalc';
+import { itemValorFinal, itemDescontoPercentual, itemSessoes } from '../../utils/quoteCalc';
+import { LinhaDeMaterial, arredondar, totaisDosMateriais } from '../../utils/estoque';
+import { EditorDeMateriais } from '../estoque/EditorDeMateriais';
 
 interface QuoteItemEditorProps {
   item: QuoteItem;
@@ -12,6 +22,15 @@ interface QuoteItemEditorProps {
   onChange: (item: QuoteItem) => void;
   onRemove: () => void;
   onMove: (direction: -1 | 1) => void;
+  /** Os produtos do estoque, para o "calcular por consumo de produto". */
+  produtos: ProdutoDeEstoque[];
+  /** O consumo deste item — as mesmas linhas do custo de material, que moram em `quote_costs`. */
+  linhasDoConsumo: LinhaDeMaterial[];
+  /** Liga ou desliga o cálculo por consumo. Quem calcula o valor é o formulário. */
+  onAlternarConsumo: (marcado: boolean) => void;
+  onMudarConsumo: (linhas: LinhaDeMaterial[]) => void;
+  /** Refaz o consumo pelo padrão do procedimento × sessões. */
+  onRecalcularConsumo: () => void;
 }
 
 /** Campos numéricos guardam o texto digitado para não travar em "0" enquanto se apaga. */
@@ -26,9 +45,26 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
   onChange,
   onRemove,
   onMove,
+  produtos,
+  linhasDoConsumo,
+  onAlternarConsumo,
+  onMudarConsumo,
+  onRecalcularConsumo,
 }) => {
   const [valorTabelaStr, setValorTabelaStr] = useState(numeroDigitado(item.valorTabela));
   const [valorDescontoStr, setValorDescontoStr] = useState(numeroDigitado(item.valorComDesconto));
+
+  // O campo guarda o texto digitado, e não acompanha o valor sozinho: ao desligar o consumo, o
+  // valor volta ao do catálogo, e o campo precisa mostrar esse — não o que foi digitado antes.
+  useEffect(() => {
+    if (!item.calculadoPorConsumo) setValorTabelaStr(numeroDigitado(item.valorTabela));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.calculadoPorConsumo]);
+
+  const porConsumo = !!item.calculadoPorConsumo;
+  const consumo = totaisDosMateriais(linhasDoConsumo);
+  const margemDoConsumo = arredondar(consumo.valorCliente - consumo.custo);
+  const sessoes = itemSessoes(item);
 
   const valorFinal = itemValorFinal(item);
   const percentual = itemDescontoPercentual(item);
@@ -70,6 +106,16 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
             placeholder="Nome do procedimento"
             className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
           />
+          {/* O orçamento personalizado: o valor sai do que o procedimento vai gastar nesta cliente. */}
+          <label className="mt-2 inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={porConsumo}
+              onChange={(e) => onAlternarConsumo(e.target.checked)}
+              className="w-3.5 h-3.5 accent-brand"
+            />
+            <span className="text-xs font-medium text-ink">Calcular por consumo de produto</span>
+          </label>
         </div>
 
         <div className="flex items-center gap-0.5 pt-4 shrink-0">
@@ -128,20 +174,29 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
           </select>
         </div>
 
-        <div>
-          <label className="block text-body font-medium text-ink mb-1">Valor de tabela</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={valorTabelaStr}
-            onChange={(e) => {
-              setValorTabelaStr(e.target.value);
-              patch({ valorTabela: e.target.value === '' ? 0 : Number(e.target.value) });
-            }}
-            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
-          />
-        </div>
+        {porConsumo ? (
+          <div>
+            <span className="block text-body font-medium text-ink mb-1">Valor pelo consumo</span>
+            <p className="w-full px-3 py-1.5 rounded-sm border border-line bg-surface-2 text-sm font-semibold text-ink tabular-nums">
+              {formatBRL(item.valorTabela)}
+            </p>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-body font-medium text-ink mb-1">Valor de tabela</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={valorTabelaStr}
+              onChange={(e) => {
+                setValorTabelaStr(e.target.value);
+                patch({ valorTabela: e.target.value === '' ? 0 : Number(e.target.value) });
+              }}
+              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
+            />
+          </div>
+        )}
       </div>
 
       {/* Desconto e sessões */}
@@ -226,6 +281,63 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
           )}
         </div>
       </div>
+
+      {/*
+        Consumo de produto — só para a equipe. O valor do item é a soma do repassado à cliente;
+        compra e margem aparecem aqui para a conta ficar à vista. No documento da cliente saem só
+        os nomes dos produtos.
+      */}
+      {porConsumo && (
+        <div className="rounded-xl border border-line bg-surface p-3 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-label font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
+              <PackageOpen className="w-3.5 h-3.5" />
+              Consumo de produto
+            </p>
+            <button
+              type="button"
+              onClick={onRecalcularConsumo}
+              className="inline-flex items-center gap-1.5 text-body font-semibold text-brand hover:underline"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Usar consumo padrão{sessoes > 1 ? ` × ${sessoes} sessões` : ''}
+            </button>
+          </div>
+
+          <EditorDeMateriais
+            idBase={`consumo-${item.id}`}
+            itens={linhasDoConsumo}
+            onChange={onMudarConsumo}
+            produtos={produtos}
+            mostrarTotais={false}
+          />
+
+          <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-line tabular-nums">
+            <div>
+              <span className="block text-label text-muted">Valor de compra</span>
+              <span className="text-body-lg font-semibold text-ink">{formatBRL(consumo.custo)}</span>
+            </div>
+            <div>
+              <span className="block text-label text-muted">Repassado à cliente</span>
+              <span className="text-body-lg font-semibold text-ink">
+                {formatBRL(consumo.valorCliente)}
+              </span>
+            </div>
+            <div>
+              <span className="block text-label text-muted">Margem</span>
+              <span
+                className={`text-body-lg font-semibold ${margemDoConsumo < 0 ? 'text-danger' : 'text-ok'}`}
+              >
+                {formatBRL(margemDoConsumo)}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-body text-muted">
+            Na proposta da cliente saem só os nomes dos produtos — sem quantidade e sem valores.
+          </p>
+        </div>
+      )}
 
       {/* Detalhes do procedimento */}
       <div className="pt-1">

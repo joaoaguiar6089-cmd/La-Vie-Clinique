@@ -3,6 +3,7 @@ import { CalendarCheck, Camera, Eye, FileText, Search, User } from 'lucide-react
 import { EvaluationRecord } from '../../types';
 import { formatDateOnly } from '../../utils/formatters';
 import { chaveDeNome } from '../../utils/templateMatching';
+import { fotosDaSessao } from '../../utils/evaluations';
 import { diasAntesDeHoje } from '../../utils/indicadores';
 import { JANELAS_DA_LISTA, ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
 import { subscribeToRegistrosDeFicha } from '../../services/databaseService';
@@ -156,7 +157,7 @@ export const ListaDeFichas: React.FC<ListaDeFichasProps> = ({ tipo, descricao, a
                       <CalendarCheck className="w-3 h-3" />
                       {formatDateOnly((r.dataAtendimento || '').slice(0, 10))}
                       {r.profissionalNome ? ` · ${r.profissionalNome}` : ''}
-                      {(r.fotoSessaoUrl || r.fotoModeloAnotadaUrl) && (
+                      {(fotosDaSessao(r).length > 0 || r.fotoModeloAnotadaUrl) && (
                         <Camera className="w-3 h-3 ml-1" aria-label="Com foto" />
                       )}
                     </p>
