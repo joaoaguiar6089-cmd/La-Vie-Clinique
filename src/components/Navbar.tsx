@@ -53,7 +53,7 @@ interface ItemDoTrilho {
 }
 
 /**
- * Um quadro do trilho: ícone em cima, rótulo embaixo. 76×60 — rótulo de 12px, o piso da escala
+ * Um quadro do trilho: ícone em cima, rótulo embaixo. 84×60 — rótulo de 12px, o piso da escala
  * da casa, cabe inteiro até "Orçamentos"; os dois nomes que não cabem ("Procedimentos",
  * "Acompanhamento") encurtam, e o nome inteiro fica no `title`.
  */
@@ -66,7 +66,7 @@ const QuadroDoTrilho: React.FC<{ item: ItemDoTrilho; compacto?: boolean }> = ({ 
       aria-current={item.ativo ? 'page' : undefined}
       aria-label={item.titulo}
       title={item.titulo}
-      className={`relative shrink-0 w-[76px] ${
+      className={`relative shrink-0 w-[84px] ${
         compacto ? 'h-[52px]' : 'h-[60px]'
       } rounded-[14px] flex flex-col items-center justify-center gap-1 transition-colors ${
         item.ativo
@@ -91,7 +91,7 @@ const QuadroDoTrilho: React.FC<{ item: ItemDoTrilho; compacto?: boolean }> = ({ 
 };
 
 /**
- * A navegação do tablet e do desktop: um trilho preto de 88px, com o monograma no topo.
+ * A navegação do tablet e do desktop: um trilho preto de 96px, com o monograma no topo.
  *
  * Antes havia duas versões — a barra expandida de 268px e o trilho só de ícones — e o trilho
  * sem rótulo obrigava a decorar os ícones. O redesign fica com uma só: ícone **e** nome, sempre,
@@ -250,7 +250,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     /* Altura da tela **visível** (`dvh`, com `vh` de reserva) e só a lista de seções rola por
        dentro. Sem isso, num tablet deitado o menu não cabia na tela: o que sobrava vazava para
        fora da coluna fixa e os últimos itens ficavam fora de alcance. */
-    <aside className="hidden sm:flex sm:flex-col sm:items-center sm:w-[88px] sm:h-screen sm:supports-[height:100dvh]:h-dvh sm:overflow-hidden sm:sticky sm:top-0 sm:shrink-0 bg-ink py-5">
+    <aside className="hidden sm:flex sm:flex-col sm:items-center sm:w-[96px] sm:h-screen sm:supports-[height:100dvh]:h-dvh sm:overflow-hidden sm:sticky sm:top-0 sm:shrink-0 bg-ink py-5">
       <button
         type="button"
         onClick={ir('hoje')}
