@@ -132,21 +132,28 @@ interface Tarefa {
 // BLOCO PRETO DO MÊS
 // ==========================================
 
+/**
+ * Um dos três números do dia. No celular o rótulo é a palavra curta do design ("hoje"), para os
+ * três quadros terem a mesma altura; no desktop, com espaço, vai o rótulo inteiro.
+ */
 const NumeroDoDia: React.FC<{
   valor: string;
   rotulo: string;
+  rotuloCurto: string;
   onClick: () => void;
-}> = ({ valor, rotulo, onClick }) => (
+}> = ({ valor, rotulo, rotuloCurto, onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="text-left rounded-[14px] bg-cream/8 px-3 py-2.5 hover:bg-cream/12 transition-colors lg:bg-transparent lg:hover:bg-transparent lg:rounded-none lg:px-0 lg:py-0 lg:pl-5 lg:border-l lg:border-cream/15 group"
+    title={rotulo}
+    className="flex flex-col items-start justify-start text-left rounded-[14px] bg-cream/8 px-3 py-2.5 hover:bg-cream/12 transition-colors lg:bg-transparent lg:hover:bg-transparent lg:rounded-none lg:px-0 lg:py-0 lg:pl-5 lg:border-l lg:border-cream/15 group"
   >
     <span className="block text-[20px] lg:text-[28px] font-bold text-white tabular-nums leading-tight">
       {valor}
     </span>
     <span className="block text-[12px] lg:text-[13px] font-medium text-cream/75 group-hover:text-cream leading-snug">
-      {rotulo}
+      <span className="lg:hidden">{rotuloCurto}</span>
+      <span className="hidden lg:inline">{rotulo}</span>
     </span>
   </button>
 );
@@ -574,12 +581,19 @@ export const HojeView: React.FC<HojeViewProps> = ({
         <NumeroDoDia
           valor={String(doDia.length)}
           rotulo={doDia.length === 1 ? 'atendimento hoje' : 'atendimentos hoje'}
+          rotuloCurto="hoje"
           onClick={() => onIrParaAgenda()}
         />
-        <NumeroDoDia valor={String(abertos.length)} rotulo="em aberto" onClick={() => onIrParaOrcamentos()} />
+        <NumeroDoDia
+          valor={String(abertos.length)}
+          rotulo="orçamentos em aberto"
+          rotuloCurto="em aberto"
+          onClick={() => onIrParaOrcamentos('enviado')}
+        />
         <NumeroDoDia
           valor={conversao.percentual === null ? '—' : `${conversao.percentual}%`}
           rotulo="conversão 30 dias"
+          rotuloCurto="conversão"
           onClick={() => onIrParaOrcamentos()}
         />
       </div>
