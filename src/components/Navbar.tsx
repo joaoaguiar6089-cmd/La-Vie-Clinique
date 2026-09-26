@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Settings,
   Syringe,
@@ -96,6 +96,39 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, []);
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  /*
+    No tablet deitado a lista de seções não cabe na altura e rola dentro do menu. Para isso não
+    esconder seção nenhuma: o item da tela aberta é trazido para a vista, e um degradê no pé da
+    lista avisa que há mais itens abaixo.
+  */
+  const navRef = useRef<HTMLElement>(null);
+  const [temMaisAbaixo, setTemMaisAbaixo] = useState(false);
+
+  const medirMenu = () => {
+    const nav = navRef.current;
+    if (!nav) return;
+    setTemMaisAbaixo(nav.scrollTop + nav.clientHeight < nav.scrollHeight - 4);
+  };
+
+  useEffect(() => {
+    const nav = navRef.current;
+    const ativo = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (nav && ativo) {
+      // Conta feita à mão, e não `scrollIntoView`: aquele rolaria também a página.
+      const lista = nav.getBoundingClientRect();
+      const item = ativo.getBoundingClientRect();
+      // A folga de baixo é a altura do degradê: o item ativo não fica debaixo dele.
+      if (item.top < lista.top) nav.scrollTop -= lista.top - item.top + 8;
+      else if (item.bottom > lista.bottom) nav.scrollTop += item.bottom - lista.bottom + 32;
+    }
+    medirMenu();
+  }, [currentView, isSidebarExpanded]);
+
+  useEffect(() => {
+    window.addEventListener('resize', medirMenu);
+    return () => window.removeEventListener('resize', medirMenu);
+  }, []);
 
   const railItems = [
     {
@@ -274,9 +307,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </header>
 
-      {/* Sidebar para Tablet (640–1023px) e Desktop/PC (≥1024px) */}
+      {/* Sidebar para Tablet (640–1023px) e Desktop/PC (≥1024px).
+
+          Altura da tela **visível** (`dvh`, com `vh` de reserva) e só a lista de seções rola por
+          dentro. Sem isso, num tablet deitado os ~880px do menu não cabiam nos ~700px da tela: o
+          que sobrava vazava para fora da coluna fixa, a página ganhava rolagem à toa (a do
+          Estoque, curta, "pulava") e os últimos itens — Financeiro, Configurações, Sair — ficavam
+          fora de alcance. */}
       <aside
-        className={`hidden sm:flex sm:flex-col sm:h-screen sm:sticky sm:top-0 sm:shrink-0 bg-ink py-[24px] transition-all duration-300 ${
+        className={`hidden sm:flex sm:flex-col sm:h-screen sm:supports-[height:100dvh]:h-dvh sm:overflow-hidden sm:sticky sm:top-0 sm:shrink-0 bg-ink py-[24px] transition-all duration-300 ${
           isSidebarExpanded
             ? 'sm:w-[268px] px-[18px]'
             : 'sm:w-[68px] px-2.5'
@@ -286,7 +325,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {isSidebarExpanded ? (
           /* MODO EXPANDIDO (Desktop padrão ou Tablet expandido):
              Logo e nome à esquerda, botão de recolher à direita — separados e com larguras protegidas */
-          <div className="flex items-center justify-between gap-2.5 mb-7 px-1">
+          <div className="shrink-0 flex items-center justify-between gap-2.5 mb-7 px-1">
             <button
               onClick={() => {
                 onSelectView('hoje');
@@ -323,7 +362,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         ) : (
           /* MODO RECOLHIDO (Tablet padrão ou PC recolhido):
              Logo centralizado e botão de expandir verticalmente abaixo — SEM NENHUMA SOBREPOSIÇÃO */
-          <div className="flex flex-col items-center gap-2.5 mb-6">
+          <div className="shrink-0 flex flex-col items-center gap-2.5 mb-6">
             <button
               onClick={() => {
                 onSelectView('hoje');
@@ -357,7 +396,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={onOpenBusca}
           title="Buscar (Ctrl+K)"
           aria-label="Buscar paciente, procedimento ou orçamento"
-          className={`flex items-center rounded-xl mb-3 bg-white/5 hover:bg-white/10 text-[rgba(246,239,228,.7)] hover:text-cream transition-colors ${
+          className={`shrink-0 flex items-center rounded-xl mb-3 bg-white/5 hover:bg-white/10 text-[rgba(246,239,228,.7)] hover:text-cream transition-colors ${
             isSidebarExpanded ? 'gap-2.5 h-[42px] px-3' : 'justify-center h-[44px] px-2'
           }`}
         >
@@ -372,45 +411,60 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </button>
 
-        {/* Itens de navegação */}
-        <nav className="flex-1 flex flex-col gap-1.5">
-          {railItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={item.onClick}
-                title={!isSidebarExpanded ? item.label : undefined}
-                className={`flex items-center rounded-xl transition-colors ${
-                  isSidebarExpanded
-                    ? 'gap-3 h-[50px] px-3.5 text-left'
-                    : 'justify-center h-[48px] px-2'
-                } ${
-                  item.active
-                    ? 'bg-[rgba(232,205,172,.14)] text-cream'
-                    : 'text-[rgba(246,239,228,.7)] hover:bg-white/5 hover:text-cream'
-                }`}
-              >
-                <Icon className="w-5 h-5 shrink-0" />
-                {isSidebarExpanded && (
-                  <>
-                    <span className="text-[15px] font-medium truncate flex-1">
-                      {item.label}
-                    </span>
-                    {item.count !== undefined && (
-                      <span className="text-[13px] font-semibold text-brand-light shrink-0">
-                        {item.count}
+        {/* Itens de navegação — a única parte que rola: cabeçalho, busca e "Sair" ficam sempre à
+            vista. O `overscroll-contain` impede que o fim da lista arraste a página junto, e o
+            `shrink-0` dos itens os faz rolar em vez de se espremerem para caber. */}
+        <div className="relative flex-1 min-h-0 flex flex-col">
+          <nav
+            ref={navRef}
+            onScroll={medirMenu}
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-1.5 [scrollbar-width:thin]"
+          >
+            {railItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={item.onClick}
+                  aria-current={item.active ? 'page' : undefined}
+                  title={!isSidebarExpanded ? item.label : undefined}
+                  className={`shrink-0 flex items-center rounded-xl transition-colors ${
+                    isSidebarExpanded
+                      ? 'gap-3 h-[50px] px-3.5 text-left'
+                      : 'justify-center h-[48px] px-2'
+                  } ${
+                    item.active
+                      ? 'bg-[rgba(232,205,172,.14)] text-cream'
+                      : 'text-[rgba(246,239,228,.7)] hover:bg-white/5 hover:text-cream'
+                  }`}
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  {isSidebarExpanded && (
+                    <>
+                      <span className="text-[15px] font-medium truncate flex-1">
+                        {item.label}
                       </span>
-                    )}
-                  </>
-                )}
-              </button>
-            );
-          })}
-        </nav>
+                      {item.count !== undefined && (
+                        <span className="text-[13px] font-semibold text-brand-light shrink-0">
+                          {item.count}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+          {temMaisAbaixo && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-ink to-transparent"
+            />
+          )}
+        </div>
 
         {/* Perfil da profissional logada + sair */}
-        <div className="pt-3 mt-2 border-t border-white/10 space-y-1.5">
+        <div className="shrink-0 pt-3 mt-2 border-t border-white/10 space-y-1.5">
           {isSidebarExpanded && currentProfessionalName && (
             <p className="px-3.5 text-[12px] font-medium text-[rgba(246,239,228,.6)] truncate">
               {currentProfessionalName}

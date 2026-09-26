@@ -90,7 +90,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           </div>
         )}
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-2">{children}</div>
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pb-2">{children}</div>
 
         {/* A faixa do gesto do iPhone. Sem isto, a última linha fica embaixo dela. */}
         <div className="pb-area-segura shrink-0" />
