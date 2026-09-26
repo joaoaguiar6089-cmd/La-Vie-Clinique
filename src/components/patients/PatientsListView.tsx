@@ -1,15 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {
-  ArrowDownAZ,
-  ChevronRight,
-  Clock,
-  MessageCircle,
-  Phone,
-  Search,
-  Trash2,
-  UserPlus,
-  Users,
-} from 'lucide-react';
+import { ArrowDownAZ, Clock, MessageCircle, Trash2, UserPlus, Users } from 'lucide-react';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
 import { formatDateShortYear } from '../../utils/formatters';
 import {
@@ -19,35 +9,35 @@ import {
   ROTULO_DA_INTERACAO,
 } from '../../utils/patientsPanel';
 import { SkeletonLista } from '../common/Skeleton';
+import { AcaoDoMenu, Avatar, BotaoPilula, CampoDeBusca, MenuDeAcoes, TituloDaTela } from '../common/Tinta';
 
 interface PatientsListViewProps {
   /** Já montadas em `PatientsModule` — inclui quem só existe em orçamento ou ficha avulsa. */
   linhas: LinhaDePaciente[];
   carregando: boolean;
+  /** Só os cadastros por completar — o quadro âmbar, ou a pendência da tela Hoje. */
+  soPendentes: boolean;
+  onSoPendentes: (so: boolean) => void;
   onAbrirPaciente: (patientId: string) => void;
   /** `nomeInicial` pré-preenche o nome no cadastro — usado quando a busca não achou ninguém. */
   onNovoPaciente: (nomeInicial?: string) => void;
   onExcluirPaciente: (linha: LinhaDePaciente) => void;
 }
 
-const ORDENS: { id: OrdemDaLista; rotulo: string; icone: typeof ArrowDownAZ }[] = [
-  { id: 'alfabetica', rotulo: 'A–Z', icone: ArrowDownAZ },
-  { id: 'interacao', rotulo: 'Última interação', icone: Clock },
-];
-
 /**
- * Lista de pacientes — deliberadamente enxuta: nome, contato, quando foi a última vez que a
- * clínica mexeu no assunto, e as portas de saída que a recepção usa o dia inteiro (abrir a página
- * e chamar no WhatsApp). Tudo o mais (fichas, orçamentos, dados pessoais) mora na página do
- * paciente.
+ * Lista de pacientes — deliberadamente enxuta: a inicial, o nome, quando foi a última vez que a
+ * clínica mexeu no assunto. Tudo o mais (fichas, orçamentos, dados pessoais) mora na página da
+ * paciente; o WhatsApp e a exclusão do cadastro ficam no "…" da linha.
  *
- * O creme claro marca as linhas que faltam completar: ou a pessoa nunca foi cadastrada (só existe
- * como nome num orçamento), ou o cadastro não tem telefone nem e-mail. É um lembrete, não um
- * bloqueio — a página abre igual para todo mundo, e completar os dados continua sendo opcional.
+ * O ponto âmbar marca quem falta completar: ou a pessoa nunca foi cadastrada (só existe como nome
+ * num orçamento), ou o cadastro não tem telefone nem e-mail. É um lembrete, não um bloqueio — a
+ * página abre igual para todo mundo, e completar os dados continua sendo opcional.
  */
 export const PatientsListView: React.FC<PatientsListViewProps> = ({
   linhas,
   carregando,
+  soPendentes,
+  onSoPendentes,
   onAbrirPaciente,
   onNovoPaciente,
   onExcluirPaciente,
@@ -55,92 +45,121 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
   const [busca, setBusca] = useState('');
   const [ordem, setOrdem] = useState<OrdemDaLista>('alfabetica');
 
+  const totalPendentes = linhas.filter((l) => l.pendencia).length;
+
   const listaFiltrada = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const digitos = termo.replace(/\D/g, '');
+    const base = soPendentes ? linhas.filter((l) => l.pendencia) : linhas;
     const filtradas = !termo
-      ? linhas
-      : linhas.filter(
+      ? base
+      : base.filter(
           (l) =>
             l.nome.toLowerCase().includes(termo) ||
             (l.patient?.email || '').toLowerCase().includes(termo) ||
             (!!digitos && (l.contato || '').replace(/\D/g, '').includes(digitos))
         );
     return ordenarLinhas(filtradas, ordem);
-  }, [linhas, busca, ordem]);
-
-  const totalPendentes = linhas.filter((l) => l.pendencia).length;
+  }, [linhas, busca, ordem, soPendentes]);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-      {/* Cabeçalho */}
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-        <div>
-          <h1 className="font-serif-luxury text-3xl sm:text-4xl text-ink">Pacientes</h1>
-          <p className="text-xs text-gray-500 mt-1">
-            {linhas.length} paciente{linhas.length === 1 ? '' : 's'}
-            {listaFiltrada.length !== linhas.length && ` · ${listaFiltrada.length} na busca`}
-            {totalPendentes > 0 && ` · ${totalPendentes} com dados por completar`}
-          </p>
-        </div>
+    <div className="max-w-3xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4">
+      <TituloDaTela
+        titulo="Pacientes"
+        acao={
+          <BotaoPilula icone={UserPlus} onClick={() => onNovoPaciente()}>
+            <span className="sm:hidden">Nova</span>
+            <span className="hidden sm:inline">Nova paciente</span>
+          </BotaoPilula>
+        }
+      />
 
+      <CampoDeBusca
+        variante="pilula"
+        valor={busca}
+        onMudar={setBusca}
+        placeholder="Nome, telefone ou e-mail"
+        rotulo="Buscar paciente por nome, telefone ou e-mail"
+      />
+
+      {/* Dois números, cada um com o seu bloco: o total em preto, o que falta em âmbar. Tocar no
+          âmbar mostra só quem falta — é a porta de entrada para completar os cadastros. */}
+      <div className="grid grid-cols-2 gap-2.5">
         <button
           type="button"
-          onClick={() => onNovoPaciente()}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest hover:bg-brand-hover transition-colors"
+          onClick={() => onSoPendentes(false)}
+          aria-pressed={!soPendentes}
+          className="rounded-[18px] bg-ink text-white px-4 py-3.5 text-left"
         >
-          <UserPlus className="w-4 h-4" />
-          Novo paciente
+          <span className="block text-[26px] font-bold tabular-nums leading-tight">{linhas.length}</span>
+          <span className="block text-[13px] font-medium text-cream/75">
+            {linhas.length === 1 ? 'paciente' : 'pacientes'}
+          </span>
         </button>
+        {totalPendentes > 0 ? (
+          <button
+            type="button"
+            onClick={() => onSoPendentes(!soPendentes)}
+            aria-pressed={soPendentes}
+            className={`rounded-[18px] px-4 py-3.5 text-left border transition-colors ${
+              soPendentes ? 'bg-warn text-white border-warn' : 'bg-warn-bg border-warn-line text-warn'
+            }`}
+          >
+            <span className="block text-[26px] font-bold tabular-nums leading-tight">{totalPendentes}</span>
+            <span className="block text-[13px] font-medium">
+              {soPendentes ? 'por completar · ver todas' : 'por completar →'}
+            </span>
+          </button>
+        ) : (
+          <div className="rounded-[18px] bg-card border border-ink/8 px-4 py-3.5">
+            <span className="block text-[26px] font-bold tabular-nums leading-tight text-ink">0</span>
+            <span className="block text-[13px] font-medium text-ink-soft">cadastros por completar</span>
+          </div>
+        )}
       </div>
 
-      {/* Busca e ordenação */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por nome, telefone ou e-mail"
-            className="w-full glass-input pl-9 pr-3 py-2.5 rounded-sm text-sm text-ink focus:outline-hidden"
-          />
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          {ORDENS.map(({ id, rotulo, icone: Icone }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setOrdem(id)}
-              aria-pressed={ordem === id}
-              title={
-                id === 'alfabetica'
-                  ? 'Ordenar por nome'
-                  : 'Ordenar pela anamnese ou orçamento mais recente'
-              }
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-sm border transition-colors ${
-                ordem === id
-                  ? 'bg-ink text-white border-ink'
-                  : 'bg-white/60 text-gray-600 border-white/80 hover:bg-white/80'
-              }`}
-            >
-              <Icone className="w-3.5 h-3.5" />
-              {rotulo}
-            </button>
-          ))}
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-sans text-[16px] font-bold text-ink">
+          {soPendentes ? 'Por completar' : 'Todas'}
+          {listaFiltrada.length !== (soPendentes ? totalPendentes : linhas.length) && (
+            <span className="font-medium text-ink-soft"> · {listaFiltrada.length} na busca</span>
+          )}
+        </h2>
+        <button
+          type="button"
+          onClick={() => setOrdem(ordem === 'alfabetica' ? 'interacao' : 'alfabetica')}
+          title={
+            ordem === 'alfabetica'
+              ? 'Ordenado por nome — toque para ordenar pela anamnese, orçamento ou atendimento mais recente'
+              : 'Ordenado pela interação mais recente — toque para ordenar por nome'
+          }
+          className="inline-flex items-center gap-1.5 min-h-[40px] px-2 -mr-2 rounded-lg text-[14px] font-semibold text-ink-soft hover:text-ink transition-colors"
+        >
+          {ordem === 'alfabetica' ? (
+            <>
+              <ArrowDownAZ className="w-4 h-4" />
+              A–Z
+            </>
+          ) : (
+            <>
+              <Clock className="w-4 h-4" />
+              Recentes
+            </>
+          )}
+        </button>
       </div>
 
       {/* Lista */}
       {carregando ? (
         <SkeletonLista linhas={7} />
       ) : listaFiltrada.length === 0 ? (
-        <div className="glass-card rounded-sm py-16 text-center">
-          <Users className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm text-gray-500">
+        <div className="rounded-[20px] bg-card border border-ink/8 py-12 px-5 text-center">
+          <Users className="w-8 h-8 text-ink-soft mx-auto mb-3" />
+          <p className="text-[14px] text-ink-soft">
             {linhas.length === 0
-              ? 'Nenhum paciente cadastrado ainda. Use "Novo paciente" acima — ou eles entram aqui sozinhos ao preencher a primeira anamnese.'
+              ? 'Nenhum paciente cadastrado ainda. Use "Nova paciente" acima — ou eles entram aqui sozinhos ao preencher a primeira anamnese.'
+              : soPendentes && !busca.trim()
+              ? 'Nenhum cadastro por completar.'
               : 'Nenhum paciente encontrado com essa busca.'}
           </p>
 
@@ -150,92 +169,81 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
             <button
               type="button"
               onClick={() => onNovoPaciente(busca.trim())}
-              className="mt-3 text-xs font-semibold text-brand hover:underline"
+              className="mt-3 text-[14px] font-semibold text-ink underline underline-offset-2"
             >
               Cadastrar "{busca.trim()}" como paciente novo
             </button>
           )}
         </div>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="flex flex-col">
           {listaFiltrada.map((linha) => {
             const whatsAppUrl = buildWhatsAppUrl(linha.contato);
             const semCadastro = linha.pendencia === 'sem_cadastro';
 
+            const acoes: AcaoDoMenu[] = [];
+            if (whatsAppUrl) {
+              acoes.push({
+                rotulo: 'Conversar no WhatsApp',
+                icone: MessageCircle,
+                onClick: () => window.open(whatsAppUrl, '_blank', 'noopener,noreferrer'),
+              });
+            }
+            // Só quem tem cadastro pode ser excluído: sem documento em `patients`, não há o que
+            // apagar — o que existe é o orçamento, e ele se exclui no painel dele.
+            if (!semCadastro) {
+              acoes.push({
+                rotulo: 'Excluir cadastro',
+                icone: Trash2,
+                tom: 'perigo',
+                onClick: () => onExcluirPaciente(linha),
+              });
+            }
+
+            const sub = linha.ultimaInteracao
+              ? `${formatDateShortYear(linha.ultimaInteracao.data)} · ${
+                  ROTULO_DA_INTERACAO[linha.ultimaInteracao.tipo]
+                }${linha.contato ? ` · ${linha.contato}` : ''}`
+              : linha.contato || 'Sem telefone nem e-mail';
+
             return (
-              <li
-                key={linha.id}
-                className={`glass-card glass-card-hover rounded-sm flex items-center gap-2 pr-2 ${
-                  linha.pendencia ? 'glass-card-pendente' : ''
-                }`}
-              >
+              <li key={linha.id} className="flex items-center gap-2 border-b border-ink/8">
                 {/* A página abre igual para todos. Quem não tem cadastro abre com um provisório,
                     montado do nome — o histórico dele é real, só o documento é que não existe. */}
                 <button
                   type="button"
                   onClick={() => onAbrirPaciente(linha.id)}
-                  className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3.5 text-left"
+                  className="flex-1 min-w-0 flex items-center gap-3 py-3 text-left group"
                   title={`Abrir a página de ${linha.nome}`}
                 >
-                  <span className="w-9 h-9 shrink-0 rounded-full bg-brand/10 text-brand flex items-center justify-center font-semibold text-sm">
-                    {linha.nome.charAt(0).toUpperCase()}
-                  </span>
-
+                  <Avatar nome={linha.nome} />
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm text-ink truncate">{linha.nome}</span>
+                    <span className="block text-[15px] font-bold text-ink truncate group-hover:underline underline-offset-2">
+                      {linha.nome}
+                    </span>
+                    <span className="block text-[13px] text-ink-soft truncate">
                       {linha.pendencia && (
-                        <span className="shrink-0 text-label text-brand">
-                          {semCadastro ? 'sem cadastro' : 'sem contato'}
+                        <span className="font-semibold text-warn">
+                          {semCadastro ? 'sem cadastro · ' : 'sem contato · '}
                         </span>
                       )}
+                      {sub}
                     </span>
-
-                    {linha.ultimaInteracao && (
-                      <span className="block text-body text-gray-400 truncate">
-                        Última interação {formatDateShortYear(linha.ultimaInteracao.data)} ·{' '}
-                        {ROTULO_DA_INTERACAO[linha.ultimaInteracao.tipo]}
-                      </span>
-                    )}
-
-                    {linha.contato && (
-                      <span className="flex items-center gap-1 text-body text-gray-400 truncate">
-                        <Phone className="w-3 h-3 shrink-0" />
-                        {linha.contato}
-                      </span>
-                    )}
                   </span>
-
-                  <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+                  {linha.pendencia && (
+                    <span
+                      className="w-2 h-2 rounded-full bg-[#D97706] shrink-0"
+                      aria-label="Cadastro por completar"
+                    />
+                  )}
                 </button>
 
-                {/* WhatsApp — some quando o cadastro não tem telefone utilizável */}
-                {whatsAppUrl && (
-                  <a
-                    href={whatsAppUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Conversar com ${linha.nome} no WhatsApp`}
-                    title="Conversar no WhatsApp"
-                    className="shrink-0 p-2.5 rounded-sm text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                  >
-                    <MessageCircle className="w-[18px] h-[18px]" />
-                  </a>
-                )}
-
-                {/* Só quem tem cadastro pode ser excluído: sem documento em `patients`, não há o
-                    que apagar — o que existe é o orçamento, e ele se exclui no painel dele. */}
-                {!semCadastro && (
-                  <button
-                    type="button"
-                    onClick={() => onExcluirPaciente(linha)}
-                    aria-label={`Excluir o cadastro de ${linha.nome}`}
-                    title="Excluir cadastro"
-                    className="shrink-0 p-2.5 rounded-sm text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                  >
-                    <Trash2 className="w-[18px] h-[18px]" />
-                  </button>
-                )}
+                <MenuDeAcoes
+                  tom="discreto"
+                  acoes={acoes}
+                  rotulo={`Mais ações para ${linha.nome}`}
+                  titulo={linha.nome}
+                />
               </li>
             );
           })}

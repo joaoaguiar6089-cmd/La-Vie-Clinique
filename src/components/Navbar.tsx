@@ -8,8 +8,6 @@ import {
   LogOut,
   Receipt,
   Users,
-  PanelLeftOpen,
-  PanelLeftClose,
   CalendarDays,
   Home,
   NotebookPen,
@@ -18,22 +16,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { ClinicProfile, AppView } from '../types';
-import { ClinicLogo } from './ClinicLogo';
-
-/** Nome da tela atual, exibido sob o nome da clínica no cabeçalho mobile. */
-const VIEW_LABEL: Record<AppView, string> = {
-  hoje: 'Hoje',
-  agenda: 'Agenda',
-  procedures: 'Procedimentos',
-  patients: 'Pacientes',
-  anamnesis: 'Anamneses',
-  evaluations: 'Fichas de Avaliação',
-  acompanhamento: 'Acompanhamento',
-  estoque: 'Estoque',
-  quotes: 'Orçamentos',
-  financeiro: 'Financeiro',
-  settings: 'Configurações',
-};
+import { clinicMonogram } from './ClinicLogo';
 
 interface NavbarProps {
   currentView: AppView;
@@ -53,11 +36,70 @@ interface NavbarProps {
   /** O Financeiro só aparece no menu para administradoras. */
   ehAdmin?: boolean;
   currentProfessionalName?: string;
-  /** Abre a busca global. No desktop o atalho é Cmd/Ctrl+K; aqui é o caminho para o dedo. */
+  /** Abre a busca global. No desktop o atalho é Cmd/Ctrl+K; aqui é o caminho para o mouse. */
   onOpenBusca: () => void;
   onLogout: () => void;
 }
 
+interface ItemDoTrilho {
+  id: string;
+  rotulo: string;
+  /** Nome inteiro, para o `title` quando o rótulo precisou encurtar. */
+  titulo: string;
+  icone: React.ElementType;
+  ativo: boolean;
+  contador?: number;
+  onClick: () => void;
+}
+
+/**
+ * Um quadro do trilho: ícone em cima, rótulo embaixo. 76×60 — rótulo de 12px, o piso da escala
+ * da casa, cabe inteiro até "Orçamentos"; os dois nomes que não cabem ("Procedimentos",
+ * "Acompanhamento") encurtam, e o nome inteiro fica no `title`.
+ */
+const QuadroDoTrilho: React.FC<{ item: ItemDoTrilho; compacto?: boolean }> = ({ item, compacto }) => {
+  const Icone = item.icone;
+  return (
+    <button
+      type="button"
+      onClick={item.onClick}
+      aria-current={item.ativo ? 'page' : undefined}
+      aria-label={item.titulo}
+      title={item.titulo}
+      className={`relative shrink-0 w-[76px] ${
+        compacto ? 'h-[52px]' : 'h-[60px]'
+      } rounded-[14px] flex flex-col items-center justify-center gap-1 transition-colors ${
+        item.ativo
+          ? 'bg-brand-light/20 text-brand-pale'
+          : 'text-cream/75 hover:bg-white/5 hover:text-cream'
+      }`}
+    >
+      <Icone className="w-5 h-5 shrink-0" strokeWidth={item.ativo ? 2.3 : 1.9} />
+      <span className="text-label font-semibold leading-none max-w-full truncate px-1">
+        {item.rotulo}
+      </span>
+      {!!item.contador && (
+        <span
+          className="absolute top-1.5 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-light text-ink text-[11px] font-bold flex items-center justify-center tabular-nums leading-none"
+          aria-label={`${item.contador} pendente${item.contador === 1 ? '' : 's'}`}
+        >
+          {item.contador > 9 ? '9+' : item.contador}
+        </span>
+      )}
+    </button>
+  );
+};
+
+/**
+ * A navegação do tablet e do desktop: um trilho preto de 88px, com o monograma no topo.
+ *
+ * Antes havia duas versões — a barra expandida de 268px e o trilho só de ícones — e o trilho
+ * sem rótulo obrigava a decorar os ícones. O redesign fica com uma só: ícone **e** nome, sempre,
+ * numa largura que não rouba a tela do tablet.
+ *
+ * No celular não há nada aqui: quem navega é a barra de baixo (`BottomNav`), e cada tela abre com
+ * o próprio título grande. O cabeçalho que repetia o nome da clínica, cortado no meio, saiu.
+ */
 export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   onSelectView,
@@ -71,30 +113,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenBusca,
   onLogout,
 }) => {
-  // No desktop (>= 1024px) inicia expandido; no tablet (640–1023px) inicia recolhido como trilho de ícones
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth >= 1024;
-    }
-    return true;
-  });
-
-  // Ajusta automaticamente quando a largura da tela cruza os breakpoints
-  useEffect(() => {
-    let lastWidth = typeof window !== 'undefined' ? window.innerWidth : 1200;
-    const handleResize = () => {
-      const currentWidth = window.innerWidth;
-      if (lastWidth < 1024 && currentWidth >= 1024) {
-        setIsSidebarExpanded(true);
-      } else if (lastWidth >= 1024 && currentWidth < 1024 && currentWidth >= 640) {
-        setIsSidebarExpanded(false);
-      }
-      lastWidth = currentWidth;
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   /*
@@ -123,369 +141,187 @@ export const Navbar: React.FC<NavbarProps> = ({
       else if (item.bottom > lista.bottom) nav.scrollTop += item.bottom - lista.bottom + 32;
     }
     medirMenu();
-  }, [currentView, isSidebarExpanded]);
+  }, [currentView]);
 
   useEffect(() => {
     window.addEventListener('resize', medirMenu);
     return () => window.removeEventListener('resize', medirMenu);
   }, []);
 
-  const railItems = [
+  const ir = (view: AppView) => () => {
+    onSelectView(view);
+    scrollToTop();
+  };
+
+  const itens: ItemDoTrilho[] = [
+    // O dia começa aqui: o que vem agora, o que ficou represado, como está o mês.
+    { id: 'hoje', rotulo: 'Hoje', titulo: 'Hoje', icone: Home, ativo: currentView === 'hoje', onClick: ir('hoje') },
     {
-      // O dia começa aqui: o que vem agora, o que ficou represado, como está o mês.
-      id: 'hoje' as const,
-      label: 'Hoje',
-      icon: Home,
-      active: currentView === 'hoje',
-      count: undefined,
-      onClick: () => {
-        onSelectView('hoje');
-        scrollToTop();
-      },
+      id: 'agenda',
+      rotulo: 'Agenda',
+      titulo: 'Agenda',
+      icone: CalendarDays,
+      ativo: currentView === 'agenda',
+      contador: agendamentosPendentesCount || undefined,
+      onClick: ir('agenda'),
     },
     {
-      id: 'agenda' as const,
-      label: 'Agenda',
-      icon: CalendarDays,
-      active: currentView === 'agenda',
-      count: agendamentosPendentesCount || undefined,
-      onClick: () => {
-        onSelectView('agenda');
-        scrollToTop();
-      },
-    },
-    {
-      id: 'procedures' as const,
-      label: 'Procedimentos',
-      icon: Syringe,
-      active: currentView === 'procedures',
-      count: proceduresCount,
-      onClick: () => {
-        onSelectView('procedures');
-        scrollToTop();
-      },
-    },
-    {
-      id: 'patients' as const,
-      label: 'Pacientes',
-      icon: Users,
-      active: currentView === 'patients',
-      count: undefined,
-      onClick: () => {
-        onSelectView('patients');
-        scrollToTop();
-      },
+      id: 'patients',
+      rotulo: 'Pacientes',
+      titulo: 'Pacientes',
+      icone: Users,
+      ativo: currentView === 'patients',
+      onClick: ir('patients'),
     },
     // Os documentos da paciente, na ordem da jornada: orçamento, anamnese, avaliação (antes do
     // procedimento) e acompanhamento (depois do atendimento).
     {
-      id: 'quotes' as const,
-      label: 'Orçamentos',
-      icon: Receipt,
-      active: currentView === 'quotes',
-      count: undefined,
-      onClick: () => {
-        onSelectView('quotes');
-        scrollToTop();
-      },
+      id: 'quotes',
+      rotulo: 'Orçamentos',
+      titulo: 'Orçamentos',
+      icone: Receipt,
+      ativo: currentView === 'quotes',
+      onClick: ir('quotes'),
     },
     {
-      id: 'anamnesis' as const,
-      label: 'Anamneses',
-      icon: ClipboardList,
-      active: currentView === 'anamnesis',
-      count: undefined,
-      onClick: () => {
-        onSelectView('anamnesis');
-        scrollToTop();
-      },
+      id: 'anamnesis',
+      rotulo: 'Anamneses',
+      titulo: 'Anamneses',
+      icone: ClipboardList,
+      ativo: currentView === 'anamnesis',
+      onClick: ir('anamnesis'),
     },
     {
-      id: 'evaluations' as const,
-      label: 'Fichas de Avaliação',
-      icon: ClipboardCheck,
-      active: currentView === 'evaluations',
-      count: undefined,
-      onClick: () => {
-        onSelectView('evaluations');
-        scrollToTop();
-      },
+      id: 'evaluations',
+      rotulo: 'Avaliações',
+      titulo: 'Fichas de avaliação',
+      icone: ClipboardCheck,
+      ativo: currentView === 'evaluations',
+      onClick: ir('evaluations'),
     },
     {
-      id: 'acompanhamento' as const,
-      label: 'Acompanhamento',
-      icon: NotebookPen,
-      active: currentView === 'acompanhamento',
-      count: undefined,
-      onClick: () => {
-        onSelectView('acompanhamento');
-        scrollToTop();
-      },
+      id: 'acompanhamento',
+      rotulo: 'Acompan.',
+      titulo: 'Acompanhamento',
+      icone: NotebookPen,
+      ativo: currentView === 'acompanhamento',
+      onClick: ir('acompanhamento'),
+    },
+    // A gestão da clínica, depois dos documentos — como no "Mais" do celular.
+    {
+      id: 'procedures',
+      rotulo: 'Procedim.',
+      titulo: `Procedimentos (${proceduresCount})`,
+      icone: Syringe,
+      ativo: currentView === 'procedures',
+      onClick: ir('procedures'),
     },
     {
-      id: 'estoque' as const,
-      label: 'Estoque',
-      icon: Package,
-      active: currentView === 'estoque',
-      count: undefined,
-      onClick: () => {
-        onSelectView('estoque');
-        scrollToTop();
-      },
+      id: 'estoque',
+      rotulo: 'Estoque',
+      titulo: 'Estoque',
+      icone: Package,
+      ativo: currentView === 'estoque',
+      onClick: ir('estoque'),
     },
     ...(ehAdmin
       ? [
           {
-            id: 'financeiro' as const,
-            label: 'Financeiro',
-            icon: Wallet,
-            active: currentView === 'financeiro',
-            count: undefined,
-            onClick: () => {
-              onSelectView('financeiro');
-              scrollToTop();
-            },
+            id: 'financeiro',
+            rotulo: 'Financeiro',
+            titulo: 'Financeiro',
+            icone: Wallet,
+            ativo: currentView === 'financeiro',
+            onClick: ir('financeiro'),
           },
         ]
       : []),
     {
-      id: 'export' as const,
-      label: 'Exportar catálogo',
-      icon: Share2,
-      active: false,
-      count: undefined,
+      id: 'export',
+      rotulo: 'Catálogo',
+      titulo: 'Exportar ou compartilhar o catálogo',
+      icone: Share2,
+      ativo: false,
       onClick: onOpenExport,
-    },
-    {
-      id: 'settings' as const,
-      label: 'Configurações',
-      icon: Settings,
-      active: currentView === 'settings',
-      count: undefined,
-      onClick: onOpenSettings,
     },
   ];
 
   return (
-    <>
-      {/* Cabeçalho do celular (<640px).
-          Sem botão de menu: quem navega no celular é a barra de baixo (`BottomNav`). O que
-          sobra aqui é identidade — onde estou — mais a lupa, que precisa estar a um toque de
-          qualquer tela. */}
-      <header className="sm:hidden sticky top-0 z-30 glass-nav">
-        <div className="px-4 py-2.5 flex items-center justify-between gap-2.5">
-          <button
-            onClick={() => {
-              onSelectView('hoje');
-              scrollToTop();
-            }}
-            className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
-          >
-            <ClinicLogo
-              clinic={clinic}
-              className="w-8 h-8 rounded-lg shrink-0"
-              monogramClassName="bg-ink text-brand-light font-serif-luxury text-sm font-semibold"
-            />
-            <div className="min-w-0 flex-1">
-              <span className="font-serif-luxury text-[16px] font-medium text-ink leading-tight block truncate">
-                {clinic.name}
-              </span>
-              <span className="text-label text-brand font-semibold leading-none block truncate">
-                {VIEW_LABEL[currentView]}
-              </span>
-            </div>
-          </button>
-
-          <button
-            onClick={onOpenBusca}
-            className="w-11 h-11 -mr-1.5 shrink-0 rounded-xl flex items-center justify-center text-ink hover:bg-black/5 active:scale-95 transition-all"
-            title="Buscar"
-            aria-label="Buscar paciente, procedimento ou orçamento"
-          >
-            <Search className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
-
-      {/* Sidebar para Tablet (640–1023px) e Desktop/PC (≥1024px).
-
-          Altura da tela **visível** (`dvh`, com `vh` de reserva) e só a lista de seções rola por
-          dentro. Sem isso, num tablet deitado os ~880px do menu não cabiam nos ~700px da tela: o
-          que sobrava vazava para fora da coluna fixa, a página ganhava rolagem à toa (a do
-          Estoque, curta, "pulava") e os últimos itens — Financeiro, Configurações, Sair — ficavam
-          fora de alcance. */}
-      <aside
-        className={`hidden sm:flex sm:flex-col sm:h-screen sm:supports-[height:100dvh]:h-dvh sm:overflow-hidden sm:sticky sm:top-0 sm:shrink-0 bg-ink py-[24px] transition-all duration-300 ${
-          isSidebarExpanded
-            ? 'sm:w-[268px] px-[18px]'
-            : 'sm:w-[68px] px-2.5'
-        }`}
+    /* Altura da tela **visível** (`dvh`, com `vh` de reserva) e só a lista de seções rola por
+       dentro. Sem isso, num tablet deitado o menu não cabia na tela: o que sobrava vazava para
+       fora da coluna fixa e os últimos itens ficavam fora de alcance. */
+    <aside className="hidden sm:flex sm:flex-col sm:items-center sm:w-[88px] sm:h-screen sm:supports-[height:100dvh]:h-dvh sm:overflow-hidden sm:sticky sm:top-0 sm:shrink-0 bg-ink py-5">
+      <button
+        type="button"
+        onClick={ir('hoje')}
+        className="shrink-0 w-11 h-11 rounded-xl bg-brand-light text-ink flex items-center justify-center font-serif-luxury text-[18px] font-semibold mb-3 hover:brightness-105 active:scale-95 transition"
+        title={clinic.name}
+        aria-label={`${clinic.name} — ir para Hoje`}
       >
-        {/* Cabeçalho do menu lateral com proteção anti-sobreposição */}
-        {isSidebarExpanded ? (
-          /* MODO EXPANDIDO (Desktop padrão ou Tablet expandido):
-             Logo e nome à esquerda, botão de recolher à direita — separados e com larguras protegidas */
-          <div className="shrink-0 flex items-center justify-between gap-2.5 mb-7 px-1">
-            <button
-              onClick={() => {
-                onSelectView('hoje');
-                scrollToTop();
-              }}
-              className="flex items-center gap-3 min-w-0 flex-1 text-left group"
-              title={clinic.name}
-            >
-              <ClinicLogo
-                clinic={clinic}
-                className="w-[42px] h-[42px] rounded-xl shrink-0 group-hover:scale-[1.02] transition-transform"
-                monogramClassName="border border-[rgba(232,205,172,.35)] bg-black/20 text-brand-light font-serif-luxury text-lg font-semibold"
-              />
-              <div className="min-w-0 flex-1">
-                <span className="font-serif-luxury text-[18px] font-medium text-cream leading-tight block truncate">
-                  {clinic.name}
-                </span>
-                <span className="text-body text-[rgba(246,239,228,.55)] block truncate">
-                  Gestão Clínica
-                </span>
-              </div>
-            </button>
+        {clinicMonogram(clinic.name)}
+      </button>
 
-            {/* Botão para recolher o menu lateral */}
-            <button
-              onClick={() => setIsSidebarExpanded(false)}
-              className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-[rgba(246,239,228,.7)] hover:bg-white/10 hover:text-white transition-colors"
-              title="Recolher menu lateral"
-              aria-label="Recolher menu lateral"
-            >
-              <PanelLeftClose className="w-5 h-5" />
-            </button>
-          </div>
-        ) : (
-          /* MODO RECOLHIDO (Tablet padrão ou PC recolhido):
-             Logo centralizado e botão de expandir verticalmente abaixo — SEM NENHUMA SOBREPOSIÇÃO */
-          <div className="shrink-0 flex flex-col items-center gap-2.5 mb-6">
-            <button
-              onClick={() => {
-                onSelectView('hoje');
-                scrollToTop();
-              }}
-              className="flex items-center justify-center w-11 h-11 rounded-xl hover:opacity-90 active:scale-95 transition-transform"
-              title={clinic.name}
-            >
-              <ClinicLogo
-                clinic={clinic}
-                className="w-10 h-10 rounded-xl shrink-0"
-                monogramClassName="border border-[rgba(232,205,172,.35)] bg-black/20 text-brand-light font-serif-luxury text-base font-semibold"
-              />
-            </button>
+      {/* Busca global. No desktop o atalho é Ctrl+K; o quadro é o caminho do mouse. */}
+      <div className="shrink-0 mb-1.5">
+        <QuadroDoTrilho
+          compacto
+          item={{
+            id: 'busca',
+            rotulo: 'Buscar',
+            titulo: 'Buscar paciente, procedimento ou orçamento (Ctrl+K)',
+            icone: Search,
+            ativo: false,
+            onClick: onOpenBusca,
+          }}
+        />
+      </div>
 
-            {/* Botão para expandir menu lateral posicionado abaixo do logo */}
-            <button
-              onClick={() => setIsSidebarExpanded(true)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[rgba(246,239,228,.7)] hover:bg-white/10 hover:text-white transition-colors"
-              title="Expandir menu lateral"
-              aria-label="Expandir menu lateral"
-            >
-              <PanelLeftOpen className="w-5 h-5" />
-            </button>
-          </div>
-        )}
-
-        {/* Busca global. É um botão com cara de campo: quem digita aqui digita no palette, e
-            duplicar o input traria dois lugares com o mesmo estado. */}
-        <button
-          onClick={onOpenBusca}
-          title="Buscar (Ctrl+K)"
-          aria-label="Buscar paciente, procedimento ou orçamento"
-          className={`shrink-0 flex items-center rounded-xl mb-3 bg-white/5 hover:bg-white/10 text-[rgba(246,239,228,.7)] hover:text-cream transition-colors ${
-            isSidebarExpanded ? 'gap-2.5 h-[42px] px-3' : 'justify-center h-[44px] px-2'
-          }`}
+      {/* Itens de navegação — a única parte que rola. O `overscroll-contain` impede que o fim da
+          lista arraste a página junto. */}
+      <div className="relative flex-1 min-h-0 w-full flex flex-col">
+        <nav
+          ref={navRef}
+          onScroll={medirMenu}
+          aria-label="Navegação principal"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col items-center gap-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          <Search className="w-[18px] h-[18px] shrink-0" />
-          {isSidebarExpanded && (
-            <>
-              <span className="text-body-lg flex-1 text-left">Buscar…</span>
-              <kbd className="text-label font-sans font-semibold px-1.5 py-0.5 rounded-sm bg-white/10">
-                ⌘K
-              </kbd>
-            </>
-          )}
-        </button>
+          {itens.map((item) => (
+            <QuadroDoTrilho key={item.id} item={item} />
+          ))}
+        </nav>
+        {temMaisAbaixo && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-ink to-transparent"
+          />
+        )}
+      </div>
 
-        {/* Itens de navegação — a única parte que rola: cabeçalho, busca e "Sair" ficam sempre à
-            vista. O `overscroll-contain` impede que o fim da lista arraste a página junto, e o
-            `shrink-0` dos itens os faz rolar em vez de se espremerem para caber. */}
-        <div className="relative flex-1 min-h-0 flex flex-col">
-          <nav
-            ref={navRef}
-            onScroll={medirMenu}
-            className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-1.5 [scrollbar-width:thin]"
-          >
-            {railItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={item.onClick}
-                  aria-current={item.active ? 'page' : undefined}
-                  title={!isSidebarExpanded ? item.label : undefined}
-                  className={`shrink-0 flex items-center rounded-xl transition-colors ${
-                    isSidebarExpanded
-                      ? 'gap-3 h-[50px] px-3.5 text-left'
-                      : 'justify-center h-[48px] px-2'
-                  } ${
-                    item.active
-                      ? 'bg-[rgba(232,205,172,.14)] text-cream'
-                      : 'text-[rgba(246,239,228,.7)] hover:bg-white/5 hover:text-cream'
-                  }`}
-                >
-                  <Icon className="w-5 h-5 shrink-0" />
-                  {isSidebarExpanded && (
-                    <>
-                      <span className="text-[15px] font-medium truncate flex-1">
-                        {item.label}
-                      </span>
-                      {item.count !== undefined && (
-                        <span className="text-[13px] font-semibold text-brand-light shrink-0">
-                          {item.count}
-                        </span>
-                      )}
-                    </>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-          {temMaisAbaixo && (
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-ink to-transparent"
-            />
-          )}
-        </div>
-
-        {/* Perfil da profissional logada + sair */}
-        <div className="shrink-0 pt-3 mt-2 border-t border-white/10 space-y-1.5">
-          {isSidebarExpanded && currentProfessionalName && (
-            <p className="px-3.5 text-[12px] font-medium text-[rgba(246,239,228,.6)] truncate">
-              {currentProfessionalName}
-            </p>
-          )}
-          <button
-            onClick={onLogout}
-            title="Sair"
-            className={`w-full flex items-center rounded-xl text-[rgba(246,239,228,.7)] hover:bg-white/5 hover:text-cream transition-colors ${
-              isSidebarExpanded
-                ? 'gap-3 h-[42px] px-3.5 text-left'
-                : 'justify-center h-[42px] px-2'
-            }`}
-          >
-            <LogOut className="w-[18px] h-[18px] shrink-0" />
-            {isSidebarExpanded && (
-              <span className="text-[14px] font-medium">Sair</span>
-            )}
-          </button>
-        </div>
-      </aside>
-    </>
+      {/* Configurações e sair, sempre à vista. */}
+      <div className="shrink-0 pt-2 mt-2 border-t border-white/10 flex flex-col items-center gap-1">
+        <QuadroDoTrilho
+          compacto
+          item={{
+            id: 'settings',
+            rotulo: 'Ajustes',
+            titulo: 'Configurações da clínica',
+            icone: Settings,
+            ativo: currentView === 'settings',
+            onClick: onOpenSettings,
+          }}
+        />
+        <QuadroDoTrilho
+          compacto
+          item={{
+            id: 'sair',
+            rotulo: 'Sair',
+            titulo: currentProfessionalName ? `Sair (${currentProfessionalName})` : 'Sair',
+            icone: LogOut,
+            ativo: false,
+            onClick: onLogout,
+          }}
+        />
+      </div>
+    </aside>
   );
 };

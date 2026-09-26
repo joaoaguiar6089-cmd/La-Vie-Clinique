@@ -262,6 +262,13 @@ export interface PedidoDeNavegacao {
   criarNovo?: boolean;
   /** Dia a focar, quando o destino é a Agenda. YYYY-MM-DD. */
   data?: string;
+  /** Hora do agendamento novo, com `criarNovo` na Agenda — o horário livre tocado na Hoje. HH:MM. */
+  hora?: string;
+  /**
+   * Recorte da lista de destino: `pendentes` em Pacientes (cadastros por completar); um status em
+   * Orçamentos (`rascunho`, `pago`).
+   */
+  filtro?: string;
   /** Orçamento a abrir na prévia, quando o destino é Orçamentos. */
   quoteId?: string;
   /** Procedimento a abrir nos detalhes, quando o destino é o catálogo. */

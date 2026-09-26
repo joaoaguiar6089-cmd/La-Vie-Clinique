@@ -100,6 +100,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   const [formAtendimento, setFormAtendimento] = useState<EstadoDoFormulario | null>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  /** Só os cadastros por completar — o quadro âmbar da lista, ou a pendência vinda da Hoje. */
+  const [soPendentes, setSoPendentes] = useState(false);
 
   useEffect(() => {
     const unsubPacientes = subscribeToPatients(
@@ -222,6 +224,10 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   useEffect(() => {
     if (!pedido) return;
     if (pedido.pacienteId) setPacienteAbertoId(pedido.pacienteId);
+    if (pedido.filtro === 'pendentes') {
+      setPacienteAbertoId(null);
+      setSoPendentes(true);
+    }
     if (pedido.criarNovo) abrirCadastro();
     onPedidoAtendido?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -367,10 +373,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   };
 
   const bannerDeErro = erro && (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-      <p className="px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700">
-        {erro}
-      </p>
+    <div className="max-w-3xl mx-auto px-5 sm:px-8 pt-6">
+      <p className="px-4 py-3 rounded-[14px] bg-danger-bg text-[14px] text-danger">{erro}</p>
     </div>
   );
 
@@ -458,6 +462,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
       <PatientsListView
         linhas={linhas}
         carregando={carregando}
+        soPendentes={soPendentes}
+        onSoPendentes={setSoPendentes}
         onAbrirPaciente={setPacienteAbertoId}
         onNovoPaciente={abrirCadastro}
         onExcluirPaciente={pedirExclusao}

@@ -15,6 +15,7 @@ import { AcompanhamentoModule } from './components/acompanhamento/Acompanhamento
 import { EstoqueModule } from './components/estoque/EstoqueModule';
 import { AgendaModule } from './components/agenda/AgendaModule';
 import { agendamentosAtrasados } from './utils/agenda';
+import { hojeISO } from './utils/attendances';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
@@ -22,6 +23,7 @@ import { CommandPalette, AcaoRapida } from './components/common/CommandPalette';
 import { HojeView } from './components/hoje/HojeView';
 import { BottomNav, AcaoDeCriacao } from './components/BottomNav';
 import { FinanceiroView } from './components/financeiro/FinanceiroView';
+import { AbasSublinhadas, TituloDaTela } from './components/common/Tinta';
 import {
   Procedure,
   ClinicProfile,
@@ -766,11 +768,13 @@ function MainCatalogApp() {
     <div className="min-h-screen bg-surface text-ink sm:flex selection:bg-brand/25 selection:text-ink">
       {/* Toast Notification */}
       {toastMessage && (
+        /* No celular o aviso sobe acima da barra flutuante de baixo, senão nasce escondido por ela. */
         <div
-          className={`fixed bottom-6 right-6 z-50 max-w-sm text-white px-5 py-3 rounded-lg shadow-2xl border flex items-start gap-3 text-xs font-medium ${
+          role="status"
+          className={`fixed left-4 right-4 sm:left-auto bottom-[calc(var(--altura-barra-inferior)+max(16px,env(safe-area-inset-bottom)))] sm:bottom-6 sm:right-6 z-50 sm:max-w-sm text-white px-5 py-3.5 rounded-2xl shadow-2xl border flex items-start gap-3 text-body font-medium animate-fadeIn ${
             toastTone === 'erro'
               ? 'bg-[#7F1D1D]/95 border-red-300/40'
-              : 'bg-ink/90 border-white/20 animate-bounce'
+              : 'bg-ink border-white/15'
           }`}
         >
           {toastTone === 'erro' ? (
@@ -814,6 +818,7 @@ function MainCatalogApp() {
         onLogout={logout}
         agendamentosPendentesCount={agendamentosPendentes}
         ehAdmin={isAdminUser}
+        profissional={currentProfessional}
       />
 
       {/* Coluna de conteúdo.
@@ -852,9 +857,14 @@ function MainCatalogApp() {
               professionalLogada={currentProfessional}
               carregando={atendimentosCarregando}
               onAbrirBusca={() => setBuscaAberta(true)}
-              onNovoAgendamento={() => navegar({ view: 'agenda', criarNovo: true })}
-              onIrParaAgenda={() => navegar({ view: 'agenda' })}
-              onIrParaOrcamentos={() => navegar({ view: 'quotes' })}
+              onCriar={criar}
+              onAgendarEm={(hora) =>
+                navegar({ view: 'agenda', criarNovo: true, data: hojeISO(), hora })
+              }
+              onIrParaAgenda={(data) => navegar({ view: 'agenda', data })}
+              onIrParaOrcamentos={(filtro) => navegar({ view: 'quotes', filtro })}
+              onIrParaFinanceiro={isAdminUser ? () => navegar({ view: 'financeiro' }) : undefined}
+              onCompletarCadastros={() => navegar({ view: 'patients', filtro: 'pendentes' })}
               onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
               onConfirmar={(a) =>
                 marcarConfirmacao(a.id, true).catch((e) =>
@@ -929,13 +939,31 @@ function MainCatalogApp() {
               pedido={currentView === 'patients' ? pedido : null}
               onPedidoAtendido={() => setPedido(null)}
             />
+          ) : currentView === 'estoque' ? (
+            <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6">
+              <EstoqueModule catalogProcedures={procedures} />
+            </div>
           ) : currentView === 'anamnesis' ||
             currentView === 'evaluations' ||
-            currentView === 'acompanhamento' ||
-            currentView === 'estoque' ? (
-            /* As seções em abas não têm moldura própria — sem esta, os cartões encostavam na
-               barra lateral. Mesma largura e respiro da Agenda e dos Orçamentos. */
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+            currentView === 'acompanhamento' ? (
+            /* As três fichas da paciente numa tela só, "Fichas clínicas", com as abas no topo:
+               anamnese (o histórico de saúde), avaliação (antes do procedimento) e acompanhamento
+               (depois do atendimento). Cada aba continua sendo a seção que era — o menu leva
+               direto a cada uma. */
+            <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4">
+              <TituloDaTela titulo="Fichas clínicas" />
+              <AbasSublinhadas
+                abas={[
+                  { id: 'anamnesis' as const, rotulo: 'Anamneses' },
+                  { id: 'evaluations' as const, rotulo: 'Avaliações' },
+                  { id: 'acompanhamento' as const, rotulo: 'Acompanhamento' },
+                ]}
+                ativa={currentView}
+                onSelecionar={(view) => {
+                  setCurrentView(view);
+                  window.scrollTo({ top: 0 });
+                }}
+              />
               {currentView === 'anamnesis' ? (
                 <AnamnesisModule
                   clinicProfile={clinic}
@@ -954,15 +982,13 @@ function MainCatalogApp() {
                   gerais={evaluationGerais}
                   currentProfessionalId={currentProfessional?.id}
                 />
-              ) : currentView === 'acompanhamento' ? (
+              ) : (
                 <AcompanhamentoModule
                   clinicProfile={clinic}
                   catalogProcedures={procedures}
                   pacientes={allPatients}
                   professionals={clinic.professionals || []}
                 />
-              ) : (
-                <EstoqueModule catalogProcedures={procedures} />
               )}
             </div>
           ) : (

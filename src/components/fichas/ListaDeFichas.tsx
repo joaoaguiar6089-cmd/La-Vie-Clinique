@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, Camera, Eye, FileText, Search, User } from 'lucide-react';
+import { Camera, FileText } from 'lucide-react';
 import { EvaluationRecord } from '../../types';
 import { formatDateOnly } from '../../utils/formatters';
 import { chaveDeNome } from '../../utils/templateMatching';
@@ -8,12 +8,13 @@ import { diasAntesDeHoje } from '../../utils/indicadores';
 import { JANELAS_DA_LISTA, ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
 import { subscribeToRegistrosDeFicha } from '../../services/databaseService';
 import { SkeletonLista } from '../common/Skeleton';
+import { Avatar, CampoDeBusca, Chip } from '../common/Tinta';
 
 interface ListaDeFichasProps {
   tipo: TipoDeFicha;
-  /** O parágrafo sob o título. */
+  /** O parágrafo de apresentação da lista. */
   descricao: string;
-  /** Botão do cabeçalho — o "Nova avaliação". */
+  /** O que vem antes da lista — o "Nova avaliação". */
   acao?: React.ReactNode;
   onAbrir: (registro: EvaluationRecord) => void;
 }
@@ -24,6 +25,9 @@ interface ListaDeFichasProps {
  * A mesma lista serve à seção de avaliação e à de acompanhamento. Ela assina as fichas pela janela
  * escolhida — 30 dias por padrão — e não a coleção inteira: cada ficha carrega respostas, snapshot
  * e o JSON das anotações, e a história recente é onde se procura quase sempre.
+ *
+ * Cada ficha é um cartão com a paciente em cima, o procedimento em destaque e **uma** ação —
+ * abrir —, no mesmo desenho das anamneses: as três fichas são abas da mesma tela.
  */
 export const ListaDeFichas: React.FC<ListaDeFichasProps> = ({ tipo, descricao, acao, onAbrir }) => {
   const rotulos = ROTULOS_DA_FICHA[tipo];
@@ -62,119 +66,97 @@ export const ListaDeFichas: React.FC<ListaDeFichasProps> = ({ tipo, descricao, a
     );
   }, [registros, busca]);
 
-  return (
-    <div className="space-y-6">
-      <div className="bg-card rounded-sm border border-white/80 p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-brand" />
-              <h3 className="font-serif-luxury text-xl font-medium text-ink capitalize">
-                {rotulos.plural}
-              </h3>
-            </div>
-            <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">{descricao}</p>
-          </div>
-          {acao}
-        </div>
+  const rotuloDaJanela = JANELAS_DA_LISTA.find((j) => j.dias === janela)?.rotulo || '';
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por paciente, procedimento ou profissional"
-              className="w-full glass-input pl-9 pr-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
-            />
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {JANELAS_DA_LISTA.map((j) => (
-              <button
-                key={j.rotulo}
-                type="button"
-                onClick={() => setJanela(j.dias)}
-                aria-pressed={janela === j.dias}
-                className={`px-2.5 py-1.5 rounded-sm text-body font-semibold border transition-colors ${
-                  janela === j.dias
-                    ? 'bg-ink text-white border-ink'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                {j.rotulo}
-              </button>
-            ))}
-          </div>
+  return (
+    <div className="flex flex-col gap-4">
+      {acao}
+
+      <p className="text-[14px] text-ink-soft leading-relaxed max-w-2xl">{descricao}</p>
+
+      <CampoDeBusca
+        valor={busca}
+        onMudar={setBusca}
+        placeholder="Paciente, procedimento ou profissional"
+        rotulo={`Buscar ${rotulos.minusculo} por paciente, procedimento ou profissional`}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <p className="text-[16px] font-bold text-ink">
+          {carregando
+            ? rotulos.plural.charAt(0).toUpperCase() + rotulos.plural.slice(1)
+            : `${filtrados.length} ${filtrados.length === 1 ? rotulos.minusculo : rotulos.plural}`}
+          {rotuloDaJanela && rotuloDaJanela !== 'Tudo' && (
+            <span className="font-medium text-ink-soft"> · {rotuloDaJanela}</span>
+          )}
+        </p>
+        <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none]" role="group" aria-label="Período">
+          {JANELAS_DA_LISTA.map((j) => (
+            <Chip key={j.rotulo} ativo={janela === j.dias} onClick={() => setJanela(j.dias)}>
+              {j.rotulo}
+            </Chip>
+          ))}
         </div>
       </div>
 
-      {erro && (
-        <p className="px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <p className="px-4 py-3 rounded-[14px] bg-danger-bg text-[14px] text-danger">{erro}</p>}
 
       {carregando ? (
         <SkeletonLista linhas={5} />
       ) : filtrados.length === 0 ? (
-        <div className="bg-white/50 rounded-sm border border-white/70 p-12 text-center">
-          <FileText className="w-9 h-9 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-ink">
+        <div className="rounded-[20px] bg-card border border-ink/8 p-10 text-center">
+          <FileText className="w-9 h-9 text-ink-soft mx-auto mb-3" />
+          <p className="text-[15px] font-bold text-ink">
             {registros.length === 0
               ? `Nenhum registro de ${rotulos.minusculo} nesta janela`
               : 'Nada encontrado com essa busca'}
           </p>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-[14px] text-ink-soft mt-1">
             {registros.length === 0
               ? 'Aumente a janela para ver os mais antigos.'
               : 'Tente o nome da paciente ou do procedimento.'}
           </p>
         </div>
       ) : (
-        <div className="bg-card rounded-sm border border-white/70 shadow-xs overflow-hidden">
-          <div className="px-5 py-3.5 bg-white/70 border-b border-white/80">
-            <span className="text-label uppercase tracking-widest font-semibold text-gray-500">
-              {filtrados.length}{' '}
-              {filtrados.length === 1 ? rotulos.minusculo : rotulos.plural}
-            </span>
-          </div>
-
-          <div className="divide-y divide-gray-100">
-            {filtrados.map((r) => (
-              <div
+        <div className="grid gap-3 lg:grid-cols-2">
+          {filtrados.map((r) => {
+            const comFoto = fotosDaSessao(r).length > 0 || !!r.fotoModeloAnotadaUrl;
+            return (
+              <article
                 key={r.id}
-                className="p-4 sm:px-5 flex items-center justify-between gap-4 hover:bg-white/80 transition-colors"
+                className="rounded-[20px] bg-card border border-ink/8 p-4 flex flex-col gap-3"
               >
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-sm bg-ink flex items-center justify-center shrink-0">
-                    <User className="w-4 h-4 text-brand-light" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-ink truncate">{r.pacienteNome}</p>
-                    <p className="text-xs text-gray-500 truncate">{r.procedimentoNome}</p>
-                    <p className="text-body text-gray-400 flex items-center gap-1 mt-0.5">
-                      <CalendarCheck className="w-3 h-3" />
+                <div className="flex gap-3 items-center">
+                  <Avatar nome={r.pacienteNome} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[16px] font-bold text-ink truncate">{r.pacienteNome}</p>
+                    <p className="text-[13px] text-ink-soft truncate">
                       {formatDateOnly((r.dataAtendimento || '').slice(0, 10))}
                       {r.profissionalNome ? ` · ${r.profissionalNome}` : ''}
-                      {(fotosDaSessao(r).length > 0 || r.fotoModeloAnotadaUrl) && (
-                        <Camera className="w-3 h-3 ml-1" aria-label="Com foto" />
-                      )}
                     </p>
                   </div>
                 </div>
-
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center px-3 py-1.5 rounded-[10px] bg-cream text-[#5B3E25] text-[14px] font-semibold">
+                    {r.procedimentoNome}
+                  </span>
+                  {comFoto && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-line-soft text-ink-soft text-[12px] font-bold">
+                      <Camera className="w-3.5 h-3.5" />
+                      Com foto
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => onAbrir(r)}
-                  className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-sm bg-white border border-gray-200 text-label font-semibold uppercase tracking-wider text-ink hover:border-brand transition-colors"
+                  className="mt-auto h-11 rounded-xl bg-ink text-white text-[14px] font-semibold hover:bg-black transition-colors"
                 >
-                  <Eye className="w-3.5 h-3.5" />
-                  Abrir
+                  Abrir {rotulos.minusculo}
                 </button>
-              </div>
-            ))}
-          </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </div>

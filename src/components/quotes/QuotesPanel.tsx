@@ -1,17 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Plus,
-  Search,
-  Pencil,
-  Copy,
-  RefreshCw,
-  Trash2,
-  FileText,
-  AlertCircle,
-  Eye,
-  Share2,
-  Ban,
-} from 'lucide-react';
+import { Plus, FileText, AlertCircle } from 'lucide-react';
 import {
   ClinicProfile,
   Patient,
@@ -20,8 +8,7 @@ import {
   Quote,
   QuoteStatus,
 } from '../../types';
-import { formatBRL, formatDate } from '../../utils/formatters';
-import { resolveQuoteStatus, isQuoteEditavel, podeSubstituir } from '../../utils/quoteCalc';
+import { resolveQuoteStatus, isQuoteEditavel } from '../../utils/quoteCalc';
 import {
   subscribeToQuotes,
   subscribeToPatients,
@@ -30,8 +17,27 @@ import {
 } from '../../services/databaseService';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { useAcoesDeOrcamento } from './useAcoesDeOrcamento';
-import { QUOTE_STATUS_LABEL, QuoteDesfecho } from './QuoteDesfecho';
+import { CartaoDeOrcamento } from './CartaoDeOrcamento';
 import { SkeletonLista } from '../common/Skeleton';
+import { AbasSublinhadas, BotaoPilula, CampoDeBusca, TituloDaTela } from '../common/Tinta';
+
+/**
+ * As abas da lista. "Outros" junta os três finais que não pedem ação — recusado, vencido e
+ * cancelado —: são consulta, e ocupavam três botões de filtro sozinhos.
+ */
+type AbaDaLista = 'todos' | 'rascunho' | 'enviado' | 'pago' | 'outros';
+
+const ABA_DO_STATUS: Record<QuoteStatus, AbaDaLista> = {
+  rascunho: 'rascunho',
+  enviado: 'enviado',
+  pago: 'pago',
+  recusado: 'outros',
+  expirado: 'outros',
+  cancelado: 'outros',
+};
+
+const ehAbaDaLista = (valor?: string): valor is AbaDaLista =>
+  valor === 'todos' || valor === 'rascunho' || valor === 'enviado' || valor === 'pago' || valor === 'outros';
 
 interface QuotesPanelProps {
   clinic: ClinicProfile;
@@ -53,7 +59,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
   const [carregando, setCarregando] = useState(true);
   const [quotaAtingida, setQuotaAtingida] = useState(false);
   const [busca, setBusca] = useState('');
-  const [filtroStatus, setFiltroStatus] = useState<'todos' | QuoteStatus>('todos');
+  const [aba, setAba] = useState<AbaDaLista>('todos');
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
 
   const acoes = useAcoesDeOrcamento({
@@ -94,7 +100,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
     const termo = busca.trim().toLowerCase();
     return quotes.filter((q) => {
       const status = resolveQuoteStatus(q);
-      if (filtroStatus !== 'todos' && status !== filtroStatus) return false;
+      if (aba !== 'todos' && ABA_DO_STATUS[status] !== aba) return false;
       if (!termo) return true;
       return (
         q.pacienteNome.toLowerCase().includes(termo) ||
@@ -102,7 +108,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
         q.itens.some((i) => (i.profissionalNome || '').toLowerCase().includes(termo))
       );
     });
-  }, [quotes, busca, filtroStatus]);
+  }, [quotes, busca, aba]);
 
   const abrirNovo = () => {
     setErro(null);
@@ -116,6 +122,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
    */
   useEffect(() => {
     if (!pedido) return;
+    if (ehAbaDaLista(pedido.filtro)) setAba(pedido.filtro);
     if (pedido.criarNovo) {
       abrirNovo();
       onPedidoAtendido?.();
@@ -146,43 +153,80 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
     }
   };
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-      {/* Cabeçalho */}
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-        <div>
-          <h1 className="font-serif-luxury text-3xl sm:text-4xl text-ink">Orçamentos</h1>
-          <p className="text-xs text-gray-500 mt-1">
-            {quotes.length} orçamento{quotes.length === 1 ? '' : 's'}
-            {listaFiltrada.length !== quotes.length && ` · ${listaFiltrada.length} no filtro`}
-          </p>
-        </div>
+  const pedirExclusao = (quote: Quote) =>
+    setConfirmacao(
+      isQuoteEditavel(quote)
+        ? {
+            titulo: `Excluir o rascunho ${quote.numero}?`,
+            mensagem:
+              'O rascunho some para sempre e o número não será reaproveitado. Como ele nunca foi enviado, ninguém tem link para ele.',
+            textoConfirmar: 'Excluir',
+            onConfirmar: () => handleDelete(quote),
+          }
+        : {
+            titulo: `Excluir o orçamento ${quote.numero}?`,
+            mensagem:
+              'O registro sai do sistema para sempre. Se a cliente ainda tiver o link, ele passa a mostrar "orçamento não encontrado" em vez do aviso de cancelamento.',
+            textoConfirmar: 'Excluir',
+            onConfirmar: () => handleDelete(quote),
+          }
+    );
 
-        <button
-          type="button"
-          onClick={abrirNovo}
-          className="px-5 py-2.5 bg-brand text-white text-xs font-semibold uppercase tracking-widest rounded-sm hover:bg-brand-hover transition-colors flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Novo orçamento
-        </button>
-      </div>
+  const pedirCancelamento = (quote: Quote) =>
+    setConfirmacao({
+      titulo: `Cancelar o orçamento ${quote.numero}?`,
+      mensagem:
+        'Ele sai da lista de ativos e o link que a cliente recebeu passa a avisar que foi cancelado.',
+      textoConfirmar: 'Cancelar orçamento',
+      onConfirmar: () => handleCancelar(quote),
+    });
+
+  return (
+    <div className="max-w-3xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4">
+      <TituloDaTela
+        titulo="Orçamentos"
+        acao={
+          <BotaoPilula icone={Plus} onClick={abrirNovo}>
+            <span className="sm:hidden">Novo</span>
+            <span className="hidden sm:inline">Novo orçamento</span>
+          </BotaoPilula>
+        }
+      />
+
+      <AbasSublinhadas
+        abas={[
+          { id: 'todos', rotulo: 'Todos', contagem: quotes.length },
+          { id: 'rascunho', rotulo: 'Rascunho' },
+          { id: 'enviado', rotulo: 'Enviados' },
+          { id: 'pago', rotulo: 'Pagos' },
+          { id: 'outros', rotulo: 'Outros' },
+        ]}
+        ativa={aba}
+        onSelecionar={setAba}
+      />
+
+      <CampoDeBusca
+        valor={busca}
+        onMudar={setBusca}
+        placeholder="Cliente, número ou profissional"
+        rotulo="Buscar orçamento por cliente, número ou profissional"
+      />
 
       {erro && (
-        <div className="mb-4 px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
+        <div className="px-4 py-3 rounded-[14px] bg-danger-bg text-[14px] text-danger flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
           {erro}
         </div>
       )}
 
       {quotaAtingida && (
-        <div className="mb-4 px-4 py-3 rounded-sm bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2.5">
-          <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+        <div className="px-4 py-3 rounded-[14px] bg-warn-bg text-[14px] text-warn flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-amber-900">
+            <p className="font-semibold">
               Limite diário de leitura gratuita do Firebase atingido (50.000 leituras/dia)
             </p>
-            <p className="mt-0.5 text-amber-700">
+            <p className="mt-0.5">
               {quotes.length > 0
                 ? 'Exibindo orçamentos salvos no cache deste navegador. A sincronização em nuvem será retomada automaticamente assim que a cota diária for renovada pelo Google (à meia-noite PST / 04:00 BRT).'
                 : 'A cota diária do plano gratuito do Firestore foi esgotada para hoje. O Google reinicia esse limite diariamente às 04:00 BRT (meia-noite PST).'}
@@ -191,216 +235,31 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
         </div>
       )}
 
-      {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por cliente, número ou profissional"
-            className="w-full glass-input pl-9 pr-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {(['todos', 'rascunho', 'enviado', 'pago', 'recusado', 'expirado', 'cancelado'] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setFiltroStatus(s)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-sm border transition-colors ${
-                filtroStatus === s
-                  ? 'bg-ink text-white border-ink'
-                  : 'bg-white/60 text-gray-600 border-white/80 hover:bg-white/80'
-              }`}
-            >
-              {s === 'todos' ? 'Todos' : QUOTE_STATUS_LABEL[s]}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Lista */}
       {carregando ? (
         <SkeletonLista linhas={6} comAvatar={false} />
       ) : listaFiltrada.length === 0 ? (
-        <div className="glass-card rounded-sm py-16 text-center">
-          <FileText className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm text-gray-500">
+        <div className="rounded-[20px] bg-card border border-ink/8 py-12 px-5 text-center">
+          <FileText className="w-8 h-8 text-ink-soft mx-auto mb-3" />
+          <p className="text-[14px] text-ink-soft">
             {quotes.length === 0
               ? 'Nenhum orçamento ainda. Crie o primeiro no botão acima.'
-              : 'Nenhum orçamento encontrado com esses filtros.'}
+              : busca.trim()
+              ? 'Nenhum orçamento encontrado com essa busca.'
+              : 'Nenhum orçamento nesta aba.'}
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {listaFiltrada.map((quote) => {
-            const status = resolveQuoteStatus(quote);
-            const editavel = isQuoteEditavel(quote);
-            const substituido = !!quote.substituidoPor;
-
-            return (
-              <div
-                key={quote.id}
-                className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
-              >
-                <div className="min-w-[110px]">
-                  <p className="font-serif-luxury text-lg text-ink tabular-nums">
-                    {quote.numero}
-                  </p>
-                  <p className="text-body text-gray-400">{formatDate(quote.dataEmissao)}</p>
-                </div>
-
-                <div className="flex-1 min-w-[160px]">
-                  <p className="text-sm text-ink truncate">{quote.pacienteNome}</p>
-                  <p className="text-body text-gray-400 truncate">
-                    {quote.itens.length} procedimento{quote.itens.length === 1 ? '' : 's'}
-                    {(() => {
-                      const nomes = Array.from(
-                        new Set(quote.itens.map((i) => i.profissionalNome).filter(Boolean))
-                      );
-                      return nomes.length > 0 ? ` · ${nomes.join(', ')}` : '';
-                    })()}
-                  </p>
-                </div>
-
-                <div className="text-right min-w-[110px]">
-                  <p className="text-sm font-semibold text-ink tabular-nums">
-                    {formatBRL(quote.total)}
-                  </p>
-                  <p className="text-body text-gray-400">
-                    válido até {formatDate(quote.dataValidade)}
-                  </p>
-                </div>
-
-                <div className="flex flex-col items-start gap-1">
-                  <QuoteDesfecho quote={quote} />
-                  {substituido && (
-                    <span className="text-label text-gray-400">
-                      substituído por {quote.substituidoPor?.numero}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-0.5 ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => acoes.abrirCompartilhamento(quote)}
-                    aria-label={`Compartilhar ${quote.numero}`}
-                    title="Compartilhar link com a cliente"
-                    className="p-2 text-gray-400 hover:text-brand transition-colors"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => acoes.abrirPrevia(quote)}
-                    aria-label={`Visualizar ${quote.numero}`}
-                    title="Visualizar — o botão de salvar PDF fica dentro da prévia"
-                    className="p-2 text-gray-400 hover:text-brand transition-colors"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-
-                  {editavel && (
-                    <button
-                      type="button"
-                      onClick={() => acoes.abrirEdicao(quote)}
-                      aria-label={`Editar ${quote.numero}`}
-                      title="Editar rascunho"
-                      className="p-2 text-gray-400 hover:text-brand transition-colors"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  )}
-
-                  {/* Pago não se substitui: o dinheiro entrou por este, com este número */}
-                  {podeSubstituir(quote) && (
-                    <button
-                      type="button"
-                      onClick={() => acoes.abrirSubstituicao(quote)}
-                      aria-label={`Substituir ${quote.numero}`}
-                      title="Substituir — cria um novo com número próprio"
-                      className="p-2 text-gray-400 hover:text-brand transition-colors"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => acoes.abrirDuplicacao(quote)}
-                    aria-label={`Duplicar ${quote.numero}`}
-                    title="Duplicar para outra cliente"
-                    className="p-2 text-gray-400 hover:text-brand transition-colors"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-
-                  {/* Rascunho ou cancelado podem ser excluídos definitivamente. Pago não tem
-                      nenhum dos dois: primeiro se desfaz o pagamento, na folha do comprovante. */}
-                  {status === 'pago' ? null : editavel ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setConfirmacao({
-                          titulo: `Excluir o rascunho ${quote.numero}?`,
-                          mensagem:
-                            'O rascunho some para sempre e o número não será reaproveitado. Como ele nunca foi enviado, ninguém tem link para ele.',
-                          textoConfirmar: 'Excluir',
-                          onConfirmar: () => handleDelete(quote),
-                        })
-                      }
-                      aria-label={`Excluir ${quote.numero}`}
-                      title="Excluir rascunho"
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  ) : status === 'cancelado' ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setConfirmacao({
-                          titulo: `Excluir o orçamento ${quote.numero}?`,
-                          mensagem:
-                            'O registro sai do sistema para sempre. Se a cliente ainda tiver o link, ele passa a mostrar "orçamento não encontrado" em vez do aviso de cancelamento.',
-                          textoConfirmar: 'Excluir',
-                          onConfirmar: () => handleDelete(quote),
-                        })
-                      }
-                      aria-label={`Excluir orçamento cancelado ${quote.numero}`}
-                      title="Excluir orçamento cancelado"
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setConfirmacao({
-                          titulo: `Cancelar o orçamento ${quote.numero}?`,
-                          mensagem:
-                            'Ele sai da lista de ativos e o link que a cliente recebeu passa a avisar que foi cancelado.',
-                          textoConfirmar: 'Cancelar orçamento',
-                          onConfirmar: () => handleCancelar(quote),
-                        })
-                      }
-                      aria-label={`Cancelar ${quote.numero}`}
-                      title="Cancelar orçamento"
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Ban className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        <div className="flex flex-col gap-3">
+          {listaFiltrada.map((quote) => (
+            <CartaoDeOrcamento
+              key={quote.id}
+              quote={quote}
+              acoes={acoes}
+              onExcluir={pedirExclusao}
+              onCancelar={pedirCancelamento}
+            />
+          ))}
         </div>
       )}
 

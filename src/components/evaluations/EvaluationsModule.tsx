@@ -112,10 +112,16 @@ export const EvaluationsModule: React.FC<EvaluationsModuleProps> = ({
             <button
               type="button"
               onClick={() => setEmitindo(true)}
-              className="w-full md:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover shadow-xs active:scale-95 transition-all shrink-0"
+              className="sm:max-w-xs rounded-[20px] bg-ink text-white p-4 flex items-center gap-3.5 text-left hover:bg-black transition-colors"
             >
-              <Plus className="w-4 h-4" />
-              Nova avaliação
+              <ClipboardCheck className="w-[22px] h-[22px] shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-bold">Nova avaliação</span>
+                <span className="block text-[12px] text-cream/75">
+                  preencher aqui ou imprimir em branco
+                </span>
+              </span>
+              <Plus className="w-5 h-5 shrink-0 text-brand-light" />
             </button>
           }
           onAbrir={setAberta}

@@ -59,15 +59,17 @@ export const AgendaSemanaStrip: React.FC<AgendaSemanaStripProps> = ({
     el.scrollLeft = el.scrollWidth / 3;
   }, [domingoDoFoco]);
 
+  /* Mora dentro do cabeçalho preto da agenda: o dia em foco é o bloco bronze, hoje ganha o
+     sublinhado, e os dias fechados apagam um grau — sem sumir, porque encaixe continua possível. */
   return (
     <div
       ref={trilhoRef}
-      className="overflow-x-auto snap-x snap-mandatory -mx-4 px-0 sm:mx-0"
+      className="overflow-x-auto snap-x snap-mandatory -mx-5 px-0 sm:mx-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       aria-label="Semana"
     >
       <div className="flex w-max">
         {semanas.map((semana, i) => (
-          <div key={i} className="flex w-screen sm:w-full snap-start px-4 sm:px-0">
+          <div key={i} className="flex gap-1 w-screen sm:w-full snap-start px-5 sm:px-0">
             {semana.map((dia) => {
               const ehFoco = dia === dataFoco;
               const ehHoje = dia === hoje;
@@ -82,25 +84,21 @@ export const AgendaSemanaStrip: React.FC<AgendaSemanaStripProps> = ({
                   type="button"
                   onClick={() => onEscolherDia(dia)}
                   aria-current={ehFoco ? 'date' : undefined}
-                  aria-label={`${dataCurta(dia)}${temAlgo ? ', com atendimentos' : ''}`}
-                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 h-[60px] mx-0.5 rounded-xl transition-colors ${
+                  aria-label={`${dataCurta(dia)}${ehHoje ? ', hoje' : ''}${temAlgo ? ', com atendimentos' : ''}`}
+                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 h-[62px] rounded-2xl transition-colors ${
                     ehFoco
-                      ? 'bg-ink text-white'
+                      ? 'bg-brand-light text-ink'
                       : fechado
-                      ? 'text-muted-light hover:bg-surface-2'
-                      : 'text-ink hover:bg-surface-2'
+                      ? 'text-cream/55 hover:bg-cream/8'
+                      : 'text-cream hover:bg-cream/8'
                   }`}
                 >
-                  <span
-                    className={`text-label font-semibold uppercase ${
-                      ehFoco ? 'text-brand-light' : ehHoje ? 'text-brand' : 'text-muted'
-                    }`}
-                  >
+                  <span className={`text-label font-medium ${ehFoco ? 'text-ink/80' : 'opacity-80'}`}>
                     {DIAS_CURTOS[diaSemana]}
                   </span>
                   <span
-                    className={`text-body-lg tabular-nums leading-none ${
-                      ehHoje || ehFoco ? 'font-bold' : 'font-medium'
+                    className={`text-[18px] font-bold tabular-nums leading-none ${
+                      ehHoje && !ehFoco ? 'underline underline-offset-4 decoration-2 decoration-brand-light' : ''
                     }`}
                   >
                     {diaDoMes}
@@ -109,8 +107,8 @@ export const AgendaSemanaStrip: React.FC<AgendaSemanaStripProps> = ({
                       subir e descer conforme os dias mudam. */}
                   <span
                     aria-hidden
-                    className={`w-1 h-1 rounded-full ${
-                      temAlgo ? (ehFoco ? 'bg-brand-light' : 'bg-brand') : 'bg-transparent'
+                    className={`w-[5px] h-[5px] rounded-full ${
+                      temAlgo ? (ehFoco ? 'bg-ink' : 'bg-brand-light') : 'bg-transparent'
                     }`}
                   />
                 </button>

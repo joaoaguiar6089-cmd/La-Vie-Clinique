@@ -1,16 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Archive,
-  ArchiveRestore,
-  Boxes,
-  ListChecks,
-  Package,
-  Pencil,
-  Plus,
-  Search,
-  Settings2,
-  Trash2,
-} from 'lucide-react';
+import { Archive, ArchiveRestore, Boxes, Pencil, Plus, Settings2, Trash2 } from 'lucide-react';
 import { ConsumoPadrao, Procedure, ProdutoDeEstoque } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { chaveDeNome } from '../../utils/templateMatching';
@@ -26,8 +15,16 @@ import {
   subscribeToConsumosPadrao,
   subscribeToProdutosDeEstoque,
 } from '../../services/databaseService';
-import { ModuleTabs } from '../common/ModuleTabs';
 import { SkeletonLista } from '../common/Skeleton';
+import {
+  AbasSublinhadas,
+  AcaoDoMenu,
+  BotaoPilula,
+  CampoDeBusca,
+  Chip,
+  MenuDeAcoes,
+  TituloDaTela,
+} from '../common/Tinta';
 import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 import { ProdutoFormPanel } from './ProdutoFormPanel';
 import { ConsumoPadraoPanel } from './ConsumoPadraoPanel';
@@ -45,6 +42,9 @@ type Aba = 'produtos' | 'consumo';
  *
  * Sem saldo, por enquanto — é o cadastro de custos. O uso registrado em cada atendimento já fica
  * gravado, então ligar a baixa automática depois não exige refazer nada.
+ *
+ * No redesign, cada produto é um cartão com **a margem em destaque** — é o número que responde "vale
+ * a pena?" —, e o comprado e o repassado lado a lado embaixo.
  */
 export const EstoqueModule: React.FC<EstoqueModuleProps> = ({ catalogProcedures }) => {
   const [aba, setAba] = useState<Aba>('produtos');
@@ -115,6 +115,11 @@ export const EstoqueModule: React.FC<EstoqueModuleProps> = ({ catalogProcedures 
     setFormAberto(true);
   };
 
+  const abrirEdicao = (p: ProdutoDeEstoque) => {
+    setEditando(p);
+    setFormAberto(true);
+  };
+
   const arquivar = async (p: ProdutoDeEstoque, arquivado: boolean) => {
     try {
       await saveProdutoDeEstoque({ ...p, arquivado });
@@ -161,199 +166,172 @@ export const EstoqueModule: React.FC<EstoqueModuleProps> = ({ catalogProcedures 
   };
 
   return (
-    <div className="space-y-6">
-      <ModuleTabs
-        tabs={[
-          { id: 'produtos' as const, icon: Package, label: 'Produtos', count: ativos },
-          {
-            id: 'consumo' as const,
-            icon: ListChecks,
-            label: 'Consumo por procedimento',
-            count: configurados,
-          },
-        ]}
-        active={aba}
-        onSelect={setAba}
+    <div className="flex flex-col gap-4">
+      <TituloDaTela
+        titulo="Estoque"
+        acao={
+          aba === 'produtos' ? (
+            <BotaoPilula icone={Plus} onClick={abrirNovo}>
+              <span className="sm:hidden">Produto</span>
+              <span className="hidden sm:inline">Novo produto</span>
+            </BotaoPilula>
+          ) : undefined
+        }
       />
 
-      {erro && (
-        <p className="px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700">
-          {erro}
-        </p>
-      )}
+      <AbasSublinhadas
+        abas={[
+          { id: 'produtos' as const, rotulo: 'Produtos', contagem: ativos },
+          { id: 'consumo' as const, rotulo: 'Consumo por procedimento', contagem: configurados },
+        ]}
+        ativa={aba}
+        onSelecionar={setAba}
+      />
 
-      <div className="bg-card rounded-sm border border-white/80 p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-brand" />
-              <h3 className="font-serif-luxury text-xl font-medium text-ink">
-                {aba === 'produtos' ? 'Produtos do estoque' : 'Consumo por procedimento'}
-              </h3>
-            </div>
-            <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">
-              {aba === 'produtos'
-                ? 'Os materiais que a clínica usa, com o valor comprado e o valor repassado à cliente — os dois por unidade de uso (U, ml, seringa…).'
-                : 'Os materiais e as quantidades que cada procedimento costuma usar por sessão. O registro de materiais do atendimento e o custo estimado do orçamento abrem preenchidos com esta lista, e é lá que o custo é calculado.'}
-            </p>
-          </div>
-          {aba === 'produtos' && (
-            <button
-              type="button"
-              onClick={abrirNovo}
-              className="w-full md:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover shadow-xs active:scale-95 transition-all shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              Novo produto
-            </button>
-          )}
-        </div>
+      <p className="text-[14px] text-ink-soft leading-relaxed max-w-2xl">
+        {aba === 'produtos'
+          ? 'Os materiais que a clínica usa, com o valor comprado e o valor repassado à cliente — os dois por unidade de uso (U, ml, seringa…).'
+          : 'Os materiais e as quantidades que cada procedimento costuma usar por sessão. O registro de materiais do atendimento e o custo estimado do orçamento abrem preenchidos com esta lista, e é lá que o custo é calculado.'}
+      </p>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder={aba === 'produtos' ? 'Buscar produto ou marca' : 'Buscar procedimento'}
-              className="w-full glass-input pl-9 pr-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
-            />
-          </div>
-          {aba === 'produtos' && produtos.some((p) => p.arquivado) && (
-            <label className="flex items-center gap-2 text-body text-ink-soft cursor-pointer shrink-0">
-              <input
-                type="checkbox"
-                checked={verArquivados}
-                onChange={(e) => setVerArquivados(e.target.checked)}
-                className="w-3.5 h-3.5 accent-brand"
-              />
-              Mostrar arquivados
-            </label>
-          )}
-        </div>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+        <CampoDeBusca
+          valor={busca}
+          onMudar={setBusca}
+          placeholder={aba === 'produtos' ? 'Produto ou marca' : 'Procedimento'}
+          rotulo={aba === 'produtos' ? 'Buscar produto ou marca' : 'Buscar procedimento'}
+          className="flex-1"
+        />
+        {aba === 'produtos' && produtos.some((p) => p.arquivado) && (
+          <Chip ativo={verArquivados} onClick={() => setVerArquivados((v) => !v)}>
+            Mostrar arquivados
+          </Chip>
+        )}
       </div>
+
+      {erro && <p className="px-4 py-3 rounded-[14px] bg-danger-bg text-[14px] text-danger">{erro}</p>}
 
       {carregando ? (
         <SkeletonLista linhas={5} comAvatar={false} />
       ) : aba === 'produtos' ? (
         produtosVisiveis.length === 0 ? (
-          <div className="bg-white/50 rounded-sm border border-white/70 p-12 text-center">
-            <Boxes className="w-9 h-9 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-ink">
+          <div className="rounded-[20px] bg-card border border-ink/8 p-10 text-center">
+            <Boxes className="w-9 h-9 text-ink-soft mx-auto mb-3" />
+            <p className="text-[15px] font-bold text-ink">
               {produtos.length === 0 ? 'Nenhum produto cadastrado ainda' : 'Nada encontrado'}
             </p>
             {produtos.length === 0 && (
               <button
                 type="button"
                 onClick={abrirNovo}
-                className="mt-2 text-xs font-semibold text-brand hover:underline"
+                className="mt-2 text-[14px] font-semibold text-ink underline underline-offset-2"
               >
                 Cadastrar o primeiro
               </button>
             )}
           </div>
         ) : (
-          <div className="bg-card rounded-sm border border-white/70 shadow-xs overflow-hidden divide-y divide-gray-100">
+          <div className="grid gap-3 lg:grid-cols-2">
             {produtosVisiveis.map((p) => {
               const margem = margemUnitaria(p);
+              const acoes: AcaoDoMenu[] = [
+                { rotulo: 'Editar', icone: Pencil, onClick: () => abrirEdicao(p) },
+                p.arquivado
+                  ? { rotulo: 'Reativar', icone: ArchiveRestore, onClick: () => arquivar(p, false) }
+                  : {
+                      rotulo: 'Arquivar',
+                      descricao: 'Sai das listas de escolha',
+                      icone: Archive,
+                      onClick: () => arquivar(p, true),
+                    },
+                { rotulo: 'Excluir', icone: Trash2, tom: 'perigo', onClick: () => pedirExclusao(p) },
+              ];
               return (
-                <div
+                <article
                   key={p.id}
-                  className={`p-4 sm:px-5 flex flex-wrap items-center gap-x-4 gap-y-2 ${
-                    p.arquivado ? 'opacity-60' : ''
+                  className={`rounded-[20px] bg-card border border-ink/8 p-4 flex flex-col gap-3.5 ${
+                    p.arquivado ? 'opacity-70' : ''
                   }`}
                 >
-                  <div className="flex-1 min-w-[180px]">
-                    <p className="text-sm font-semibold text-ink">
-                      {p.nome}
-                      {p.arquivado && (
-                        <span className="ml-2 px-1.5 py-0.5 rounded-xs bg-gray-100 text-gray-500 text-label font-semibold uppercase tracking-wider">
-                          Arquivado
-                        </span>
+                  <div className="flex items-start justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => abrirEdicao(p)}
+                      className="min-w-0 flex-1 text-left group"
+                      title={`Editar ${p.nome}`}
+                    >
+                      <span className="block text-[16px] font-bold text-ink group-hover:underline underline-offset-2">
+                        {p.nome}
+                        {p.arquivado && (
+                          <span className="ml-2 align-middle px-2 py-0.5 rounded-full bg-line-soft text-ink-soft text-[11px] font-bold">
+                            Arquivado
+                          </span>
+                        )}
+                      </span>
+                      <span className="block text-[13px] text-ink-soft">
+                        {[
+                          p.marca,
+                          `por ${p.unidade}`,
+                          p.caixa &&
+                            `caixa com ${quantidadeComUnidade(p.caixa.unidades, '')}${
+                              p.caixa.custo > 0 ? ` (${formatBRL(p.caixa.custo)})` : ''
+                            }`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    </button>
+                    <div className="flex items-start gap-1 shrink-0">
+                      {margem && (
+                        <div className="text-right">
+                          <p
+                            className={`text-[22px] font-bold tabular-nums leading-tight ${
+                              margem.valor < 0 ? 'text-danger' : 'text-ok'
+                            }`}
+                          >
+                            {margem.percentual}%
+                          </p>
+                          <p className="text-[12px] font-medium text-ink-soft">margem</p>
+                        </div>
                       )}
-                    </p>
-                    <p className="text-body text-gray-400">
-                      {[
-                        p.marca,
-                        `por ${p.unidade}`,
-                        p.caixa &&
-                          `caixa com ${quantidadeComUnidade(p.caixa.unidades, '')}${
-                            p.caixa.custo > 0 ? ` (${formatBRL(p.caixa.custo)})` : ''
-                          }`,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </p>
+                      <MenuDeAcoes
+                        tom="discreto"
+                        acoes={acoes}
+                        rotulo={`Mais ações para ${p.nome}`}
+                        titulo={p.nome}
+                        className="-mr-2 -mt-1.5"
+                      />
+                    </div>
                   </div>
-                  <div className="text-right tabular-nums min-w-[120px]">
-                    <p className="text-body text-gray-400">Comprado</p>
-                    <p className="text-sm text-ink">{formatarPrecoUnitario(p.custoUnitario)}</p>
-                  </div>
-                  <div className="text-right tabular-nums min-w-[120px]">
-                    <p className="text-body text-gray-400">Repassado</p>
-                    <p className="text-sm text-ink">
-                      {p.valorCliente > 0 ? formatarPrecoUnitario(p.valorCliente) : '—'}
-                    </p>
-                    {margem && (
-                      <p className={`text-label ${margem.valor < 0 ? 'text-danger' : 'text-ok'}`}>
-                        margem {margem.percentual}%
+                  <div className="grid grid-cols-2 border-t border-ink/8 pt-3">
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-medium text-ink-soft">Comprado · por {p.unidade}</p>
+                      <p className="text-[16px] font-bold text-ink tabular-nums truncate">
+                        {formatarPrecoUnitario(p.custoUnitario)}
                       </p>
-                    )}
+                    </div>
+                    <div className="min-w-0 border-l border-ink/8 pl-3.5">
+                      <p className="text-[12px] font-medium text-ink-soft">Repassado à cliente</p>
+                      <p className="text-[16px] font-bold text-ink tabular-nums truncate">
+                        {p.valorCliente > 0 ? formatarPrecoUnitario(p.valorCliente) : '—'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-0.5 ml-auto">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditando(p);
-                        setFormAberto(true);
-                      }}
-                      title="Editar"
-                      aria-label={`Editar ${p.nome}`}
-                      className="p-2 text-gray-400 hover:text-brand transition-colors"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => arquivar(p, !p.arquivado)}
-                      title={p.arquivado ? 'Reativar' : 'Arquivar — sai das listas de escolha'}
-                      aria-label={p.arquivado ? `Reativar ${p.nome}` : `Arquivar ${p.nome}`}
-                      className="p-2 text-gray-400 hover:text-brand transition-colors"
-                    >
-                      {p.arquivado ? (
-                        <ArchiveRestore className="w-4 h-4" />
-                      ) : (
-                        <Archive className="w-4 h-4" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => pedirExclusao(p)}
-                      title="Excluir"
-                      aria-label={`Excluir ${p.nome}`}
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                </article>
               );
             })}
           </div>
         )
       ) : porCategoria.length === 0 ? (
-        <div className="bg-white/50 rounded-sm border border-white/70 p-12 text-center">
-          <p className="text-sm font-semibold text-ink">Nenhum procedimento encontrado</p>
+        <div className="rounded-[20px] bg-card border border-ink/8 p-10 text-center">
+          <p className="text-[15px] font-bold text-ink">Nenhum procedimento encontrado</p>
         </div>
       ) : (
         <div className="space-y-5">
           {porCategoria.map(([categoria, procs]) => (
             <section key={categoria} className="space-y-2">
-              <h4 className="text-label uppercase tracking-widest font-semibold text-brand">
-                {categoria}
-              </h4>
-              <div className="bg-card rounded-sm border border-white/70 shadow-xs overflow-hidden divide-y divide-gray-100">
+              <h2 className="font-sans text-[13px] font-semibold text-ink-soft">{categoria}</h2>
+              <div className="rounded-[20px] bg-card border border-ink/8 overflow-hidden divide-y divide-ink/8">
                 {procs.map((p) => {
                   const itens = consumos.find((c) => c.procedureId === p.id)?.itens || [];
                   // Produto excluído do estoque sai da lista, como sai da sugestão do atendimento.
@@ -362,19 +340,19 @@ export const EstoqueModule: React.FC<EstoqueModuleProps> = ({ catalogProcedures 
                     return produto ? [{ produto, quantidade: i.quantidade }] : [];
                   });
                   return (
-                    <div key={p.id} className="p-4 sm:px-5 flex flex-wrap items-center gap-3">
+                    <div key={p.id} className="p-4 flex flex-wrap items-center gap-3">
                       <div className="flex-1 min-w-[180px]">
-                        <p className="text-sm text-ink">{p.title}</p>
+                        <p className="text-[15px] font-bold text-ink">{p.title}</p>
                         {materiais.length === 0 ? (
-                          <p className="text-body text-gray-400">Sem consumo configurado</p>
+                          <p className="text-[13px] text-ink-soft">Sem consumo configurado</p>
                         ) : (
                           <ul className="mt-1.5 flex flex-wrap gap-1.5">
                             {materiais.map(({ produto, quantidade }, i) => (
                               <li
                                 key={i}
-                                className="inline-flex items-baseline gap-1.5 px-2 py-0.5 rounded-full bg-surface border border-line text-body text-ink-soft"
+                                className="inline-flex items-baseline gap-1.5 px-2.5 py-1 rounded-full bg-line-soft text-[13px] text-ink-soft"
                               >
-                                <span className="font-semibold text-ink tabular-nums">
+                                <span className="font-bold text-ink tabular-nums">
                                   {quantidadeComUnidade(quantidade, produto.unidade)}
                                 </span>
                                 {produto.nome}
@@ -386,9 +364,13 @@ export const EstoqueModule: React.FC<EstoqueModuleProps> = ({ catalogProcedures 
                       <button
                         type="button"
                         onClick={() => setConfigurando(p)}
-                        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-sm bg-white border border-gray-200 text-label font-semibold uppercase tracking-wider text-ink hover:border-brand transition-colors"
+                        className={`shrink-0 inline-flex items-center gap-1.5 h-10 px-4 rounded-xl text-[14px] font-semibold transition-colors ${
+                          itens.length === 0
+                            ? 'bg-ink text-white hover:bg-black'
+                            : 'border border-ink/15 text-ink hover:border-ink/40'
+                        }`}
                       >
-                        <Settings2 className="w-3.5 h-3.5" />
+                        <Settings2 className="w-4 h-4" />
                         {itens.length === 0 ? 'Configurar' : 'Editar'}
                       </button>
                     </div>
@@ -400,11 +382,7 @@ export const EstoqueModule: React.FC<EstoqueModuleProps> = ({ catalogProcedures 
         </div>
       )}
 
-      <ProdutoFormPanel
-        aberto={formAberto}
-        onFechar={() => setFormAberto(false)}
-        produto={editando}
-      />
+      <ProdutoFormPanel aberto={formAberto} onFechar={() => setFormAberto(false)} produto={editando} />
 
       <ConsumoPadraoPanel
         aberto={!!configurando}

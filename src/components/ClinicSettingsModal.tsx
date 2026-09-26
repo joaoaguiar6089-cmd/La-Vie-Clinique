@@ -457,10 +457,8 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           <ArrowLeft className="w-4 h-4" />
           Voltar
         </button>
-        <p className="text-label uppercase tracking-wider font-semibold text-brand">
-          Configurações
-        </p>
-        <h1 className="font-serif-luxury text-title-lg sm:text-display text-ink mt-0.5">
+        <p className="text-[13px] font-semibold text-muted">Configurações</p>
+        <h1 className="font-serif-luxury text-[34px] lg:text-[42px] font-semibold leading-[1.1] text-ink">
           Dados da clínica e equipe
         </h1>
       </header>
@@ -469,7 +467,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           lado a lado — melhor deslizar do que quebrar em três linhas. */}
       <nav
         aria-label="Seções das configurações"
-        className="sticky top-[57px] sm:top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 py-2 mb-5 bg-surface/95 border-b border-line overflow-x-auto"
+        className="sticky top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 py-2 mb-5 bg-surface/95 border-b border-line overflow-x-auto"
       >
         <ul className="flex items-center gap-1.5 w-max">
           {SECOES.map((s) => (
