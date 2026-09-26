@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { CheckCheck, MessageCircle, Plus, UtensilsCrossed } from 'lucide-react';
+import { CheckCheck, MessageCircle, Plus } from 'lucide-react';
 import { Attendance, ClinicProfile, Patient, Procedure, Professional } from '../../types';
 import { DataISO } from '../../utils/attendances';
 import {
@@ -12,7 +12,6 @@ import {
   expedienteDoDia,
   hhmmDeMinutos,
   horariosLivresDoDia,
-  intervaloDaGrade,
   mensagemDeConfirmacao,
   minutosDoHHMM,
   nomeCurtoDaProfissional,
@@ -21,23 +20,18 @@ import {
   semHorario,
 } from '../../utils/agenda';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
-import {
-  ESTILO_DA_SITUACAO,
-  ROTULO_DA_SITUACAO,
-  SituacaoDoCartao,
-  situacaoDoCartao,
-} from './AgendaCard';
+import { ROTULO_DA_SITUACAO, SituacaoDoCartao, situacaoDoCartao } from './AgendaCard';
 
 /**
  * A visão de dia do celular.
  *
  * A grade proporcional da semana não sobrevive a 375px: um cartão de 30 minutos vira uma faixa
  * de 42px de altura, e nela não cabe hora, nome e procedimento. Aqui o dia é uma **lista** — uma
- * linha por atendimento, com a altura que o conteúdo pede — e os buracos do expediente entram
- * como linhas tracejadas, tocáveis, com a hora já preenchida.
+ * linha por horário, com a hora na coluna da esquerda, como uma agenda de papel.
  *
- * O que se perde: a proporção do tempo. O que se ganha: ler o nome da paciente sem apertar os
- * olhos, e encaixar alguém em três toques (dia, horário livre, salvar).
+ * O que vem pela frente é bloco preto (é o que a recepção precisa achar de longe); o que já
+ * aconteceu — compareceu, faltou, realizado — volta para o cartão claro, e o status fica escrito
+ * em cada um, em vez de depender de uma legenda de cores.
  */
 
 interface AgendaDiaMobileProps {
@@ -54,12 +48,26 @@ interface AgendaDiaMobileProps {
   onConfirmar: (a: Attendance) => void;
 }
 
-/** A legenda das cores. Cor sozinha não informa quem não distingue cores. */
-const LEGENDA: { situacao: SituacaoDoCartao; amostra: string }[] = [
-  { situacao: 'confirmado', amostra: 'bg-ok-bg border-ok-line' },
-  { situacao: 'agendado', amostra: 'bg-card border-brand/45' },
-  { situacao: 'faltou', amostra: 'bg-danger-bg/70 border-danger-line' },
-];
+/** A cor do status escrito no bloco preto — todas acima de 7:1 sobre o #1A1A1A. */
+const COR_NO_ESCURO: Partial<Record<SituacaoDoCartao, string>> = {
+  confirmado: 'text-ok-claro',
+  agendado: 'text-brand-pale',
+  atrasado: 'text-[#FDE68A]',
+};
+
+/** A cor do status escrito no cartão claro. */
+const COR_NO_CLARO: Partial<Record<SituacaoDoCartao, string>> = {
+  compareceu: 'text-ok',
+  realizado: 'text-ink-soft',
+  faltou: 'text-danger',
+};
+
+/** A coluna da hora, à esquerda de cada linha. */
+const Hora: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <span className={`w-12 shrink-0 text-[14px] font-semibold text-ink-soft tabular-nums ${className}`}>
+    {children}
+  </span>
+);
 
 export const AgendaDiaMobile: React.FC<AgendaDiaMobileProps> = ({
   data,
@@ -74,13 +82,11 @@ export const AgendaDiaMobile: React.FC<AgendaDiaMobileProps> = ({
   onNovoEm,
   onConfirmar,
 }) => {
-  const listaRef = useRef<HTMLDivElement>(null);
   const agoraRef = useRef<HTMLDivElement>(null);
 
   const doDia = useMemo(() => atendimentosDoDia(atendimentos, data), [atendimentos, data]);
   const expediente = expedienteDoDia(clinic, data);
   const almoco = almocoDoDia(clinic, data);
-  const passo = intervaloDaGrade(clinic);
 
   const livres = useMemo(
     () => horariosLivresDoDia(data, atendimentos, clinic, catalogo),
@@ -128,30 +134,24 @@ export const AgendaDiaMobile: React.FC<AgendaDiaMobileProps> = ({
   /** Onde a linha vermelha de "agora" cabe: antes da primeira linha cujo horário já passou. */
   const indiceDeAgora = ehHoje ? linhas.findIndex((l) => l.minuto >= minutosAgora) : -1;
 
-  return (
-    <div className="space-y-3" ref={listaRef}>
-      {/* Legenda */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-0.5">
-        {LEGENDA.map(({ situacao, amostra }) => (
-          <span key={situacao} className="inline-flex items-center gap-1.5 text-label text-muted">
-            <span aria-hidden className={`w-3 h-3 rounded-sm border ${amostra}`} />
-            {ROTULO_DA_SITUACAO[situacao]}
-          </span>
-        ))}
-        <span className="inline-flex items-center gap-1.5 text-label text-muted">
-          <span aria-hidden className="w-3 h-3 rounded-sm bg-line border border-line" />
-          Bloqueado
-        </span>
-      </div>
+  const linhaDeAgora = (
+    <div ref={agoraRef} className="flex items-center gap-2 h-7" aria-label="Agora">
+      <span className="w-12 shrink-0 text-[13px] font-bold text-danger tabular-nums">
+        {hhmmDeMinutos(minutosAgora)}
+      </span>
+      <span className="w-2 h-2 rounded-full bg-danger shrink-0" />
+      <span className="flex-1 h-0.5 bg-danger" />
+    </div>
+  );
 
+  return (
+    <div className="space-y-3">
       {/* Sem horário */}
       {semHora.length > 0 && (
-        <div className="glass-card p-2.5 space-y-1.5">
-          <p className="text-label uppercase tracking-wider font-semibold text-muted px-1">
-            Sem horário
-          </p>
+        <div className="space-y-2">
+          <p className="text-[13px] font-semibold text-ink-soft">Sem horário</p>
           {semHora.map((a) => (
-            <LinhaDeAtendimento
+            <CartaoDeAtendimento
               key={a.id}
               atendimento={a}
               clinic={clinic}
@@ -166,96 +166,91 @@ export const AgendaDiaMobile: React.FC<AgendaDiaMobileProps> = ({
         </div>
       )}
 
-      {/* Antes do almoço não há nada a dizer; a faixa entra na posição do relógio, abaixo. */}
       {!expediente && (
-        <div className="glass-card p-5 text-center">
-          <p className="text-body-lg font-medium text-ink">A clínica não abre neste dia.</p>
-          <p className="text-body text-muted mt-1">
-            Encaixe continua possível: toque em "Novo agendamento" na barra acima.
+        <div className="rounded-[18px] bg-card border border-ink/8 p-5 text-center">
+          <p className="text-[15px] font-bold text-ink">A clínica não abre neste dia.</p>
+          <p className="text-[14px] text-ink-soft mt-1">
+            Encaixe continua possível: toque no + da barra de baixo.
           </p>
         </div>
       )}
 
       {linhas.length === 0 && expediente && (
-        <div className="glass-card p-5 text-center">
-          <p className="text-body-lg font-medium text-ink">Dia livre.</p>
-          <p className="text-body text-muted mt-1">
+        <div className="rounded-[18px] bg-card border border-ink/8 p-5 text-center">
+          <p className="text-[15px] font-bold text-ink">Dia livre.</p>
+          <p className="text-[14px] text-ink-soft mt-1">
             Nenhum atendimento marcado e nenhum horário sobrando no expediente.
           </p>
         </div>
       )}
 
-      <div className="space-y-1.5">
+      <div className="flex flex-col">
         {linhas.map((linha, i) => (
           <React.Fragment key={linha.tipo === 'livre' ? `livre-${linha.hora}` : linha.atendimento.id}>
-            {i === indiceDeAgora && (
-              <div ref={agoraRef} className="flex items-center gap-2 py-0.5" aria-label="Agora">
-                <span className="w-2 h-2 rounded-full bg-danger shrink-0" />
-                <span className="h-px flex-1 bg-danger/60" />
-                <span className="text-label font-semibold text-danger tabular-nums">
-                  {hhmmDeMinutos(minutosAgora)}
-                </span>
-              </div>
-            )}
+            {i === indiceDeAgora && linhaDeAgora}
 
-            {/* A pausa do almoço entra como bloco cinza na posição dela. */}
+            {/* A pausa do almoço entra como faixa listrada na posição dela. */}
             {almoco &&
               linha.minuto >= almoco.fimMin &&
               (i === 0 || linhas[i - 1].minuto < almoco.inicioMin) && (
-                <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-line/60 border border-line">
-                  <UtensilsCrossed className="w-4 h-4 text-muted shrink-0" />
-                  <span className="text-body text-muted">
-                    Almoço · {hhmmDeMinutos(almoco.inicioMin)}–{hhmmDeMinutos(almoco.fimMin)}
+                <div className="flex items-center gap-3 min-h-[56px] border-t border-ink/8">
+                  <Hora>{hhmmDeMinutos(almoco.inicioMin)}</Hora>
+                  <span
+                    className="flex-1 h-10 rounded-xl flex items-center px-3 text-[14px] font-medium text-ink-soft"
+                    style={{
+                      background:
+                        'repeating-linear-gradient(135deg,#EFEDE7 0 6px,#F9F8F6 6px 12px)',
+                    }}
+                  >
+                    Bloqueado · almoço até {hhmmDeMinutos(almoco.fimMin)}
                   </span>
                 </div>
               )}
 
             {linha.tipo === 'atendimento' ? (
-              <LinhaDeAtendimento
-                atendimento={linha.atendimento}
-                clinic={clinic}
-                catalogo={catalogo}
-                pacientes={pacientes}
-                professionals={professionals}
-                rotuloDoPlano={rotulosDePlano.get(linha.atendimento.id)}
-                onAbrir={onAbrirAtendimento}
-                onConfirmar={onConfirmar}
-              />
+              <div className="flex gap-3 border-t border-ink/8 py-2.5">
+                <Hora className="pt-3">{linha.atendimento.hora}</Hora>
+                <div className="flex-1 min-w-0">
+                  <CartaoDeAtendimento
+                    atendimento={linha.atendimento}
+                    clinic={clinic}
+                    catalogo={catalogo}
+                    pacientes={pacientes}
+                    professionals={professionals}
+                    rotuloDoPlano={rotulosDePlano.get(linha.atendimento.id)}
+                    onAbrir={onAbrirAtendimento}
+                    onConfirmar={onConfirmar}
+                  />
+                </div>
+              </div>
             ) : (
               <button
                 type="button"
                 onClick={() => onNovoEm(data, linha.hora)}
-                className="w-full flex items-center gap-3 min-h-[48px] px-3 rounded-xl border border-dashed border-line text-left hover:border-brand hover:bg-brand-bg/40 transition-colors"
+                className="w-full flex items-center gap-3 min-h-[56px] border-t border-ink/8 text-left group"
+                aria-label={`Agendar às ${linha.hora}`}
               >
-                <span className="w-[46px] shrink-0 text-body font-semibold text-muted tabular-nums">
-                  {linha.hora}
+                <Hora>{linha.hora}</Hora>
+                <span className="flex-1 text-[14px] font-medium text-muted group-hover:text-ink transition-colors">
+                  Livre
                 </span>
-                <span className="flex-1 text-body text-muted">
-                  Livre · {passo} min
+                <span className="w-9 h-9 shrink-0 rounded-full border border-ink/15 flex items-center justify-center text-ink group-hover:bg-ink group-hover:text-white group-hover:border-ink transition-colors">
+                  <Plus className="w-4 h-4" />
                 </span>
-                <Plus className="w-4 h-4 text-brand shrink-0" />
               </button>
             )}
           </React.Fragment>
         ))}
 
         {/* Agora depois de tudo: o expediente acabou e nenhuma linha ficou à frente do relógio. */}
-        {ehHoje && indiceDeAgora === -1 && linhas.length > 0 && (
-          <div ref={agoraRef} className="flex items-center gap-2 py-0.5" aria-label="Agora">
-            <span className="w-2 h-2 rounded-full bg-danger shrink-0" />
-            <span className="h-px flex-1 bg-danger/60" />
-            <span className="text-label font-semibold text-danger tabular-nums">
-              {hhmmDeMinutos(minutosAgora)}
-            </span>
-          </div>
-        )}
+        {ehHoje && indiceDeAgora === -1 && linhas.length > 0 && linhaDeAgora}
       </div>
     </div>
   );
 };
 
 /** Uma visita na lista do dia. */
-const LinhaDeAtendimento: React.FC<{
+const CartaoDeAtendimento: React.FC<{
   atendimento: Attendance;
   clinic: ClinicProfile;
   catalogo: Procedure[];
@@ -281,6 +276,12 @@ const LinhaDeAtendimento: React.FC<{
   const sala = nomeDaSala(atendimento.salaId, clinic);
   const confirmado = ehConfirmado(atendimento);
   const pendente = atendimento.status === 'agendado';
+  /** O que ainda vai acontecer é bloco preto; o que já aconteceu, cartão claro. */
+  const escuro = situacao === 'agendado' || situacao === 'confirmado' || situacao === 'atrasado';
+  const faltou = situacao === 'faltou';
+
+  const faixa =
+    inicioMin === null ? 'Sem horário' : `${atendimento.hora}–${hhmmDeMinutos(inicioMin + duracao)}`;
 
   const link = buildWhatsAppUrl(
     contatoDoAtendimento(atendimento, pacientes),
@@ -289,58 +290,53 @@ const LinhaDeAtendimento: React.FC<{
 
   return (
     <div
-      className={`relative flex items-stretch gap-2 rounded-xl border overflow-hidden ${ESTILO_DA_SITUACAO[situacao]}`}
+      className={`relative flex items-stretch rounded-2xl overflow-hidden ${
+        escuro ? 'bg-ink text-cream' : 'bg-card border border-ink/8 text-ink'
+      }`}
     >
       {/* A tarja da profissional, como na grade do desktop. */}
       <span
         aria-hidden
-        className="absolute left-0 top-0 bottom-0 w-[3px]"
+        className="absolute left-0 top-0 bottom-0 w-1"
         style={{ backgroundColor: corDaProfissional(atendimento.professionalId) }}
       />
 
       <button
         type="button"
         onClick={() => onAbrir(atendimento)}
-        className="flex-1 min-w-0 flex items-start gap-3 pl-3.5 pr-1 py-2.5 text-left"
+        className="flex-1 min-w-0 pl-4 pr-2 py-3 text-left flex flex-col gap-1"
       >
-        <span className="w-[46px] shrink-0">
+        <span className="flex items-center justify-between gap-2">
           <span
-            className={`block text-body-lg font-semibold tabular-nums ${
-              situacao === 'faltou' ? 'line-through' : ''
-            }`}
-          >
-            {atendimento.hora || '—'}
-          </span>
-          {inicioMin !== null && (
-            <span className="block text-label text-muted tabular-nums">
-              {hhmmDeMinutos(inicioMin + duracao)}
-            </span>
-          )}
-        </span>
-
-        <span className="min-w-0 flex-1">
-          <span
-            className={`block text-body-lg font-medium truncate ${
-              situacao === 'faltou' ? 'line-through' : ''
+            className={`text-[15px] font-bold truncate ${escuro ? 'text-white' : 'text-ink'} ${
+              faltou ? 'line-through' : ''
             }`}
           >
             {atendimento.pacienteNome}
           </span>
-          <span className="block text-body opacity-80 truncate">
-            {atendimento.procedimentoNome}
-            {rotuloDoPlano ? ` · ${rotuloDoPlano}` : ''}
+          <span
+            className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-bold ${
+              escuro ? COR_NO_ESCURO[situacao] || 'text-cream' : COR_NO_CLARO[situacao] || 'text-ink-soft'
+            }`}
+          >
+            {situacao === 'confirmado' && <span className="w-1.5 h-1.5 rounded-full bg-ok-claro" />}
+            {ROTULO_DA_SITUACAO[situacao]}
           </span>
-          {(profissional || sala) && (
-            <span className="block text-label opacity-70 truncate">
-              {[profissional, sala].filter(Boolean).join(' · ')}
-            </span>
-          )}
         </span>
+        <span className={`text-[13px] truncate ${escuro ? 'text-cream/75' : 'text-ink-soft'}`}>
+          {atendimento.procedimentoNome} · {faixa}
+          {rotuloDoPlano ? ` · ${rotuloDoPlano}` : ''}
+        </span>
+        {(profissional || sala) && (
+          <span className={`text-[12px] truncate ${escuro ? 'text-cream/65' : 'text-muted'}`}>
+            {[profissional, sala].filter(Boolean).join(' · ')}
+          </span>
+        )}
       </button>
 
       {/* Confirmar não passa pelo detalhe: é o gesto mais repetido do dia da recepção. */}
       {pendente && (
-        <span className="flex items-center gap-0.5 pr-1 shrink-0">
+        <span className="flex items-center gap-0.5 pr-1.5 shrink-0">
           {!confirmado && link && (
             <a
               href={link}
@@ -349,7 +345,7 @@ const LinhaDeAtendimento: React.FC<{
               onClick={(e) => e.stopPropagation()}
               aria-label={`Confirmar ${atendimento.pacienteNome} pelo WhatsApp`}
               title="Confirmar pelo WhatsApp"
-              className="w-11 h-11 rounded-lg flex items-center justify-center text-whatsapp hover:bg-black/5 transition-colors"
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-cream hover:bg-white/10 transition-colors"
             >
               <MessageCircle className="w-[18px] h-[18px]" />
             </a>
@@ -367,8 +363,8 @@ const LinhaDeAtendimento: React.FC<{
                 : `Marcar ${atendimento.pacienteNome} como confirmada`
             }
             title={confirmado ? 'Confirmado — toque para desmarcar' : 'Marcar como confirmado'}
-            className={`w-11 h-11 rounded-lg flex items-center justify-center transition-colors ${
-              confirmado ? 'text-ok' : 'text-muted hover:text-ok hover:bg-black/5'
+            className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors hover:bg-white/10 ${
+              confirmado ? 'text-ok-claro' : 'text-cream'
             }`}
           >
             <CheckCheck className="w-[18px] h-[18px]" />

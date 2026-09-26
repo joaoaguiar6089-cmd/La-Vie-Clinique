@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  FileText,
+  ArrowRight,
   MessageSquare,
   Sparkles,
   Calculator,
@@ -24,7 +24,10 @@ import { formatBRL, formatDateOnly } from '../../utils/formatters';
 import {
   calcularOrcamento,
   calcularDataValidade,
+  itemSessoes,
+  itemValorFinal,
   montarTextoApresentacao,
+  NOME_FORMA_PAGAMENTO,
   sugerirDescontoCombinado,
   contarProcedimentosParaDesconto,
 } from '../../utils/quoteCalc';
@@ -41,6 +44,7 @@ import { QuotePaymentOptionEditor } from './QuotePaymentOptionEditor';
 import { LaserQuoteMapModal } from '../laser/LaserQuoteMapModal';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { SidePanel } from '../common/SidePanel';
+import { AvisoTinta, CampoTinta, INPUT_TINTA, Interruptor } from '../common/Tinta';
 import {
   getCustoDoOrcamento,
   getRecordsForPatient,
@@ -106,11 +110,21 @@ const SectionHeader: React.FC<{ icon: React.ReactNode; children: React.ReactNode
   icon,
   children,
 }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
+  <h3 className="font-sans text-[15px] font-bold text-ink flex items-center gap-2">
     {icon}
     {children}
   </h3>
 );
+
+/** As quatro etapas do orçamento — a ordem em que a conversa com a paciente acontece. */
+type Etapa = 1 | 2 | 3 | 4;
+
+const ETAPAS: { numero: Etapa; rotulo: string }[] = [
+  { numero: 1, rotulo: 'Paciente' },
+  { numero: 2, rotulo: 'Procedimentos' },
+  { numero: 3, rotulo: 'Pagamento' },
+  { numero: 4, rotulo: 'Revisar' },
+];
 
 export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   isOpen,
@@ -164,6 +178,8 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   const [custoGravadoExistia, setCustoGravadoExistia] = useState(false);
   const [produtos, setProdutos] = useState<ProdutoDeEstoque[]>([]);
   const [consumos, setConsumos] = useState<ConsumoPadrao[]>([]);
+  /** A etapa aberta: 1 paciente, 2 procedimentos, 3 pagamento, 4 revisar. */
+  const [etapa, setEtapa] = useState<Etapa>(1);
 
   const base = quoteToEdit || seedFrom || null;
 
@@ -212,6 +228,9 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     setIsSaving(false);
     setAvisoDaAnamnese(null);
     setAvisoDaAvaliacao(null);
+    // Com a paciente já conhecida (editar, duplicar, vir da página dela ou da avaliação), a
+    // primeira pergunta já está respondida — o formulário abre nos procedimentos.
+    setEtapa(base || initialPatient || avaliacaoDeOrigem ? 2 : 1);
     setCustos({});
     // O item calculado por consumo nunca segue o consumo padrão sozinho: as linhas dele são as
     // gravadas em `quote_costs`, que chegam logo abaixo. Seguir o padrão até lá mostraria uma conta
@@ -553,8 +572,8 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   const removeOpcaoPagamento = (id: string) =>
     setOpcoesPagamento((prev) => (prev.length > 1 ? prev.filter((o) => o.id !== id) : prev));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const novosErros: Record<string, string> = {};
 
     if (!pacienteNome.trim()) novosErros.paciente = 'Informe a paciente';
@@ -565,6 +584,8 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
 
     if (Object.keys(novosErros).length > 0) {
       setErrors(novosErros);
+      // Volta para a etapa do primeiro problema — o aviso mora lá, junto do campo.
+      setEtapa(novosErros.paciente || novosErros.validade || novosErros.avaliacao ? 1 : 2);
       return;
     }
 
@@ -609,84 +630,117 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   const tituloModal = quoteToEdit
     ? `Editar orçamento ${quoteToEdit.numero}`
     : seedFrom
-      ? `Novo orçamento a partir de ${seedFrom.numero}`
-      : 'Novo Orçamento';
+      ? `Novo a partir de ${seedFrom.numero}`
+      : 'Novo orçamento';
 
-  /* O orçamento é o formulário mais longo do sistema, e o único cujo conteúdo ganha de verdade
-     com largura: cada procedimento é uma linha com valor, desconto e sessões. Daí a variante
-     `larga` do painel. */
+  const proximaEtapa = ETAPAS.find((e) => e.numero === etapa + 1);
+
+  /* As etapas no cabeçalho preto. Tocáveis: nada obriga a seguir a ordem, e voltar para mudar a
+     paciente depois de montar os procedimentos não perde nada. */
+  const cabecalho = (
+    <nav aria-label="Etapas do orçamento" className="-mx-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <ol className="flex gap-4 px-1 w-max">
+        {ETAPAS.map((e) => {
+          const ativa = e.numero === etapa;
+          return (
+            <li key={e.numero}>
+              <button
+                type="button"
+                onClick={() => setEtapa(e.numero)}
+                aria-current={ativa ? 'step' : undefined}
+                className={`pb-1.5 border-b-2 text-[13px] font-semibold whitespace-nowrap transition-colors ${
+                  ativa
+                    ? 'text-white border-brand-light'
+                    : 'text-cream/60 border-transparent hover:text-cream'
+                }`}
+              >
+                {e.numero} {e.rotulo}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+
+  /* A barra preta de baixo: o total, que se atualiza enquanto se monta, e o próximo passo. */
   const rodape = (
-    <div className="flex items-center justify-end gap-3">
-      <button
-        type="button"
-        onClick={onClose}
-        className="min-h-[44px] px-5 text-body font-semibold uppercase tracking-widest text-muted hover:text-ink transition-colors"
-      >
-        Cancelar
-      </button>
-      <button
-        type="submit"
-        form="form-orcamento"
-        disabled={isSaving}
-        className="min-h-[44px] px-6 bg-brand text-white text-body font-semibold uppercase tracking-widest rounded-xl transition-colors disabled:opacity-50"
-      >
-        {isSaving ? 'Salvando...' : quoteToEdit ? 'Salvar alterações' : 'Salvar orçamento'}
-      </button>
+    <div className="flex items-center gap-3.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-[12px] font-medium text-cream/75 truncate">
+          Total · {itens.length} {itens.length === 1 ? 'procedimento' : 'procedimentos'}
+        </p>
+        <p className="text-[22px] font-bold text-white tabular-nums leading-tight truncate">
+          {formatBRL(totais.total)}
+        </p>
+      </div>
+      {etapa < 4 && proximaEtapa ? (
+        <button
+          type="button"
+          onClick={() => setEtapa(proximaEtapa.numero)}
+          className="shrink-0 h-[52px] px-[22px] rounded-full bg-brand-light text-ink text-[16px] font-bold flex items-center gap-2 hover:brightness-105 active:scale-[.97] transition"
+        >
+          {proximaEtapa.rotulo}
+          <ArrowRight className="w-[18px] h-[18px]" />
+        </button>
+      ) : (
+        <button
+          type="submit"
+          form="form-orcamento"
+          disabled={isSaving}
+          className="shrink-0 h-[52px] px-[22px] rounded-full bg-brand-light text-ink text-[16px] font-bold flex items-center gap-2 hover:brightness-105 active:scale-[.97] transition disabled:opacity-50"
+        >
+          {isSaving ? 'Salvando…' : quoteToEdit ? 'Salvar alterações' : 'Salvar orçamento'}
+        </button>
+      )}
     </div>
   );
+
+  const principal = totais.opcoesPagamento[0];
+  const opcaoPrincipal = opcoesPagamento[0];
 
   return (
     <SidePanel
       aberto={isOpen}
       onFechar={onClose}
       titulo={tituloModal}
-      sobretitulo="Orçamento"
+      sobretitulo={pacienteNome.trim() || 'Orçamento'}
+      cabecalho={cabecalho}
+      onVoltar={etapa > 1 ? () => setEtapa((etapa - 1) as Etapa) : undefined}
+      etapa={etapa}
       largura="larga"
       bloqueado={isSaving}
       /* Adicionar ou remover um procedimento não passa por `input`/`change`, então o painel
          não enxergaria a alteração sozinho. */
       alterado={itens.length > 0 && !quoteToEdit}
       rodape={rodape}
+      rodapeTom="escuro"
     >
-      <form id="form-orcamento" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-7">
-        {!quoteToEdit && (
-          <p className="text-body text-muted -mt-1">
-            O número é gerado ao salvar — abrir e desistir não gasta numeração.
-          </p>
+      <form
+        id="form-orcamento"
+        /* Enter num campo leva para a etapa seguinte; salvar é só na última, pelo botão. */
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (etapa < 4) setEtapa((etapa + 1) as Etapa);
+          else handleSubmit();
+        }}
+        className="px-5 sm:px-6 py-5 space-y-6"
+      >
+        {errors.salvar && (
+          <AvisoTinta tom="erro" icone={AlertCircle}>
+            {errors.salvar}
+          </AvisoTinta>
         )}
-          {/* Seção 1 — Identificação */}
-          <div className="space-y-4">
-            <SectionHeader icon={<FileText className="w-3.5 h-3.5" />}>Identificação</SectionHeader>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Data de emissão
-                </label>
-                <input
-                  type="date"
-                  value={toDateInput(dataEmissao)}
-                  onChange={(e) => setDataEmissao(fromDateInput(e.target.value))}
-                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Válido até *
-                </label>
-                <input
-                  type="date"
-                  value={toDateInput(dataValidade)}
-                  onChange={(e) => setDataValidade(fromDateInput(e.target.value))}
-                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
-                />
-                {errors.validade && (
-                  <p className="mt-1 text-body text-red-500">{errors.validade}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* ETAPA 1 — A PACIENTE */}
+        {etapa === 1 && (
+          <>
+            {!quoteToEdit && (
+              <p className="text-[13px] text-ink-soft -mt-1">
+                O número é gerado ao salvar — abrir e desistir não gasta numeração.
+              </p>
+            )}
+            <div className="space-y-3.5">
               <div>
                 <PatientSearchSelect
                   patients={patients}
@@ -699,245 +753,271 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   }}
                 />
                 {errors.paciente && (
-                  <p className="mt-1 text-body text-red-500">{errors.paciente}</p>
+                  <p className="mt-1 px-1 text-[13px] font-medium text-danger">{errors.paciente}</p>
                 )}
               </div>
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Contato (WhatsApp)
-                </label>
+
+              <CampoTinta rotulo="WhatsApp" htmlFor="orcamento-contato">
                 <input
-                  type="text"
+                  id="orcamento-contato"
+                  type="tel"
+                  inputMode="tel"
                   value={pacienteContato}
                   onChange={(e) => setPacienteContato(e.target.value)}
                   placeholder="(19) 99123-4567"
-                  className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
+                  autoComplete="off"
+                  className={INPUT_TINTA}
                 />
+              </CampoTinta>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <CampoTinta rotulo="Emissão" htmlFor="orcamento-emissao">
+                  <input
+                    id="orcamento-emissao"
+                    type="date"
+                    value={toDateInput(dataEmissao)}
+                    onChange={(e) => setDataEmissao(fromDateInput(e.target.value))}
+                    className={`${INPUT_TINTA} min-h-[24px]`}
+                  />
+                </CampoTinta>
+                <CampoTinta rotulo="Válido até" htmlFor="orcamento-validade" erro={errors.validade}>
+                  <input
+                    id="orcamento-validade"
+                    type="date"
+                    value={toDateInput(dataValidade)}
+                    onChange={(e) => setDataValidade(fromDateInput(e.target.value))}
+                    className={`${INPUT_TINTA} min-h-[24px]`}
+                  />
+                </CampoTinta>
+              </div>
+
+              <div className="rounded-2xl bg-card border border-ink/10 px-4 py-3.5 flex flex-col gap-3">
+                <Interruptor
+                  ligado={jaTeveAvaliacao}
+                  onMudar={setJaTeveAvaliacao}
+                  rotulo="Já teve avaliação"
+                  descricao="A data sai no PDF, junto do nome da paciente."
+                />
+                {jaTeveAvaliacao && (
+                  <CampoTinta
+                    rotulo="Data da avaliação"
+                    htmlFor="orcamento-avaliacao"
+                    erro={errors.avaliacao}
+                    className="max-w-[220px]"
+                  >
+                    <input
+                      id="orcamento-avaliacao"
+                      type="date"
+                      value={toDateInput(dataAvaliacao)}
+                      onChange={(e) => setDataAvaliacao(fromDateInput(e.target.value))}
+                      className={`${INPUT_TINTA} min-h-[24px]`}
+                    />
+                  </CampoTinta>
+                )}
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={jaTeveAvaliacao}
-                  onChange={(e) => setJaTeveAvaliacao(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-brand"
+              <SectionHeader icon={<MessageSquare className="w-4 h-4" />}>Mensagem de abertura</SectionHeader>
+              <CampoTinta rotulo="O texto que abre o orçamento" htmlFor="orcamento-apresentacao">
+                <textarea
+                  id="orcamento-apresentacao"
+                  value={textoApresentacao}
+                  onChange={(e) => {
+                    setTextoApresentacao(e.target.value);
+                    setTextoEditadoManualmente(true);
+                  }}
+                  rows={3}
+                  className={`${INPUT_TINTA} resize-y leading-snug font-medium`}
                 />
-                <span className="text-xs font-medium text-ink">Já teve avaliação</span>
-              </label>
-              {jaTeveAvaliacao && (
-                <div className="max-w-xs">
-                  <input
-                    type="date"
-                    value={toDateInput(dataAvaliacao)}
-                    onChange={(e) => setDataAvaliacao(fromDateInput(e.target.value))}
-                    className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
-                  />
-                  {errors.avaliacao && (
-                    <p className="mt-1 text-body text-red-500">{errors.avaliacao}</p>
-                  )}
-                </div>
+              </CampoTinta>
+              {!textoEditadoManualmente && (
+                <p className="px-1 text-[13px] text-ink-soft">
+                  Sugestão automática — acompanha o nome da paciente até você editar.
+                </p>
               )}
             </div>
-          </div>
+          </>
+        )}
 
-          {/* Seção 2 — Mensagem de abertura */}
-          <div className="space-y-3">
-            <SectionHeader icon={<MessageSquare className="w-3.5 h-3.5" />}>
-              Mensagem de abertura
-            </SectionHeader>
-            <textarea
-              value={textoApresentacao}
-              onChange={(e) => {
-                setTextoApresentacao(e.target.value);
-                setTextoEditadoManualmente(true);
-              }}
-              rows={3}
-              className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden resize-y"
-            />
-            {!textoEditadoManualmente && (
-              <p className="text-body text-gray-400">
-                Sugestão automática — acompanha o nome da paciente até você editar
-              </p>
-            )}
-          </div>
+        {/* ETAPA 2 — OS PROCEDIMENTOS */}
+        {etapa === 2 && (
+          <>
+            <div className="space-y-3">
+              <SectionHeader icon={<Sparkles className="w-4 h-4" />}>
+                Procedimentos ({itens.length})
+              </SectionHeader>
 
-          {/* Seção 3 — Procedimentos */}
-          <div className="space-y-3">
-            <SectionHeader icon={<Sparkles className="w-3.5 h-3.5" />}>
-              Procedimentos ({itens.length})
-            </SectionHeader>
+              {errors.itens && (
+                <AvisoTinta tom="erro" icone={AlertCircle}>
+                  {errors.itens}
+                </AvisoTinta>
+              )}
 
-            {errors.itens && (
-              <p className="text-body text-red-500 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" />
-                {errors.itens}
-              </p>
-            )}
+              <div className="space-y-3">
+                {itens.map((item, index) => (
+                  <QuoteItemEditor
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    total={itens.length}
+                    professionals={professionals}
+                    onChange={updateItem}
+                    onRemove={() => removeItem(item.id)}
+                    onMove={(direction) => moveItem(index, direction)}
+                    produtos={produtos}
+                    linhasDoConsumo={custos[item.id] || []}
+                    onAlternarConsumo={(marcado) => alternarConsumoDoItem(item, marcado)}
+                    onMudarConsumo={(linhas) => mudarConsumoDoItem(item.id, linhas)}
+                    onRecalcularConsumo={() => recalcularConsumoDoItem(item.id)}
+                  />
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-start gap-2">
+                <ProcedureSearchAdd
+                  procedures={procedures}
+                  onAdd={addProcedure}
+                  onAbrirMapa={() => setMapaAberto(true)}
+                  areasNoMapa={areasNoOrcamento.size}
+                />
+                {areasNoOrcamento.size > 0 && (
+                  <label className="w-full flex items-center gap-2 text-body text-ink cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={mostrarMapaCorporal}
+                      onChange={(e) => setMostrarMapaCorporal(e.target.checked)}
+                      className="w-4 h-4 accent-ink"
+                    />
+                    Incluir o manequim com as áreas contratadas no PDF
+                  </label>
+                )}
+
+                {avisoDaAvaliacao && (
+                  <p className="w-full text-body text-ok bg-ok-bg rounded-xl px-3 py-2 leading-snug flex items-start justify-between gap-2">
+                    <span>
+                      Preenchido com o consumo estimado na avaliação de{' '}
+                      {formatDateOnly(avisoDaAvaliacao)}. Confira as quantidades no item.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAvisoDaAvaliacao(null)}
+                      className="shrink-0 underline underline-offset-2 hover:no-underline"
+                    >
+                      ok
+                    </button>
+                  </p>
+                )}
+                {avisoDaAnamnese && (
+                  <p className="w-full text-body text-ok bg-ok-bg rounded-xl px-3 py-2 leading-snug flex items-start justify-between gap-2">
+                    <span>
+                      {avisoDaAnamnese.quantidade}{' '}
+                      {avisoDaAnamnese.quantidade === 1 ? 'área veio' : 'áreas vieram'} da ficha de{' '}
+                      {new Date(avisoDaAnamnese.data).toLocaleDateString('pt-BR')}. Desmarque no mapa
+                      o que não entrar.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAvisoDaAnamnese(null)}
+                      className="shrink-0 underline underline-offset-2 hover:no-underline"
+                    >
+                      ok
+                    </button>
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setItens((prev) => [...prev, montarItemAvulso()])}
+                  className="h-10 px-4 rounded-full border border-ink/15 text-ink text-[14px] font-semibold hover:border-ink/40 transition-colors flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Procedimento fora do catálogo
+                </button>
+              </div>
+            </div>
 
             <div className="space-y-3">
-              {itens.map((item, index) => (
-                <QuoteItemEditor
-                  key={item.id}
-                  item={item}
-                  index={index}
-                  total={itens.length}
-                  professionals={professionals}
-                  onChange={updateItem}
-                  onRemove={() => removeItem(item.id)}
-                  onMove={(direction) => moveItem(index, direction)}
-                  produtos={produtos}
-                  linhasDoConsumo={custos[item.id] || []}
-                  onAlternarConsumo={(marcado) => alternarConsumoDoItem(item, marcado)}
-                  onMudarConsumo={(linhas) => mudarConsumoDoItem(item.id, linhas)}
-                  onRecalcularConsumo={() => recalcularConsumoDoItem(item.id)}
+              <SectionHeader icon={<Calculator className="w-4 h-4" />}>Desconto</SectionHeader>
+
+              <div className="rounded-2xl bg-card border border-ink/10 px-4 py-3.5 flex flex-col gap-3">
+                <Interruptor
+                  ligado={temDescontoCombinado}
+                  onMudar={handleToggleCombinado}
+                  rotulo="Desconto plano combinado"
+                  descricao={`Sugestão: ${sugerirDescontoCombinado(procedimentosParaDesconto, clinic)}% para ${procedimentosParaDesconto} ${
+                    procedimentosParaDesconto === 1 ? 'procedimento' : 'procedimentos'
+                  }.`}
                 />
-              ))}
-            </div>
+                {temDescontoCombinado && (
+                  <div className="flex items-end gap-3">
+                    <CampoTinta
+                      rotulo="Percentual"
+                      htmlFor="orcamento-desconto-combinado"
+                      sufixo={<span className="text-[14px] font-semibold text-ink-soft">%</span>}
+                      className="w-36"
+                    >
+                      <input
+                        id="orcamento-desconto-combinado"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={descontoCombinadoPercentual}
+                        onChange={(e) => setDescontoCombinadoPercentual(Number(e.target.value) || 0)}
+                        className={`${INPUT_TINTA} tabular-nums`}
+                      />
+                    </CampoTinta>
+                    <p className="text-[13px] text-ink-soft pb-3">
+                      abate {formatBRL(totais.descontoCombinadoValor)}
+                    </p>
+                  </div>
+                )}
+              </div>
 
-            <div className="flex flex-wrap items-start gap-2">
-              <ProcedureSearchAdd
-                procedures={procedures}
-                onAdd={addProcedure}
-                onAbrirMapa={() => setMapaAberto(true)}
-                areasNoMapa={areasNoOrcamento.size}
-              />
-              {areasNoOrcamento.size > 0 && (
-                <label className="w-full flex items-center gap-2 text-body text-ink cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={mostrarMapaCorporal}
-                    onChange={(e) => setMostrarMapaCorporal(e.target.checked)}
-                    className="w-3.5 h-3.5 accent-brand"
-                  />
-                  Incluir o manequim com as áreas contratadas no PDF
-                </label>
-              )}
-
-              {avisoDaAvaliacao && (
-                <p className="w-full text-body text-ok bg-ok-bg border border-ok-line rounded-sm px-2.5 py-1.5 leading-snug flex items-start justify-between gap-2">
-                  <span>
-                    Preenchido com o consumo estimado na avaliação de{' '}
-                    {formatDateOnly(avisoDaAvaliacao)}. Confira as quantidades no item.
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setAvisoDaAvaliacao(null)}
-                    className="shrink-0 underline underline-offset-2 hover:no-underline"
-                  >
-                    ok
-                  </button>
-                </p>
-              )}
-              {avisoDaAnamnese && (
-                <p className="w-full text-body text-[#1D5E38] bg-[#E4F5EA] border border-[#BFE3CB] rounded-sm px-2.5 py-1.5 leading-snug flex items-start justify-between gap-2">
-                  <span>
-                    {avisoDaAnamnese.quantidade}{' '}
-                    {avisoDaAnamnese.quantidade === 1 ? 'área veio' : 'áreas vieram'} da ficha de{' '}
-                    {new Date(avisoDaAnamnese.data).toLocaleDateString('pt-BR')}. Desmarque no mapa
-                    o que não entrar.
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setAvisoDaAnamnese(null)}
-                    className="shrink-0 underline underline-offset-2 hover:no-underline"
-                  >
-                    ok
-                  </button>
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={() => setItens((prev) => [...prev, montarItemAvulso()])}
-                className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Procedimento fora do catálogo
-              </button>
-            </div>
-          </div>
-
-          {/* Seção 4 — Totais */}
-          <div className="space-y-3">
-            <SectionHeader icon={<Calculator className="w-3.5 h-3.5" />}>Totais</SectionHeader>
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={temDescontoCombinado}
-                onChange={(e) => handleToggleCombinado(e.target.checked)}
-                className="w-3.5 h-3.5 accent-brand"
-              />
-              <span className="text-xs font-medium text-ink">Desconto plano combinado</span>
-            </label>
-
-            {temDescontoCombinado && (
-              <div className="flex items-end gap-3">
-                <div className="w-32">
-                  <label className="block text-body font-medium text-ink mb-1">
-                    Percentual (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.5"
-                    value={descontoCombinadoPercentual}
-                    onChange={(e) => setDescontoCombinadoPercentual(Number(e.target.value) || 0)}
-                    className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
-                  />
+              <div className="rounded-2xl bg-card border border-ink/10 p-4 space-y-1.5 text-[14px] tabular-nums">
+                <div className="flex justify-between text-ink-soft">
+                  <span>Subtotal</span>
+                  <span>{formatBRL(totais.subtotal)}</span>
                 </div>
-                <p className="text-body text-gray-500 pb-2">
-                  Sugestão: {sugerirDescontoCombinado(procedimentosParaDesconto, clinic)}% para{' '}
-                  {procedimentosParaDesconto}{' '}
-                  {procedimentosParaDesconto === 1 ? 'procedimento' : 'procedimentos'} · abate{' '}
-                  {formatBRL(totais.descontoCombinadoValor)}
-                </p>
-              </div>
-            )}
-
-            <div className="glass-card rounded-sm p-4 space-y-1.5 text-sm tabular-nums">
-              <div className="flex justify-between text-gray-600">
-                <span>Subtotal</span>
-                <span>{formatBRL(totais.subtotal)}</span>
-              </div>
-              {temDescontoCombinado && totais.descontoCombinadoValor > 0 && (
-                <div className="flex justify-between text-gray-600">
-                  <span>Desconto plano combinado ({descontoCombinadoPercentual}%)</span>
-                  <span>− {formatBRL(totais.descontoCombinadoValor)}</span>
+                {temDescontoCombinado && totais.descontoCombinadoValor > 0 && (
+                  <div className="flex justify-between text-ink-soft">
+                    <span>Desconto plano combinado ({descontoCombinadoPercentual}%)</span>
+                    <span>− {formatBRL(totais.descontoCombinadoValor)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-2 mt-1 border-t border-ink/8 text-ink font-bold">
+                  <span>Total</span>
+                  <span className="text-[17px]">{formatBRL(totais.total)}</span>
                 </div>
-              )}
-              <div className="flex justify-between pt-2 mt-1 border-t border-line text-ink font-semibold">
-                <span>Total</span>
-                <span className="text-lg font-serif-luxury">{formatBRL(totais.total)}</span>
+                {totais.descontoEfetivoPercentual > 0 && (
+                  <p className="text-[13px] text-ink-soft pt-1">
+                    Desconto efetivo de {totais.descontoEfetivoPercentual.toFixed(1).replace('.', ',')}
+                    % sobre os valores de tabela
+                  </p>
+                )}
               </div>
-              {totais.descontoEfetivoPercentual > 0 && (
-                <p className="text-body text-brand pt-1">
-                  Desconto efetivo de {totais.descontoEfetivoPercentual.toFixed(1).replace('.', ',')}
-                  % sobre os valores de tabela
-                </p>
-              )}
             </div>
-          </div>
 
-          {/* Seção interna — custo de material. Nunca vai para o documento do orçamento. */}
-          <CustoDeMaterialDoOrcamento
-            itens={itens}
-            custos={custos}
-            produtos={produtos}
-            totalDoOrcamento={totais.total}
-            onChange={mudarConsumoDoItem}
-            onRecalcular={recalcularConsumoDoItem}
-          />
+            {/* Seção interna — custo de material. Nunca vai para o documento do orçamento. */}
+            <CustoDeMaterialDoOrcamento
+              itens={itens}
+              custos={custos}
+              produtos={produtos}
+              totalDoOrcamento={totais.total}
+              onChange={mudarConsumoDoItem}
+              onRecalcular={recalcularConsumoDoItem}
+            />
+          </>
+        )}
 
-          {/* Seção 5 — Pagamento */}
+        {/* ETAPA 3 — O PAGAMENTO */}
+        {etapa === 3 && (
           <div className="space-y-4">
-            <SectionHeader icon={<CreditCard className="w-3.5 h-3.5" />}>
-              Pagamento ({opcoesPagamento.length})
+            <SectionHeader icon={<CreditCard className="w-4 h-4" />}>
+              Formas de pagamento ({opcoesPagamento.length})
             </SectionHeader>
 
-            <p className="text-body text-gray-500 -mt-1">
+            <p className="text-[13px] text-ink-soft -mt-2">
               A primeira forma é a principal — dá o valor do bloco preto no PDF. As demais aparecem
               como alternativas, ex.: cartão parcelado com Pix à vista com desconto ao lado.
             </p>
@@ -963,46 +1043,107 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
             <button
               type="button"
               onClick={addOpcaoPagamento}
-              className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+              className="h-10 px-4 rounded-full border border-ink/15 text-ink text-[14px] font-semibold hover:border-ink/40 transition-colors flex items-center gap-1.5"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
               Adicionar forma de pagamento
             </button>
 
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">
-                Negociação (opcional)
-              </label>
+            <CampoTinta rotulo="Negociação (opcional)" htmlFor="orcamento-negociacao">
               <textarea
+                id="orcamento-negociacao"
                 value={negociacao}
                 onChange={(e) => setNegociacao(e.target.value)}
                 rows={2}
                 placeholder="Entrada de R$ 800,00 no Pix e o restante parcelado..."
-                className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden resize-y"
+                className={`${INPUT_TINTA} resize-y leading-snug font-medium`}
               />
-            </div>
+            </CampoTinta>
 
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">
-                Observações (opcional)
-              </label>
+            <CampoTinta rotulo="Observações (opcional)" htmlFor="orcamento-observacoes">
               <textarea
+                id="orcamento-observacoes"
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 rows={2}
                 placeholder="Você pode iniciar por um único procedimento e incluir o outro depois..."
-                className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden resize-y"
+                className={`${INPUT_TINTA} resize-y leading-snug font-medium`}
               />
-            </div>
+            </CampoTinta>
           </div>
+        )}
 
-          {errors.salvar && (
-            <p className="text-body text-red-500 flex items-center gap-1">
-              <AlertCircle className="w-3 h-3" />
-              {errors.salvar}
+        {/* ETAPA 4 — REVISAR: o que vai sair, antes de salvar. */}
+        {etapa === 4 && (
+          <div className="space-y-3">
+            <div className="rounded-[20px] bg-card border border-ink/8 p-4 flex flex-col gap-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <button type="button" onClick={() => setEtapa(1)} className="min-w-0 text-left group">
+                  <span className="block text-[12px] font-semibold text-ink-soft">Para</span>
+                  <span className="block text-[17px] font-bold text-ink truncate group-hover:underline underline-offset-2">
+                    {pacienteNome.trim() || 'Falta escolher a paciente'}
+                  </span>
+                </button>
+                <div className="text-right shrink-0">
+                  <span className="block text-[12px] font-semibold text-ink-soft">Válido até</span>
+                  <span className="block text-[15px] font-bold text-ink tabular-nums">
+                    {dataValidade ? new Date(dataValidade).toLocaleDateString('pt-BR') : '—'}
+                  </span>
+                </div>
+              </div>
+
+              <ul className="border-t border-ink/8 divide-y divide-ink/8">
+                {itens.length === 0 ? (
+                  <li className="py-3 text-[14px] text-ink-soft">
+                    Nenhum procedimento ainda.{' '}
+                    <button type="button" onClick={() => setEtapa(2)} className="font-semibold text-ink underline underline-offset-2">
+                      Adicionar
+                    </button>
+                  </li>
+                ) : (
+                  itens.map((item) => (
+                    <li key={item.id} className="py-2.5 flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block text-[15px] font-semibold text-ink">{item.titulo || 'Sem título'}</span>
+                        <span className="block text-[13px] text-ink-soft truncate">
+                          {[
+                            item.profissionalNome,
+                            itemSessoes(item) > 1 ? `${itemSessoes(item)} sessões` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ') || 'Sem profissional'}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[15px] font-bold text-ink tabular-nums">
+                        {formatBRL(itemValorFinal(item))}
+                      </span>
+                    </li>
+                  ))
+                )}
+              </ul>
+
+              <div className="border-t border-ink/8 pt-3 flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="block text-[12px] font-semibold text-ink-soft">Investimento</span>
+                  {opcaoPrincipal && principal && (
+                    <span className="block text-[13px] text-ink-soft">
+                      {NOME_FORMA_PAGAMENTO[opcaoPrincipal.forma]}
+                      {principal.parcela ? ` · ${principal.parcelas}× de ${formatBRL(principal.parcela)}` : ''}
+                    </span>
+                  )}
+                </div>
+                <span className="shrink-0 text-[22px] font-bold text-ink tabular-nums">
+                  {formatBRL(principal ? principal.valorFinal : totais.total)}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[13px] text-ink-soft px-1">
+              Toque numa etapa lá em cima para corrigir qualquer coisa — nada do que já foi preenchido
+              se perde.
             </p>
-          )}
-
+          </div>
+        )}
       </form>
 
       {/* Fora do <form>: um clique no mapa não pode disparar o submit do orçamento. */}

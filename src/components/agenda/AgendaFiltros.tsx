@@ -1,14 +1,14 @@
 import React from 'react';
-import { DoorOpen, Users } from 'lucide-react';
 import { ClinicProfile, Professional } from '../../types';
 import { corDaProfissional, salasDaClinica } from '../../utils/agenda';
+import { Chip } from '../common/Tinta';
 
 /**
  * Chips de filtro da agenda: por profissional e por sala/equipamento.
  *
  * Chip e não `select` porque o estado precisa ficar **visível**: com um select, a agenda
  * filtrada por uma profissional parece uma agenda vazia, e já aconteceu de alguém marcar em
- * cima de um horário que o filtro estava escondendo. O chip aceso diz o porquê.
+ * cima de um horário que o filtro estava escondendo. O chip aceso — preto — diz o porquê.
  *
  * Cada fileira some quando não há o que escolher — uma clínica com uma profissional só e sem
  * salas cadastradas não ganha dois controles inúteis.
@@ -23,32 +23,21 @@ interface AgendaFiltrosProps {
   onFiltrarSala: (id: string) => void;
 }
 
-const Chip: React.FC<{
-  ativo: boolean;
-  onClick: () => void;
-  cor?: string;
-  children: React.ReactNode;
-}> = ({ ativo, onClick, cor, children }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-pressed={ativo}
-    className={`inline-flex items-center gap-1.5 min-h-[36px] px-3 rounded-full border text-body font-medium whitespace-nowrap transition-colors ${
-      ativo
-        ? 'bg-ink text-white border-ink'
-        : 'bg-card text-ink-soft border-line hover:border-brand'
-    }`}
-  >
-    {cor && (
-      <span
-        aria-hidden
-        className="w-2 h-2 rounded-full shrink-0"
-        style={{ backgroundColor: cor }}
-      />
-    )}
-    {children}
-  </button>
-);
+const semTitulo = (nome: string) => nome.replace(/^(Dra?\.?|Dr\.?)\s+/i, '').trim();
+
+/**
+ * "Juliana", "Karoline" — o primeiro nome basta num chip. Quando duas profissionais dividem o
+ * primeiro nome, as duas ficam com o nome inteiro, senão o chip não diria qual é qual.
+ */
+const rotulosDasProfissionais = (professionals: Professional[]): Map<string, string> => {
+  const primeiros = professionals.map((p) => semTitulo(p.name).split(/\s+/)[0] || p.name);
+  return new Map(
+    professionals.map((p, i) => [
+      p.id,
+      primeiros.filter((n) => n === primeiros[i]).length > 1 ? semTitulo(p.name) : primeiros[i],
+    ])
+  );
+};
 
 export const AgendaFiltros: React.FC<AgendaFiltrosProps> = ({
   professionals,
@@ -63,16 +52,13 @@ export const AgendaFiltros: React.FC<AgendaFiltrosProps> = ({
   const temSalas = salas.length > 0;
   if (!temProfissionais && !temSalas) return null;
 
+  const rotulos = rotulosDasProfissionais(professionals);
+
   return (
     <div className="space-y-2">
       {temProfissionais && (
-        <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto">
-          <div
-            className="flex items-center gap-1.5 w-max"
-            role="group"
-            aria-label="Filtrar por profissional"
-          >
-            <Users className="w-4 h-4 text-muted shrink-0 mr-0.5" aria-hidden />
+        <div className="-mx-5 px-5 sm:mx-0 sm:px-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex items-center gap-2 w-max" role="group" aria-label="Filtrar por profissional">
             <Chip ativo={!filtroProfissionalId} onClick={() => onFiltrarProfissional('')}>
               Todas
             </Chip>
@@ -81,9 +67,10 @@ export const AgendaFiltros: React.FC<AgendaFiltrosProps> = ({
                 key={p.id}
                 ativo={filtroProfissionalId === p.id}
                 cor={corDaProfissional(p.id)}
+                title={p.name}
                 onClick={() => onFiltrarProfissional(filtroProfissionalId === p.id ? '' : p.id)}
               >
-                {p.name.replace(/^(Dra?\.?|Dr\.?)\s+/i, '')}
+                {rotulos.get(p.id)}
               </Chip>
             ))}
           </div>
@@ -91,13 +78,8 @@ export const AgendaFiltros: React.FC<AgendaFiltrosProps> = ({
       )}
 
       {temSalas && (
-        <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto">
-          <div
-            className="flex items-center gap-1.5 w-max"
-            role="group"
-            aria-label="Filtrar por sala ou equipamento"
-          >
-            <DoorOpen className="w-4 h-4 text-muted shrink-0 mr-0.5" aria-hidden />
+        <div className="-mx-5 px-5 sm:mx-0 sm:px-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex items-center gap-2 w-max" role="group" aria-label="Filtrar por sala ou equipamento">
             <Chip ativo={!filtroSalaId} onClick={() => onFiltrarSala('')}>
               Todas as salas
             </Chip>

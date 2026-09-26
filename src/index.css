@@ -16,6 +16,8 @@
   --color-brand: #A67C52;
   --color-brand-hover: #8E653D;
   --color-brand-light: #C49B74;
+  /* O bronze mais claro: a letra do avatar preto e o item ativo da barra escura. Só sobre preto. */
+  --color-brand-pale: #E8CDAC;
   --color-brand-deep: #6E4924;
   /* Fundo claro de marca — o lugar de um selo bronze sobre superfície clara */
   --color-brand-bg: #F4EDE5;
@@ -55,6 +57,8 @@
   --color-ok: #2E6B4F;
   --color-ok-bg: #EAF3EE;
   --color-ok-line: #BFD9CC;
+  /* Verde de "confirmado" e de margem sobre fundo preto — o `ok` escuro some ali (2,6:1). */
+  --color-ok-claro: #A7F3D0;
   --color-warn: #8A5A12;
   --color-warn-bg: #FDF6E7;
   --color-warn-line: #E8D5AC;
@@ -103,8 +107,9 @@
     --font-serif: 'Cormorant Garamond', Georgia, serif;
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-display: 'Syne', sans-serif;
-    /* Altura da barra inferior do celular, para o conteúdo reservar espaço. */
-    --altura-barra-inferior: 64px;
+    /* Altura da barra inferior do celular (68px, flutuando 16px acima da borda), para o conteúdo
+       reservar espaço. */
+    --altura-barra-inferior: 84px;
     /**
      * Bronze *de texto*.
      *

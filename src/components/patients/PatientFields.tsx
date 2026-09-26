@@ -1,6 +1,7 @@
 import React from 'react';
 import { Patient, PatientGender } from '../../types';
 import { formatCpf } from '../../utils/formatters';
+import { CampoTinta, INPUT_TINTA, PilulasDeEscolha, RotuloTinta } from '../common/Tinta';
 
 /**
  * Os campos do cadastro de paciente, em um só lugar. São exatamente os mesmos no cadastro de um
@@ -59,10 +60,6 @@ export const formToPatient = (form: PatientFormValues, base?: Patient | null): P
   createdAt: base?.createdAt || new Date().toISOString(),
 });
 
-const inputClass =
-  'w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden';
-const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
-
 interface PatientFieldsProps {
   values: PatientFormValues;
   onChange: (patch: Partial<PatientFormValues>) => void;
@@ -73,119 +70,108 @@ interface PatientFieldsProps {
    */
   idPrefix: string;
   autoFocus?: boolean;
+  /** Erro do nome — o único campo obrigatório. */
+  erroNome?: string;
 }
 
+/**
+ * Os campos no desenho preenchido do redesign: rótulo dentro da caixa, sem contorno, 16px. Na
+ * ordem em que a recepção costuma receber os dados — o nome e o WhatsApp primeiro, o resto
+ * quando houver.
+ */
 export const PatientFields: React.FC<PatientFieldsProps> = ({
   values,
   onChange,
   idPrefix,
   autoFocus,
+  erroNome,
 }) => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-    <div className="sm:col-span-2">
-      <label className={labelClass} htmlFor={`${idPrefix}-nome`}>
-        Nome completo *
-      </label>
+  <div className="flex flex-col gap-3.5">
+    <CampoTinta rotulo="Nome completo" htmlFor={`${idPrefix}-nome`} erro={erroNome}>
       <input
         id={`${idPrefix}-nome`}
         type="text"
         autoFocus={autoFocus}
+        autoComplete="off"
         value={values.nome}
         onChange={(e) => onChange({ nome: e.target.value })}
-        className={inputClass}
+        placeholder="Nome e sobrenome"
+        className={INPUT_TINTA}
       />
-    </div>
+    </CampoTinta>
 
-    <div>
-      <label className={labelClass} htmlFor={`${idPrefix}-contato`}>
-        Telefone / WhatsApp
-      </label>
+    <CampoTinta rotulo="WhatsApp" htmlFor={`${idPrefix}-contato`}>
       <input
         id={`${idPrefix}-contato`}
         type="tel"
         inputMode="tel"
+        autoComplete="off"
         value={values.contato}
         onChange={(e) => onChange({ contato: e.target.value })}
-        placeholder="(11) 98888-7777"
-        className={inputClass}
+        placeholder="(19) 90000-0000"
+        className={INPUT_TINTA}
       />
+    </CampoTinta>
+
+    <div className="grid grid-cols-2 gap-2.5">
+      <CampoTinta rotulo="Nascimento" htmlFor={`${idPrefix}-nascimento`}>
+        <input
+          id={`${idPrefix}-nascimento`}
+          type="date"
+          value={values.dataNascimento}
+          onChange={(e) => onChange({ dataNascimento: e.target.value })}
+          className={`${INPUT_TINTA} min-h-[24px]`}
+        />
+      </CampoTinta>
+      <CampoTinta rotulo="CPF" htmlFor={`${idPrefix}-cpf`}>
+        <input
+          id={`${idPrefix}-cpf`}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={values.cpf}
+          onChange={(e) => onChange({ cpf: formatCpf(e.target.value) })}
+          placeholder="000.000.000-00"
+          className={`${INPUT_TINTA} tabular-nums`}
+        />
+      </CampoTinta>
     </div>
 
     <div>
-      <label className={labelClass} htmlFor={`${idPrefix}-email`}>
-        E-mail
-      </label>
+      <RotuloTinta>Gênero · define o mapa anatômico das fichas</RotuloTinta>
+      <PilulasDeEscolha
+        rotulo="Gênero"
+        opcoes={[
+          { id: 'feminino', rotulo: 'Feminino' },
+          { id: 'masculino', rotulo: 'Masculino' },
+        ]}
+        valor={values.genero}
+        onMudar={(genero) => onChange({ genero: genero as PatientFormValues['genero'] })}
+        permiteDesmarcar
+      />
+    </div>
+
+    <CampoTinta rotulo="E-mail" htmlFor={`${idPrefix}-email`}>
       <input
         id={`${idPrefix}-email`}
         type="email"
+        autoComplete="off"
         value={values.email}
         onChange={(e) => onChange({ email: e.target.value })}
-        className={inputClass}
+        placeholder="nome@email.com"
+        className={INPUT_TINTA}
       />
-    </div>
+    </CampoTinta>
 
-    <div>
-      <label className={labelClass} htmlFor={`${idPrefix}-nascimento`}>
-        Data de nascimento
-      </label>
-      <input
-        id={`${idPrefix}-nascimento`}
-        type="date"
-        value={values.dataNascimento}
-        onChange={(e) => onChange({ dataNascimento: e.target.value })}
-        className={inputClass}
-      />
-    </div>
-
-    <div>
-      <label className={labelClass} htmlFor={`${idPrefix}-cpf`}>
-        CPF
-      </label>
-      <input
-        id={`${idPrefix}-cpf`}
-        type="text"
-        inputMode="numeric"
-        value={values.cpf}
-        onChange={(e) => onChange({ cpf: formatCpf(e.target.value) })}
-        placeholder="000.000.000-00"
-        className={inputClass}
-      />
-    </div>
-
-    <div className="sm:col-span-2">
-      <span className={labelClass}>
-        Gênero <span className="normal-case">(define a foto de referência das fichas)</span>
-      </span>
-      <div className="flex items-center gap-2">
-        {(['feminino', 'masculino'] as const).map((opcao) => (
-          <button
-            key={opcao}
-            type="button"
-            onClick={() => onChange({ genero: values.genero === opcao ? '' : opcao })}
-            className={`px-4 py-2 rounded-sm text-xs font-medium border transition-colors ${
-              values.genero === opcao
-                ? 'bg-ink text-white border-ink'
-                : 'bg-white/70 text-gray-600 border-gray-200 hover:border-brand/40'
-            }`}
-          >
-            {opcao === 'feminino' ? 'Feminino' : 'Masculino'}
-          </button>
-        ))}
-      </div>
-    </div>
-
-    <div className="sm:col-span-2">
-      <label className={labelClass} htmlFor={`${idPrefix}-observacoes`}>
-        Observações
-      </label>
+    <CampoTinta rotulo="Observações" htmlFor={`${idPrefix}-observacoes`}>
       <textarea
         id={`${idPrefix}-observacoes`}
         value={values.observacoes}
         onChange={(e) => onChange({ observacoes: e.target.value })}
-        rows={3}
-        placeholder="Anotações da equipe sobre este paciente"
-        className={`${inputClass} resize-y`}
+        rows={2}
+        placeholder="Alergias, indicação, preferências de horário"
+        className={`${INPUT_TINTA} resize-y leading-snug font-medium`}
       />
-    </div>
+    </CampoTinta>
   </div>
 );

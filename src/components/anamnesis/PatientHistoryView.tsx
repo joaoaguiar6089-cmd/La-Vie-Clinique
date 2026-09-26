@@ -3,23 +3,8 @@ import { Patient, AnamnesisRecord, AnamnesisTemplate, ClinicProfile } from '../.
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import { anamneseFechada } from '../../utils/evaluations';
-import {
-  Search,
-  Plus,
-  FileText,
-  User,
-  Calendar,
-  Eye,
-  Printer,
-  Trash2,
-  Camera,
-  Phone,
-  Clock,
-  Sparkles,
-  ChevronRight,
-  Filter,
-  Share2,
-} from 'lucide-react';
+import { ChevronDown, ClipboardList, Camera, Download, Eye, FileText, Share2, Trash2 } from 'lucide-react';
+import { Avatar, CampoDeBusca, MenuDeAcoes } from '../common/Tinta';
 
 interface PatientHistoryViewProps {
   patients: Patient[];
@@ -85,338 +70,257 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
     return records.filter((r) => r.pacienteId === patientId).length;
   };
 
+  const tagDoProcedimento =
+    'inline-flex items-center px-3 py-1.5 rounded-[10px] bg-cream text-[#5B3E25] text-[14px] font-semibold';
+  const seloPequeno = 'inline-flex items-center px-2.5 py-1 rounded-full text-[12px] font-bold';
+
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Quick Actions */}
-      <div className="bg-card rounded-sm border border-white/80 p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-brand" />
-            <h3 className="font-serif-luxury text-xl font-medium text-ink">
-              Anamneses Preenchidas & Enviadas
-            </h3>
-            <span className="px-2 py-0.5 rounded-full bg-brand/15 text-brand text-label font-mono font-bold">
-              {patients.length} pacientes · {records.length} fichas
-            </span>
-          </div>
-          <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">
-            Consulte prontuários anteriores, acesse fotos clínicas salvas e inicie novos atendimentos
-            com preenchimento automatizado das informações da paciente.
-          </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => abrirEnvioDeLink()}
-            disabled={templates.length === 0}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-white border border-brand/40 text-brand text-xs font-semibold uppercase tracking-wider hover:bg-brand hover:text-white shadow-xs active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand"
-            title={
-              templates.length === 0
-                ? 'Cadastre um modelo de ficha antes de enviar o link'
-                : 'Gerar e enviar o link de preenchimento para a paciente'
-            }
-          >
-            <Share2 className="w-4 h-4" />
-            Enviar Link da Ficha
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onOpenFillModal()}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-sm bg-ink text-brand-light text-xs font-semibold uppercase tracking-wider hover:bg-black shadow-xs active:scale-95 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Preencher Nova Ficha
-          </button>
-        </div>
+    <div className="flex flex-col gap-4">
+      {/* As duas maneiras de uma ficha nascer: aqui, com a paciente ao lado — ou pelo link, que
+          ela preenche em casa. */}
+      <div className="grid grid-cols-2 gap-2.5 sm:max-w-xl">
+        <button
+          type="button"
+          onClick={() => onOpenFillModal()}
+          className="rounded-[20px] bg-ink text-white p-4 flex flex-col gap-[18px] text-left hover:bg-black transition-colors"
+        >
+          <ClipboardList className="w-[22px] h-[22px]" />
+          <span>
+            <span className="block text-[15px] font-bold">Preencher ficha</span>
+            <span className="block text-[12px] text-cream/75">aqui, com a paciente</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => abrirEnvioDeLink()}
+          disabled={templates.length === 0}
+          title={
+            templates.length === 0
+              ? 'Cadastre um modelo de ficha antes de enviar o link'
+              : 'Gerar e enviar o link de preenchimento para a paciente'
+          }
+          className="rounded-[20px] bg-card border border-ink/10 text-ink p-4 flex flex-col gap-[18px] text-left hover:border-ink/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Share2 className="w-[22px] h-[22px]" />
+          <span>
+            <span className="block text-[15px] font-bold">Enviar link</span>
+            <span className="block text-[12px] text-ink-soft">ela preenche em casa</span>
+          </span>
+        </button>
       </div>
 
-      {/* Filter and Switch bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por paciente, procedimento ou telefone..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-sm bg-white/80 border border-gray-200 text-ink focus:outline-hidden focus:border-brand focus:bg-white"
-          />
-        </div>
+      <CampoDeBusca
+        valor={searchTerm}
+        onMudar={setSearchTerm}
+        placeholder="Paciente, procedimento ou telefone"
+        rotulo="Buscar ficha por paciente, procedimento, telefone ou profissional"
+      />
 
-        {/* View switcher and patient filter */}
-        <div className="flex items-center gap-2">
-          {/* Patient dropdown filter */}
-          <select
-            value={selectedPatientFilter}
-            onChange={(e) => setSelectedPatientFilter(e.target.value)}
-            className="px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-gray-700 focus:outline-hidden focus:border-brand"
-          >
-            <option value="all">Todos os Pacientes ({patients.length})</option>
-            {patients.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome} ({getPatientRecordsCount(p.id)} fichas)
-              </option>
-            ))}
-          </select>
-
-          {/* Sub tabs */}
-          <div className="flex items-center bg-white/80 p-0.5 rounded-xs border border-gray-200">
-            <button
-              type="button"
-              onClick={() => setViewTab('records')}
-              className={`px-3 py-1.5 rounded-2xs text-xs font-medium transition-all ${
-                viewTab === 'records'
-                  ? 'bg-ink text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[16px] font-bold text-ink">
+          {viewTab === 'records'
+            ? `${filteredRecords.length} ${filteredRecords.length === 1 ? 'ficha' : 'fichas'}`
+            : `${filteredPatients.length} ${filteredPatients.length === 1 ? 'paciente' : 'pacientes'}`}
+        </p>
+        {viewTab === 'records' && (
+          <label className="relative min-w-0">
+            <span className="sr-only">Filtrar por paciente</span>
+            <select
+              value={selectedPatientFilter}
+              onChange={(e) => setSelectedPatientFilter(e.target.value)}
+              className="appearance-none max-w-[220px] truncate bg-transparent border-0 pr-6 py-2 text-[14px] font-semibold text-ink-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-lg text-right"
             >
-              Fichas ({filteredRecords.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewTab('patients')}
-              className={`px-3 py-1.5 rounded-2xs text-xs font-medium transition-all ${
-                viewTab === 'patients'
-                  ? 'bg-ink text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Pacientes ({filteredPatients.length})
-            </button>
-          </div>
-        </div>
+              <option value="all">Todas as pacientes</option>
+              {patients.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome} ({getPatientRecordsCount(p.id)})
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-4 h-4 absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-ink-soft" />
+          </label>
+        )}
       </div>
 
-      {/* VIEW 1: RECORDS TIMELINE / CARDS */}
+      {/* VIEW 1: AS FICHAS */}
       {viewTab === 'records' && (
-        <div className="space-y-3">
-          {filteredRecords.map((rec) => (
-            <div
-              key={rec.id}
-              className="bg-card rounded-sm border border-white/90 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-brand/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
-            >
-              {/* Left Column: Patient & Procedure info */}
-              <div className="flex items-start gap-3.5 flex-1 min-w-0">
-                {/* Photo or Icon badge */}
-                {(rec.fotoPacienteUrl || rec.fotoUrl || rec.fotoModeloUrl) ? (
-                  <div className="relative w-12 h-12 rounded-sm overflow-hidden border border-gray-200 shadow-2xs shrink-0 group-hover:border-brand transition-colors">
+        <div className="grid gap-3 lg:grid-cols-2">
+          {filteredRecords.map((rec) => {
+            const foto = rec.fotoPacienteUrl || rec.fotoUrl || rec.fotoModeloUrl;
+            const temFotoPaciente = !!(rec.fotoPacienteUrl || rec.fotoUrl);
+            return (
+              <article
+                key={rec.id}
+                className="rounded-[20px] bg-card border border-ink/8 p-4 flex flex-col gap-3"
+              >
+                <div className="flex gap-3 items-center">
+                  {foto ? (
                     <img
-                      src={rec.fotoPacienteUrl || rec.fotoUrl || rec.fotoModeloUrl}
-                      alt={rec.pacienteNome}
-                      className="w-full h-full object-cover"
+                      src={foto}
+                      alt=""
+                      className="w-[46px] h-[46px] rounded-full object-cover shrink-0 border border-ink/10"
                     />
-                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] text-center font-mono py-0.5">
-                      {rec.fotoPacienteUrl || rec.fotoUrl ? 'PACIENTE' : 'DOUTOR'}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="w-12 h-12 rounded-sm bg-surface border border-gray-200 text-brand flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5 stroke-1" />
-                  </div>
-                )}
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-serif-luxury text-base font-bold text-ink group-hover:text-brand transition-colors">
-                      {rec.pacienteNome}
-                    </h4>
-                    {rec.origemPreenchimento === 'online_paciente' && (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-emerald-50 text-emerald-700 border border-emerald-200 text-label font-bold uppercase tracking-wider">
-                        Online Paciente
-                      </span>
-                    )}
-                    {/*
-                      "Aguardando atendimento", e não mais "aguardando médico": o que fecha a
-                      ficha agora é a visita acontecer, não a profissional completar um bloco
-                      dentro dela. Sem esta troca, o selo ficaria aceso para sempre em toda ficha
-                      preenchida online.
-                    */}
-                    {rec.origemPreenchimento === 'online_paciente' && !anamneseFechada(rec) && (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-amber-50 text-amber-700 border border-amber-200 text-label font-bold uppercase tracking-wider">
-                        Aguardando Atendimento
-                      </span>
-                    )}
-                    {rec.fotoModeloUrl && (rec.fotoPacienteUrl || rec.fotoUrl) ? (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-purple-50 text-purple-700 border border-purple-200 text-label font-semibold">
-                        Foto Doutor + Paciente
-                      </span>
-                    ) : rec.fotoModeloUrl ? (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-purple-50 text-purple-700 border border-purple-200 text-label font-semibold">
-                        Foto Doutor
-                      </span>
-                    ) : (rec.fotoPacienteUrl || rec.fotoUrl) ? (
-                      <span className="px-1.5 py-0.5 rounded-xs bg-emerald-50 text-emerald-700 border border-emerald-200 text-label font-semibold">
-                        Foto Paciente
-                      </span>
-                    ) : null}
-                    {rec.pacienteContato && (
-                      <span className="text-body text-gray-400 font-mono">
-                        {rec.pacienteContato}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-600 flex-wrap">
-                    <span className="font-semibold text-brand">
-                      {rec.procedimentoNome}
-                    </span>
-                    <span className="text-gray-300">•</span>
-                    <span className="flex items-center gap-1 text-gray-500">
-                      <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                  ) : (
+                    <Avatar nome={rec.pacienteNome} />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[16px] font-bold text-ink truncate">{rec.pacienteNome}</p>
+                    <p className="text-[13px] text-ink-soft truncate">
                       {new Date(rec.dataAtendimento + 'T12:00:00Z').toLocaleDateString('pt-BR')}
-                    </span>
-                    {rec.profissionalNome && (
-                      <>
-                        <span className="text-gray-300">•</span>
-                        <span className="text-gray-500 text-body">
-                          Resp: {rec.profissionalNome}
-                        </span>
-                      </>
-                    )}
-                  </div>
-
-                  {rec.observacoesFinais && (
-                    <p className="text-body text-gray-500 mt-1 line-clamp-1 italic">
-                      "{rec.observacoesFinais}"
+                      {rec.profissionalNome ? ` · ${rec.profissionalNome}` : ''}
                     </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={tagDoProcedimento}>{rec.procedimentoNome}</span>
+                  {rec.origemPreenchimento === 'online_paciente' && (
+                    <span className={`${seloPequeno} bg-ok-bg text-ok`}>Online</span>
+                  )}
+                  {/*
+                    "Aguardando atendimento", e não mais "aguardando médico": o que fecha a
+                    ficha agora é a visita acontecer, não a profissional completar um bloco
+                    dentro dela. Sem esta troca, o selo ficaria aceso para sempre em toda ficha
+                    preenchida online.
+                  */}
+                  {rec.origemPreenchimento === 'online_paciente' && !anamneseFechada(rec) && (
+                    <span className={`${seloPequeno} bg-warn-bg text-warn`}>Aguardando atendimento</span>
+                  )}
+                  {(rec.fotoModeloUrl || temFotoPaciente) && (
+                    <span className={`${seloPequeno} bg-line-soft text-ink-soft gap-1`}>
+                      <Camera className="w-3.5 h-3.5" />
+                      {rec.fotoModeloUrl && temFotoPaciente
+                        ? 'Fotos'
+                        : temFotoPaciente
+                        ? 'Foto da paciente'
+                        : 'Foto de referência'}
+                    </span>
                   )}
                 </div>
-              </div>
 
-              {/* Right Column: Actions */}
-              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                <button
-                  type="button"
-                  onClick={() => onOpenRecordDetail(rec)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:text-ink hover:border-brand transition-colors shadow-2xs"
-                >
-                  <Eye className="w-3.5 h-3.5 text-gray-400" />
-                  Ver Ficha
-                </button>
+                {rec.observacoesFinais && (
+                  <p className="text-[13px] text-ink-soft line-clamp-1 italic">"{rec.observacoesFinais}"</p>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => onOpenRecordDetail(rec)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xs bg-ink text-brand-light text-xs font-semibold uppercase tracking-wider hover:bg-black transition-colors shadow-2xs"
-                  title="Imprimir ou salvar PDF oficial"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  PDF
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setConfirmacao({
-                      titulo: 'Excluir esta ficha?',
-                      mensagem: `Ficha de ${rec.pacienteNome} — ${rec.procedimentoNome}.\n\nTodas as respostas e anotações registradas nela são apagadas para sempre.`,
-                      textoConfirmar: 'Excluir ficha',
-                      onConfirmar: () => onDeleteRecord(rec.id),
-                    })
-                  }
-                  className="p-1.5 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                  title="Excluir ficha"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
+                <div className="flex gap-2 mt-auto">
+                  <button
+                    type="button"
+                    onClick={() => onOpenRecordDetail(rec)}
+                    className="flex-1 h-11 rounded-xl bg-ink text-white text-[14px] font-semibold hover:bg-black transition-colors"
+                  >
+                    Ver ficha
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenRecordDetail(rec)}
+                    title="Imprimir ou salvar o PDF oficial"
+                    className="flex-1 h-11 rounded-xl border border-ink/15 text-ink text-[14px] font-semibold flex items-center justify-center gap-2 hover:border-ink/40 transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    PDF
+                  </button>
+                  <MenuDeAcoes
+                    rotulo={`Mais ações da ficha de ${rec.pacienteNome}`}
+                    titulo={rec.pacienteNome}
+                    acoes={[
+                      {
+                        rotulo: 'Excluir ficha',
+                        icone: Trash2,
+                        tom: 'perigo',
+                        onClick: () =>
+                          setConfirmacao({
+                            titulo: 'Excluir esta ficha?',
+                            mensagem: `Ficha de ${rec.pacienteNome} — ${rec.procedimentoNome}.\n\nTodas as respostas e anotações registradas nela são apagadas para sempre.`,
+                            textoConfirmar: 'Excluir ficha',
+                            onConfirmar: () => onDeleteRecord(rec.id),
+                          }),
+                      },
+                    ]}
+                  />
+                </div>
+              </article>
+            );
+          })}
 
           {filteredRecords.length === 0 && (
-            <div className="text-center py-12 bg-white/40 rounded-sm border border-dashed border-gray-300">
-              <FileText className="w-8 h-8 mx-auto text-gray-400 stroke-1" />
-              <p className="text-sm font-medium text-gray-600 mt-2">
-                Nenhuma ficha de anamnese encontrada
-              </p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Clique no botão acima para preencher a primeira ficha de atendimento
+            <div className="lg:col-span-2 rounded-[20px] bg-card border border-ink/8 py-12 px-5 text-center">
+              <FileText className="w-8 h-8 mx-auto text-ink-soft" />
+              <p className="text-[15px] font-bold text-ink mt-2">Nenhuma ficha de anamnese encontrada</p>
+              <p className="text-[14px] text-ink-soft mt-0.5">
+                Use "Preencher ficha" acima para a primeira — ou envie o link para a paciente.
               </p>
             </div>
           )}
         </div>
       )}
 
-      {/* VIEW 2: PATIENTS DIRECTORY */}
+      {/* VIEW 2: POR PACIENTE */}
       {viewTab === 'patients' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filteredPatients.map((pat) => {
             const count = getPatientRecordsCount(pat.id);
             return (
-              <div
+              <article
                 key={pat.id}
-                className="bg-card rounded-sm border border-white/90 p-5 shadow-xs flex flex-col justify-between hover:border-brand/40 transition-all"
+                className="rounded-[20px] bg-card border border-ink/8 p-4 flex flex-col gap-3"
               >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="w-8 h-8 rounded-full bg-brand/10 text-brand flex items-center justify-center font-bold text-xs">
-                      {pat.nome.charAt(0)}
-                    </div>
-                    <span className="px-2 py-0.5 rounded-xs bg-gray-100 text-gray-600 text-label font-mono font-bold">
+                <div className="flex items-center gap-3">
+                  <Avatar nome={pat.nome} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[16px] font-bold text-ink truncate">{pat.nome}</p>
+                    <p className="text-[13px] text-ink-soft truncate">
                       {count} {count === 1 ? 'ficha' : 'fichas'}
-                    </span>
-                  </div>
-
-                  <h4 className="font-serif-luxury text-base font-bold text-ink mt-3">
-                    {pat.nome}
-                  </h4>
-
-                  <div className="mt-2 space-y-1 text-xs text-gray-500">
-                    {pat.contato && (
-                      <p className="flex items-center gap-1.5">
-                        <Phone className="w-3 h-3 text-gray-400" />
-                        {pat.contato}
-                      </p>
-                    )}
-                    {pat.dataNascimento && (
-                      <p className="flex items-center gap-1.5">
-                        <Calendar className="w-3 h-3 text-gray-400" />
-                        Nasc: {new Date(pat.dataNascimento + 'T12:00:00Z').toLocaleDateString('pt-BR')}
-                      </p>
-                    )}
+                      {pat.contato ? ` · ${pat.contato}` : ''}
+                    </p>
                   </div>
                 </div>
-
-                <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                <div className="flex gap-2 mt-auto">
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedPatientFilter(pat.id);
-                      setViewTab('records');
-                    }}
-                    className="text-xs font-semibold text-brand hover:underline"
+                    onClick={() => onOpenFillModal(pat.id)}
+                    className="flex-1 h-11 rounded-xl bg-ink text-white text-[14px] font-semibold hover:bg-black transition-colors"
                   >
-                    Ver Histórico ({count})
+                    Nova ficha
                   </button>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => abrirEnvioDeLink(pat.id)}
-                      disabled={templates.length === 0}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-xs bg-white border border-brand/40 text-brand text-body font-semibold hover:bg-brand hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand"
-                      title="Enviar o link de preenchimento para esta paciente"
-                    >
-                      <Share2 className="w-3 h-3" />
-                      Link
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onOpenFillModal(pat.id)}
-                      className="px-2.5 py-1 rounded-xs bg-ink text-white text-body font-semibold hover:bg-black transition-colors"
-                    >
-                      + Nova Ficha
-                    </button>
-                  </div>
+                  <MenuDeAcoes
+                    rotulo={`Mais ações para ${pat.nome}`}
+                    titulo={pat.nome}
+                    acoes={[
+                      {
+                        rotulo: `Ver as fichas (${count})`,
+                        icone: Eye,
+                        onClick: () => {
+                          setSelectedPatientFilter(pat.id);
+                          setViewTab('records');
+                        },
+                      },
+                      ...(templates.length > 0
+                        ? [
+                            {
+                              rotulo: 'Enviar o link da ficha',
+                              icone: Share2,
+                              onClick: () => abrirEnvioDeLink(pat.id),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
       )}
+
+      {/* A lista por paciente é a exceção — quem procura uma pessoa usa Pacientes —, então fica
+          no pé, e não disputando o topo com as fichas. */}
+      <button
+        type="button"
+        onClick={() => setViewTab(viewTab === 'records' ? 'patients' : 'records')}
+        className="self-start min-h-[44px] text-[14px] font-semibold text-ink underline underline-offset-2"
+      >
+        {viewTab === 'records' ? 'Ver a lista por paciente' : 'Voltar para as fichas'}
+      </button>
 
       {shareModalOpen && (
         <ShareAnamnesisLinkModal

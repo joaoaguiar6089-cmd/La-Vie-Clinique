@@ -220,15 +220,15 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   const fotos = React.useMemo(() => fotosDaPaciente(records), [records]);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+    <div className="max-w-4xl mx-auto px-5 sm:px-8 pt-4 sm:pt-8 pb-8 sm:pb-10">
       {/* Volta para a lista */}
       <button
         type="button"
         onClick={onVoltar}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-brand transition-colors mb-4"
+        className="inline-flex items-center gap-1.5 min-h-[44px] -ml-1 pr-2 text-[14px] font-semibold text-ink-soft hover:text-ink transition-colors mb-2"
       >
-        <ArrowLeft className="w-3.5 h-3.5" />
-        Todos os pacientes
+        <ArrowLeft className="w-4 h-4" />
+        Pacientes
       </button>
 
       {/* Cabeçalho */}
@@ -237,16 +237,16 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
             ponto de ancoragem visual — e para a lista e a ficha se reconhecerem uma na outra. */}
         <span
           aria-hidden
-          className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-full bg-brand-bg text-brand flex items-center justify-center font-serif-luxury text-title-lg"
+          className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-full bg-ink text-brand-pale flex items-center justify-center font-serif-luxury text-title-lg font-semibold"
         >
           {iniciais}
         </span>
 
         <div className="min-w-0 flex-1">
-          <h1 className="font-serif-luxury text-title-lg sm:text-display text-ink break-words leading-tight">
+          <h1 className="font-serif-luxury text-[30px] sm:text-[38px] font-semibold text-ink break-words leading-[1.1]">
             {patient.nome}
           </h1>
-          <p className="text-body text-muted mt-0.5">
+          <p className="text-body text-ink-soft mt-0.5">
             {[
               idade !== undefined ? `${idade} anos` : null,
               desde ? `paciente desde ${formatDateOnly(desde)}` : null,

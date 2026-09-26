@@ -310,7 +310,9 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   useEffect(() => {
     if (!pedido) return;
     if (pedido.data) irParaDia(pedido.data as DataISO);
-    if (pedido.criarNovo) abrirNovo(pedido.data ? { data: pedido.data as DataISO } : undefined);
+    if (pedido.criarNovo) {
+      abrirNovo(pedido.data ? { data: pedido.data as DataISO, hora: pedido.hora } : undefined);
+    }
     onPedidoAtendido?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedido?.nonce]);
@@ -444,7 +446,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-5">
+    <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 sm:py-8 pb-4 space-y-4 sm:space-y-5">
       <AgendaToolbar
         visao={visao}
         onTrocarVisao={setVisao}
@@ -453,11 +455,25 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         onProximo={() => andar(1)}
         onHoje={() => setDataFoco(hoje)}
         onNovo={() => abrirNovo()}
+        semana={
+          /* Faixa da semana — só no celular, e só na visão de dia: na semana e no mês o próprio
+             calendário já é a navegação. */
+          ehCelular && visao === 'dia' ? (
+            <AgendaSemanaStrip
+              dataFoco={dataFoco}
+              hoje={hoje}
+              clinic={clinic}
+              diasComAlgo={diasComAlgo}
+              onEscolherDia={setDataFoco}
+            />
+          ) : undefined
+        }
       />
 
+      <div className="px-5 sm:px-0 space-y-4 sm:space-y-5">
       {erro && (
-        <div className="px-3 py-2 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+        <div className="px-4 py-3 rounded-[14px] bg-danger-bg text-[14px] text-danger flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
           {erro}
         </div>
       )}
@@ -470,18 +486,6 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         onAbrirAtendimento={setDetalhe}
         onConfirmar={(a) => alternarConfirmacao(a, true)}
       />
-
-      {/* Faixa da semana — só no celular, e só na visão de dia: na semana e no mês o próprio
-          calendário já é a navegação. */}
-      {ehCelular && visao === 'dia' && (
-        <AgendaSemanaStrip
-          dataFoco={dataFoco}
-          hoje={hoje}
-          clinic={clinic}
-          diasComAlgo={diasComAlgo}
-          onEscolherDia={setDataFoco}
-        />
-      )}
 
       <AgendaFiltros
         professionals={professionals}
@@ -536,7 +540,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         />
       )}
 
-      <p className="text-body text-muted text-center">
+      <p className="text-[13px] text-ink-soft text-center">
         {ehCelular
           ? 'Toque num horário livre para agendar.'
           : 'Clique num horário vazio para agendar. Arraste um agendamento para remarcá-lo.'}
@@ -551,6 +555,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         onFaltou={(a) => marcarStatus(a, 'faltou')}
         onRemarcar={abrirRemarcacao}
       />
+      </div>
 
       {detalhe && (
         <AgendaDetalheModal
@@ -611,6 +616,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         }
         sementeDataHora={formulario?.semente}
         atendimentosDaClinica={atendimentos}
+        clinic={clinic}
         salas={salasDaClinica(clinic)}
         cadastroSeraCriado={cadastroSeraCriado}
         atendimentos={doPacienteDoForm.atendimentos}

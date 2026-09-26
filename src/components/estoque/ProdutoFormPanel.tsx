@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, Calculator, Check, Loader2 } from 'lucide-react';
+import { AlertCircle, Calculator, Loader2 } from 'lucide-react';
 import { CaixaDoProduto, ProdutoDeEstoque } from '../../types';
 import {
   UNIDADES_SUGERIDAS,
@@ -11,6 +11,14 @@ import {
 } from '../../utils/estoque';
 import { saveProdutoDeEstoque } from '../../services/databaseService';
 import { SidePanel } from '../common/SidePanel';
+import {
+  AvisoTinta,
+  BotaoPrincipal,
+  CampoTinta,
+  INPUT_TINTA,
+  RotuloTinta,
+  Segmentado,
+} from '../common/Tinta';
 
 interface ProdutoFormPanelProps {
   aberto: boolean;
@@ -21,10 +29,6 @@ interface ProdutoFormPanelProps {
   nomeInicial?: string;
   onSalvo?: (produto: ProdutoDeEstoque) => void;
 }
-
-const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
-const inputClass =
-  'w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden tabular-nums';
 
 /** Campo numérico guardado como texto, para não travar em "0" enquanto se apaga. */
 const paraCampo = (valor?: number): string =>
@@ -99,16 +103,6 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
   const margem = margemUnitaria(porUnidade);
   const precoCalculado = precoPorUnidade(numeroValido(precoEmbalagem), numeroValido(unidadesEmbalagem));
 
-  const linhaDaMargem = margem && (
-    <p
-      className={`mt-1 text-body tabular-nums ${
-        margem.valor < 0 ? 'text-danger' : 'text-gray-500'
-      }`}
-    >
-      Margem de {formatarPrecoUnitario(margem.valor)} por {nomeDaUnidade} ({margem.percentual}%)
-    </p>
-  );
-
   const alternarCaixa = (marcada: boolean) => {
     // Desmarcar leva a divisão para os campos por unidade: o produto continua valendo o mesmo
     // até alguém mudar os números.
@@ -120,8 +114,8 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
     setPorCaixa(marcada);
   };
 
-  const salvar = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const salvar = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!nome.trim()) {
       setErro('Informe o nome do produto.');
       return;
@@ -159,25 +153,31 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
     }
   };
 
-  const rodape = (
-    <div className="flex items-center justify-end gap-2">
-      <button
-        type="button"
-        onClick={onFechar}
-        disabled={salvando}
-        className="min-h-[44px] px-4 rounded-xl text-body-lg font-semibold text-ink-soft hover:bg-surface-2 transition-colors disabled:opacity-40"
+  /** A unidade escolhida é uma das sugeridas — senão o campo "outra" fica aberto com ela. */
+  const unidadeSugerida = UNIDADES_SUGERIDAS.includes(unidade.trim());
+  const [outraUnidade, setOutraUnidade] = useState(false);
+  useEffect(() => {
+    if (aberto) setOutraUnidade(!!produto?.unidade && !UNIDADES_SUGERIDAS.includes(produto.unidade));
+  }, [aberto, produto?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const prefixoReais = <span className="text-[14px] font-semibold text-ink-soft shrink-0">R$</span>;
+
+  /* A margem calculada ao vivo, no cabeçalho preto: é a pergunta que o formulário responde. */
+  const cabecalho = (
+    <div className="flex items-end justify-between gap-3 rounded-2xl bg-cream/8 px-3.5 py-3">
+      <div className="min-w-0">
+        <p className="text-[12px] font-semibold text-brand-light">Margem por {nomeDaUnidade}</p>
+        <p className="text-[22px] font-bold text-white tabular-nums leading-tight truncate">
+          {margem ? formatarPrecoUnitario(margem.valor) : '—'}
+        </p>
+      </div>
+      <p
+        className={`text-[30px] font-bold tabular-nums leading-none shrink-0 ${
+          !margem ? 'text-cream/40' : margem.valor < 0 ? 'text-[#FECACA]' : 'text-ok-claro'
+        }`}
       >
-        Cancelar
-      </button>
-      <button
-        type="submit"
-        form="form-produto"
-        disabled={salvando}
-        className="inline-flex items-center gap-2 min-h-[44px] px-5 rounded-xl bg-ink text-white text-body-lg font-semibold disabled:opacity-40"
-      >
-        {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-        Salvar produto
-      </button>
+        {margem ? `${margem.percentual}%` : '—'}
+      </p>
     </div>
   );
 
@@ -187,88 +187,121 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
       onFechar={onFechar}
       titulo={produto ? 'Editar produto' : 'Novo produto'}
       sobretitulo="Estoque"
+      cabecalho={cabecalho}
       bloqueado={salvando}
-      rodape={rodape}
+      rodape={
+        <BotaoPrincipal type="submit" form="form-produto" disabled={salvando}>
+          {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
+          {produto ? 'Salvar alterações' : 'Salvar produto'}
+        </BotaoPrincipal>
+      }
     >
-      <form id="form-produto" onSubmit={salvar} className="p-4 sm:p-6 space-y-5">
+      <form id="form-produto" onSubmit={salvar} className="px-5 sm:px-6 py-5 flex flex-col gap-3.5">
         {erro && (
-          <div className="flex items-start gap-2 text-body text-danger bg-danger-bg border border-danger-line rounded-xl px-3 py-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
-            <span>{erro}</span>
-          </div>
+          <AvisoTinta tom="erro" icone={AlertCircle}>
+            {erro}
+          </AvisoTinta>
         )}
 
-        <div>
-          <label className={labelClass} htmlFor="produto-nome">
-            Nome *
-          </label>
-          <input
-            id="produto-nome"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            placeholder="Ex: Toxina botulínica 100 U"
-            className={inputClass}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass} htmlFor="produto-unidade">
-              Unidade de uso *
-            </label>
+        <div className="grid grid-cols-[1.3fr_1fr] gap-2.5">
+          <CampoTinta rotulo="Nome" htmlFor="produto-nome">
             <input
-              id="produto-unidade"
-              list="produto-unidades"
-              value={unidade}
-              onChange={(e) => setUnidade(e.target.value)}
-              placeholder="U, ml, un, seringa…"
-              className={inputClass}
+              id="produto-nome"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Ex: Toxina 100 U"
+              autoComplete="off"
+              className={INPUT_TINTA}
             />
-            <datalist id="produto-unidades">
-              {UNIDADES_SUGERIDAS.map((u) => (
-                <option key={u} value={u} />
-              ))}
-            </datalist>
-            <p className="mt-1 text-body text-gray-400">
-              Como ele é usado no atendimento — é por esta unidade que o custo e o repasse são
-              calculados.
-            </p>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="produto-marca">
-              Marca / fornecedor
-            </label>
+          </CampoTinta>
+          <CampoTinta rotulo="Marca" htmlFor="produto-marca">
             <input
               id="produto-marca"
               value={marca}
               onChange={(e) => setMarca(e.target.value)}
-              className={inputClass}
+              placeholder="Fornecedor"
+              autoComplete="off"
+              className={INPUT_TINTA}
             />
-          </div>
+          </CampoTinta>
         </div>
 
-        <label className="flex items-start gap-2 p-3 rounded-xl border border-line bg-surface cursor-pointer">
-          <input
-            type="checkbox"
-            checked={porCaixa}
-            onChange={(e) => alternarCaixa(e.target.checked)}
-            className="w-4 h-4 accent-brand mt-0.5"
-          />
-          <span className="text-body text-ink">
-            Caixa com unidades
-            <span className="block text-muted">
-              Comprado em caixa — ex.: 5 frascos por R$ 500,00. Você digita os valores da caixa e o
-              sistema calcula o custo e o repasse por {nomeDaUnidade}.
-            </span>
-          </span>
-        </label>
+        <div>
+          <RotuloTinta>Unidade de uso</RotuloTinta>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Unidade de uso">
+            {UNIDADES_SUGERIDAS.map((u) => {
+              const ativa = !outraUnidade && unidade.trim() === u;
+              return (
+                <button
+                  key={u}
+                  type="button"
+                  aria-pressed={ativa}
+                  onClick={() => {
+                    setOutraUnidade(false);
+                    setUnidade(u);
+                  }}
+                  className={`h-10 px-4 rounded-full text-[14px] font-semibold transition-colors ${
+                    ativa ? 'bg-ink text-white' : 'bg-line-soft text-ink hover:bg-[#E6E2DA]'
+                  }`}
+                >
+                  {u}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              aria-pressed={outraUnidade || (!unidadeSugerida && !!unidade.trim())}
+              onClick={() => {
+                setOutraUnidade(true);
+                if (unidadeSugerida) setUnidade('');
+              }}
+              className={`h-10 px-4 rounded-full text-[14px] font-semibold transition-colors ${
+                outraUnidade || (!unidadeSugerida && !!unidade.trim())
+                  ? 'bg-ink text-white'
+                  : 'bg-line-soft text-ink hover:bg-[#E6E2DA]'
+              }`}
+            >
+              Outra…
+            </button>
+          </div>
+          {(outraUnidade || (!unidadeSugerida && !!unidade.trim())) && (
+            <CampoTinta rotulo="Qual unidade?" htmlFor="produto-unidade" className="mt-2.5">
+              <input
+                id="produto-unidade"
+                value={unidade}
+                onChange={(e) => setUnidade(e.target.value)}
+                placeholder="Ex: bisnaga, cápsula"
+                autoFocus
+                autoComplete="off"
+                className={INPUT_TINTA}
+              />
+            </CampoTinta>
+          )}
+          <p className="mt-1.5 px-1 text-[13px] text-ink-soft leading-snug">
+            Como ele é usado no atendimento — é por esta unidade que o custo e o repasse são
+            calculados.
+          </p>
+        </div>
+
+        {/* Comprado em caixa ou por unidade: é uma troca de vista, não uma opção a mais. */}
+        <Segmentado
+          cheio
+          rotulo="Como o produto é comprado"
+          opcoes={[
+            { id: 'unidade', rotulo: 'Por unidade' },
+            { id: 'caixa', rotulo: 'Por caixa' },
+          ]}
+          valor={porCaixa ? 'caixa' : 'unidade'}
+          onMudar={(v) => alternarCaixa(v === 'caixa')}
+        />
 
         {porCaixa ? (
           <>
-            <div className="sm:w-1/2 sm:pr-2">
-              <label className={labelClass} htmlFor="produto-caixa-unidades">
-                Quantidade na caixa ({nomeDaUnidade}) *
-              </label>
+            <p className="-mt-1 px-1 text-[13px] text-ink-soft leading-snug">
+              Ex.: 5 frascos por R$ 500,00. Você digita os valores da caixa e o sistema calcula o
+              custo e o repasse por {nomeDaUnidade}.
+            </p>
+            <CampoTinta rotulo={`Quantidade na caixa (${nomeDaUnidade})`} htmlFor="produto-caixa-unidades">
               <input
                 id="produto-caixa-unidades"
                 type="number"
@@ -278,14 +311,20 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
                 value={unidadesNaCaixa}
                 onChange={(e) => setUnidadesNaCaixa(e.target.value)}
                 placeholder="Ex: 5"
-                className={inputClass}
+                className={`${INPUT_TINTA} tabular-nums`}
               />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass} htmlFor="produto-caixa-custo">
-                  Valor comprado (por caixa)
-                </label>
+            </CampoTinta>
+            <div className="grid grid-cols-2 gap-2.5">
+              <CampoTinta
+                rotulo="Comprado · caixa"
+                htmlFor="produto-caixa-custo"
+                ajuda={
+                  daCaixa.custoUnitario > 0
+                    ? `= ${formatarPrecoUnitario(daCaixa.custoUnitario)} por ${nomeDaUnidade}`
+                    : undefined
+                }
+                prefixo={prefixoReais}
+              >
                 <input
                   id="produto-caixa-custo"
                   type="number"
@@ -295,18 +334,19 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
                   value={custoDaCaixa}
                   onChange={(e) => setCustoDaCaixa(e.target.value)}
                   placeholder="0,00"
-                  className={inputClass}
+                  className={`${INPUT_TINTA} text-[18px] font-bold tabular-nums`}
                 />
-                {daCaixa.custoUnitario > 0 && (
-                  <p className="mt-1 text-body text-ink tabular-nums">
-                    = {formatarPrecoUnitario(daCaixa.custoUnitario)} por {nomeDaUnidade}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="produto-caixa-cliente">
-                  Valor repassado à cliente (por caixa)
-                </label>
+              </CampoTinta>
+              <CampoTinta
+                rotulo="Repassado · caixa"
+                htmlFor="produto-caixa-cliente"
+                ajuda={
+                  daCaixa.valorCliente > 0
+                    ? `= ${formatarPrecoUnitario(daCaixa.valorCliente)} por ${nomeDaUnidade}`
+                    : undefined
+                }
+                prefixo={prefixoReais}
+              >
                 <input
                   id="produto-caixa-cliente"
                   type="number"
@@ -316,73 +356,63 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
                   value={valorClienteDaCaixa}
                   onChange={(e) => setValorClienteDaCaixa(e.target.value)}
                   placeholder="0,00"
-                  className={inputClass}
+                  className={`${INPUT_TINTA} text-[18px] font-bold tabular-nums`}
                 />
-                {daCaixa.valorCliente > 0 && (
-                  <p className="mt-1 text-body text-ink tabular-nums">
-                    = {formatarPrecoUnitario(daCaixa.valorCliente)} por {nomeDaUnidade}
-                  </p>
-                )}
-                {linhaDaMargem}
-              </div>
+              </CampoTinta>
             </div>
           </>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass} htmlFor="produto-custo">
-                Valor comprado (por {nomeDaUnidade})
-              </label>
-              <input
-                id="produto-custo"
-                type="number"
-                min="0"
-                step="0.0001"
-                inputMode="decimal"
-                value={custo}
-                onChange={(e) => setCusto(e.target.value)}
-                placeholder="0,00"
-                className={inputClass}
-              />
-              <button
-                type="button"
-                onClick={() => setCalculadoraAberta((a) => !a)}
-                className="mt-1.5 inline-flex items-center gap-1 text-body font-semibold text-brand hover:underline"
+          <>
+            <div className="grid grid-cols-2 gap-2.5">
+              <CampoTinta rotulo={`Comprado · por ${nomeDaUnidade}`} htmlFor="produto-custo" prefixo={prefixoReais}>
+                <input
+                  id="produto-custo"
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  inputMode="decimal"
+                  value={custo}
+                  onChange={(e) => setCusto(e.target.value)}
+                  placeholder="0,00"
+                  className={`${INPUT_TINTA} text-[18px] font-bold tabular-nums`}
+                />
+              </CampoTinta>
+              <CampoTinta
+                rotulo={`Repassado · por ${nomeDaUnidade}`}
+                htmlFor="produto-cliente"
+                prefixo={prefixoReais}
               >
-                <Calculator className="w-3.5 h-3.5" />
-                Calcular pelo preço da embalagem
-              </button>
+                <input
+                  id="produto-cliente"
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  inputMode="decimal"
+                  value={valorCliente}
+                  onChange={(e) => setValorCliente(e.target.value)}
+                  placeholder="0,00"
+                  className={`${INPUT_TINTA} text-[18px] font-bold tabular-nums`}
+                />
+              </CampoTinta>
             </div>
-            <div>
-              <label className={labelClass} htmlFor="produto-cliente">
-                Valor repassado à cliente (por {nomeDaUnidade})
-              </label>
-              <input
-                id="produto-cliente"
-                type="number"
-                min="0"
-                step="0.0001"
-                inputMode="decimal"
-                value={valorCliente}
-                onChange={(e) => setValorCliente(e.target.value)}
-                placeholder="0,00"
-                className={inputClass}
-              />
-              {linhaDaMargem}
-            </div>
-          </div>
+            <button
+              type="button"
+              onClick={() => setCalculadoraAberta((a) => !a)}
+              className="self-start -mt-1 inline-flex items-center gap-1.5 min-h-[40px] px-1 text-[14px] font-semibold text-ink underline underline-offset-2"
+            >
+              <Calculator className="w-4 h-4" />
+              Calcular pelo preço da embalagem
+            </button>
+          </>
         )}
 
         {!porCaixa && calculadoraAberta && (
-          <div className="p-3.5 rounded-xl border border-line bg-surface space-y-3">
-            <p className="text-body text-muted">
+          <div className="p-4 rounded-2xl bg-card border border-ink/10 flex flex-col gap-3">
+            <p className="text-[13px] text-ink-soft">
               Ex.: o frasco de 100 U custa R$ 1.200,00 → R$ 12,00 por U.
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass} htmlFor="produto-preco-embalagem">
-                  Preço da embalagem
-                </label>
+            <div className="grid grid-cols-2 gap-2.5">
+              <CampoTinta rotulo="Preço da embalagem" htmlFor="produto-preco-embalagem" prefixo={prefixoReais}>
                 <input
                   id="produto-preco-embalagem"
                   type="number"
@@ -391,13 +421,10 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
                   inputMode="decimal"
                   value={precoEmbalagem}
                   onChange={(e) => setPrecoEmbalagem(e.target.value)}
-                  className={inputClass}
+                  className={`${INPUT_TINTA} tabular-nums`}
                 />
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="produto-unidades-embalagem">
-                  {unidade.trim() || 'Unidades'} na embalagem
-                </label>
+              </CampoTinta>
+              <CampoTinta rotulo={`${unidade.trim() || 'Unidades'} na embalagem`} htmlFor="produto-unidades-embalagem">
                 <input
                   id="produto-unidades-embalagem"
                   type="number"
@@ -406,12 +433,12 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
                   inputMode="decimal"
                   value={unidadesEmbalagem}
                   onChange={(e) => setUnidadesEmbalagem(e.target.value)}
-                  className={inputClass}
+                  className={`${INPUT_TINTA} tabular-nums`}
                 />
-              </div>
+              </CampoTinta>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-body-lg text-ink tabular-nums">
+              <span className="text-[15px] font-bold text-ink tabular-nums">
                 {precoCalculado > 0
                   ? `${formatarPrecoUnitario(precoCalculado)} por ${nomeDaUnidade}`
                   : '—'}
@@ -423,7 +450,7 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
                   setCusto(String(precoCalculado));
                   setCalculadoraAberta(false);
                 }}
-                className="min-h-[40px] px-3 rounded-lg bg-ink text-white text-body font-semibold disabled:opacity-40"
+                className="h-10 px-4 rounded-full bg-ink text-white text-[14px] font-semibold disabled:opacity-40"
               >
                 Usar este valor
               </button>
@@ -431,18 +458,16 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
           </div>
         )}
 
-        <div>
-          <label className={labelClass} htmlFor="produto-obs">
-            Observações
-          </label>
+        <CampoTinta rotulo="Observações" htmlFor="produto-obs">
           <textarea
             id="produto-obs"
             value={observacoes}
             onChange={(e) => setObservacoes(e.target.value)}
             rows={2}
-            className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden resize-y"
+            placeholder="Lote, validade, fornecedor"
+            className={`${INPUT_TINTA} resize-y leading-snug font-medium`}
           />
-        </div>
+        </CampoTinta>
       </form>
     </SidePanel>
   );

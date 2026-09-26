@@ -16,17 +16,16 @@ interface ModuleTabsProps<T extends string> {
 }
 
 /**
- * A navegação entre as seções de um módulo — a barra que a anamnese e a avaliação compartilham.
+ * A troca de vista dentro de um módulo — "Preenchidas · Fichas-modelo" na anamnese, na avaliação
+ * e no acompanhamento.
  *
- * Mora num componente só porque o requisito é que as duas telas sejam **reconhecíveis uma na
- * outra**: a equipe usa o app em pé, durante o atendimento, e pagar um instante para reparar que
- * "esta tela é parecida mas não igual" é exatamente o custo que a unificação evita. Duas cópias
- * do mesmo JSX divergem no primeiro ajuste que alguém fizer só de um lado.
+ * Mora num componente só porque o requisito é que as telas sejam **reconhecíveis umas nas
+ * outras**: a equipe usa o app em pé, durante o atendimento, e pagar um instante para reparar que
+ * "esta tela é parecida mas não igual" é exatamente o custo que a unificação evita.
  *
- * Linha horizontal **sempre**, inclusive no celular. A versão anterior da anamnese empilhava na
- * vertical abaixo de `lg`, e fazia sentido enquanto eram três rótulos longos; com dois rótulos
- * curtos, empilhar só gastava uma faixa de tela. O que o empilhamento dava de bom — o dedo
- * acertar o alvo — fica preservado no `py-3.5`, que é maior que o da barra que a avaliação usava.
+ * No redesign ela virou controle segmentado. As abas sublinhadas do topo escolhem **qual ficha**
+ * (anamnese, avaliação, acompanhamento); isto aqui escolhe **o que ver dela** — e dois controles
+ * iguais empilhados não diriam qual é qual.
  */
 export function ModuleTabs<T extends string>({ tabs, active, onSelect }: ModuleTabsProps<T>) {
   return (
@@ -34,7 +33,7 @@ export function ModuleTabs<T extends string>({ tabs, active, onSelect }: ModuleT
     // outros ou vazar da tela.
     <div
       role="tablist"
-      className="flex items-center gap-1 border-b border-[rgba(26,26,26,.07)] overflow-x-auto"
+      className="inline-flex max-w-full gap-1 p-1 rounded-xl bg-line-soft overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {tabs.map((tab) => {
         const Icon = tab.icon;
@@ -46,23 +45,16 @@ export function ModuleTabs<T extends string>({ tabs, active, onSelect }: ModuleT
             role="tab"
             aria-selected={ativa}
             onClick={() => onSelect(tab.id)}
-            className={`flex items-center gap-2 shrink-0 whitespace-nowrap px-4 py-3.5 text-[14px] font-semibold border-b-2 -mb-px transition-colors ${
+            className={`flex items-center gap-2 shrink-0 whitespace-nowrap h-9 px-3.5 rounded-[9px] text-[13px] font-semibold transition-colors ${
               ativa
-                ? 'border-brand text-ink'
-                : 'border-transparent text-muted hover:text-ink'
+                ? 'bg-card text-ink shadow-[0_1px_2px_rgba(26,26,26,.08)]'
+                : 'text-ink-soft hover:text-ink'
             }`}
           >
             <Icon className="w-4 h-4 shrink-0" />
             {tab.label}
             {tab.count !== undefined && (
-              <span
-                className={`px-2 py-0.5 rounded-full text-[12px] font-semibold ${
-                  ativa ? 'bg-brand text-white' : 'bg-gray-100 text-muted'
-                }`}
-                style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}
-              >
-                {tab.count}
-              </span>
+              <span className={`tabular-nums ${ativa ? 'text-ink-soft' : 'text-muted'}`}>{tab.count}</span>
             )}
           </button>
         );

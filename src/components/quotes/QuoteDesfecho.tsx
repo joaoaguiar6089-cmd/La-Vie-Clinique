@@ -186,7 +186,7 @@ interface FolhaDePagamentoProps {
  * O comprovante sobe **antes** de o status mudar: se o Storage recusar, nada foi gravado e a
  * profissional decide — tenta de novo ou tira o arquivo e registra só o pagamento.
  */
-const FolhaDePagamento: React.FC<FolhaDePagamentoProps> = ({ quote, onFechar, onConfirmar }) => {
+export const FolhaDePagamento: React.FC<FolhaDePagamentoProps> = ({ quote, onFechar, onConfirmar }) => {
   const [data, setData] = useState(hojeISO());
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -402,6 +402,68 @@ const FolhaDePagamento: React.FC<FolhaDePagamentoProps> = ({ quote, onFechar, on
  * mostra como desfazer. Usado na tela de Orçamentos e na aba de orçamentos da paciente, para as
  * duas listas se comportarem igual.
  */
+/**
+ * O desfecho de um orçamento — registrar o pagamento, recusar, reabrir — com a folha e as
+ * perguntas que ele abre. Serve à linha antiga (`QuoteDesfecho`) e ao cartão novo da tela de
+ * Orçamentos, para as duas pedirem a mesma confirmação com as mesmas palavras.
+ */
+export const useDesfechoDoOrcamento = (quote: Quote) => {
+  const [folhaAberta, setFolhaAberta] = useState(false);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
+
+  const recusar = () =>
+    setConfirmacao({
+      titulo: `A cliente recusou o ${quote.numero}?`,
+      mensagem:
+        'O orçamento sai dos abertos e conta na conversão como não fechado. O link da cliente continua igual. Dá para desfazer depois.',
+      textoConfirmar: 'Marcar recusado',
+      tom: 'neutro',
+      onConfirmar: () => {
+        marcarQuoteComoRecusado(quote.id).catch((e) =>
+          setConfirmacao(aviso('Não foi possível marcar como recusado', (e as Error).message, 'perigo'))
+        );
+      },
+    });
+
+  const reabrir = () => {
+    const volta = statusAntesDoDesfecho(quote);
+    setConfirmacao({
+      titulo: `Reabrir o ${quote.numero}?`,
+      mensagem: `A recusa é desfeita e o orçamento volta para ${volta === 'enviado' ? 'enviado' : 'rascunho'}.`,
+      textoConfirmar: 'Reabrir',
+      tom: 'neutro',
+      onConfirmar: () => {
+        desfazerDesfechoDoQuote(quote).catch((e) =>
+          setConfirmacao(aviso('Não foi possível reabrir', (e as Error).message, 'perigo'))
+        );
+      },
+    });
+  };
+
+  /* No `body`, e não dentro da linha: a lista pode estar num painel com animação de entrada, e
+     um ancestral com `transform` prende o `position: fixed` a ele. */
+  const elementos = createPortal(
+    <>
+      {folhaAberta && (
+        <FolhaDePagamento
+          quote={quote}
+          onFechar={() => setFolhaAberta(false)}
+          onConfirmar={setConfirmacao}
+        />
+      )}
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+    </>,
+    document.body
+  );
+
+  return {
+    abrirPagamento: () => setFolhaAberta(true),
+    recusar,
+    reabrir,
+    elementos,
+  };
+};
+
 export const QuoteDesfecho: React.FC<{ quote: Quote }> = ({ quote }) => {
   const [folhaAberta, setFolhaAberta] = useState(false);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
