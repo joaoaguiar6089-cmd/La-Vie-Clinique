@@ -92,8 +92,9 @@ const Destino: React.FC<{
         </span>
       )}
     </span>
+    {/* 11px só nos aparelhos mais estreitos (360px), onde "Pacientes" em 12px não cabe. */}
     <span
-      className={`text-label leading-none max-w-full truncate px-0.5 ${
+      className={`text-[11px] min-[380px]:text-label leading-none max-w-full truncate px-0.5 ${
         ativo ? 'font-bold' : 'font-medium'
       }`}
     >
@@ -361,7 +362,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     <>
       <nav
         aria-label="Navegação principal"
-        className="sm:hidden fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-40 h-[68px] rounded-[24px] bg-ink px-2 flex items-center shadow-[0_12px_30px_rgba(26,26,26,.3)]"
+        className="sm:hidden fixed inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] z-40 h-[68px] rounded-[24px] bg-ink px-1.5 flex items-center shadow-[0_12px_30px_rgba(26,26,26,.3)]"
       >
         <Destino
           icone={Home}
@@ -378,7 +379,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         />
 
         {/* O + central. Botão de ação, não destino — por isso o tratamento diferente. */}
-        <div className="flex-1 min-w-[44px] flex items-center justify-center">
+        <div className="w-[60px] shrink-0 flex items-center justify-center">
           <button
             type="button"
             onClick={() => setCriarAberto(true)}

@@ -15,7 +15,6 @@ import { AcompanhamentoModule } from './components/acompanhamento/Acompanhamento
 import { EstoqueModule } from './components/estoque/EstoqueModule';
 import { AgendaModule } from './components/agenda/AgendaModule';
 import { agendamentosAtrasados } from './utils/agenda';
-import { hojeISO } from './utils/attendances';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
@@ -59,7 +58,6 @@ import {
   subscribeToAttendances,
   subscribeToPatients,
   subscribeToQuotes,
-  marcarConfirmacao,
   isQuotaOrOfflineError,
   normalizeProcedureList,
 } from './services/databaseService';
@@ -858,19 +856,9 @@ function MainCatalogApp() {
               carregando={atendimentosCarregando}
               onAbrirBusca={() => setBuscaAberta(true)}
               onCriar={criar}
-              onAgendarEm={(hora) =>
-                navegar({ view: 'agenda', criarNovo: true, data: hojeISO(), hora })
-              }
               onIrParaAgenda={(data) => navegar({ view: 'agenda', data })}
-              onIrParaOrcamentos={(filtro) => navegar({ view: 'quotes', filtro })}
-              onIrParaFinanceiro={isAdminUser ? () => navegar({ view: 'financeiro' }) : undefined}
-              onCompletarCadastros={() => navegar({ view: 'patients', filtro: 'pendentes' })}
+              onIrPara={(view) => navegar({ view })}
               onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
-              onConfirmar={(a) =>
-                marcarConfirmacao(a.id, true).catch((e) =>
-                  showToast(`Não foi possível confirmar: ${(e as Error).message}`, 'erro')
-                )
-              }
             />
           ) : currentView === 'financeiro' ? (
             <FinanceiroView
