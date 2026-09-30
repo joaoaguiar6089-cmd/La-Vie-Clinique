@@ -36,6 +36,7 @@ import {
   montarItemAvulso,
   montarItemDoProcedimento,
   montarSnapshotClinica,
+  sessoesDoProcedimento,
 } from '../../utils/quoteFactory';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { ProcedureSearchAdd } from './ProcedureSearchAdd';
@@ -468,16 +469,24 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     });
 
   /**
-   * Um item já mexido pela profissional: desconto, número de sessões ou detalhes alterados.
+   * Um item já mexido pela profissional: desconto, número de sessões diferente do cadastro ou
+   * cálculo por consumo.
    *
    * Serve à trava do controle vivo — desmarcar no mapa remove o item, mas desmarcar por engano um
    * item onde ela já negociou 20% e 6 sessões apagaria um trabalho que não se refaz sozinho.
+   *
+   * As sessões se comparam com as do cadastro porque o item já nasce com elas: laser de 10 sessões
+   * não é "mexido" só por existir. Os detalhes ficaram de fora — só o cadastro do procedimento os
+   * edita, então o item nunca os altera.
    */
-  const itemFoiEditado = (item: QuoteItem): boolean =>
-    item.temDesconto ||
-    item.maisDeUmaSessao ||
-    !!item.calculadoPorConsumo ||
-    (item.detalhes || []).some((d) => d.titulo.trim() || d.valor.trim());
+  const itemFoiEditado = (item: QuoteItem): boolean => {
+    const doCatalogo = procedures.find((p) => p.id === item.procedureId);
+    return (
+      item.temDesconto ||
+      !!item.calculadoPorConsumo ||
+      itemSessoes(item) !== (doCatalogo ? sessoesDoProcedimento(doCatalogo) : 1)
+    );
+  };
 
   const alternarAreaDoLaser = (procedureId: string) => {
     const existente = itens.find((i) => i.procedureId === procedureId);
@@ -1162,7 +1171,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
             ? {
                 titulo: `Remover ${nomeCurtoDaArea(confirmarRemocao.titulo)} do orçamento?`,
                 mensagem:
-                  'Este item já foi ajustado — desconto, número de sessões ou detalhes. Removê-lo ' +
+                  'Este item já foi ajustado — desconto, número de sessões ou cálculo por consumo. Removê-lo ' +
                   'descarta esses ajustes, e eles não voltam ao marcar a área de novo.',
                 textoConfirmar: 'Remover mesmo assim',
                 onConfirmar: () => {

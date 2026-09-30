@@ -84,6 +84,13 @@ Status: **aprovado, pronto para implementar** — 2026-09-08.
   - `sessionsRecommended` → "Sessões"
   - `recoveryTime` → "Recuperação"
   - `areasTreated` → "Áreas tratadas" (join com ", ")
+- Esses detalhes **só se editam aqui**. O item do orçamento os recebe na montagem e os
+  mostra como estão (PDF e página pública), sem campo para mexer — quem quiser mudar um
+  detalhe muda no cadastro do procedimento.
+- **"Mais de 1 sessão"** (`sessoesInclusas`): checkbox + quantidade, tanto no painel do laser
+  quanto no formulário completo. É um número, separado do texto livre de `sessionsRecommended`
+  ("1 a 3 sessões anuais"), porque só o número dá para o orçamento herdar. Desmarcar apaga o
+  campo no banco (`deleteField`), já que a gravação é `merge: true`.
 
 ## 4. Formulário gerador (`QuoteFormModal`)
 
@@ -111,8 +118,8 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
 - Dois botões lado a lado abaixo da lista: **"+ Adicionar procedimento"** (abre a
   busca no catálogo) e **"+ Procedimento fora do catálogo"** (item em branco).
 - O item nasce com categoria, título, valor (`promotionalPrice` quando houver, senão
-  `price`) e os detalhes pré-preenchidos — todos editáveis, cada detalhe removível,
-  com "+ adicionar campo".
+  `price`), as sessões do cadastro e os detalhes pré-preenchidos. Título, valor e sessões
+  seguem editáveis no item; **os detalhes não** — ver seção 3.
 - **Profissional por procedimento**: cada item tem a sua, porque nem sempre é a mesma
   pessoa que realiza tudo. Vem da atribuição do próprio procedimento no catálogo
   (`assignedDoctorIds`); sem atribuição, o item nasce sem profissional e quem emite
@@ -120,7 +127,9 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
 - Valor: editável.
 - Checkbox **desconto** → digita-se o **novo valor**; o sistema calcula o percentual,
   que é o que aparece no PDF ("desconto de 11%").
-- Checkbox **mais de 1 sessão** → campo de quantidade.
+- Checkbox **mais de 1 sessão** → campo de quantidade. Já vem marcado e preenchido quando o
+  procedimento tem `sessoesInclusas` (laser de 10 sessões nasce com 10); continua editável, e
+  o item de fora do catálogo nasce desmarcado.
 - **Sem nota de preço.** A linha abaixo do valor mostra apenas o desconto e, quando
   houver, a quantidade de sessões.
 

@@ -7,6 +7,7 @@ import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES }
 import { subirImagemOuManter } from '../services/imageStorage';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { isLaserCategory } from '../utils/templateMatching';
+import { sessoesDoProcedimento } from '../utils/quoteFactory';
 import { LaserAreaEditor } from './laser/LaserAreaEditor';
 import { SidePanel } from './common/SidePanel';
 import { ConfirmDialog, ConfirmRequest } from './ConfirmDialog';
@@ -38,6 +39,53 @@ interface ProcedureFormModalProps {
   onAbrirConfiguracoes?: () => void;
 }
 
+/**
+ * "Mais de 1 sessão" + quantidade — o número que o orçamento usa para já nascer com as sessões do
+ * pacote preenchidas. Aparece no painel do laser e no formulário completo, com o mesmo
+ * comportamento; só o estilo do campo muda.
+ */
+const CampoMaisDeUmaSessao: React.FC<{
+  marcado: boolean;
+  quantidade: string;
+  onMarcar: (marcado: boolean) => void;
+  onQuantidade: (quantidade: string) => void;
+  inputClassName: string;
+}> = ({ marcado, quantidade, onMarcar, onQuantidade, inputClassName }) => (
+  <div className="space-y-1.5">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={marcado}
+          onChange={(e) => onMarcar(e.target.checked)}
+          className="w-3.5 h-3.5 accent-brand"
+        />
+        <span className="text-xs font-medium text-ink">Mais de 1 sessão</span>
+      </label>
+      {marcado && (
+        <input
+          type="number"
+          min="2"
+          step="1"
+          value={quantidade}
+          onChange={(e) => onQuantidade(e.target.value)}
+          // Sair do campo vazio ou com 1 devolve o mínimo, para o número nunca ficar inválido.
+          onBlur={() => {
+            if (!(Math.floor(Number(quantidade)) >= 2)) onQuantidade('2');
+          }}
+          aria-label="Quantidade de sessões"
+          className={`w-20 tabular-nums ${inputClassName}`}
+        />
+      )}
+    </div>
+    <p className="text-label text-muted leading-snug">
+      {marcado
+        ? 'O orçamento já nasce com esse número de sessões — dá para ajustar lá.'
+        : 'Marque para pacotes: o orçamento já nasce com o número de sessões preenchido.'}
+    </p>
+  </div>
+);
+
 export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   isOpen,
   onClose,
@@ -61,6 +109,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [isStartingPrice, setIsStartingPrice] = useState<boolean>(false);
   const [duration, setDuration] = useState('45 a 60 min');
   const [sessionsRecommended, setSessionsRecommended] = useState('1 a 3 sessões');
+  /** "Mais de 1 sessão": o número de sessões do pacote, que o orçamento herda. Texto digitado. */
+  const [maisDeUmaSessao, setMaisDeUmaSessao] = useState(false);
+  const [sessoesInclusas, setSessoesInclusas] = useState('');
   const [recoveryTime, setRecoveryTime] = useState('Sem downtime');
   /** O "antes de vir" que a confirmação do WhatsApp anexa quando a clínica liga a opção. */
   const [orientacoesPreProcedimento, setOrientacoesPreProcedimento] = useState('');
@@ -132,6 +183,18 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   /** Foto já adicionada que a usuária pediu para reenquadrar (índice em `images`). */
   const [adjustingImage, setAdjustingImage] = useState<{ index: number; src: string } | null>(null);
 
+  /** Devolve à tela o "Mais de 1 sessão" gravado no procedimento (ou o desmarcado, sem procedimento). */
+  const carregarSessoesInclusas = (proc: Procedure | null) => {
+    const n = proc ? sessoesDoProcedimento(proc) : 1;
+    setMaisDeUmaSessao(n > 1);
+    setSessoesInclusas(n > 1 ? String(n) : '');
+  };
+
+  const marcarMaisDeUmaSessao = (marcado: boolean) => {
+    setMaisDeUmaSessao(marcado);
+    if (marcado && !(Number(sessoesInclusas) >= 2)) setSessoesInclusas('2');
+  };
+
   useEffect(() => {
     if (procedureToEdit) {
       setTitle(procedureToEdit.title || '');
@@ -144,6 +207,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setIsStartingPrice(Boolean(procedureToEdit.isStartingPrice));
       setDuration(procedureToEdit.duration || '');
       setSessionsRecommended(procedureToEdit.sessionsRecommended || '');
+      carregarSessoesInclusas(procedureToEdit);
       setRecoveryTime(procedureToEdit.recoveryTime || '');
       setOrientacoesPreProcedimento(procedureToEdit.orientacoesPreProcedimento || '');
       setIntervaloEntreSessoesDias(
@@ -177,6 +241,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setIsStartingPrice(false);
       setDuration('45 min');
       setSessionsRecommended('1 a 3 sessões');
+      carregarSessoesInclusas(null);
       setRecoveryTime('Sem downtime');
       setImages(['https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80']);
       setBenefits(['Rejuvenescimento visível e seguro', 'Estímulo de colágeno e viço natural']);
@@ -406,6 +471,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       isStartingPrice: isStartingPrice,
       duration: duration.trim() || undefined,
       sessionsRecommended: sessionsRecommended.trim() || undefined,
+      // Desmarcado = `undefined`, e é o `saveProcedureToDb` que transforma isso em apagar o campo.
+      sessoesInclusas: maisDeUmaSessao ? Math.max(2, Math.floor(Number(sessoesInclusas)) || 2) : undefined,
       recoveryTime: recoveryTime.trim() || undefined,
       orientacoesPreProcedimento: orientacoesPreProcedimento.trim() || undefined,
       intervaloEntreSessoesDias: Number(intervaloEntreSessoesDias) > 0
@@ -535,6 +602,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setIsStartingPrice(Boolean(proc.isStartingPrice));
     setDuration(proc.duration || '');
     setSessionsRecommended(proc.sessionsRecommended || '');
+    carregarSessoesInclusas(proc);
     setRecoveryTime(proc.recoveryTime || '');
     setOrientacoesPreProcedimento(proc.orientacoesPreProcedimento || '');
     setIntervaloEntreSessoesDias(
@@ -777,6 +845,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                       />
                     </div>
                   </div>
+
+                  <CampoMaisDeUmaSessao
+                    marcado={maisDeUmaSessao}
+                    quantidade={sessoesInclusas}
+                    onMarcar={marcarMaisDeUmaSessao}
+                    onQuantidade={setSessoesInclusas}
+                    inputClassName="px-2.5 py-1.5 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
+                  />
 
                   <button
                     type="button"
@@ -1197,6 +1273,17 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
                 />
               </div>
+
+              <div className="sm:col-span-2">
+                <span className="block text-xs font-medium text-ink mb-2">Sessões do pacote</span>
+                <CampoMaisDeUmaSessao
+                  marcado={maisDeUmaSessao}
+                  quantidade={sessoesInclusas}
+                  onMarcar={marcarMaisDeUmaSessao}
+                  onQuantidade={setSessoesInclusas}
+                  inputClassName="px-3 py-1.5 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
+                />
+              </div>
             </div>
 
             {/* Preparo da paciente. Diferente de "Contraindicações": aquilo é motivo para não
@@ -1335,7 +1422,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             <p className="text-body leading-relaxed text-gray-500">
               Campos que já nascem preenchidos no orçamento deste procedimento — produto, unidades,
-              duração do efeito, anestesia, intervalo. Quem emitir pode editar ou remover cada um.
+              duração do efeito, anestesia, intervalo. É só aqui que eles se editam: no orçamento aparecem
+              como estão, sem campo para mexer.
               <span className="block mt-1 text-gray-400">
                 Duração, sessões, recuperação e regiões aplicadas já entram automaticamente, não
                 precisa repetir aqui.

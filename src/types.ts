@@ -111,6 +111,15 @@ export interface Procedure {
   isStartingPrice?: boolean; // Quando true, exibe a opção "A partir de" antes do valor
   duration?: string; // e.g. "45 min", "1h 30min"
   sessionsRecommended?: string; // e.g. "1 a 3 sessões anuais", "4 a 6 sessões quinzenais"
+  /**
+   * Quantas sessões o valor do procedimento cobre — "10 sessões" de laser. Só existe quando são 2
+   * ou mais; ausente = 1 sessão.
+   *
+   * É o número que o orçamento usa para nascer com "Mais de 1 sessão" marcada e a quantidade
+   * preenchida (continua editável lá). Separado de `sessionsRecommended` porque aquele é texto
+   * livre para o catálogo ("1 a 3 sessões anuais") e não dá para ler um número confiável dele.
+   */
+  sessoesInclusas?: number;
   recoveryTime?: string; // e.g. "Sem downtime", "24 a 48h com leve vermelhidão"
   images: string[];
   benefits: string[];
