@@ -3,6 +3,7 @@ import { AlertTriangle, CalendarClock, Check, ChevronDown, X } from 'lucide-reac
 import { Attendance } from '../../types';
 import { DataISO } from '../../utils/attendances';
 import { dataCurta } from '../../utils/agenda';
+import { ausenciaAvisada } from '../../utils/agendamentoLink';
 
 /**
  * Agendamentos cuja data já passou e ninguém marcou compareceu, faltou ou remarcou.
@@ -83,14 +84,17 @@ export const AgendaPendencias: React.FC<AgendaPendenciasProps> = ({
                   <Check className="w-3.5 h-3.5" />
                   Compareceu
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onFaltou(a)}
-                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-sm text-body font-medium text-red-600 hover:bg-red-50 transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Faltou
-                </button>
+                {/* Quem avisou pelo link que não ia não "faltou" — a equipe só remarca ou exclui. */}
+                {!ausenciaAvisada(a) && (
+                  <button
+                    type="button"
+                    onClick={() => onFaltou(a)}
+                    className="inline-flex items-center gap-1 px-2 py-1.5 rounded-sm text-body font-medium text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Faltou
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onRemarcar(a)}

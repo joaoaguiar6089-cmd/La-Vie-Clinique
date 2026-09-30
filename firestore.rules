@@ -83,6 +83,48 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // Link do agendamento: a cópia enxuta de um agendamento que a clínica manda à paciente
+    // (?agendamento=<token>) para ela confirmar, avisar que não vai ou pedir outro horário. É a
+    // única coleção da agenda que alguém sem login toca, então cada permissão é a menor possível:
+    //
+    //  - `get` é público e vale só por id. O segredo é o token, um crypto.randomUUID() — a mesma
+    //    proteção dos orçamentos. `list` fica com a equipe: sem isso qualquer pessoa enumeraria
+    //    todos os tokens e leria os agendamentos de todas as pacientes.
+    //  - Quem não tem login só pode ATUALIZAR, só enquanto o agendamento está ativo, e só os três
+    //    campos da resposta. Horário, nome, foto e clínica são da equipe.
+    //  - A resposta é validada por `respostaValida`: tipo dentro da lista, data e hora no formato
+    //    certo, recado curto. Assim o campo não vira um depósito de texto de terceiros.
+    //
+    // Nada aqui contém observação interna, preço, id ou contato da paciente (ver
+    // `montarSnapshotDoLink`). Publicar com: firebase deploy --only firestore:rules
+    match /appointment_links/{token} {
+      function respostaValida(r) {
+        return r is map
+          && r.keys().hasOnly(['tipo', 'novaData', 'novaHora', 'mensagem'])
+          && r.tipo in ['confirmar', 'nao_vai', 'remarcar']
+          && (!('mensagem' in r) || (r.mensagem is string && r.mensagem.size() <= 300))
+          && (r.tipo != 'remarcar' || (
+                'novaData' in r && r.novaData is string
+                && r.novaData.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+                && 'novaHora' in r && r.novaHora is string
+                && r.novaHora.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')))
+          && (r.tipo == 'remarcar' || (!('novaData' in r) && !('novaHora' in r)));
+      }
+
+      allow get: if true;
+      allow list, create, delete: if request.auth != null;
+      allow update: if request.auth != null
+        || (
+          resource.data.situacao == 'ativo'
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['resposta', 'respostaPendente', 'respondidoEm'])
+          && request.resource.data.respostaPendente == true
+          && request.resource.data.respondidoEm is string
+          && request.resource.data.respondidoEm.size() <= 40
+          && respostaValida(request.resource.data.resposta)
+        );
+    }
+
     // Fichas de avaliação: o que a profissional avalia ANTES do procedimento — fototipo,
     // estratégia proposta, o mapa anatômico rabiscado e a foto do estado inicial.
     //

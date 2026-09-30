@@ -26,6 +26,8 @@ import {
   AnamnesisQuestion,
   AnamnesisTemplate,
   Attendance,
+  AppointmentLink,
+  AppointmentLinkResposta,
   Patient,
   SessionPlan,
   AnamnesisRecord,
@@ -58,6 +60,13 @@ import {
   planejarMigracao,
 } from '../utils/evaluations';
 import { paraArray } from '../utils/firestoreShapes';
+import {
+  efeitoDaResposta,
+  montarSnapshotDoLink,
+  primeiroNomeDe,
+  respostaParaGravar,
+  situacaoDoLink,
+} from '../utils/agendamentoLink';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../utils/fichasClinicas';
 import { caixaLida, linhasSemValor } from '../utils/estoque';
 import {
@@ -95,6 +104,12 @@ const COUNTERS_COLLECTION = 'counters';
 
 const ATTENDANCES_COLLECTION = 'attendances';
 const SESSION_PLANS_COLLECTION = 'session_plans';
+/**
+ * O espelho público de cada agendamento compartilhado com a paciente — ver `AppointmentLink`.
+ * É a **primeira** coleção da agenda aberta a quem não tem login; as regras liberam a leitura só
+ * por id (`get`, nunca `list`) e a escrita só do campo da resposta.
+ */
+const APPOINTMENT_LINKS_COLLECTION = 'appointment_links';
 
 // Fichas de avaliação — o que a profissional avalia ANTES do procedimento. Ao contrário de
 // `patients` e `anamnesis_records`, estas três exigem login nas regras: a paciente preenche a
@@ -1997,18 +2012,29 @@ export async function saveAttendance(
     updatedAt: new Date().toISOString(),
   });
   /**
-   * Mudar a data ou a hora de um agendamento confirmado derruba a confirmação: a paciente disse
-   * que vinha **naquele** horário.
+   * Mudar a data ou a hora de um agendamento derruba tudo o que a paciente respondeu: ela disse
+   * que vinha (ou não vinha, ou pediu outro dia) para **aquele** horário.
    *
    * Precisa ser explícito porque a gravação é `merge: true` e `cleanForFirestore` descarta
    * `undefined` — sem o sentinela, o campo simplesmente sobreviveria. E o sentinela entra depois
    * da limpeza: ele é um objeto, e passar por lá o transformaria num `{}` que o Firestore recusa.
    */
-  if (opcoes?.limparConfirmacao) dataToSave.confirmadoEm = deleteField();
+  if (opcoes?.limparConfirmacao) {
+    dataToSave.confirmadoEm = deleteField();
+    dataToSave.avisoAusenciaEm = deleteField();
+    dataToSave.pedidoRemarcacao = deleteField();
+  }
+  // `remarcado` é estado final: o link passa para o agendamento que nasce ao lado. Se este
+  // registro continuasse com o token, qualquer gravação futura dele puxaria o link de volta.
+  if (attendance.status === 'remarcado') dataToSave.linkToken = deleteField();
   // Com confirmação do servidor por causa da agenda: uma gravação barrada pela cota fica na fila
   // local e a promise nunca resolve, então a tela mostraria o horário reservado sem que nada
   // tivesse chegado ao banco — e a recepção marcaria outra paciente em cima.
   await comConfirmacaoDoServidor(setDoc(docRef, dataToSave, { merge: true }), 'do atendimento');
+  await sincronizarLinkDoAtendimento(
+    attendance,
+    opcoes?.limparConfirmacao ? apagarRespostaDoLink() : {}
+  );
 }
 
 /**
@@ -2028,6 +2054,19 @@ export async function deleteAttendance(atendimento: Attendance): Promise<void> {
     batch.delete(doc(db, ATTENDANCE_MATERIALS_COLLECTION, atendimento.id));
   }
   await batch.commit();
+
+  // O link fica de fora do lote: o token só existe em quem já o compartilhou, e um documento
+  // ausente ou uma regra ainda não publicada não podem impedir a exclusão da visita.
+  if (atendimento.linkToken) {
+    try {
+      await comConfirmacaoDoServidor(
+        deleteDoc(doc(db, APPOINTMENT_LINKS_COLLECTION, atendimento.linkToken)),
+        'da exclusão do link'
+      );
+    } catch (e) {
+      console.warn('Não foi possível apagar o link do agendamento excluído:', e);
+    }
+  }
 }
 
 /**
@@ -2098,10 +2137,19 @@ export function subscribeToSessionPlans(
  *
  * Num `writeBatch` só: meio caminho deixaria a paciente sem horário nenhum (antigo remarcado, novo
  * não criado) ou com dois ao mesmo tempo.
+ *
+ * O link da paciente, se existir, passa para o agendamento novo: o token é o mesmo e ela continua
+ * abrindo o mesmo endereço, agora com o horário certo. Essa parte vem **depois** do lote e não
+ * dentro dele, porque o link é um espelho — um documento ausente não pode desfazer a remarcação.
+ *
+ * `aprovacaoDePedido` marca a remarcação que a própria paciente pediu pelo link. O horário foi
+ * escolha dela e a equipe o aceitou, então o agendamento novo já nasce confirmado — mandar
+ * confirmar de novo o que ela acabou de propor seria pedir a mesma resposta duas vezes.
  */
 export async function remarcarAtendimento(
   original: Attendance,
-  destino: { data: string; hora: string }
+  destino: { data: string; hora: string },
+  opcoes?: { aprovacaoDePedido?: boolean }
 ): Promise<Attendance> {
   const agora = new Date().toISOString();
 
@@ -2120,7 +2168,10 @@ export async function remarcarAtendimento(
     materiaisRegistradosEm: undefined,
     custoMateriais: undefined,
     materiaisSemValor: undefined,
-    confirmadoEm: undefined,
+    confirmadoEm: opcoes?.aprovacaoDePedido ? agora : undefined,
+    // O aviso de ausência e o pedido de outro horário eram sobre a visita que caiu.
+    avisoAusenciaEm: undefined,
+    pedidoRemarcacao: undefined,
     createdAt: agora,
     updatedAt: agora,
   };
@@ -2129,11 +2180,291 @@ export async function remarcarAtendimento(
   batch.update(doc(db, ATTENDANCES_COLLECTION, original.id), {
     status: 'remarcado',
     updatedAt: agora,
+    // Estado final: o token e as respostas da paciente seguem com o agendamento novo.
+    linkToken: deleteField(),
+    avisoAusenciaEm: deleteField(),
+    pedidoRemarcacao: deleteField(),
   });
   batch.set(doc(db, ATTENDANCES_COLLECTION, novo.id), cleanForFirestore(novo), { merge: true });
   await comConfirmacaoDoServidor(batch.commit(), 'da remarcação');
 
+  await sincronizarLinkDoAtendimento(novo, {
+    ...apagarRespostaDoLink(),
+    ...(opcoes?.aprovacaoDePedido
+      ? { decisaoRemarcacao: 'aprovada', decisaoEm: agora }
+      : {}),
+  });
+
   return novo;
+}
+
+// ==========================================
+// LINK DO AGENDAMENTO (página pública da paciente)
+// ==========================================
+
+/**
+ * Os campos do link que dependem só do atendimento e por isso acompanham cada gravação dele.
+ *
+ * Não refaz a cópia inteira: foto, descrição e dados da clínica exigem o catálogo e o perfil, que
+ * a gravação de um atendimento não tem à mão — esses são renovados quando a equipe abre
+ * "Compartilhar" (`garantirLinkDoAgendamento`). Aqui vão o horário, a profissional, o nome do
+ * procedimento e a situação: o que, se ficasse velho, faria a paciente confirmar um horário que
+ * já não existe.
+ */
+function camposDoLinkDoAtendimento(a: Attendance): Record<string, unknown> {
+  const campos: Record<string, unknown> = {
+    attendanceId: a.id,
+    clientePrimeiroNome: primeiroNomeDe(a.pacienteNome),
+    data: a.data,
+    hora: a.hora || deleteField(),
+    profissionalNome: a.profissionalNome || deleteField(),
+    situacao: situacaoDoLink(a.status),
+    updatedAt: new Date().toISOString(),
+  };
+  // Caminho com ponto: troca só o título e preserva foto e orientações copiadas do catálogo.
+  if (a.procedimentoNome) campos['procedimento.titulo'] = a.procedimentoNome;
+  if (a.duracaoMin) campos.duracaoMin = a.duracaoMin;
+  return campos;
+}
+
+/** Zera o que a paciente respondeu e o que a equipe decidiu — a resposta era para outro horário. */
+function apagarRespostaDoLink(): Record<string, unknown> {
+  return {
+    resposta: deleteField(),
+    respondidoEm: deleteField(),
+    respostaPendente: false,
+    decisaoRemarcacao: deleteField(),
+    decisaoEm: deleteField(),
+  };
+}
+
+/**
+ * Mantém o link em dia com o atendimento. Não faz nada para quem nunca compartilhou.
+ *
+ * **Nunca lança.** O link é um espelho, e o atendimento já foi gravado quando isto roda: se a
+ * regra ainda não foi publicada, se o documento sumiu ou se a cota acabou, o pior resultado é uma
+ * página desatualizada — e derrubar o salvamento da agenda por isso seria trocar o essencial pelo
+ * acessório. A falha vai para o console.
+ */
+async function sincronizarLinkDoAtendimento(
+  atendimento: Attendance,
+  extra: Record<string, unknown> = {}
+): Promise<void> {
+  if (!atendimento.linkToken) return;
+  try {
+    await comConfirmacaoDoServidor(
+      updateDoc(doc(db, APPOINTMENT_LINKS_COLLECTION, atendimento.linkToken), {
+        ...camposDoLinkDoAtendimento(atendimento),
+        ...extra,
+      }),
+      'do link do agendamento'
+    );
+  } catch (e) {
+    console.warn('Não foi possível atualizar o link do agendamento:', e);
+  }
+}
+
+/**
+ * Cria o link do agendamento — ou renova a cópia dele — e devolve o token.
+ *
+ * Chamado quando a equipe abre "Compartilhar", isto é, por uma ação explícita e nunca por um
+ * `onSnapshot`: cada chamada custa uma leitura e uma gravação da cota diária.
+ *
+ * No primeiro uso o token nasce aqui (`crypto.randomUUID()`, o mesmo segredo dos orçamentos) e vai
+ * para o atendimento junto com o documento público, num lote — um sem o outro deixaria um link
+ * órfão ou um atendimento apontando para o nada. Nas demais vezes só a cópia é renovada, sem tocar
+ * na resposta que a paciente já deu. Diferente da sincronização, **aqui os erros sobem**: quem
+ * clicou em "Compartilhar" precisa saber que o link não funciona.
+ */
+export async function garantirLinkDoAgendamento(
+  atendimento: Attendance,
+  clinic: ClinicProfile,
+  catalogo: Procedure[]
+): Promise<string> {
+  const agora = new Date().toISOString();
+  const snapshot = montarSnapshotDoLink(atendimento, clinic, catalogo);
+
+  const token = atendimento.linkToken || crypto.randomUUID();
+  const linkRef = doc(db, APPOINTMENT_LINKS_COLLECTION, token);
+
+  if (atendimento.linkToken) {
+    const existente = await getDoc(linkRef);
+    if (existente.exists()) {
+      // Campo que deixou de existir (a hora, a foto) precisa ser apagado no link, e o merge por
+      // caminho não apaga sozinho.
+      const renovacao: Record<string, unknown> = {};
+      (Object.keys(snapshot) as (keyof typeof snapshot)[]).forEach((chave) => {
+        renovacao[chave] = snapshot[chave] === undefined ? deleteField() : snapshot[chave];
+      });
+      renovacao.procedimento = cleanForFirestore(snapshot.procedimento);
+      renovacao.clinica = cleanForFirestore(snapshot.clinica);
+      await comConfirmacaoDoServidor(
+        updateDoc(linkRef, { ...renovacao, updatedAt: agora }),
+        'do link do agendamento'
+      );
+      return token;
+    }
+  }
+
+  const batch = writeBatch(db);
+  batch.set(
+    linkRef,
+    cleanForFirestore({
+      ...snapshot,
+      respostaPendente: false,
+      createdAt: agora,
+      updatedAt: agora,
+    })
+  );
+  if (!atendimento.linkToken) {
+    batch.update(doc(db, ATTENDANCES_COLLECTION, atendimento.id), { linkToken: token });
+  }
+  await comConfirmacaoDoServidor(batch.commit(), 'do link do agendamento');
+  return token;
+}
+
+/** Lê o link pelo token — é o que a página pública da paciente faz, sem login. */
+export async function getLinkDoAgendamento(token: string): Promise<AppointmentLink | null> {
+  const snap = await getDoc(doc(db, APPOINTMENT_LINKS_COLLECTION, token));
+  if (!snap.exists()) return null;
+  return { ...(snap.data() as AppointmentLink), id: snap.id };
+}
+
+/**
+ * Grava a resposta da paciente — a **única** escrita que a página pública faz.
+ *
+ * Só três campos, e as regras do Firestore conferem isso: quem tem o token pode responder, mas não
+ * consegue mexer no horário, no nome nem em nada que a equipe gravou. Cada resposta substitui a
+ * anterior por inteiro (`resposta` é um mapa gravado de uma vez, então uma data pedida antes não
+ * sobrevive a uma confirmação depois).
+ */
+export async function responderAoLink(
+  token: string,
+  resposta: AppointmentLinkResposta
+): Promise<void> {
+  await comConfirmacaoDoServidor(
+    updateDoc(doc(db, APPOINTMENT_LINKS_COLLECTION, token), {
+      resposta: respostaParaGravar(resposta),
+      respostaPendente: true,
+      respondidoEm: new Date().toISOString(),
+    }),
+    'da sua resposta'
+  );
+}
+
+/**
+ * As respostas que a equipe ainda não aplicou. Filtra no servidor por `respostaPendente`, então a
+ * assinatura lê só o que é novo — normalmente nenhum documento — e não a coleção inteira.
+ */
+function subscribeToRespostasPendentesDireto(
+  onUpdate: (data: AppointmentLink[]) => void,
+  onError?: (err: Error) => void
+) {
+  const consulta = query(
+    collection(db, APPOINTMENT_LINKS_COLLECTION),
+    where('respostaPendente', '==', true)
+  );
+  return onSnapshot(
+    consulta,
+    (snapshot) => {
+      const items: AppointmentLink[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ ...(docSnap.data() as AppointmentLink), id: docSnap.id });
+      });
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Appointment links subscription offline/cota diária atingida.');
+      } else {
+        // `permission-denied` aqui costuma ser só a regra ainda não publicada.
+        console.warn('Appointment links subscription error:', error);
+      }
+      if (onError) onError(error);
+    }
+  );
+}
+
+export function subscribeToRespostasPendentes(
+  onUpdate: (data: AppointmentLink[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<AppointmentLink[]>(
+    'appointment_links_pendentes',
+    subscribeToRespostasPendentesDireto,
+    onUpdate,
+    onError
+  );
+}
+
+/**
+ * Passa a resposta da paciente do link para o atendimento, que é onde a agenda a enxerga.
+ *
+ * A página pública não pode escrever em `attendances`, então quem faz a cópia é o painel da
+ * equipe, quando abre. Roda uma vez por resposta e é idempotente: dois painéis abertos gravam os
+ * mesmos valores. O `em` gravado é o instante em que **ela** respondeu, não o de agora.
+ *
+ * Só toca o atendimento se ele ainda for o que o link aponta e ainda estiver `agendado` — resposta
+ * a uma visita já resolvida ou excluída apenas encerra a pendência.
+ */
+export async function aplicarRespostaDoLink(link: AppointmentLink): Promise<void> {
+  const agora = new Date().toISOString();
+  const linkRef = doc(db, APPOINTMENT_LINKS_COLLECTION, link.id);
+  const batch = writeBatch(db);
+
+  if (link.resposta && link.respondidoEm) {
+    const atendimentoRef = doc(db, ATTENDANCES_COLLECTION, link.attendanceId);
+    const atual = await getDoc(atendimentoRef);
+    const dados = atual.exists() ? (atual.data() as Attendance) : null;
+
+    if (dados && dados.status === 'agendado' && dados.linkToken === link.id) {
+      const efeito = efeitoDaResposta(link.resposta, link.respondidoEm);
+      const campos: Record<string, unknown> = { ...efeito.gravar, updatedAt: agora };
+      efeito.apagar.forEach((campo) => {
+        campos[campo] = deleteField();
+      });
+      batch.update(atendimentoRef, campos);
+    }
+  }
+
+  batch.update(linkRef, { respostaPendente: false, respostaAplicadaEm: agora });
+  await comConfirmacaoDoServidor(batch.commit(), 'da resposta da paciente');
+}
+
+/**
+ * Recusa o pedido de outro horário: o agendamento fica onde estava e a página da paciente passa a
+ * dizer que a clínica não conseguiu, com o convite para propor outro.
+ */
+export async function recusarPedidoDeRemarcacao(atendimento: Attendance): Promise<void> {
+  const agora = new Date().toISOString();
+  await comConfirmacaoDoServidor(
+    updateDoc(doc(db, ATTENDANCES_COLLECTION, atendimento.id), {
+      pedidoRemarcacao: deleteField(),
+      updatedAt: agora,
+    }),
+    'da recusa'
+  );
+  await sincronizarLinkDoAtendimento(atendimento, {
+    resposta: deleteField(),
+    respondidoEm: deleteField(),
+    respostaPendente: false,
+    decisaoRemarcacao: 'recusada',
+    decisaoEm: agora,
+  });
+}
+
+/**
+ * Aprova o pedido de outro horário: é uma remarcação como qualquer outra, com o horário que a
+ * paciente escolheu.
+ */
+export async function aprovarPedidoDeRemarcacao(atendimento: Attendance): Promise<Attendance> {
+  const pedido = atendimento.pedidoRemarcacao;
+  if (!pedido) throw new Error('Este agendamento não tem pedido de alteração em aberto.');
+  return remarcarAtendimento(
+    atendimento,
+    { data: pedido.data, hora: pedido.hora },
+    { aprovacaoDePedido: true }
+  );
 }
 
 export async function saveSessionPlan(plan: SessionPlan): Promise<void> {

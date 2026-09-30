@@ -138,6 +138,8 @@ interface AttendanceFormModalProps {
   /**
    * `limparConfirmacao` é verdadeiro quando a edição mexeu na data ou na hora: a paciente tinha
    * confirmado **aquele** horário, e manter o selo verde no novo faria a agenda de amanhã mentir.
+   * Vale o mesmo para o aviso de ausência e o pedido de outro horário que ela fez pelo link — e
+   * também para o agendamento novo de uma remarcação, que herda o link mas não as respostas.
    */
   onSalvar: (
     attendance: Attendance,
@@ -618,6 +620,9 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         salaId: salaId || undefined,
         profissionalNome: profissional?.name,
         observacoes: observacoes.trim() || undefined,
+        // O link que a paciente recebeu. Em `novo` a semente é sempre uma remarcação (é o único
+        // caminho que passa `atendimento` aí), e o agendamento novo fica com o mesmo endereço.
+        linkToken: atendimento?.linkToken,
         // Natureza congelada na criação. Confirmar resolve o agendamento; editar não mexe nela.
         status:
           modo === 'confirmacao'
@@ -642,8 +647,17 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         modo === 'edicao' &&
         (registro.data !== atendimento?.data || (registro.hora || '') !== (atendimento?.hora || ''));
 
+      const temRespostaDaPaciente =
+        !!atendimento?.confirmadoEm ||
+        !!atendimento?.avisoAusenciaEm ||
+        !!atendimento?.pedidoRemarcacao;
       await onSalvar(registro, planoNovo, {
-        limparConfirmacao: !!atendimento?.confirmadoEm && horarioMudou,
+        limparConfirmacao:
+          (temRespostaDaPaciente && horarioMudou) ||
+          // Remarcação que herdou o link: o agendamento novo começa sem resposta nenhuma.
+          (modo === 'novo' && !!atendimento?.linkToken) ||
+          // O link guarda o que a paciente respondeu para o horário antigo, mesmo sem selo.
+          (!!atendimento?.linkToken && horarioMudou),
       });
 
       if (confirmarNoWhatsApp && clinic) {

@@ -53,6 +53,8 @@ const COR_NO_ESCURO: Partial<Record<SituacaoDoCartao, string>> = {
   confirmado: 'text-ok-claro',
   agendado: 'text-brand-pale',
   atrasado: 'text-[#FDE68A]',
+  pediuAlteracao: 'text-[#FDE68A]',
+  naoVai: 'text-[#FCA5A5]',
 };
 
 /** A cor do status escrito no cartão claro. */
@@ -277,7 +279,12 @@ const CartaoDeAtendimento: React.FC<{
   const confirmado = ehConfirmado(atendimento);
   const pendente = atendimento.status === 'agendado';
   /** O que ainda vai acontecer é bloco preto; o que já aconteceu, cartão claro. */
-  const escuro = situacao === 'agendado' || situacao === 'confirmado' || situacao === 'atrasado';
+  const escuro =
+    situacao === 'agendado' ||
+    situacao === 'confirmado' ||
+    situacao === 'pediuAlteracao' ||
+    situacao === 'naoVai' ||
+    situacao === 'atrasado';
   const faltou = situacao === 'faltou';
 
   const faixa =

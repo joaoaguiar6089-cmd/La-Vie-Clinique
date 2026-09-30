@@ -11,8 +11,10 @@ import {
   SessionPlan,
 } from '../../types';
 import {
+  aprovarPedidoDeRemarcacao,
   deleteAttendance,
   marcarConfirmacao,
+  recusarPedidoDeRemarcacao,
   remarcarAtendimento,
   saveAttendance,
   subscribeToQuotes,
@@ -24,8 +26,11 @@ import {
   AGENDA_VISAO_STORAGE_KEY,
   aConfirmarAmanha,
   agendamentosAtrasados,
+  conflitosDe,
+  conflitosDeSala,
   dataCurta,
   diasComAtendimento,
+  nomeDaSala,
   salasDaClinica,
   deslocarDias,
   deslocarMeses,
@@ -33,8 +38,9 @@ import {
   diasDoMesDe,
   diasVisiveisDaSemana,
 } from '../../utils/agenda';
+import { respostasParaResolver } from '../../utils/agendamentoLink';
 import { DataISO, hojeISO, progressoDoPlano, numeroDaSessao } from '../../utils/attendances';
-import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
+import { aviso, ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { AttendanceFormModal, ModoDoFormulario } from '../patients/AttendanceFormModal';
 import { AgendaToolbar } from './AgendaToolbar';
 import { AgendaGradeView } from './AgendaGradeView';
@@ -45,6 +51,8 @@ import { AgendaSemanaStrip } from './AgendaSemanaStrip';
 import { AgendaDiaMobile } from './AgendaDiaMobile';
 import { AgendaFiltros } from './AgendaFiltros';
 import { AgendaDetalheModal } from './AgendaDetalheModal';
+import { AgendamentoShareModal } from './AgendamentoShareModal';
+import { AgendaRespostasClientes } from './AgendaRespostasClientes';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { SkeletonAgenda } from '../common/Skeleton';
@@ -124,6 +132,8 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   const [formulario, setFormulario] = useState<EstadoDoFormulario | null>(null);
   const [pacienteDoForm, setPacienteDoForm] = useState<Patient | null>(null);
   const [detalhe, setDetalhe] = useState<Attendance | null>(null);
+  /** O agendamento cujo link está sendo compartilhado. */
+  const [compartilhando, setCompartilhando] = useState<Attendance | null>(null);
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
   const [arrastando, setArrastando] = useState<Attendance | null>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
@@ -234,6 +244,38 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
           : atendimentos
       ),
     [atendimentos, filtroProfissionalId]
+  );
+
+  /**
+   * O que as clientes responderam pelo link e ainda pede decisão. Vem de `atendimentos` (a clínica
+   * inteira), sem o filtro de profissional: um pedido de outro horário não deve sumir porque
+   * alguém está olhando a agenda de uma pessoa só.
+   */
+  const respostasDasClientes = useMemo(() => respostasParaResolver(atendimentos), [atendimentos]);
+
+  /**
+   * O detalhe guarda uma **cópia** do agendamento de quando foi aberto — é o que deixa o selo de
+   * "confirmado" virar no toque (ver `alternarConfirmacao`). As respostas da cliente chegam
+   * enquanto ele está aberto, então esses três campos, e só eles, vêm sempre da lista viva.
+   */
+  const detalheAoVivo = useMemo(() => {
+    if (!detalhe) return null;
+    const vivo = atendimentos.find((a) => a.id === detalhe.id);
+    if (!vivo) return detalhe;
+    return {
+      ...detalhe,
+      linkToken: vivo.linkToken,
+      avisoAusenciaEm: vivo.avisoAusenciaEm,
+      pedidoRemarcacao: vivo.pedidoRemarcacao,
+    };
+  }, [detalhe, atendimentos]);
+
+  const compartilhandoAoVivo = useMemo(
+    () =>
+      compartilhando
+        ? atendimentos.find((a) => a.id === compartilhando.id) ?? compartilhando
+        : null,
+    [compartilhando, atendimentos]
   );
 
   // ==========================================
@@ -407,6 +449,105 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
     }
   };
 
+  // ==========================================
+  // PEDIDOS DE OUTRO HORÁRIO (link da cliente)
+  // ==========================================
+
+  /**
+   * Aprova o horário que a cliente pediu. É uma remarcação como a do arrasto, então pergunta antes
+   * — e confere o que a agenda sabe e a cliente não: a sala ocupada **impede** (mesma regra do
+   * formulário), a profissional ocupada só **avisa**.
+   */
+  const pedirAprovacao = (a: Attendance) => {
+    const pedido = a.pedidoRemarcacao;
+    if (!pedido) return;
+    setDetalhe(null);
+
+    if (pedido.data < hoje) {
+      setConfirmacao(
+        aviso(
+          'Esse horário já passou',
+          `A cliente pediu ${dataCurta(pedido.data)} às ${pedido.hora}, mas o pedido ficou parado e a ` +
+            'data já passou. Recuse o pedido ou remarque à mão para uma data futura.'
+        )
+      );
+      return;
+    }
+
+    const candidato = {
+      id: a.id,
+      data: pedido.data,
+      hora: pedido.hora,
+      duracaoMin: a.duracaoMin,
+      procedureId: a.procedureId,
+      professionalId: a.professionalId,
+      salaId: a.salaId,
+    };
+
+    const salaOcupada = conflitosDeSala(candidato, atendimentos, catalogProcedures);
+    if (salaOcupada.length > 0) {
+      setConfirmacao(
+        aviso(
+          'Sala ocupada nesse horário',
+          `${nomeDaSala(a.salaId, clinic) || 'A sala'} já está reservada em ${dataCurta(pedido.data)} ` +
+            `às ${pedido.hora} (${salaOcupada.map((o) => o.pacienteNome).join(', ')}). Recuse o pedido ` +
+            'ou remarque à mão para outro horário.',
+          'perigo'
+        )
+      );
+      return;
+    }
+
+    const conflitos = conflitosDe(candidato, atendimentos, catalogProcedures);
+    const alerta =
+      conflitos.length > 0
+        ? `\n\nAtenção: ${a.profissionalNome || 'a profissional'} já tem ` +
+          conflitos.map((c) => `${c.pacienteNome}${c.hora ? ' às ' + c.hora : ''}`).join(' e ') +
+          ' nesse horário.'
+        : '';
+
+    setConfirmacao({
+      titulo: 'Aprovar novo horário',
+      tom: 'neutro',
+      textoConfirmar: 'Aprovar',
+      mensagem:
+        `${a.pacienteNome} passa de ${dataCurta(a.data)}${a.hora ? ' às ' + a.hora : ''} ` +
+        `para ${dataCurta(pedido.data)} às ${pedido.hora}. O agendamento atual fica marcado como ` +
+        'remarcado e um novo é criado já confirmado — o link da cliente passa a mostrar o novo ' +
+        `horário.${alerta}`,
+      onConfirmar: async () => {
+        try {
+          setErro(null);
+          await aprovarPedidoDeRemarcacao(a);
+        } catch (e) {
+          setErro(`Não foi possível aprovar o novo horário: ${(e as Error).message}`);
+        }
+      },
+    });
+  };
+
+  const pedirRecusa = (a: Attendance) => {
+    const pedido = a.pedidoRemarcacao;
+    if (!pedido) return;
+    setConfirmacao({
+      titulo: 'Recusar novo horário',
+      tom: 'neutro',
+      textoConfirmar: 'Recusar',
+      mensagem:
+        `${a.pacienteNome} continua em ${dataCurta(a.data)}${a.hora ? ' às ' + a.hora : ''}. A ` +
+        'página dela vai avisar que a clínica não conseguiu o horário pedido, e ela pode propor ' +
+        'outro. Se preferir, fale com ela pelo WhatsApp antes de recusar.',
+      onConfirmar: async () => {
+        try {
+          setErro(null);
+          await recusarPedidoDeRemarcacao(a);
+        } catch (e) {
+          setErro(`Não foi possível recusar o pedido: ${(e as Error).message}`);
+        }
+      },
+    });
+  };
+
   const pedirExclusao = (a: Attendance) => {
     setDetalhe(null);
     setConfirmacao({
@@ -477,6 +618,16 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
           {erro}
         </div>
       )}
+
+      {/* No topo: é a cliente esperando resposta, e a decisão é rápida. */}
+      <AgendaRespostasClientes
+        respostas={respostasDasClientes}
+        onAbrir={setDetalhe}
+        onAprovar={pedirAprovacao}
+        onRecusar={pedirRecusa}
+        onRemarcar={abrirRemarcacao}
+        onExcluir={pedirExclusao}
+      />
 
       <AgendaAConfirmar
         aConfirmar={aConfirmar}
@@ -557,9 +708,9 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
       />
       </div>
 
-      {detalhe && (
+      {detalheAoVivo && (
         <AgendaDetalheModal
-          atendimento={detalhe}
+          atendimento={detalheAoVivo}
           clinic={clinic}
           catalogo={catalogProcedures}
           pacientes={pacientes}
@@ -575,6 +726,21 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
             setDetalhe(null);
             setAcompanhando(a);
           }}
+          onCompartilhar={setCompartilhando}
+          onAprovarPedido={pedirAprovacao}
+          onRecusarPedido={pedirRecusa}
+        />
+      )}
+
+      {/* Depois do detalhe, e não dentro dele: os dois são folhas do mesmo nível, e esta abre por
+          cima. Ao fechar, a equipe volta ao agendamento de onde veio. */}
+      {compartilhandoAoVivo && (
+        <AgendamentoShareModal
+          atendimento={compartilhandoAoVivo}
+          clinic={clinic}
+          catalogo={catalogProcedures}
+          pacientes={pacientes}
+          onFechar={() => setCompartilhando(null)}
         />
       )}
 

@@ -758,6 +758,26 @@ export interface Attendance {
    */
   confirmadoEm?: string; // ISO
   /**
+   * O segredo do link que a clínica compartilhou com a paciente (`appointment_links/{token}`).
+   * Ausente = o link nunca foi gerado.
+   *
+   * Mora aqui, e não como id previsível do link, porque `atd-<timestamp>` é adivinhável — quem
+   * abre o link sem login só chega ao documento sabendo o token, que é um `crypto.randomUUID()`.
+   * É também o que faz cada gravação do atendimento saber que precisa manter o link em dia.
+   */
+  linkToken?: string;
+  /**
+   * Instante em que a paciente avisou, pelo link, que **não vai poder ir**. Só sinaliza: o
+   * agendamento continua `agendado` e quem decide (remarcar ou excluir) é a equipe. Some quando a
+   * data ou a hora mudam, ou quando a paciente confirma depois.
+   */
+  avisoAusenciaEm?: string; // ISO
+  /**
+   * O horário que a paciente pediu, pelo link, no lugar do marcado — à espera de a equipe
+   * aprovar (vira `remarcarAtendimento`) ou recusar. Ausente = nenhum pedido em aberto.
+   */
+  pedidoRemarcacao?: PedidoDeRemarcacao;
+  /**
    * **Legado.** Marcava que a visita tinha `EvaluationRecord`, do tempo em que a avaliação era uma
    * por atendimento. A avaliação virou ficha pré-procedimento, emitida pela própria seção e sem
    * vínculo com a visita — este campo não é mais escrito nem lido. Fica no tipo porque os
@@ -789,6 +809,91 @@ export interface Attendance {
    * morar aqui: sem uma leitura por atendimento. Ausente = nenhuma.
    */
   materiaisSemValor?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// ==========================================
+// LINK DO AGENDAMENTO — TIPOS
+// ==========================================
+
+/** O pedido de outro horário que a paciente fez pelo link. */
+export interface PedidoDeRemarcacao {
+  data: string; // YYYY-MM-DD
+  hora: string; // HH:MM
+  mensagem?: string;
+  em: string; // ISO
+}
+
+/**
+ * Onde o link está na vida do agendamento. Derivado do `status` do atendimento a cada gravação:
+ * `ativo` deixa a paciente responder; os outros dois mostram a página só para leitura.
+ */
+export type AppointmentLinkSituacao = 'ativo' | 'remarcado' | 'encerrado';
+
+export type AppointmentLinkRespostaTipo = 'confirmar' | 'nao_vai' | 'remarcar';
+
+/** A resposta da paciente — a única coisa que a página pública grava. */
+export interface AppointmentLinkResposta {
+  tipo: AppointmentLinkRespostaTipo;
+  /** Só em `remarcar`. */
+  novaData?: string; // YYYY-MM-DD
+  novaHora?: string; // HH:MM
+  mensagem?: string;
+}
+
+/** O que a página pública mostra da clínica — sem e-mail nem qualquer dado de login da equipe. */
+export interface AppointmentLinkClinica {
+  name: string;
+  tagline?: string;
+  phone?: string;
+  address?: string;
+  cityState?: string;
+  logoUrl?: string;
+}
+
+/**
+ * O espelho público de um agendamento, em `appointment_links/{token}`.
+ *
+ * A página da paciente não tem login e, pelas regras, não pode ler `attendances`, `procedures`
+ * nem `patients`. Então a equipe grava aqui uma **cópia enxuta** do que a paciente precisa ver, e
+ * mantém a cópia em dia a cada mudança do atendimento. Fica de fora tudo o que é interno:
+ * observações, preços, id e contato da paciente, plano de sessões.
+ */
+export interface AppointmentLink {
+  /** O token, igual ao id do documento. */
+  id: string;
+  attendanceId: string;
+  /** Só o primeiro nome — a saudação da página. */
+  clientePrimeiroNome: string;
+  procedimento: {
+    titulo: string;
+    subtitulo?: string;
+    descricao?: string;
+    /** Só endereço http(s). Foto em base64 estouraria o limite do documento. */
+    foto?: string;
+    duracaoTexto?: string;
+    /** O preparo de antes da visita (`Procedure.orientacoesPreProcedimento`). */
+    orientacoes?: string;
+  };
+  data: string; // YYYY-MM-DD
+  hora?: string; // HH:MM
+  duracaoMin?: number;
+  profissionalNome?: string;
+  clinica: AppointmentLinkClinica;
+  situacao: AppointmentLinkSituacao;
+  resposta?: AppointmentLinkResposta;
+  respondidoEm?: string; // ISO
+  /**
+   * A equipe ainda não aplicou a resposta ao atendimento. É o campo que a assinatura do painel
+   * filtra — assim ela lê só o que é novo, e não a coleção inteira.
+   */
+  respostaPendente: boolean;
+  /** Quando o painel da equipe copiou a resposta para o atendimento. */
+  respostaAplicadaEm?: string; // ISO
+  /** O desfecho do último pedido de outro horário, para a paciente ver na própria página. */
+  decisaoRemarcacao?: 'aprovada' | 'recusada';
+  decisaoEm?: string; // ISO
   createdAt: string;
   updatedAt?: string;
 }

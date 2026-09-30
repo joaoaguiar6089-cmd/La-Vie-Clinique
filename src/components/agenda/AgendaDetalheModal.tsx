@@ -6,9 +6,11 @@ import {
   MessageCircle,
   NotebookPen,
   Pencil,
+  Send,
   Stethoscope,
   Trash2,
   User,
+  UserX,
   X,
 } from 'lucide-react';
 import { Attendance, ClinicProfile, Patient, Procedure } from '../../types';
@@ -24,6 +26,7 @@ import {
 import { ROTULO_DO_STATUS, ehPendente } from '../../utils/attendances';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
 import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fichasClinicas';
+import { ausenciaAvisada, instanteCurto } from '../../utils/agendamentoLink';
 
 /**
  * O que um cartão da grade abre.
@@ -52,6 +55,11 @@ interface AgendaDetalheModalProps {
    * atendimento na ficha da paciente.
    */
   onAcompanhamento: (a: Attendance) => void;
+  /** Abre o modal do link que a cliente recebe para confirmar, avisar que não vai ou pedir outro horário. */
+  onCompartilhar: (a: Attendance) => void;
+  /** Aprova o horário que a cliente pediu pelo link — é uma remarcação, com confirmação em diálogo. */
+  onAprovarPedido: (a: Attendance) => void;
+  onRecusarPedido: (a: Attendance) => void;
 }
 
 const acaoBase =
@@ -71,6 +79,9 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
   onExcluir,
   onAlternarConfirmacao,
   onAcompanhamento,
+  onCompartilhar,
+  onAprovarPedido,
+  onRecusarPedido,
 }) => {
   const inicioMin = minutosDoHHMM(atendimento.hora);
   const duracao = duracaoDoAtendimento(atendimento, catalogo);
@@ -81,6 +92,13 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
   );
   const pendente = ehPendente(atendimento);
   const confirmado = ehConfirmado(atendimento);
+  /**
+   * A cliente já disse, pelo link, que não vem. "Faltou" deixa de ser oferecido: ela avisou, então
+   * marcar falta seria registrar como descuido o que foi um aviso. Sobram Remarcar e Excluir — a
+   * decisão de quem atende. "Compareceu" fica, porque quem avisou pode aparecer mesmo assim.
+   */
+  const avisouAusencia = ausenciaAvisada(atendimento);
+  const pedido = pendente ? atendimento.pedidoRemarcacao : undefined;
 
   return (
     <div
@@ -143,6 +161,55 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
             </p>
           )}
 
+          {/* O que a cliente respondeu pelo link. Só aparece enquanto pede alguma decisão. */}
+          {pedido && (
+            <div className="rounded-sm bg-warn-bg border border-warn-line px-3 py-2.5 space-y-2">
+              <p className="flex items-start gap-2 text-body text-warn">
+                <CalendarClock className="w-4 h-4 shrink-0 mt-px" />
+                <span>
+                  <strong>A cliente pediu outro horário</strong> em {instanteCurto(pedido.em)}:{' '}
+                  <span className="font-semibold first-letter:uppercase">
+                    {dataExtensa(pedido.data)} às {pedido.hora}
+                  </span>
+                  .
+                </span>
+              </p>
+              {pedido.mensagem && (
+                <p className="text-body text-ink-soft italic whitespace-pre-wrap">
+                  “{pedido.mensagem}”
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onAprovarPedido(atendimento)}
+                  className={`${acaoBase} bg-ok-bg text-ok border border-ok-line hover:bg-ok-bg/70`}
+                >
+                  <Check className="w-4 h-4" />
+                  Aprovar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRecusarPedido(atendimento)}
+                  className={`${acaoBase} bg-white/70 text-gray-600 border border-gray-200 hover:border-brand/40`}
+                >
+                  <X className="w-4 h-4" />
+                  Recusar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {avisouAusencia && (
+            <p className="flex items-start gap-2 px-3 py-2.5 rounded-sm bg-danger-bg border border-danger-line text-body text-danger">
+              <UserX className="w-4 h-4 shrink-0 mt-px" />
+              <span>
+                <strong>A cliente avisou que não vai poder ir</strong> em{' '}
+                {instanteCurto(atendimento.avisoAusenciaEm)}. Remarque ou exclua o agendamento.
+              </span>
+            </p>
+          )}
+
           {/* Confirmação, em dois passos separados de propósito.
 
               O botão de WhatsApp **não grava nada**: ele só abre a conversa com a mensagem
@@ -151,6 +218,15 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
               se fosse resposta, e a agenda de amanhã passaria a mentir. */}
           {pendente && (
             <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => onCompartilhar(atendimento)}
+                className={`${acaoBase} w-full bg-ink text-white hover:bg-ink/90`}
+              >
+                <Send className="w-4 h-4" />
+                Compartilhar link com a cliente
+              </button>
+
               {linkWhatsApp ? (
                 <a
                   href={linkWhatsApp}
@@ -202,7 +278,7 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
 
           {/* Os três desfechos, só enquanto houver o que resolver. */}
           {pendente && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${avisouAusencia ? 'grid-cols-2' : 'grid-cols-3'}`}>
               <button
                 type="button"
                 onClick={() => onCompareceu(atendimento)}
@@ -211,14 +287,16 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
                 <Check className="w-4 h-4" />
                 Compareceu
               </button>
-              <button
-                type="button"
-                onClick={() => onFaltou(atendimento)}
-                className={`${acaoBase} bg-red-50 text-red-600 border border-red-200 hover:bg-red-100`}
-              >
-                <X className="w-4 h-4" />
-                Faltou
-              </button>
+              {!avisouAusencia && (
+                <button
+                  type="button"
+                  onClick={() => onFaltou(atendimento)}
+                  className={`${acaoBase} bg-red-50 text-red-600 border border-red-200 hover:bg-red-100`}
+                >
+                  <X className="w-4 h-4" />
+                  Faltou
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onRemarcar(atendimento)}

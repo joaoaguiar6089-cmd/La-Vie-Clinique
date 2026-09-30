@@ -19,6 +19,7 @@ import {
 import { Attendance, SessionPlan } from '../../types';
 import { formatDateOnly } from '../../utils/formatters';
 import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fichasClinicas';
+import { ausenciaAvisada } from '../../utils/agendamentoLink';
 import {
   ehPendente,
   ehPendenteAtrasado,
@@ -99,15 +100,18 @@ const AcoesDoAgendamento: React.FC<{
     >
       <CalendarCheck className="w-4 h-4" />
     </button>
-    <button
-      type="button"
-      onClick={() => onFaltou(atendimento)}
-      title="Faltou"
-      aria-label="Marcar como faltou"
-      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-    >
-      <CalendarX className="w-4 h-4" />
-    </button>
+    {/* Quem avisou pelo link que não ia não "faltou" — sobram Remarcar e Excluir. */}
+    {!ausenciaAvisada(atendimento) && (
+      <button
+        type="button"
+        onClick={() => onFaltou(atendimento)}
+        title="Faltou"
+        aria-label="Marcar como faltou"
+        className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+      >
+        <CalendarX className="w-4 h-4" />
+      </button>
+    )}
     <button
       type="button"
       onClick={() => onRemarcar(atendimento)}

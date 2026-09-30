@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Check, CheckCheck, Clock, X } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Check, CheckCheck, Clock, UserX, X } from 'lucide-react';
 import { Attendance, Procedure, Professional } from '../../types';
 import {
   corDaProfissional,
@@ -10,6 +10,7 @@ import {
   nomeCurtoDaProfissional,
 } from '../../utils/agenda';
 import { ehPendenteAtrasado } from '../../utils/attendances';
+import { ausenciaAvisada, temPedidoDeRemarcacao } from '../../utils/agendamentoLink';
 
 /**
  * O cartão de uma visita na agenda.
@@ -22,6 +23,8 @@ import { ehPendenteAtrasado } from '../../utils/attendances';
 export type SituacaoDoCartao =
   | 'agendado'
   | 'confirmado'
+  | 'pediuAlteracao'
+  | 'naoVai'
   | 'atrasado'
   | 'compareceu'
   | 'faltou'
@@ -34,6 +37,10 @@ export type SituacaoDoCartao =
  */
 export const situacaoDoCartao = (a: Attendance): SituacaoDoCartao => {
   if (ehPendenteAtrasado(a)) return 'atrasado';
+  // O que a cliente respondeu pelo link e ainda espera uma decisão da equipe vence o verde: um
+  // agendamento com pedido de outro horário ou aviso de ausência não é "confirmado" para ninguém.
+  if (temPedidoDeRemarcacao(a)) return 'pediuAlteracao';
+  if (ausenciaAvisada(a)) return 'naoVai';
   if (a.status === 'agendado') return ehConfirmado(a) ? 'confirmado' : 'agendado';
   if (a.status === 'compareceu') return 'compareceu';
   if (a.status === 'faltou') return 'faltou';
@@ -44,6 +51,8 @@ export const situacaoDoCartao = (a: Attendance): SituacaoDoCartao => {
 export const ESTILO_DA_SITUACAO: Record<SituacaoDoCartao, string> = {
   agendado: 'bg-card border-brand/45 text-ink hover:border-brand',
   confirmado: 'bg-ok-bg border-ok-line text-ok hover:border-ok',
+  pediuAlteracao: 'bg-warn-bg border-warn-line text-warn hover:border-warn',
+  naoVai: 'bg-danger-bg/70 border-danger-line text-danger hover:border-danger',
   atrasado: 'bg-warn-bg border-warn-line text-warn hover:border-warn',
   compareceu: 'bg-ok-bg/60 border-ok-line/70 text-ok hover:border-ok-line',
   faltou: 'bg-danger-bg/70 border-danger-line text-danger hover:border-danger',
@@ -53,6 +62,8 @@ export const ESTILO_DA_SITUACAO: Record<SituacaoDoCartao, string> = {
 export const ROTULO_DA_SITUACAO: Record<SituacaoDoCartao, string> = {
   agendado: 'A confirmar',
   confirmado: 'Confirmado',
+  pediuAlteracao: 'Pediu alteração',
+  naoVai: 'Cliente não vai',
   atrasado: 'Sem desfecho',
   compareceu: 'Compareceu',
   faltou: 'Faltou',
@@ -188,6 +199,10 @@ export const AgendaCard: React.FC<AgendaCardProps> = ({
             <Check className="w-3 h-3" />
           ) : situacao === 'faltou' ? (
             <X className="w-3 h-3" />
+          ) : situacao === 'pediuAlteracao' ? (
+            <CalendarClock className="w-3 h-3" />
+          ) : situacao === 'naoVai' ? (
+            <UserX className="w-3 h-3" />
           ) : (
             <AlertTriangle className="w-3 h-3" />
           )}

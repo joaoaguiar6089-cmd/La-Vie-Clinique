@@ -15,7 +15,9 @@ import { AcompanhamentoModule } from './components/acompanhamento/Acompanhamento
 import { EstoqueModule } from './components/estoque/EstoqueModule';
 import { AgendaModule } from './components/agenda/AgendaModule';
 import { agendamentosAtrasados } from './utils/agenda';
+import { respostasParaResolver } from './utils/agendamentoLink';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
+import { PublicAppointmentEntry } from './components/agenda/PublicAppointmentEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { CommandPalette, AcaoRapida } from './components/common/CommandPalette';
@@ -56,6 +58,8 @@ import {
   subscribeToEvaluationTemplates,
   subscribeToEvaluationGeneralQuestions,
   subscribeToAttendances,
+  subscribeToRespostasPendentes,
+  aplicarRespostaDoLink,
   subscribeToPatients,
   subscribeToQuotes,
   isQuotaOrOfflineError,
@@ -87,6 +91,9 @@ const STORAGE_KEY_CLINIC = 'aura_bronze_clinic_v1';
 const publicSearchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 const isPublicAnamnesisRoute = !!(publicSearchParams?.get('anamnese') || publicSearchParams?.get('ficha'));
 const isPublicQuoteRoute = !!publicSearchParams?.get('orcamento');
+// Mesmo padrão: a cliente abre o agendamento dela (?agendamento=<token>) para confirmar, avisar
+// que não vai ou pedir outro horário — sem login e sem carregar o painel.
+const isPublicAppointmentRoute = !!publicSearchParams?.get('agendamento');
 
 function MainCatalogApp() {
   // Catálogo exibido enquanto o Firestore não responde. É só uma cópia local da última
@@ -474,9 +481,46 @@ function MainCatalogApp() {
     return () => unsubs.forEach((u) => u());
   }, [authUser]);
 
-  /** Agendamentos que já passaram e continuam sem desfecho — o selo da Agenda no menu. */
+  /**
+   * Respostas que as clientes deram pelo link do agendamento. A página pública não pode escrever
+   * em `attendances`, então quem copia a resposta para lá é este painel, quando está aberto.
+   *
+   * A assinatura filtra por `respostaPendente` no servidor — normalmente não traz documento
+   * nenhum —, e cada resposta é aplicada **uma vez** (a chave inclui o instante dela, então uma
+   * segunda resposta da mesma cliente vale de novo). Sem a guarda, o snapshot que a própria
+   * gravação dispara reaplicaria a resposta em laço.
+   */
+  const respostasJaAplicadas = useRef(new Set<string>());
+  useEffect(() => {
+    if (!authUser) return;
+    return subscribeToRespostasPendentes(
+      (links) => {
+        links.forEach((link) => {
+          const chave = `${link.id}|${link.respondidoEm || ''}`;
+          if (respostasJaAplicadas.current.has(chave)) return;
+          respostasJaAplicadas.current.add(chave);
+          aplicarRespostaDoLink(link).catch((e) => {
+            // Volta para a fila: a próxima abertura do painel tenta de novo.
+            respostasJaAplicadas.current.delete(chave);
+            console.warn('Não foi possível aplicar a resposta da cliente ao agendamento:', e);
+          });
+        });
+      },
+      (err) => {
+        if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
+        // `permission-denied` costuma ser só a regra ainda não publicada — o resto do painel
+        // continua funcionando, então não vira aviso na tela.
+        console.warn('Respostas dos links de agendamento indisponíveis:', err);
+      }
+    );
+  }, [authUser]);
+
+  /**
+   * O selo da Agenda no menu: agendamentos que já passaram e continuam sem desfecho, mais o que
+   * as clientes responderam e espera uma decisão (pedido de outro horário, aviso de ausência).
+   */
   const agendamentosPendentes = useMemo(
-    () => agendamentosAtrasados(attendances).length,
+    () => agendamentosAtrasados(attendances).length + respostasParaResolver(attendances).length,
     [attendances]
   );
 
@@ -1171,6 +1215,11 @@ export default function App() {
   // Mesmo padrão da anamnese: a paciente abre o orçamento pelo link, sem login
   if (isPublicQuoteRoute) {
     return <PublicQuoteEntry />;
+  }
+
+  // E o agendamento: a cliente responde pelo link, sem login
+  if (isPublicAppointmentRoute) {
+    return <PublicAppointmentEntry />;
   }
 
   return <MainCatalogApp />;

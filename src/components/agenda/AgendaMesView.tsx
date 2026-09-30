@@ -23,6 +23,8 @@ const LIMITE_POR_DIA = 3;
 const COR_DA_SITUACAO: Record<string, string> = {
   agendado: 'text-ink',
   atrasado: 'text-amber-800 font-semibold',
+  pediuAlteracao: 'text-amber-800 font-semibold',
+  naoVai: 'text-red-700',
   compareceu: 'text-emerald-800',
   faltou: 'text-red-700/70 line-through',
   realizado: 'text-gray-600',
