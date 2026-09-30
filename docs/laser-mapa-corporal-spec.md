@@ -178,7 +178,8 @@ o de sempre.
 2. **Desenha o laço à mão livre** contornando a região; fecha sozinho e vira
    polígono preenchido.
 3. Painel abre com os **6 campos essenciais**: nome, preço, preço promocional,
-   observação de preço, duração, sessões. Link **"mostrar todos os campos"** expande
+   observação de preço, duração, sessões (texto livre, mais o checkbox **"Mais de 1
+   sessão"** com o número que o orçamento herda). Link **"mostrar todos os campos"** expande
    para os 17 do cadastro completo, sem sair do modal.
 4. **Aplicar** → grava o procedimento **na hora** (uma escrita por área, mais a
    reescrita do espelho). Painel fecha, a área vira botão no anel.
@@ -374,7 +375,8 @@ dois sentidos.
 ### 6.4 Controle vivo, com trava
 
 Desmarcar no mapa **remove** o item — **exceto** quando ele já foi editado (desconto,
-sessões ou detalhes alterados): aí pede confirmação nomeando o que se perde.
+sessões diferentes das do cadastro, ou cálculo por consumo): aí pede confirmação nomeando o
+que se perde. As sessões que o item herdou do cadastro não contam como edição.
 
 ### 6.5 Desconto combinado: laser conta como **um**
 

@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   Trash2,
-  Plus,
   ChevronUp,
   ChevronDown,
   AlertCircle,
   PackageOpen,
   RotateCcw,
 } from 'lucide-react';
-import { ProdutoDeEstoque, Professional, QuoteItem, QuoteItemDetail } from '../../types';
+import { ProdutoDeEstoque, Professional, QuoteItem } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { itemValorFinal, itemDescontoPercentual, itemSessoes } from '../../utils/quoteCalc';
 import { LinhaDeMaterial, arredondar, totaisDosMateriais } from '../../utils/estoque';
@@ -53,6 +52,9 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
 }) => {
   const [valorTabelaStr, setValorTabelaStr] = useState(numeroDigitado(item.valorTabela));
   const [valorDescontoStr, setValorDescontoStr] = useState(numeroDigitado(item.valorComDesconto));
+  // O item já pode nascer com o número do cadastro (10 sessões de laser) e a profissional só ajusta.
+  // Guardar o texto, e não forçar `>= 2` a cada tecla, é o que deixa apagar o "10" para digitar "12".
+  const [sessoesStr, setSessoesStr] = useState(numeroDigitado(item.sessoes));
 
   // O campo guarda o texto digitado, e não acompanha o valor sozinho: ao desligar o consumo, o
   // valor volta ao do catálogo, e o campo precisa mostrar esse — não o que foi digitado antes.
@@ -74,22 +76,6 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
     (Number(valorDescontoStr) >= item.valorTabela || Number(valorDescontoStr) < 0);
 
   const patch = (changes: Partial<QuoteItem>) => onChange({ ...item, ...changes });
-
-  const updateDetail = (id: string, field: 'titulo' | 'valor', value: string) =>
-    patch({
-      detalhes: item.detalhes.map((d) => (d.id === id ? { ...d, [field]: value } : d)),
-    });
-
-  const addDetail = () =>
-    patch({
-      detalhes: [
-        ...item.detalhes,
-        { id: `qd-${Date.now()}-${item.detalhes.length}`, titulo: '', valor: '' } as QuoteItemDetail,
-      ],
-    });
-
-  const removeDetail = (id: string) =>
-    patch({ detalhes: item.detalhes.filter((d) => d.id !== id) });
 
   return (
     <div className="glass-card rounded-sm p-4 space-y-3">
@@ -253,12 +239,11 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
             <input
               type="checkbox"
               checked={item.maisDeUmaSessao}
-              onChange={(e) =>
-                patch({
-                  maisDeUmaSessao: e.target.checked,
-                  sessoes: e.target.checked ? Math.max(2, item.sessoes || 2) : 1,
-                })
-              }
+              onChange={(e) => {
+                const sessoes = e.target.checked ? Math.max(2, item.sessoes || 2) : 1;
+                setSessoesStr(numeroDigitado(sessoes));
+                patch({ maisDeUmaSessao: e.target.checked, sessoes });
+              }}
               className="w-3.5 h-3.5 accent-brand"
             />
             <span className="text-xs font-medium text-ink">Mais de 1 sessão</span>
@@ -270,8 +255,14 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
                 type="number"
                 min="2"
                 step="1"
-                value={item.sessoes}
-                onChange={(e) => patch({ sessoes: Math.max(2, Number(e.target.value) || 2) })}
+                value={sessoesStr}
+                onChange={(e) => {
+                  setSessoesStr(e.target.value);
+                  // Só grava o que já é um número válido; o resto espera a saída do campo.
+                  const n = Math.floor(Number(e.target.value));
+                  if (n >= 2) patch({ sessoes: n });
+                }}
+                onBlur={() => setSessoesStr(numeroDigitado(item.sessoes))}
                 className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
               />
               <p className="mt-1 text-body text-gray-400">
@@ -338,51 +329,6 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
           </p>
         </div>
       )}
-
-      {/* Detalhes do procedimento */}
-      <div className="pt-1">
-        <p className="text-label font-semibold uppercase tracking-widest text-gray-400 mb-2">
-          Detalhes ({item.detalhes.length})
-        </p>
-
-        <div className="space-y-2">
-          {item.detalhes.map((detail) => (
-            <div key={detail.id} className="flex gap-2 items-start">
-              <input
-                type="text"
-                value={detail.titulo}
-                onChange={(e) => updateDetail(detail.id, 'titulo', e.target.value)}
-                placeholder="Título"
-                className="w-2/5 glass-input px-2.5 py-1.5 rounded-sm text-xs text-ink focus:outline-hidden"
-              />
-              <input
-                type="text"
-                value={detail.valor}
-                onChange={(e) => updateDetail(detail.id, 'valor', e.target.value)}
-                placeholder="Resposta"
-                className="flex-1 glass-input px-2.5 py-1.5 rounded-sm text-xs text-ink focus:outline-hidden"
-              />
-              <button
-                type="button"
-                onClick={() => removeDetail(detail.id)}
-                aria-label={`Remover detalhe ${detail.titulo || 'sem título'}`}
-                className="p-1.5 text-red-500 hover:text-red-700 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
-
-          <button
-            type="button"
-            onClick={addDetail}
-            className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Adicionar campo
-          </button>
-        </div>
-      </div>
     </div>
   );
 };

@@ -39,6 +39,12 @@ export const montarDetalhesDoProcedimento = (procedure: Procedure): QuoteItemDet
   return detalhes;
 };
 
+/** Sessões que o valor do procedimento cobre. 1 quando o cadastro não marcou "Mais de 1 sessão". */
+export const sessoesDoProcedimento = (procedure: Pick<Procedure, "sessoesInclusas">): number => {
+  const n = procedure.sessoesInclusas;
+  return typeof n === "number" && isFinite(n) && n >= 2 ? Math.floor(n) : 1;
+};
+
 /**
  * Item de orçamento pré-preenchido a partir do catálogo. Tudo continua editável.
  * A profissional vem só da atribuição do próprio procedimento no catálogo
@@ -54,6 +60,7 @@ export const montarItemDoProcedimento = (
     professionals.some((p) => p.id === id)
   );
   const profissional = professionals.find((p) => p.id === professionalId);
+  const sessoes = sessoesDoProcedimento(procedure);
 
   return {
     id: novoId("qi"),
@@ -68,8 +75,8 @@ export const montarItemDoProcedimento = (
         ? procedure.promotionalPrice
         : procedure.price,
     temDesconto: false,
-    maisDeUmaSessao: false,
-    sessoes: 1,
+    maisDeUmaSessao: sessoes > 1,
+    sessoes,
     detalhes: montarDetalhesDoProcedimento(procedure),
   };
 };

@@ -572,6 +572,12 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure
      * desenho antigo continuaria no banco, voltando na próxima leitura.
      */
     laserAreas: areasGravaveis ?? deleteField(),
+    /**
+     * Mesma razão do `laserAreas`: desmarcar "Mais de 1 sessão" deixa o campo `undefined`, que o
+     * `merge: true` trata como "não mexa" — o número antigo continuaria no banco e o orçamento
+     * seguiria nascendo com ele.
+     */
+    sessoesInclusas: procedureAtualizado.sessoesInclusas ?? deleteField(),
   };
 
   const bytes = estimateFirestoreDocBytes(dataToSave);
