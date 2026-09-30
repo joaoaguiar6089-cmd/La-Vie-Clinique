@@ -459,6 +459,21 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       .map((d) => ({ ...d, titulo: d.titulo.trim(), valor: d.valor.trim() }))
       .filter((d) => d.titulo && d.valor);
 
+    const sessoesDoPacote = maisDeUmaSessao
+      ? Math.max(2, Math.floor(Number(sessoesInclusas)) || 2)
+      : undefined;
+
+    // O painel do laser não tem mais o campo de texto "Sessões" — vale o número. Uma área nova leva
+    // o texto do catálogo a partir dele; sem isso gravaria o "1 a 3 sessões" padrão do formulário,
+    // que ninguém vê nem escolheu. Área que já existe mantém o texto que tem, e com "Mostrar todos
+    // os campos" aberto o texto é o que estiver digitado em "Plano Recomendado".
+    const textoDeSessoes =
+      ehLaser && !mostrarTodosCampos && !baseDoProcedimento
+        ? sessoesDoPacote
+          ? `${sessoesDoPacote} sessões`
+          : undefined
+        : sessionsRecommended.trim() || undefined;
+
     const procedureData: Procedure = {
       id: procedureId,
       title: title.trim(),
@@ -470,9 +485,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       priceNote: priceNote.trim() || 'por sessão',
       isStartingPrice: isStartingPrice,
       duration: duration.trim() || undefined,
-      sessionsRecommended: sessionsRecommended.trim() || undefined,
+      sessionsRecommended: textoDeSessoes,
       // Desmarcado = `undefined`, e é o `saveProcedureToDb` que transforma isso em apagar o campo.
-      sessoesInclusas: maisDeUmaSessao ? Math.max(2, Math.floor(Number(sessoesInclusas)) || 2) : undefined,
+      sessoesInclusas: sessoesDoPacote,
       recoveryTime: recoveryTime.trim() || undefined,
       orientacoesPreProcedimento: orientacoesPreProcedimento.trim() || undefined,
       intervaloEntreSessoesDias: Number(intervaloEntreSessoesDias) > 0
@@ -819,31 +834,17 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-body font-medium text-ink mb-1">
-                        Duração
-                      </label>
-                      <input
-                        type="text"
-                        value={duration}
-                        onChange={(e) => setDuration(e.target.value)}
-                        placeholder="20 min"
-                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-body font-medium text-ink mb-1">
-                        Sessões
-                      </label>
-                      <input
-                        type="text"
-                        value={sessionsRecommended}
-                        onChange={(e) => setSessionsRecommended(e.target.value)}
-                        placeholder="6 a 10 sessões"
-                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-body font-medium text-ink mb-1">
+                      Duração
+                    </label>
+                    <input
+                      type="text"
+                      value={duration}
+                      onChange={(e) => setDuration(e.target.value)}
+                      placeholder="20 min"
+                      className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
+                    />
                   </div>
 
                   <CampoMaisDeUmaSessao
