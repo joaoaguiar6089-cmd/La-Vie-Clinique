@@ -178,8 +178,10 @@ o de sempre.
 2. **Desenha o laço à mão livre** contornando a região; fecha sozinho e vira
    polígono preenchido.
 3. Painel abre com os **6 campos essenciais**: nome, preço, preço promocional,
-   observação de preço, duração, sessões (texto livre, mais o checkbox **"Mais de 1
-   sessão"** com o número que o orçamento herda). Link **"mostrar todos os campos"** expande
+   observação de preço, duração e o checkbox **"Mais de 1 sessão"** com o número de
+   sessões (o que o orçamento herda; não há campo de texto para sessões nesse painel — uma
+   área nova leva "N sessões" no texto do catálogo, e área existente mantém o que tem).
+   Link **"mostrar todos os campos"** expande
    para os 17 do cadastro completo, sem sair do modal.
 4. **Aplicar** → grava o procedimento **na hora** (uma escrita por área, mais a
    reescrita do espelho). Painel fecha, a área vira botão no anel.
