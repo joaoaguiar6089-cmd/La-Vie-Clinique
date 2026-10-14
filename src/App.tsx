@@ -69,7 +69,7 @@ import { DEFAULT_PROCEDURE_TEMPLATES } from './data/anamnesisInitialData';
 import { onAuthChange, logout, type User } from './services/authService';
 import { firebaseConfig } from './lib/firebase';
 import {
-  enderecoPublicoDaJanela,
+  ENDERECO_DO_SITE,
   motivoEnderecoFechado,
   normalizarEnderecoPublico,
 } from './utils/publicLinks';
@@ -160,7 +160,7 @@ function MainCatalogApp() {
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const publicProfilePublishedRef = useRef(false);
   const firebaseClinicSyncedPhotoRef = useRef(false);
-  const enderecoPublicoAprendidoRef = useRef(false);
+  const enderecoPublicoCorrigidoRef = useRef(false);
 
   useEffect(() => {
     if (syncStatus === 'error') {
@@ -381,21 +381,17 @@ function MainCatalogApp() {
                 );
               }
 
-              // O painel aprende o endereço publicado sozinho. Os links de orçamento e de ficha
-              // saíam pedindo senha porque a base era o endereço de desenvolvimento do AI Studio —
-              // o da aba em que a equipe trabalha — e o campo "Endereço público" ficava em branco
-              // (ou com esse mesmo endereço). Basta abrir o site publicado uma vez, já logada,
-              // para os links passarem a sair certos também de dentro do AI Studio.
+              // Um endereço que não serve no campo "Endereço público" — um endereço antigo do site
+              // ou um que pede login, como o de desenvolvimento do AI Studio — é trocado pelo
+              // endereço do site. Os links já saem certos sem isso (`resolvePublicBase` pula o que
+              // não serve), mas assim as Configurações mostram o endereço que a paciente recebe.
               //
-              // Só grava quando o configurado não serve: um domínio próprio preenchido à mão
-              // nunca é trocado pelo endereço técnico da hospedagem.
-              if (!enderecoPublicoAprendidoRef.current) {
-                const daJanela = enderecoPublicoDaJanela();
+              // Um domínio próprio preenchido à mão, que abre sem login, nunca é trocado.
+              if (!enderecoPublicoCorrigidoRef.current) {
                 const configurado = normalizarEnderecoPublico(firebaseClinic.publicBaseUrl);
-                const configuradoServe = !!configurado && !motivoEnderecoFechado(configurado);
-                if (daJanela && !configuradoServe && daJanela !== configurado) {
-                  enderecoPublicoAprendidoRef.current = true;
-                  salvarEnderecoPublicoDaClinica(daJanela).catch((err) =>
+                if (configurado && motivoEnderecoFechado(configurado)) {
+                  enderecoPublicoCorrigidoRef.current = true;
+                  salvarEnderecoPublicoDaClinica(ENDERECO_DO_SITE).catch((err) =>
                     console.warn('Não foi possível gravar o endereço público da clínica:', err)
                   );
                 }
