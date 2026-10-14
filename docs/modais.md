@@ -49,7 +49,7 @@ acaba no meio da tela, onde a mão não chega sem trocar a pegada do aparelho.
 Sem mudança, porque não são formulário nem escolha: são **superfície de trabalho** ou
 **documento**, e os dois querem o máximo de área em qualquer tamanho de tela.
 
-`ImageCropperModal`, `PhotoAnnotationEditor`, `LaserAreasManagerModal`, `LaserQuoteMapModal`,
+`ImageCropperModal`, `AjusteDaFotoModal`, `PhotoAnnotationEditor`, `LaserAreasManagerModal`, `LaserQuoteMapModal`,
 `ProcedureDetailModal`, `ShareExportModal`, `QuotePreviewModal`, `ProcedureMultiSelect`,
 `ProcedureTemplatesManager`, `GeneralQuestionsManager`, `FichasModeloManager`,
 `OrientationImageCard`, e os componentes de impressão (`Printable*`, `BlankAnamnesisSheet`),

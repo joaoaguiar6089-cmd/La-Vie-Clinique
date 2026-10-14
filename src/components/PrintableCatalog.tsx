@@ -7,6 +7,8 @@ import { getProcedureDoctors, getClinicDoctors } from '../utils/doctorHelpers';
 import { Sparkles, Clock, Home, ChevronRight, MessageCircle } from 'lucide-react';
 import { ClinicLogo } from './ClinicLogo';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
+import { enquadramentoDaCapa } from '../utils/enquadramentoDaFoto';
+import { FotoEnquadrada } from './FotoEnquadrada';
 
 interface PrintableCatalogProps {
   procedures: Procedure[];
@@ -48,11 +50,11 @@ const HorizontalProcedureCard: React.FC<ProcedureCardProps> = ({
 
   const imageElement = (
     <div className="relative w-[280px] h-[430px] bg-line-soft overflow-hidden shrink-0">
-      <img
+      <FotoEnquadrada
         src={imgUrl}
         alt={proc.title}
-        className="w-full h-full object-cover block"
-        referrerPolicy="no-referrer"
+        enquadramento={enquadramentoDaCapa(proc, 'catalogo')}
+        className="w-full h-full"
       />
       <div className="absolute top-3.5 left-3.5 px-3 py-1 rounded-sm bg-ink/90 text-brand-light text-[10px] font-bold uppercase tracking-wider shadow-sm">
         {proc.category}
