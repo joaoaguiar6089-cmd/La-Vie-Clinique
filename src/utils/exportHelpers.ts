@@ -439,7 +439,9 @@ export function buildSingleProcedureWhatsAppUrl(
   procedure: Procedure,
   clinic: ClinicProfile,
   /** Desconto promocional aplicado a todos os procedimentos, em % (dias especiais). */
-  discountPercent: number = 0
+  discountPercent: number = 0,
+  /** Falso quando o card saiu sem valores: a mensagem pronta também não cita o preço. */
+  showPrice: boolean = true
 ): string {
   const prefix = procedure.isStartingPrice ? 'a partir de ' : '';
   const { strikePrice, finalPrice } = getCatalogPrice(procedure, discountPercent);
@@ -450,7 +452,9 @@ export function buildSingleProcedureWhatsAppUrl(
   let message = `Olá! Gostaria de agendar ou tirar dúvidas sobre o procedimento:\n\n`;
   message += `✨ *${procedure.title.toUpperCase()}*\n`;
   if (procedure.subtitle) message += `_${procedure.subtitle}_\n\n`;
-  message += `💰 Investimento: ${priceText} ${procedure.priceNote ? `(${procedure.priceNote})` : ''}\n`;
+  if (showPrice) {
+    message += `💰 Investimento: ${priceText} ${procedure.priceNote ? `(${procedure.priceNote})` : ''}\n`;
+  }
   if (procedure.duration) message += `⏱️ Duração: ${procedure.duration}\n`;
   if (procedure.recoveryTime) message += `🌿 Recuperação: ${procedure.recoveryTime}\n\n`;
   message += `Poderia me informar as datas e horários disponíveis na *${clinic.name}*?`;

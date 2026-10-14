@@ -20,6 +20,8 @@ import { resolverCamposDoLaser } from '../utils/laserAreas';
 import { formatBRL } from '../utils/formatters';
 import { buildSingleProcedureWhatsAppUrl } from '../utils/exportHelpers';
 import { getProcedureDoctors } from '../utils/doctorHelpers';
+import { enquadramentoDaFoto } from '../utils/enquadramentoDaFoto';
+import { FotoEnquadrada } from './FotoEnquadrada';
 
 interface ProcedureDetailModalProps {
   procedure: Procedure | null;
@@ -55,6 +57,12 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
     ? procedure.images
     : ['https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80'];
 
+  // A tela de detalhes tem o desenho do cartão compartilhado, então usa o ajuste do cartão.
+  const enquadramentoNaTela =
+    procedure.images && procedure.images.length > 0
+      ? enquadramentoDaFoto(procedure, activeImgIndex, 'cartao')
+      : undefined;
+
   const hasDiscount = procedure.promotionalPrice && procedure.promotionalPrice < procedure.price;
   const doctors = getProcedureDoctors(procedure, clinic);
   const whatsAppUrl = buildSingleProcedureWhatsAppUrl(procedure, clinic);
@@ -71,11 +79,11 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
         {/* ============ MOBILE (<640px): full-screen ============ */}
         <div className="sm:hidden flex-1 overflow-y-auto">
           <div className="relative h-[250px] bg-line-soft shrink-0">
-            <img
+            <FotoEnquadrada
               src={images[activeImgIndex]}
               alt={procedure.title}
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
+              enquadramento={enquadramentoNaTela}
+              className="w-full h-full"
             />
             <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
               <button
@@ -267,7 +275,12 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
             {/* Left column */}
             <div className="sm:col-span-5 bg-white/40 p-6 flex flex-col border-b sm:border-b-0 sm:border-r border-[rgba(26,26,26,.07)]">
               <div className="relative h-[212px] rounded-2xl overflow-hidden bg-line-soft mb-3">
-                <img src={images[activeImgIndex]} alt={procedure.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <FotoEnquadrada
+                  src={images[activeImgIndex]}
+                  alt={procedure.title}
+                  enquadramento={enquadramentoNaTela}
+                  className="w-full h-full"
+                />
                 {images.length > 1 && (
                   <>
                     <button

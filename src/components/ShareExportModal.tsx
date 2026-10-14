@@ -440,7 +440,20 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 </select>
               </div>
 
-              {discountControl}
+              {/* Sem valores, o desconto não tem onde aparecer no card — o campo some junto. */}
+              {showPrices && discountControl}
+
+              <div className="flex items-center sm:pb-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={showPrices}
+                    onChange={(e) => setShowPrices(e.target.checked)}
+                    className="w-4 h-4 text-brand rounded-xs border-gray-300"
+                  />
+                  Exibir valores monetários
+                </label>
+              </div>
 
               <div className="flex items-center gap-2">
                 <button
@@ -472,7 +485,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 </button>
               </div>
 
-              {discountPercent > 0 && (
+              {showPrices && discountPercent > 0 && (
                 <p className="w-full flex items-center gap-2 text-body text-brand-hover bg-brand/10 border border-brand/30 rounded-sm px-3 py-2">
                   <Tag className="w-3.5 h-3.5 shrink-0" />
                   <span>
@@ -516,6 +529,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   procedure={activeSingleProcedure}
                   clinic={clinic}
                   discountPercent={discountPercent}
+                  showPrices={showPrices}
                 />
               </div>
             </div>

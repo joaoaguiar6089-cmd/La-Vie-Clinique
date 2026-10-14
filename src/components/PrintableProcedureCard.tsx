@@ -17,7 +17,9 @@ import { formatBRL } from '../utils/formatters';
 import { getCatalogPrice, formatDiscountPercent } from '../utils/catalogPricing';
 import { getProcedureDoctors } from '../utils/doctorHelpers';
 import { buildSingleProcedureWhatsAppUrl } from '../utils/exportHelpers';
+import { enquadramentoDaCapa } from '../utils/enquadramentoDaFoto';
 import { ClinicLogo } from './ClinicLogo';
+import { FotoEnquadrada } from './FotoEnquadrada';
 
 const IMAGEM_PADRAO =
   'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80';
@@ -27,6 +29,11 @@ interface PrintableProcedureCardProps {
   clinic: ClinicProfile;
   /** Desconto promocional aplicado no momento da geração (dias especiais), em %. */
   discountPercent?: number;
+  /**
+   * Desligado, o card sai sem nenhum valor: some o bloco de investimento e o selo de desconto, e a
+   * mensagem pronta do WhatsApp deixa de citar o preço.
+   */
+  showPrices?: boolean;
 }
 
 /**
@@ -46,7 +53,8 @@ interface PrintableProcedureCardProps {
 export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
   procedure: procedureBruto,
   clinic,
-  discountPercent = 0,
+  discountPercent: descontoPedido = 0,
+  showPrices = true,
 }) => {
   // Mesma resolução de padrões da tela de detalhes: nas áreas de laser os campos em branco vêm
   // das Configurações, e o card precisa mostrar o que a tela mostrou.
@@ -54,9 +62,11 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
 
   const images = procedure.images && procedure.images.length > 0 ? procedure.images : [IMAGEM_PADRAO];
   const doctors = getProcedureDoctors(procedure, clinic);
+  // Sem preço no card, desconto não tem onde aparecer — nem no selo, nem na mensagem.
+  const discountPercent = showPrices ? descontoPedido : 0;
   const { strikePrice, finalPrice } = getCatalogPrice(procedure, discountPercent);
   const isPromoDay = discountPercent > 0;
-  const whatsAppUrl = buildSingleProcedureWhatsAppUrl(procedure, clinic, discountPercent);
+  const whatsAppUrl = buildSingleProcedureWhatsAppUrl(procedure, clinic, discountPercent, showPrices);
 
   // Várias clínicas preenchem `address` já com a cidade; repetir viraria "Indaiatuba - SP · Indaiatuba - SP".
   const endereco = [clinic.address, clinic.cityState]
@@ -116,11 +126,11 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
           {/* Coluna esquerda — foto, ficha técnica e regiões */}
           <div className="col-span-5 bg-surface p-6 flex flex-col border-r border-[rgba(26,26,26,.07)] overflow-hidden">
             <div className="relative h-[240px] rounded-2xl overflow-hidden bg-line-soft mb-3 shrink-0">
-              <img
+              <FotoEnquadrada
                 src={images[0]}
                 alt={procedure.title}
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
+                enquadramento={enquadramentoDaCapa(procedure, 'cartao')}
+                className="w-full h-full"
               />
             </div>
 
@@ -252,31 +262,33 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
 
             {/* Investimento + contatos (mesmo lugar da barra de ações do modal) */}
             <div className="pt-4 border-t border-[rgba(26,26,26,.07)] space-y-3 shrink-0">
-              <div className="flex items-center justify-between bg-ink text-white p-5 rounded-2xl">
-                <div>
-                  <span className="text-[10px] font-semibold text-brand-light block mb-1 uppercase tracking-widest">
-                    Investimento
-                  </span>
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    {procedure.isStartingPrice && (
-                      <span className="text-[12px] font-medium text-gray-300">a partir de</span>
-                    )}
-                    {strikePrice !== null && (
-                      <span className="text-[13px] text-gray-400 line-through">{formatBRL(strikePrice)}</span>
-                    )}
-                    <span className="font-serif-luxury text-[34px] font-medium text-white leading-none">
-                      {formatBRL(finalPrice)}
+              {showPrices && (
+                <div className="flex items-center justify-between bg-ink text-white p-5 rounded-2xl">
+                  <div>
+                    <span className="text-[10px] font-semibold text-brand-light block mb-1 uppercase tracking-widest">
+                      Investimento
                     </span>
-                    {procedure.priceNote && (
-                      <span className="text-[12px] text-brand-light font-medium ml-1">{procedure.priceNote}</span>
-                    )}
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      {procedure.isStartingPrice && (
+                        <span className="text-[12px] font-medium text-gray-300">a partir de</span>
+                      )}
+                      {strikePrice !== null && (
+                        <span className="text-[13px] text-gray-400 line-through">{formatBRL(strikePrice)}</span>
+                      )}
+                      <span className="font-serif-luxury text-[34px] font-medium text-white leading-none">
+                        {formatBRL(finalPrice)}
+                      </span>
+                      {procedure.priceNote && (
+                        <span className="text-[12px] text-brand-light font-medium ml-1">{procedure.priceNote}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right text-[11px] text-gray-400 shrink-0">
+                    <p>Condições personalizadas</p>
+                    <p className="text-brand-light">Avaliação inclusa</p>
                   </div>
                 </div>
-                <div className="text-right text-[11px] text-gray-400 shrink-0">
-                  <p>Condições personalizadas</p>
-                  <p className="text-brand-light">Avaliação inclusa</p>
-                </div>
-              </div>
+              )}
 
               <div
                 data-link-url={whatsAppUrl}

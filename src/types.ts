@@ -99,6 +99,26 @@ export interface LaserBodyMap {
   updatedAt?: string;
 }
 
+/** Os lugares onde a capa do procedimento aparece — cada um tem o seu formato de frame. */
+export type VisualizacaoDaFoto = 'menu' | 'catalogo' | 'cartao';
+
+/**
+ * Posição da foto dentro do frame de uma visualização, sem cortar o arquivo.
+ *
+ * `x` e `y` vão de 0 a 100 e valem como no `object-position`: 0 encosta a borda esquerda (ou de
+ * cima) da foto na do frame, 100 a direita (ou de baixo). `zoom` parte de 1, que é a foto cobrindo
+ * o frame inteiro. Em proporção e não em pixels porque o mesmo ajuste serve ao frame do editor,
+ * ao card da tela e à página exportada, que têm tamanhos diferentes.
+ */
+export interface EnquadramentoDaFoto {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+/** Ajuste de uma foto em cada visualização. Visualização ausente = foto centralizada. */
+export type EnquadramentosDaFoto = Partial<Record<VisualizacaoDaFoto, EnquadramentoDaFoto>>;
+
 export interface Procedure {
   id: string;
   title: string;
@@ -122,6 +142,14 @@ export interface Procedure {
   sessoesInclusas?: number;
   recoveryTime?: string; // e.g. "Sem downtime", "24 a 48h com leve vermelhidão"
   images: string[];
+  /**
+   * Ajuste de cada foto no menu, no catálogo e no cartão — na mesma ordem de `images`, `null` (ou
+   * posição faltando) para a foto que segue centralizada.
+   *
+   * Lista paralela, e não chave pela URL da foto: a foto recém-enviada é um dataURL que vira link do
+   * Storage ao salvar, e remover a capa promove a segunda foto levando o ajuste dela junto.
+   */
+  enquadramentosDasFotos?: (EnquadramentosDaFoto | null)[];
   benefits: string[];
   areasTreated?: string[];
   contraindications?: string;

@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import { Procedure, ClinicProfile, AnamnesisTemplate } from '../types';
 import { formatBRL } from '../utils/formatters';
+import { enquadramentoDaCapa } from '../utils/enquadramentoDaFoto';
 import { SkeletonCards } from './common/Skeleton';
+import { FotoEnquadrada } from './FotoEnquadrada';
 
 interface ProcedureManagerProps {
   procedures: Procedure[];
@@ -266,11 +268,10 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                     a foto encolheu para ser um sinal rápido, cobri-la com pílulas desfaz o ganho. */}
                 <div className="h-[128px] sm:h-[136px] bg-line-soft shrink-0">
                   {img ? (
-                    <img
+                    <FotoEnquadrada
                       src={img}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
+                      enquadramento={enquadramentoDaCapa(proc, 'menu')}
+                      className="w-full h-full"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-muted-light">
