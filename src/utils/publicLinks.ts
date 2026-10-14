@@ -1,29 +1,38 @@
 import { ClinicProfile } from '../types';
 
 /**
- * Endereço dos links que saem do painel para a paciente: ficha de anamnese, orçamento e o QR Code
- * do catálogo.
+ * Endereço dos links que saem do painel para a paciente: ficha de anamnese, orçamento, link do
+ * agendamento e o QR Code do catálogo.
  *
  * Por que isso não é só `window.location.origin`: o link era montado com o endereço da janela em
  * que a equipe estava. Quando o painel era aberto pela URL de desenvolvimento da hospedagem — que
  * exige conta Google com acesso ao projeto —, a paciente recebia essa URL, caía na tela de login
  * do Google e nunca chegava na ficha. O endereço público é uma propriedade da clínica, não da aba
- * que por acaso está aberta, então ele fica configurado no perfil.
+ * que por acaso está aberta.
  *
- * Só configurar não bastou: com o campo em branco (ou preenchido com o próprio endereço de
- * desenvolvimento, que é o que aparece na barra quando se trabalha pelo AI Studio), o orçamento
- * continuava saindo com um link que pede senha. Por isso agora:
- *   - `motivoEnderecoFechado` reconhece os endereços que pedem login;
- *   - `resolvePublicBase` nunca prefere um endereço fechado quando existe um aberto;
- *   - o App grava sozinho o endereço aberto da janela quando o configurado não serve
- *     (`enderecoPublicoDaJanela`), e quem compartilha é avisado quando nenhum serve.
+ * Por isso a base é, nesta ordem:
+ *   - o endereço configurado no perfil (Configurações → "Endereço público do sistema"), se ele
+ *     abre sem login e não é um endereço antigo do site;
+ *   - senão, `ENDERECO_DO_SITE`, o endereço publicado.
+ *
+ * `motivoEnderecoFechado` reconhece os endereços que não servem, e o App troca sozinho, no
+ * perfil, um endereço configurado que não serve pelo `ENDERECO_DO_SITE`.
  */
 
-/** Base a partir da janela atual, sem barra no fim. */
-function baseDaJanela(): string {
-  if (typeof window === 'undefined') return '';
-  return `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, '');
-}
+/**
+ * O endereço publicado do site — o que o Google AI Studio mostra ao publicar. Se o site mudar de
+ * endereço, troque aqui e ponha o anterior em `ENDERECOS_ANTIGOS`.
+ */
+export const ENDERECO_DO_SITE = 'https://drakaroline-lavie.ai.studio';
+
+/**
+ * Endereços que o site já teve. Ficam aqui para que um perfil que ainda guarde um deles não
+ * continue mandando o endereço velho para a paciente.
+ */
+const ENDERECOS_ANTIGOS = new Set([
+  'la-vie-clinique-cat-logo.ai.studio',
+  'la-vie-clinique-cat-logo-125950720102.us-west1.run.app',
+]);
 
 /**
  * Normaliza o que a clínica digitou. Aceita "clinica.com.br", "https://clinica.com.br/" e
@@ -44,12 +53,13 @@ export function normalizarEnderecoPublico(valor?: string | null): string | null 
 }
 
 /**
- * Por que a paciente não conseguiria abrir um link com esta base — ou `null` quando ela abre.
+ * Por que esta base não serve para o link da paciente — ou `null` quando serve.
  *
  * O AI Studio serve o mesmo app em endereços diferentes: o de desenvolvimento (`ais-dev-…`) e o
  * de pré-visualização (`ais-pre-…`) só abrem para contas Google com acesso ao projeto, e é deles
- * que vem a tela pedindo e-mail e senha. O endereço publicado (o `….run.app` que o AI Studio
- * mostra ao publicar, ou um domínio próprio) é o que abre para qualquer pessoa.
+ * que vem a tela pedindo e-mail e senha. O endereço publicado (o `….ai.studio` que o AI Studio
+ * mostra ao publicar, ou um domínio próprio) é o que abre para qualquer pessoa. Os endereços
+ * antigos do site também não servem: a paciente receberia o endereço que a clínica já trocou.
  */
 export function motivoEnderecoFechado(base: string): string | null {
   let host: string;
@@ -59,6 +69,9 @@ export function motivoEnderecoFechado(base: string): string | null {
     return null;
   }
 
+  if (ENDERECOS_ANTIGOS.has(host)) {
+    return `é um endereço antigo do site, que agora é ${new URL(ENDERECO_DO_SITE).host}`;
+  }
   if (host.startsWith('ais-dev-')) {
     return 'é o endereço de desenvolvimento do Google AI Studio, que só abre com uma conta Google autorizada no projeto';
   }
@@ -80,40 +93,13 @@ export function motivoEnderecoFechado(base: string): string | null {
 }
 
 /**
- * O endereço desta janela, quando ele serve de base para os links da paciente; senão `null`.
- *
- * Fora de iframe de propósito: o AI Studio roda a pré-visualização do app dentro de um quadro, e
- * o endereço dali não é o que a paciente deve receber. Aberto direto no navegador e sem pedir
- * login, é o site publicado.
- */
-export function enderecoPublicoDaJanela(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    if (window.self !== window.top) return null;
-  } catch {
-    // Acesso ao `top` negado: é um quadro de outra origem.
-    return null;
-  }
-  const base = baseDaJanela();
-  return base && !motivoEnderecoFechado(base) ? base : null;
-}
-
-/**
- * A base dos links da paciente, em ordem de preferência:
- *   1. o endereço configurado no perfil, se ele abre sem login;
- *   2. o endereço desta janela, se ele abre sem login;
- *   3. o que houver — e aí `motivoEnderecoFechado` diz a quem compartilha que não vai abrir.
- *
- * Endereço configurado inválido não impede um envio: cai na janela atual.
+ * A base dos links da paciente: o endereço configurado no perfil, se ele serve; senão o
+ * `ENDERECO_DO_SITE`. Endereço configurado inválido, fechado ou antigo não impede um envio.
  */
 export function resolvePublicBase(clinic?: Pick<ClinicProfile, 'publicBaseUrl'> | null): string {
   const configurado = normalizarEnderecoPublico(clinic?.publicBaseUrl);
   if (configurado && !motivoEnderecoFechado(configurado)) return configurado;
-
-  const janela = baseDaJanela();
-  if (janela && !motivoEnderecoFechado(janela)) return janela;
-
-  return configurado || janela;
+  return ENDERECO_DO_SITE;
 }
 
 /**

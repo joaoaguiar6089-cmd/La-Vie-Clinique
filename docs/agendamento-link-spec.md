@@ -69,8 +69,8 @@ data, hora, profissional, título e `situacao` (`ativo` / `remarcado` / `encerra
    ```
 
 2. Publicar o site pelo Google AI Studio (a partir da `main`).
-3. Conferir o **Endereço público do sistema** (Configurações) — o link herda esse endereço, e o
-   endereço de desenvolvimento do AI Studio pede login para a cliente (`AvisoLinkFechado` avisa).
+3. O link sai com o endereço do site (`ENDERECO_DO_SITE` em `utils/publicLinks.ts`), ou com o
+   **Endereço público do sistema** (Configurações) quando ele abre sem login.
 
 ## Fora do escopo
 

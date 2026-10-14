@@ -6,7 +6,7 @@ import { mascararHora } from './common/MaskedDateTimeInput';
 import { createProfessionalLogin } from '../services/authService';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
-import { motivoEnderecoFechado, normalizarEnderecoPublico } from '../utils/publicLinks';
+import { ENDERECO_DO_SITE, motivoEnderecoFechado, normalizarEnderecoPublico } from '../utils/publicLinks';
 
 /**
  * A foto da profissional entra em dois lugares com recortes diferentes: o bloco 92×104 da capa do
@@ -959,22 +959,22 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   type="text"
                   value={formData.publicBaseUrl || ''}
                   onChange={(e) => handleChange('publicBaseUrl', e.target.value)}
-                  placeholder="https://catalogo.lavieclinique.com.br"
+                  placeholder={ENDERECO_DO_SITE}
                   className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
                 <p className="text-body text-gray-500 mt-1.5 leading-snug">
-                  Base dos links enviados à paciente — ficha de anamnese, orçamento e QR Code do
-                  catálogo. Preencha com o endereço que abre <strong>sem pedir login</strong>. Em
-                  branco, o link usa o endereço da janela em que você estiver: se o painel foi
-                  aberto por um endereço de desenvolvimento, a paciente recebe esse endereço e cai
-                  numa tela de login. Para conferir, abra o link numa aba anônima.
+                  Base dos links enviados à paciente — ficha de anamnese, orçamento, confirmação
+                  do agendamento e QR Code do catálogo. Em branco, os links usam o endereço do
+                  site, <strong>{ENDERECO_DO_SITE}</strong>. Só preencha se o site tiver outro
+                  endereço que abra <strong>sem pedir login</strong>. Para conferir, abra o link
+                  numa aba anônima.
                 </p>
                 {(() => {
                   const base = normalizarEnderecoPublico(formData.publicBaseUrl);
                   const motivo = base ? motivoEnderecoFechado(base) : null;
                   return motivo ? (
                     <p className="text-body text-red-600 mt-1.5 leading-snug">
-                      Este endereço não serve: ele {motivo}. Use o endereço publicado do site.
+                      Este endereço não serve: ele {motivo}. Os links saem com {ENDERECO_DO_SITE}.
                     </p>
                   ) : null;
                 })()}

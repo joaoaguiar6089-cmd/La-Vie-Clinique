@@ -261,11 +261,11 @@ e capturaria distorcido um `transform: scale`. O arquivo sai como
   o botão **"Ver comprovante"**. Recusado não muda nada na página.
 - **O link não pode pedir senha.** A base do link vem de `utils/publicLinks.ts`:
   o endereço configurado em Configurações → "Endereço público do sistema" se ele
-  abrir sem login, senão o da janela atual se ele abrir sem login. Os endereços do
-  AI Studio `ais-dev-…` / `ais-pre-…` e `aistudio.google.com` pedem login do
-  Google e nunca são preferidos. Quando o painel é aberto pelo site publicado e o
-  perfil não tem um endereço que sirva, o App grava esse endereço sozinho. Se
-  nenhum endereço aberto é conhecido, o compartilhamento avisa em vermelho.
+  abrir sem login e não for um endereço antigo do site, senão `ENDERECO_DO_SITE`
+  (hoje `https://drakaroline-lavie.ai.studio`). Os endereços do AI Studio
+  `ais-dev-…` / `ais-pre-…` e `aistudio.google.com` pedem login do Google e nunca
+  são usados. Quando o perfil guarda um endereço que não serve, o App o troca
+  sozinho pelo `ENDERECO_DO_SITE`.
 
 ## 8. Configurações (`ClinicSettingsModal`)
 

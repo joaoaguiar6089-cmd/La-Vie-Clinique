@@ -754,8 +754,8 @@ export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<Cli
 /**
  * Grava só o endereço público do sistema — a base dos links que vão para a paciente.
  *
- * Um campo, e não o perfil inteiro: quem chama é o App, sozinho, quando percebe que foi aberto
- * pelo site publicado e o perfil não tem um endereço que abra sem login (ver `utils/publicLinks`).
+ * Um campo, e não o perfil inteiro: quem chama é o App, sozinho, quando o perfil guarda um
+ * endereço que não serve — antigo ou que pede login (ver `utils/publicLinks`).
  * Regravar o perfil inteiro ali arriscaria sobrescrever uma edição feita em outra aba.
  */
 export async function salvarEnderecoPublicoDaClinica(publicBaseUrl: string): Promise<void> {

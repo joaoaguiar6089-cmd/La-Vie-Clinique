@@ -17,7 +17,6 @@ import { contatoDoAtendimento, dataExtensa } from '../../utils/agenda';
 import { instanteCurto, mensagemDoLink } from '../../utils/agendamentoLink';
 import { buildPublicLink } from '../../utils/publicLinks';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
-import { AvisoLinkFechado } from '../common/AvisoLinkFechado';
 
 interface AgendamentoShareModalProps {
   atendimento: Attendance;
@@ -157,8 +156,6 @@ export const AgendamentoShareModal: React.FC<AgendamentoShareModalProps> = ({
 
           {token && (
             <>
-              <AvisoLinkFechado link={link} />
-
               <div className="flex items-stretch gap-2">
                 <input
                   type="text"
