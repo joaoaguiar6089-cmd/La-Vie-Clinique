@@ -18,26 +18,58 @@ Agenda, num calendário próprio chamado **"La Vie Clinique"**.
 
 ### 1. Google Cloud — projeto `database-dra-karoline`
 
-Em [console.cloud.google.com](https://console.cloud.google.com), com o projeto
-`database-dra-karoline` selecionado:
+Tudo em [console.cloud.google.com](https://console.cloud.google.com), entrando com a conta Google
+dona do projeto do Firebase. No seletor de projeto, no alto da tela, escolha
+**database-dra-karoline**. Os links abaixo já abrem no projeto certo.
 
-1. **Ativar a API.** APIs e serviços → Biblioteca → "Google Calendar API" → Ativar.
-2. **Tela de consentimento** (Google Auth Platform):
-   - *Branding*: nome do app "La Vie Clinique", e-mail de suporte. Se pedir domínio autorizado,
-     adicione `drakaroline-lavie.ai.studio`.
-   - *Público*: tipo **Externo**, e clique em **Publicar app** para ficar **Em produção**. No modo
-     "Teste" o Google derruba a autorização a cada 7 dias.
-   - *Acesso a dados*: adicione o escopo `https://www.googleapis.com/auth/calendar.app.created`.
-   - Não é preciso pedir verificação ao Google: com menos de 100 contas o app funciona, só mostra
-     o aviso "O Google não verificou este app" na hora de conectar.
-3. **Credencial.** Clientes (ou Credenciais) → Criar → ID do cliente OAuth → **Aplicativo da Web**:
-   - URI de redirecionamento autorizado:
-     `https://drakaroline-lavie.ai.studio/api/google-agenda/retorno`
-   - Copie o **ID do cliente** e a **Chave secreta do cliente**.
+**1.1. Ativar a API do Google Agenda.**
+[Abrir a Google Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=database-dra-karoline)
+→ **Ativar**.
+
+**1.2. Tela de consentimento** (menu ☰ → *Google Auth Platform*, ou
+[este link](https://console.cloud.google.com/auth/overview?project=database-dra-karoline)).
+Se aparecer **Primeiros passos** (*Get started*), preencha o assistente: nome do app
+"La Vie Clinique", e-mail de suporte, público **Externo**, e-mail de contato, aceite a política →
+**Criar**. Depois, no menu da esquerda:
+
+- **Público-alvo** (*Audience*): em "Status de publicação", clique em **Publicar app** e confirme.
+  Tem de ficar **Em produção**: no modo "Teste" o Google derruba a autorização a cada 7 dias.
+- **Acesso a dados** (*Data access*): **Adicionar ou remover escopos** → cole
+  `https://www.googleapis.com/auth/calendar.app.created` em "Adicionar escopos manualmente" →
+  **Adicionar à tabela** → **Atualizar** → **Salvar**.
+- Não é preciso pedir verificação ao Google: com menos de 100 contas o app funciona, só mostra o
+  aviso "O Google não verificou este app" na hora de conectar.
+
+**1.3. Criar a credencial** — é ela que gera os dois valores que vão para o AI Studio.
+Menu da esquerda → **Clientes** (*Clients*) → **+ Criar cliente**
+([link direto](https://console.cloud.google.com/auth/clients/create?project=database-dra-karoline)):
+
+- **Tipo de aplicativo:** Aplicativo da Web.
+- **Nome:** "Google Agenda do painel" (só para reconhecer depois).
+- **Origens JavaScript autorizadas:** deixar em branco.
+- **URIs de redirecionamento autorizados:** **+ Adicionar URI** →
+  `https://drakaroline-lavie.ai.studio/api/google-agenda/retorno` (exatamente assim, sem barra no
+  fim).
+- **Criar.**
+
+Abre a janela **"Cliente OAuth criado"** com:
+
+- **ID do cliente** — termina em `.apps.googleusercontent.com`;
+- **Chave secreta do cliente** — começa com `GOCSPX-`.
+
+> **A chave secreta só aparece nessa janela.** Copie as duas antes de fechar (ou clique em
+> **Baixar JSON**). Se fechar sem copiar: Clientes → clique no cliente → **Adicionar chave
+> secreta**, e use a nova.
+
+Na lista de Clientes pode existir um *"Web client (auto created by Google Service)"*: é o do
+Firebase. Não use esse — use o que você acabou de criar.
+
+O Google avisa que mudanças no cliente podem levar de 5 minutos a algumas horas para valer.
 
 ### 2. Google AI Studio — Secrets
 
-Settings → Secrets, e depois publicar de novo:
+No app dentro do AI Studio: **Settings** (engrenagem) → **Secrets** → adicionar os dois abaixo,
+com os nomes escritos exatamente assim, e depois **publicar de novo**:
 
 | Nome | Valor |
 |---|---|
