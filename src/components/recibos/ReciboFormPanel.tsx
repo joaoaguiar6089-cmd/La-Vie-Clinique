@@ -1,16 +1,29 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import { ClinicProfile, FormaDoRecibo, Patient, Quote, QuoteComprovante, Recibo, ReciboDraft } from '../../types';
+import { AlertCircle, Loader2, Plus, X } from 'lucide-react';
+import {
+  ClinicProfile,
+  FormaDoRecibo,
+  Patient,
+  Procedure,
+  Quote,
+  QuoteComprovante,
+  Recibo,
+  ReciboDraft,
+  ReciboItem,
+} from '../../types';
 import { formatBRL, formatCpf } from '../../utils/formatters';
 import { hojeISO } from '../../utils/attendances';
 import {
+  MAXIMO_DE_ITENS,
   PARCELAS_MAXIMAS,
   isoParaDia,
+  itensDoOrcamento,
+  itensDoRecibo,
   montarClinicaDoRecibo,
   pagamentosSugeridos,
   parcelasDoRecibo,
-  referenteDoOrcamento,
 } from '../../utils/recibos';
+import { sessoesDoProcedimento } from '../../utils/quoteFactory';
 import {
   apagarComprovante,
   enviarComprovanteDoRecibo,
@@ -35,10 +48,7 @@ import {
 } from '../common/Tinta';
 import { PatientSearchSelect } from '../quotes/PatientSearchSelect';
 import { ComprovanteAnexado, EscolhaDeComprovante } from '../quotes/CampoDeComprovante';
-
-/** Os textos livres têm teto: o recibo é uma folha só, e não pagina. */
-const LIMITE_REFERENTE = 300;
-const LIMITE_OBSERVACOES = 300;
+import { ProcedureSearchAdd } from '../quotes/ProcedureSearchAdd';
 
 const FORMAS: { id: FormaDoRecibo; rotulo: string }[] = [
   { id: 'pix', rotulo: 'Pix' },
@@ -54,6 +64,27 @@ const diaParaISO = (dia: string): string => new Date(`${dia}T12:00:00`).toISOStr
 const valorDoCampo = (valor?: number): string =>
   typeof valor === 'number' && valor > 0 ? valor.toFixed(2) : '';
 
+const numeroDoCampo = (texto: string): number => Number(String(texto).replace(',', '.')) || 0;
+
+/** Uma linha da lista no formulário — os números como texto, do jeito que os campos devolvem. */
+interface ItemEmEdicao {
+  id: string;
+  titulo: string;
+  sessoes: string;
+  valor: string;
+  procedureId?: string;
+}
+
+const paraEdicao = (i: ReciboItem): ItemEmEdicao => ({
+  id: i.id,
+  titulo: i.titulo,
+  sessoes: String(i.sessoes || 1),
+  valor: valorDoCampo(i.valor),
+  procedureId: i.procedureId,
+});
+
+const itemEmBranco = (): ItemEmEdicao => ({ id: crypto.randomUUID(), titulo: '', sessoes: '1', valor: '' });
+
 export interface ReciboFormPanelProps {
   aberto: boolean;
   onFechar: () => void;
@@ -64,6 +95,8 @@ export interface ReciboFormPanelProps {
   /** Recibo avulso aberto da página da paciente: ela já vem escolhida. */
   pacienteInicial?: Patient | null;
   pacientes: Patient[];
+  /** O catálogo, para o "+ Adicionar procedimento" da lista. */
+  procedimentos: Procedure[];
   clinic: ClinicProfile;
   /** O recibo gravado — quem abriu decide o que mostrar em seguida (a prévia, para enviar). */
   onSalvo: (recibo: Recibo) => void;
@@ -71,7 +104,12 @@ export interface ReciboFormPanelProps {
 
 /**
  * O formulário da nota de recibo: cliente (nome e CPF), data, valor, forma de pagamento — à
- * vista ou parcelado no crédito —, o que foi pago e o comprovante.
+ * vista ou parcelado no crédito —, a lista do que foi pago e o comprovante.
+ *
+ * A lista segue a do orçamento: procedimento do catálogo ou fora dele, um por linha, numerados.
+ * O nome de cada linha é livre — o mesmo procedimento tem protocolos diferentes de uma cliente
+ * para outra ("Harmonização Glútea — Fases 1 e 2", "— Fase 3") —, com as sessões e, se quiser,
+ * o valor de cada um.
  *
  * Vindo de um orçamento, quase tudo já chega preenchido: a cliente, os procedimentos, a data do
  * pagamento e a forma principal do orçamento com o valor dela. Se a cliente pagou por outra das
@@ -87,6 +125,7 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
   orcamento,
   pacienteInicial,
   pacientes,
+  procedimentos,
   clinic,
   onSalvo,
 }) => {
@@ -98,12 +137,11 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
   const [valor, setValor] = useState('');
   const [forma, setForma] = useState<FormaDoRecibo>('pix');
   const [parcelas, setParcelas] = useState(1);
-  const [referente, setReferente] = useState('');
-  const [observacoes, setObservacoes] = useState('');
+  const [itens, setItens] = useState<ItemEmEdicao[]>([itemEmBranco()]);
   /** O comprovante que continua no recibo — o já gravado, até ser trocado ou removido. */
   const [comprovanteAtual, setComprovanteAtual] = useState<QuoteComprovante | undefined>(undefined);
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [erros, setErros] = useState<Partial<Record<'nome' | 'cpf' | 'data' | 'valor', string>>>({});
+  const [erros, setErros] = useState<Partial<Record<'nome' | 'cpf' | 'data' | 'valor' | 'itens', string>>>({});
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -134,8 +172,8 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
       setValor(valorDoCampo(recibo.valor));
       setForma(recibo.forma);
       setParcelas(parcelasDoRecibo(recibo));
-      setReferente(recibo.referente || '');
-      setObservacoes(recibo.observacoes || '');
+      const doRecibo = itensDoRecibo(recibo).map(paraEdicao);
+      setItens(doRecibo.length > 0 ? doRecibo : [itemEmBranco()]);
       setComprovanteAtual(recibo.comprovante);
       return;
     }
@@ -153,14 +191,51 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
     setValor(valorDoCampo(principal?.valor ?? orcamento?.total));
     setForma(principal?.forma || 'pix');
     setParcelas(principal?.parcelas || 1);
-    setReferente(orcamento ? referenteDoOrcamento(orcamento).slice(0, LIMITE_REFERENTE) : '');
-    setObservacoes('');
+    const doOrcamento = orcamento ? itensDoOrcamento(orcamento).map(paraEdicao) : [];
+    setItens(doOrcamento.length > 0 ? doOrcamento : [itemEmBranco()]);
     setComprovanteAtual(undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto, recibo?.id, orcamento?.id]);
 
-  const valorNumero = Number(String(valor).replace(',', '.')) || 0;
+  const valorNumero = numeroDoCampo(valor);
   const parcelado = forma === 'credito' && parcelas > 1;
+
+  const itensPreenchidos = itens.filter((i) => i.titulo.trim());
+  /** Todos os itens com valor e a soma longe do recebido: aviso, sem impedir — pode ser de propósito. */
+  const somaDosItens = itensPreenchidos.reduce((soma, i) => soma + numeroDoCampo(i.valor), 0);
+  const somaDiferente =
+    itensPreenchidos.length > 0 &&
+    itensPreenchidos.every((i) => numeroDoCampo(i.valor) > 0) &&
+    valorNumero > 0 &&
+    Math.abs(somaDosItens - valorNumero) >= 0.01;
+
+  const mudarItem = (id: string, patch: Partial<ItemEmEdicao>) => {
+    setItens((atual) => atual.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    setErros((e) => ({ ...e, itens: undefined }));
+  };
+
+  const removerItem = (id: string) =>
+    setItens((atual) => {
+      const resto = atual.filter((i) => i.id !== id);
+      return resto.length > 0 ? resto : [itemEmBranco()];
+    });
+
+  /** Do catálogo: ocupa a linha em branco que estiver sobrando, ou entra no fim. */
+  const adicionarDoCatalogo = (proc: Procedure) => {
+    const novo: ItemEmEdicao = {
+      id: crypto.randomUUID(),
+      titulo: proc.title,
+      sessoes: String(sessoesDoProcedimento(proc)),
+      valor: '',
+      procedureId: proc.id,
+    };
+    setItens((atual) => {
+      const emBranco = atual.findIndex((i) => !i.titulo.trim());
+      if (emBranco >= 0) return atual.map((i, n) => (n === emBranco ? novo : i));
+      return atual.length >= MAXIMO_DE_ITENS ? atual : [...atual, novo];
+    });
+    setErros((e) => ({ ...e, itens: undefined }));
+  };
 
   const escolherPaciente = (escolha: { id?: string; nome: string; contato?: string }) => {
     setPacienteId(escolha.id);
@@ -188,6 +263,7 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
     if (!data) novos.data = 'Informe a data do pagamento.';
     else if (data > hojeISO()) novos.data = 'O recibo é de um pagamento que já aconteceu.';
     if (!(valorNumero > 0)) novos.valor = 'Informe o valor recebido.';
+    if (itensPreenchidos.length === 0) novos.itens = 'Informe ao menos um procedimento.';
     setErros(novos);
     return Object.keys(novos).length === 0;
   };
@@ -212,8 +288,19 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
         pacienteNome: pacienteNome.trim(),
         pacienteCpf: digitosCpf || undefined,
         pacienteContato: pacienteContato || undefined,
-        referente: referente.trim() || undefined,
-        observacoes: observacoes.trim() || undefined,
+        itens: itensPreenchidos.map((i) => {
+          const valorDoItem = numeroDoCampo(i.valor);
+          return {
+            id: i.id,
+            titulo: i.titulo.trim(),
+            sessoes: Math.max(1, Math.round(numeroDoCampo(i.sessoes) || 1)),
+            valor: valorDoItem > 0 ? Math.round(valorDoItem * 100) / 100 : undefined,
+            procedureId: i.procedureId,
+          };
+        }),
+        // O "Referente a" de texto virou a lista; a observação dos recibos antigos fica como estava.
+        referente: undefined,
+        observacoes: recibo?.observacoes,
         quoteId,
         quoteNumero,
         comprovante: novoComprovante ?? comprovanteAtual,
@@ -461,35 +548,106 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
           )}
         </section>
 
-        {/* O que foi pago */}
+        {/* O que foi pago — a tabela do recibo */}
         <section className="flex flex-col gap-3">
-          <h3 className="font-serif-luxury text-[22px] font-semibold text-ink">Referente a</h3>
-          <CampoTinta
-            rotulo="O que foi pago"
-            htmlFor="recibo-referente"
-            ajuda={`Entra na frase do recibo: "… referente a ${referente.trim() || 'Botox — terço superior'}".`}
-          >
-            <textarea
-              id="recibo-referente"
-              rows={2}
-              maxLength={LIMITE_REFERENTE}
-              value={referente}
-              onChange={(e) => setReferente(e.target.value)}
-              placeholder="Procedimento, sessão, pacote…"
-              className={`${INPUT_TINTA} resize-none leading-snug`}
-            />
-          </CampoTinta>
-          <CampoTinta rotulo="Observações (opcional)" htmlFor="recibo-observacoes">
-            <textarea
-              id="recibo-observacoes"
-              rows={2}
-              maxLength={LIMITE_OBSERVACOES}
-              value={observacoes}
-              onChange={(e) => setObservacoes(e.target.value)}
-              placeholder="Entrada do pacote, retorno incluso…"
-              className={`${INPUT_TINTA} resize-none leading-snug font-medium`}
-            />
-          </CampoTinta>
+          <div>
+            <h3 className="font-serif-luxury text-[22px] font-semibold text-ink">Procedimentos</h3>
+            <p className="text-[13px] text-ink-soft leading-snug">
+              Cada linha vira uma linha da tabela do recibo. O nome pode ser mudado — por exemplo,
+              o protocolo de cada fase.
+            </p>
+          </div>
+
+          {erros.itens && (
+            <AvisoTinta tom="erro" icone={AlertCircle}>
+              {erros.itens}
+            </AvisoTinta>
+          )}
+
+          {itens.map((item, n) => (
+            <div key={item.id} className="rounded-2xl bg-card border border-ink/10 p-3 flex flex-col gap-2.5">
+              <div className="flex items-start gap-2.5">
+                <span
+                  aria-hidden
+                  className="w-8 h-8 mt-3 shrink-0 rounded-full bg-ink text-brand-pale text-[14px] font-bold flex items-center justify-center tabular-nums"
+                >
+                  {n + 1}
+                </span>
+                <CampoTinta rotulo="Procedimento" htmlFor={`recibo-item-${item.id}`} className="flex-1 min-w-0">
+                  <input
+                    id={`recibo-item-${item.id}`}
+                    type="text"
+                    value={item.titulo}
+                    maxLength={120}
+                    onChange={(e) => mudarItem(item.id, { titulo: e.target.value })}
+                    placeholder="Harmonização Glútea — Fases 1 e 2"
+                    className={INPUT_TINTA}
+                  />
+                </CampoTinta>
+                <button
+                  type="button"
+                  onClick={() => removerItem(item.id)}
+                  aria-label={`Remover o procedimento ${n + 1}`}
+                  title="Remover"
+                  className="w-10 h-10 mt-2 shrink-0 rounded-full flex items-center justify-center text-ink-soft hover:text-danger hover:bg-danger-bg transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 sm:pl-[42px] sm:pr-[50px]">
+                <CampoTinta rotulo="Sessões" htmlFor={`recibo-item-sessoes-${item.id}`}>
+                  <input
+                    id={`recibo-item-sessoes-${item.id}`}
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="numeric"
+                    value={item.sessoes}
+                    onChange={(e) => mudarItem(item.id, { sessoes: e.target.value })}
+                    className={`${INPUT_TINTA} tabular-nums`}
+                  />
+                </CampoTinta>
+                <CampoTinta rotulo="Valor (opcional)" htmlFor={`recibo-item-valor-${item.id}`} prefixo={prefixoReais}>
+                  <input
+                    id={`recibo-item-valor-${item.id}`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={item.valor}
+                    onChange={(e) => mudarItem(item.id, { valor: e.target.value })}
+                    placeholder="—"
+                    className={`${INPUT_TINTA} tabular-nums`}
+                  />
+                </CampoTinta>
+              </div>
+            </div>
+          ))}
+
+          {itens.length < MAXIMO_DE_ITENS ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <ProcedureSearchAdd procedures={procedimentos} onAdd={adicionarDoCatalogo} />
+              <button
+                type="button"
+                onClick={() => setItens((atual) => [...atual, itemEmBranco()])}
+                className="h-10 px-4 rounded-full border border-ink/15 text-ink text-[14px] font-semibold hover:border-ink/40 transition-colors flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                Item fora do catálogo
+              </button>
+            </div>
+          ) : (
+            <p className="px-1 text-[13px] text-ink-soft">
+              Até {MAXIMO_DE_ITENS} linhas — é o que cabe na folha do recibo.
+            </p>
+          )}
+
+          {somaDiferente && (
+            <AvisoTinta tom="alerta" icone={AlertCircle}>
+              A soma dos itens ({formatBRL(somaDosItens)}) é diferente do valor recebido (
+              {formatBRL(valorNumero)}). No recibo, o total é o valor recebido.
+            </AvisoTinta>
+          )}
         </section>
 
         {/* O comprovante */}

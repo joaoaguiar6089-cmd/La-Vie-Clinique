@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Recibo } from '../../types';
 import { clinicMonogram } from '../ClinicLogo';
 import { PaginaDoComprovante } from '../quotes/usePaginasDoComprovante';
@@ -7,10 +7,10 @@ import {
   BRONZE,
   BRONZE_CLARO,
   CINZA,
-  CINZA_CLARO,
   CONTENT_W,
   CREME,
   HAIRLINE,
+  MM,
   OFFWHITE,
   PRETO,
   TEXTO_DETALHE,
@@ -21,11 +21,15 @@ import {
 } from '../documentos/estiloA4';
 import {
   NOME_FORMA_DO_RECIBO,
+  comMaiuscula,
   condicaoDoPagamento,
   cpfLegivel,
   dataPorExtenso,
   declaracaoDoRecibo,
   formatCnpj,
+  itensDoRecibo,
+  partesDoNomeDaClinica,
+  sessoesLegivel,
   valorPorExtenso,
 } from '../../utils/recibos';
 import { formatBRL } from '../../utils/formatters';
@@ -35,26 +39,51 @@ import { formatBRL } from '../../utils/formatters';
  * html2canvas desenha cada trecho entre pontos de quebra separado, e no hífen comum isso abria um
  * vão no PDF ("789- 01") que a tela não mostrava.
  */
-const semQuebra = (texto: string): string => texto.replace(/-/g, '\u2011');
+const semQuebra = (texto: string): string => texto.replace(/-/g, '‑');
 
 /** Espaço da folha do comprovante: a página útil menos o cabeçalho compacto e o título. */
 const CAIXA_COMPROVANTE_W = CONTENT_W;
 const CAIXA_COMPROVANTE_H = ALTURA_UTIL - 110;
 
+/** A folha do recibo tem margens laterais mais largas que a do orçamento — é um documento curto. */
+const MARGEM_DO_RECIBO = 20 * MM;
+
+/**
+ * Quanto a folha precisou apertar para caber: 0 é o desenho normal; 1 encolhe a tabela e os
+ * espaços; 2 encolhe também o nome, o valor e a frase. Ver `PaginasDoRecibo`.
+ */
+type Densidade = 0 | 1 | 2;
+
+/** O bege das linhas pares e do total da tabela. */
+const BEGE_DA_LINHA = '#F4F0EA';
+const BEGE_DO_TOTAL = '#EEE6DB';
+/** Largura das colunas de quantidade e valor; o procedimento fica com o resto. */
+const COLUNA_QTD = 120;
+const COLUNA_VALOR = 120;
+
+const rotuloPequeno: React.CSSProperties = {
+  ...estiloDoRotulo,
+  fontSize: 8.5,
+  fontWeight: 600,
+  letterSpacing: '.1em',
+};
+
 const Cabecalho: React.FC<{ recibo: Recibo }> = ({ recibo }) => {
   const clinica = recibo.clinica;
+  const { curto, complemento } = partesDoNomeDaClinica(clinica.name);
+  const linhaDeBaixo = [clinica.tagline, clinica.cityState].filter(Boolean).join(' • ');
   return (
-    <div style={{ flexShrink: 0 }}>
+    <div style={{ flexShrink: 0, marginTop: 14 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
           <div
             style={{
-              width: 42,
-              height: 42,
+              width: 52,
+              height: 52,
               background: PRETO,
               color: BRONZE,
               fontFamily: 'var(--font-serif)',
-              fontSize: 15,
+              fontSize: 18,
               letterSpacing: '.06em',
               display: 'flex',
               alignItems: 'center',
@@ -64,42 +93,36 @@ const Cabecalho: React.FC<{ recibo: Recibo }> = ({ recibo }) => {
           >
             {clinicMonogram(clinica.name)}
           </div>
-          <div>
-            <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, color: PRETO, lineHeight: 1.1 }}>
-              {clinica.name}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: PRETO, lineHeight: 1.1 }}>
+              {curto}
             </div>
-            <div
-              style={{
-                fontSize: 9.5,
-                textTransform: 'uppercase',
-                letterSpacing: '.14em',
-                color: CINZA,
-                marginTop: 3,
-              }}
-            >
-              {[clinica.tagline, clinica.cityState].filter(Boolean).join(' · ')}
-            </div>
+            {[complemento, linhaDeBaixo].filter(Boolean).map((linha) => (
+              <div
+                key={linha}
+                style={{
+                  fontSize: 9,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.08em',
+                  color: CINZA,
+                  marginTop: 4,
+                }}
+              >
+                {linha}
+              </div>
+            ))}
           </div>
         </div>
 
         <div style={{ textAlign: 'right', flexShrink: 0, whiteSpace: 'nowrap' }}>
-          <div style={estiloDoRotulo}>Nota de recibo</div>
-          <div
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: 20,
-              color: PRETO,
-              lineHeight: 1.25,
-            }}
-          >
+          <div style={rotuloPequeno}>Recibo</div>
+          <div style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: PRETO, lineHeight: 1.25, marginTop: 2 }}>
             Nº {recibo.numero}
           </div>
-          <div style={{ fontSize: 10, color: CINZA }}>
-            Emitido em {dataCurta(recibo.createdAt)}
-          </div>
+          <div style={{ fontSize: 10.5, color: CINZA, marginTop: 1 }}>Emitido em {dataCurta(recibo.createdAt)}</div>
         </div>
       </div>
-      <div style={{ height: 1, background: HAIRLINE, marginTop: 13 }} />
+      <div style={{ height: 1, background: HAIRLINE, marginTop: 20 }} />
     </div>
   );
 };
@@ -120,89 +143,143 @@ const CabecalhoCompacto: React.FC<{ recibo: Recibo }> = ({ recibo }) => (
 );
 
 /** Quem pagou à esquerda; o valor no bloco preto à direita — o número que a cliente procura. */
-const Destaque: React.FC<{ recibo: Recibo }> = ({ recibo }) => {
+const Destaque: React.FC<{ recibo: Recibo; densidade: Densidade }> = ({ recibo, densidade }) => {
   const cpf = cpfLegivel(recibo.pacienteCpf);
   return (
-    <div style={{ display: 'flex', gap: 22, alignItems: 'stretch', flexShrink: 0, marginTop: 6 }}>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <div style={{ ...estiloDoRotulo, marginBottom: 4 }}>Recebido de</div>
-        <div
-          style={{
-            fontFamily: 'var(--font-serif)',
-            fontSize: 34,
-            color: PRETO,
-            lineHeight: 1.12,
-          }}
-        >
+    <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexShrink: 0 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...rotuloPequeno, marginBottom: 8 }}>Recebido de</div>
+        <div style={{ fontFamily: 'var(--font-serif)', fontSize: densidade === 2 ? 26 : 32, color: PRETO, lineHeight: 1.12 }}>
           {recibo.pacienteNome}
         </div>
-        {cpf && (
-          <div style={{ fontSize: 11, color: CINZA, marginTop: 6 }}>
-            CPF {semQuebra(cpf)}
-          </div>
-        )}
+        {cpf && <div style={{ fontSize: 11.5, color: CINZA, marginTop: 6 }}>CPF {semQuebra(cpf)}</div>}
       </div>
 
       <div
         style={{
           background: PRETO,
           color: OFFWHITE,
-          padding: '20px 22px',
-          width: 290,
+          padding: '20px 22px 18px',
+          width: 260,
+          minHeight: densidade === 2 ? 100 : 128,
+          boxSizing: 'border-box',
+          borderRadius: 8,
           flexShrink: 0,
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
         }}
       >
-        <div style={estiloDoRotulo}>Valor recebido</div>
-        <div
-          style={{
-            fontFamily: 'var(--font-serif)',
-            fontSize: 38,
-            lineHeight: 1.15,
-            marginTop: 4,
-          }}
-        >
-          {formatBRL(recibo.valor)}
+        <div>
+          <div style={rotuloPequeno}>Valor recebido</div>
+          <div style={{ fontFamily: 'var(--font-serif)', fontSize: 34, lineHeight: 1.15, marginTop: 6 }}>
+            {formatBRL(recibo.valor)}
+          </div>
         </div>
-        <div style={{ fontSize: 10, color: CREME, opacity: 0.75, lineHeight: 1.45, marginTop: 4 }}>
-          {valorPorExtenso(recibo.valor)}
-        </div>
-        <div style={{ height: 1, background: 'rgba(196,155,116,.35)', margin: '12px 0 9px' }} />
-        <div style={{ fontSize: 10.5, color: CREME }}>
-          Pago em {dataCurta(recibo.dataPagamento)}
+        <div style={{ fontSize: 10.5, color: CREME, opacity: 0.85, lineHeight: 1.4 }}>
+          {comMaiuscula(valorPorExtenso(recibo.valor))}
         </div>
       </div>
     </div>
   );
 };
 
-/** O texto formal do recibo, com o nome e o valor em destaque. */
-const Declaracao: React.FC<{ recibo: Recibo }> = ({ recibo }) => {
-  const d = declaracaoDoRecibo(recibo);
+/** A frase de abertura e, logo abaixo, a tabela do que foi pago com o total recebido. */
+const OQueFoiPago: React.FC<{ recibo: Recibo; densidade: Densidade }> = ({ recibo, densidade }) => {
+  const itens = itensDoRecibo(recibo);
+  const celula: React.CSSProperties =
+    densidade === 0
+      ? { padding: '10px 18px', fontSize: 11.5, lineHeight: 1.35 }
+      : { padding: '6px 14px', fontSize: 10.5, lineHeight: 1.3 };
   return (
-    <div
-      style={{
-        fontFamily: 'var(--font-serif)',
-        fontSize: 17,
-        lineHeight: 1.6,
-        color: TEXTO_DETALHE,
-        flexShrink: 0,
-        marginTop: 8,
-      }}
-    >
-      {d.antesDoNome}
-      <span style={{ color: PRETO, fontWeight: 600 }}>{d.nome}</span>
-      {d.depoisDoNome}
-      <span style={{ color: PRETO, fontWeight: 600 }}>{d.valor}</span>{' '}
-      {d.extenso}
-      {d.fim}
+    <div style={{ flexShrink: 0, marginTop: densidade === 0 ? 30 : 14 }}>
+      <div
+        style={{
+          fontFamily: 'var(--font-serif)',
+          fontSize: densidade === 2 ? 15 : 17,
+          lineHeight: densidade === 2 ? 1.45 : 1.6,
+          color: PRETO,
+          maxWidth: 540,
+        }}
+      >
+        {declaracaoDoRecibo(recibo)}
+      </div>
+
+      <div style={{ marginTop: densidade === 0 ? 18 : 10 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: PRETO,
+            color: '#FFFFFF',
+            borderRadius: '8px 8px 0 0',
+            fontSize: 8.5,
+            fontWeight: 700,
+            letterSpacing: '.08em',
+            textTransform: 'uppercase',
+          }}
+        >
+          <div style={{ ...celula, fontSize: 8.5, flex: 1, paddingTop: 12, paddingBottom: 12 }}>Item / procedimento</div>
+          <div style={{ ...celula, fontSize: 8.5, width: COLUNA_QTD, textAlign: 'center', paddingTop: 12, paddingBottom: 12 }}>
+            Qtd.
+          </div>
+          <div style={{ ...celula, fontSize: 8.5, width: COLUNA_VALOR, textAlign: 'right', paddingTop: 12, paddingBottom: 12 }}>
+            Valor
+          </div>
+        </div>
+
+        {itens.map((item, i) => (
+          <div
+            key={item.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: i % 2 === 0 ? '#FFFFFF' : BEGE_DA_LINHA,
+              borderBottom: `1px solid ${HAIRLINE}`,
+            }}
+          >
+            <div style={{ ...celula, flex: 1, minWidth: 0, color: PRETO }}>{item.titulo}</div>
+            <div style={{ ...celula, width: COLUNA_QTD, textAlign: 'center', color: CINZA, fontSize: 10.5 }}>
+              {sessoesLegivel(item.sessoes)}
+            </div>
+            <div style={{ ...celula, width: COLUNA_VALOR, textAlign: 'right', color: PRETO }}>
+              {item.valor ? formatBRL(item.valor) : '—'}
+            </div>
+          </div>
+        ))}
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: BEGE_DO_TOTAL,
+            fontWeight: 700,
+            color: PRETO,
+          }}
+        >
+          <div style={{ ...celula, flex: 1, fontSize: 11, letterSpacing: '.04em', textTransform: 'uppercase' }}>
+            Total recebido
+          </div>
+          <div style={{ ...celula, textAlign: 'right' }}>{formatBRL(recibo.valor)}</div>
+        </div>
+      </div>
+
+      {/* Observação dos recibos antigos, de antes da tabela. Recibo novo não tem. */}
+      {recibo.observacoes?.trim() && (
+        <div style={{ fontSize: 10.5, color: TEXTO_DETALHE, lineHeight: 1.55, marginTop: 12, whiteSpace: 'pre-line' }}>
+          {recibo.observacoes.trim()}
+        </div>
+      )}
+
+      <div style={{ fontSize: 10.5, color: CINZA, lineHeight: 1.7, marginTop: densidade === 0 ? 18 : 8, maxWidth: 360 }}>
+        O presente recibo comprova o pagamento descrito acima, dando plena quitação do valor recebido.
+      </div>
     </div>
   );
 };
 
-/** A grade de dados do pagamento — data, forma, condição e o orçamento de origem. */
+/** A grade de dados do pagamento — data, forma, condição, o orçamento de origem e o comprovante. */
 const Detalhes: React.FC<{ recibo: Recibo; paginaDoComprovante?: number }> = ({
   recibo,
   paginaDoComprovante,
@@ -213,7 +290,7 @@ const Detalhes: React.FC<{ recibo: Recibo; paginaDoComprovante?: number }> = ({
     { rotulo: 'Condição', valor: condicaoDoPagamento(recibo) },
   ];
   if (recibo.quoteNumero) celulas.push({ rotulo: 'Orçamento', valor: semQuebra(`Nº ${recibo.quoteNumero}`) });
-  if (paginaDoComprovante) celulas.push({ rotulo: 'Comprovante', valor: `Anexo, pág. ${paginaDoComprovante}` });
+  if (paginaDoComprovante) celulas.push({ rotulo: 'Comprovante', valor: `Anexo na página ${paginaDoComprovante}` });
 
   return (
     <div
@@ -221,18 +298,16 @@ const Detalhes: React.FC<{ recibo: Recibo; paginaDoComprovante?: number }> = ({
         display: 'grid',
         gridTemplateColumns: `repeat(${celulas.length}, minmax(0, 1fr))`,
         gap: 18,
-        paddingTop: 13,
+        paddingTop: 16,
         borderTop: `1px solid ${HAIRLINE}`,
         flexShrink: 0,
-        marginTop: 6,
+        marginTop: 4,
       }}
     >
       {celulas.map((c) => (
         <div key={c.rotulo}>
-          <div style={{ ...estiloDoRotulo, fontSize: 8, letterSpacing: '.14em', marginBottom: 4 }}>{c.rotulo}</div>
-          <div style={{ fontSize: 12, color: PRETO, lineHeight: 1.4 }}>
-            {c.valor}
-          </div>
+          <div style={{ ...rotuloPequeno, fontSize: 8, marginBottom: 6 }}>{c.rotulo}</div>
+          <div style={{ fontSize: 11, color: PRETO, lineHeight: 1.4 }}>{c.valor}</div>
         </div>
       ))}
     </div>
@@ -243,14 +318,13 @@ const Detalhes: React.FC<{ recibo: Recibo; paginaDoComprovante?: number }> = ({
 const Selo: React.FC<{ data: string }> = ({ data }) => (
   <div
     style={{
-      width: 104,
-      height: 104,
+      width: 80,
+      height: 80,
       borderRadius: '50%',
       border: `1.5px solid ${BRONZE}`,
       padding: 4,
       boxSizing: 'border-box',
       flexShrink: 0,
-      transform: 'rotate(-8deg)',
     }}
   >
     <div
@@ -267,48 +341,29 @@ const Selo: React.FC<{ data: string }> = ({ data }) => (
         color: BRONZE,
       }}
     >
-      <div style={{ fontSize: 7, letterSpacing: '.22em', textTransform: 'uppercase' }}>Pagamento</div>
-      <div
-        style={{
-          fontFamily: 'var(--font-serif)',
-          fontSize: 24,
-          letterSpacing: '.12em',
-          lineHeight: 1.1,
-          color: PRETO,
-          margin: '2px 0 1px',
-        }}
-      >
+      <div style={{ fontSize: 6.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>Pagamento</div>
+      <div style={{ fontFamily: 'var(--font-serif)', fontSize: 17, letterSpacing: '.06em', lineHeight: 1.15, color: PRETO }}>
         PAGO
       </div>
-      <div style={{ fontSize: 8, letterSpacing: '.08em' }}>{data}</div>
+      <div style={{ fontSize: 7, color: CINZA }}>{data}</div>
     </div>
   </div>
 );
 
-/** Local e data à esquerda; o selo e a linha de quem emite à direita. */
+/** O selo à esquerda; ao lado, o local e a data por extenso e quem emite. */
 const Assinatura: React.FC<{ recibo: Recibo }> = ({ recibo }) => {
   const clinica = recibo.clinica;
   const cnpj = formatCnpj(clinica.cnpj);
   const local = [clinica.cityState, dataPorExtenso(recibo.createdAt)].filter(Boolean).join(', ');
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexShrink: 0 }}>
-      <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 15, color: TEXTO_DETALHE }}>
-        {local}.
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 22 }}>
-        <Selo data={dataCurta(recibo.dataPagamento)} />
-        <div style={{ width: 230, textAlign: 'center' }}>
-          <div style={{ height: 1, background: PRETO, opacity: 0.55, marginBottom: 7 }} />
-          <div style={{ fontFamily: 'var(--font-serif)', fontSize: 15, color: PRETO, lineHeight: 1.2 }}>
-            {clinica.name}
-          </div>
-          {cnpj && (
-            <div style={{ fontSize: 9.5, color: CINZA, marginTop: 2 }}>
-              CNPJ {semQuebra(cnpj)}
-            </div>
-          )}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0, paddingLeft: 18 }}>
+      <Selo data={dataCurta(recibo.dataPagamento)} />
+      <div style={{ maxWidth: 300 }}>
+        <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 15, color: CINZA }}>{local}.</div>
+        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 15, color: PRETO, lineHeight: 1.35, marginTop: 10 }}>
+          {clinica.name}
         </div>
+        {cnpj && <div style={{ fontSize: 9.5, color: CINZA, marginTop: 3 }}>CNPJ {semQuebra(cnpj)}</div>}
       </div>
     </div>
   );
@@ -316,18 +371,14 @@ const Assinatura: React.FC<{ recibo: Recibo }> = ({ recibo }) => {
 
 const Rodape: React.FC<{ recibo: Recibo }> = ({ recibo }) => {
   const clinica = recibo.clinica;
+  const assinatura = [partesDoNomeDaClinica(clinica.name).curto, clinica.cityState, clinica.phone]
+    .filter(Boolean)
+    .join(' • ');
   return (
-    <div style={{ flexShrink: 0, paddingTop: 10, borderTop: `1px solid ${HAIRLINE}` }}>
+    <div style={{ flexShrink: 0, paddingTop: 14, borderTop: `1px solid ${HAIRLINE}` }}>
       <div style={{ display: 'flex', gap: 22, justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ fontSize: 9.5, color: CINZA_CLARO, lineHeight: 1.55, maxWidth: '52ch' }}>
-          Este recibo comprova o pagamento descrito acima. Guarde-o junto com o comprovante da
-          transação.
-        </div>
-        <div style={{ fontSize: 9.5, color: CINZA, textAlign: 'right', lineHeight: 1.6, flexShrink: 0 }}>
-          <div>{[clinica.phone, clinica.instagram].filter(Boolean).join(' · ')}</div>
-          {clinica.email && <div>{clinica.email}</div>}
-          {clinica.address && <div>{clinica.address}</div>}
-        </div>
+        <div style={{ fontSize: 9.5, color: CINZA }}>Guarde este recibo junto ao comprovante da transação.</div>
+        <div style={{ fontSize: 9.5, color: CINZA, textAlign: 'right' }}>{semQuebra(assinatura)}</div>
       </div>
     </div>
   );
@@ -349,17 +400,46 @@ export const paginasDoRecibo = (folhasDoComprovante: number): number => 1 + folh
 /**
  * A nota de recibo em folhas A4 — a página do recibo e, depois, uma por folha do comprovante.
  *
- * Um recibo é um documento curto: tudo cabe numa página, e o espaço que sobra fica entre o texto e
- * a assinatura, onde um recibo de papel também deixa. Não há paginação medida como no orçamento;
- * o formulário limita o tamanho dos textos livres para nada passar da folha.
+ * Um recibo é um documento curto: tudo cabe numa página, e o espaço que sobra fica embaixo, antes
+ * do rodapé. Não há paginação medida como no orçamento; o formulário limita a quantidade de itens
+ * (`MAXIMO_DE_ITENS`) para a tabela não passar da folha.
  */
-export const PaginasDoRecibo: React.FC<PaginasDoReciboProps> = ({
+export const PaginasDoRecibo: React.FC<PaginasDoReciboProps> = (props) => {
+  // Recibo novo (ou editado) começa de novo do desenho normal, e a medição decide.
+  const versao = `${props.recibo.id}|${props.recibo.updatedAt || ''}|${props.recibo.createdAt}`;
+  return <PaginasDoReciboMedidas key={versao} {...props} />;
+};
+
+const PaginasDoReciboMedidas: React.FC<PaginasDoReciboProps> = ({
   recibo,
   folhasDoComprovante = [],
   numeroInicial = 1,
   totalDePaginas,
 }) => {
   const total = totalDePaginas ?? numeroInicial - 1 + paginasDoRecibo(folhasDoComprovante.length);
+
+  /**
+   * A folha mede a si mesma: se o conteúdo passou da altura do A4 (muitos itens, nomes longos),
+   * aperta um nível e mede de novo. Sem isso a assinatura e o rodapé sairiam cortados do PDF —
+   * o html2canvas captura só a altura da folha. As fontes precisam estar carregadas antes: com a
+   * fonte de reserva, a medida sai errada.
+   */
+  const paginaRef = useRef<HTMLDivElement>(null);
+  const [densidade, setDensidade] = useState<Densidade>(0);
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      if (document.fonts) await document.fonts.ready;
+      const pagina = paginaRef.current;
+      if (cancelado || !pagina) return;
+      if (pagina.scrollHeight > pagina.clientHeight + 1 && densidade < 2) {
+        setDensidade((densidade + 1) as Densidade);
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [densidade]);
   const numero = (n: number) => (
     <div style={estiloDoNumeroDaPagina}>
       {n}/{total}
@@ -368,41 +448,37 @@ export const PaginasDoRecibo: React.FC<PaginasDoReciboProps> = ({
 
   return (
     <>
-      <div data-pdf-page={numeroInicial} style={estiloDaPagina}>
+      <div
+        ref={paginaRef}
+        data-pdf-page={numeroInicial}
+        style={{ ...estiloDaPagina, paddingLeft: MARGEM_DO_RECIBO, paddingRight: MARGEM_DO_RECIBO }}
+      >
+        {/* A faixa preta no alto, de ponta a ponta — só na folha do recibo */}
+        <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 26, background: PRETO }} />
+
         <Cabecalho recibo={recibo} />
-        <Destaque recibo={recibo} />
-        <Declaracao recibo={recibo} />
+        <Destaque recibo={recibo} densidade={densidade} />
+        <OQueFoiPago recibo={recibo} densidade={densidade} />
         <Detalhes
           recibo={recibo}
           paginaDoComprovante={folhasDoComprovante.length > 0 ? numeroInicial + 1 : undefined}
         />
-
-        {recibo.observacoes?.trim() && (
-          <div style={{ flexShrink: 0 }}>
-            <div style={{ ...estiloDoRotulo, fontSize: 8, marginBottom: 4 }}>Observações</div>
-            <div style={{ fontSize: 11, color: TEXTO_DETALHE, lineHeight: 1.55, whiteSpace: 'pre-line' }}>
-              {recibo.observacoes.trim()}
-            </div>
-          </div>
-        )}
-
-        {/* A assinatura vem logo depois do texto, como num recibo de papel; o que sobra da folha
-            fica embaixo, com o monograma bem apagado ocupando o vazio. */}
-        <div style={{ height: 34, flexShrink: 0 }} />
+        <div style={{ height: 6, flexShrink: 0 }} />
         <Assinatura recibo={recibo} />
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+
+        {/* O que sobra da folha fica embaixo, com o monograma bem apagado ocupando o vazio. */}
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
           <div
             aria-hidden
             style={{
               position: 'absolute',
-              right: -6,
-              bottom: -40,
+              right: 0,
+              bottom: -18,
               fontFamily: 'var(--font-serif)',
-              fontSize: 300,
+              fontSize: 160,
               lineHeight: 1,
-              letterSpacing: '.02em',
               color: BRONZE,
-              opacity: 0.07,
+              opacity: 0.08,
               userSelect: 'none',
             }}
           >
@@ -411,7 +487,9 @@ export const PaginasDoRecibo: React.FC<PaginasDoReciboProps> = ({
         </div>
         <Rodape recibo={recibo} />
 
-        {numero(numeroInicial)}
+        <div style={{ ...estiloDoNumeroDaPagina, right: MARGEM_DO_RECIBO }}>
+          {numeroInicial}/{total}
+        </div>
       </div>
 
       {folhasDoComprovante.map((folha, i) => {

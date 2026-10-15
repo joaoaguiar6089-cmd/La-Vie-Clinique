@@ -25,11 +25,18 @@ Cormorant, bronze, bloco preto do valor), para enviar pelo WhatsApp.
   cadastro.
 - **Pagamento**: data (não aceita futuro), valor, forma — **Pix, cartão de débito, cartão de
   crédito, dinheiro** — e, no crédito, **à vista ou parcelado** (2 a 12×, com o valor da parcela).
-- Vindo de orçamento: cliente, procedimentos ("Referente a"), data do pagamento e a forma principal
-  com o valor dela já preenchidos. Se o orçamento aceitava mais de uma forma, pílulas "Como a
-  cliente pagou?" trocam forma e valor de uma vez (ex.: Pix com 10% de desconto).
-- **Referente a** e **observações**: texto livre, até 300 caracteres cada — o recibo é uma folha
-  só e não pagina.
+- Vindo de orçamento: cliente, procedimentos, data do pagamento e a forma principal com o valor
+  dela já preenchidos. Se o orçamento aceitava mais de uma forma, pílulas "Como a cliente pagou?"
+  trocam forma e valor de uma vez (ex.: Pix com 10% de desconto).
+- **Procedimentos**: lista numerada, como a do orçamento — "+ Adicionar procedimento" (busca no
+  catálogo) e "+ Item fora do catálogo". Cada linha tem **nome editável**, **sessões** e **valor
+  opcional**. O nome livre existe para os protocolos de cada cliente dentro do mesmo procedimento
+  ("Harmonização Glútea — Fases 1 e 2", "Harmonização Glútea — Fase 3"). Vindo de orçamento, as
+  linhas nascem dos itens dele, com as sessões e **sem valor**: repartir o que entrou entre itens
+  com descontos diferentes seria inventar número. Até 8 linhas. Se todos os itens têm valor e a
+  soma não bate com o recebido, o formulário avisa (não impede).
+- Substituiu os antigos "Referente a" e "Observações". Recibo antigo abre com o "Referente a"
+  como a linha 1, e a observação dele continua no PDF.
 - **Comprovante** (opcional): foto ou PDF, até 10 MB, em `recibos/<id>/comprovantes/` no Storage.
   Sobe **antes** do recibo ser gravado: se falhar, nada foi emitido e o número não foi gasto.
 - Emitido, abre a **prévia** — o próximo passo é mandar para a cliente.
@@ -49,19 +56,28 @@ Cormorant, bronze, bloco preto do valor), para enviar pelo WhatsApp.
 
 ## 4. PDF
 
-- `PaginasDoRecibo` (`components/recibos/ReciboPrintable.tsx`): uma A4 com cabeçalho (monograma,
-  clínica, "Nota de recibo Nº", emissão) → "Recebido de" + nome + CPF ao lado do bloco preto do
-  valor (com o valor por extenso e a data do pagamento) → a declaração ("Recebemos de …, a
-  importância de R$ … (por extenso), referente a …, conforme o orçamento Nº …. Para clareza,
-  firmamos o presente, dando quitação do valor recebido.") → grade de data, forma, condição,
-  orçamento e comprovante → local e data por extenso, selo "PAGO" e linha da clínica com CNPJ →
-  rodapé de contatos. O comprovante entra como páginas seguintes, uma por folha (PDF até 6).
+- `PaginasDoRecibo` (`components/recibos/ReciboPrintable.tsx`), no desenho aprovado em
+  2026-10-15 (modelo "Recibo La Vie Clinique com tabela"): faixa preta no alto → cabeçalho
+  (monograma; o nome da clínica partido no travessão — "La Vie Clinique" grande, "Clínica de
+  Estética Facial e Corporal" em caixa alta —; tagline • cidade; "Recibo Nº", emissão) →
+  "Recebido de" + nome + CPF ao lado do bloco preto arredondado do valor, com o extenso →
+  "Declaramos o recebimento de …, CPF …, da importância de R$ … (por extenso), referente a:" →
+  **tabela** (Item / procedimento · Qtd. · Valor, linhas alternadas, "—" sem valor, **Total
+  recebido**) → "O presente recibo comprova o pagamento descrito acima, dando plena quitação do
+  valor recebido." → grade de data, forma, condição, orçamento e comprovante → selo "PAGO" com o
+  local e a data por extenso e o nome da clínica (e CNPJ) → monograma apagado → rodapé.
+  Margens laterais de 20 mm (o orçamento usa 14). O comprovante entra como páginas seguintes,
+  uma por folha (PDF até 6).
+- **A folha se mede**: se o conteúdo passa da altura do A4 (muitos itens com nome longo), ela
+  aperta a tabela e os espaços (nível 1) e, se precisar, o nome, o valor e a frase (nível 2).
+  Sem isso a assinatura e o rodapé sairiam cortados do PDF.
 - Métrica e paleta em `components/documentos/estiloA4.ts`, compartilhadas com o orçamento.
 - **Orçamento completo com recibo**: a prévia do orçamento pago (`QuotePreviewModal`) traz, depois
   das páginas dele, as notas de recibo e os comprovantes delas, com a numeração "N/total" contínua.
   Só no painel — a página pública do orçamento não lê `receipts`.
-- Sem `tabular-nums` e com hífen inseparável nos números em sans: o html2canvas abria vãos
-  ("789- 01") que a tela não mostrava.
+- Sem `tabular-nums` nem `font-feature-settings` e com hífen inseparável nos números em sans: o
+  html2canvas abria vãos ("789- 01") que a tela não mostrava. Pelo mesmo motivo os números em
+  Cormorant ficam com os algarismos de texto da fonte — o html2canvas ignora o `lnum`.
 
 ## 5. Envio (`ReciboPreviewModal`)
 

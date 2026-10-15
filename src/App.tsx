@@ -815,7 +815,7 @@ function MainCatalogApp() {
 
   return (
     // Notas de recibo: uma assinatura e um formulário para o painel inteiro — ver RecibosContext.
-    <RecibosProvider clinic={clinic} pacientes={allPatients}>
+    <RecibosProvider clinic={clinic} pacientes={allPatients} procedimentos={procedures}>
       <div className="min-h-screen bg-surface text-ink sm:flex selection:bg-brand/25 selection:text-ink">
         {/* Toast Notification */}
         {toastMessage && (
