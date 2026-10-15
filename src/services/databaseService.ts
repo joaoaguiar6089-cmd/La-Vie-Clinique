@@ -36,6 +36,8 @@ import {
   QuoteDraft,
   QuoteStoredStatus,
   QuoteComprovante,
+  Recibo,
+  ReciboDraft,
   LaserBodyMap,
   ConsentTermSection,
   EvaluationTemplate,
@@ -49,6 +51,7 @@ import {
 } from '../types';
 import { formatQuoteNumber, statusAntesDoDesfecho } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
+import { normalizarRecibo } from '../utils/recibos';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
 import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
 import { subirImagem, subirImagemOuManter } from './imageStorage';
@@ -102,6 +105,9 @@ const ANAMNESIS_RECORDS_COLLECTION = 'anamnesis_records';
 
 const QUOTES_COLLECTION = 'quotes';
 const COUNTERS_COLLECTION = 'counters';
+// Notas de recibo de pagamento. Ao contrário de `quotes`, só a equipe lê: levam o CPF da cliente,
+// e ela recebe o PDF, não um link.
+const RECEIPTS_COLLECTION = 'receipts';
 
 const ATTENDANCES_COLLECTION = 'attendances';
 const SESSION_PLANS_COLLECTION = 'session_plans';
@@ -1952,6 +1958,106 @@ export async function getQuoteById(quoteId: string): Promise<Quote | null> {
   const snap = await getDoc(doc(db, QUOTES_COLLECTION, quoteId));
   if (!snap.exists()) return null;
   return normalizarQuote({ ...(snap.data() as Quote), id: snap.id });
+}
+
+
+// ==========================================
+// NOTAS DE RECIBO
+// ==========================================
+
+function subscribeToRecibosDireto(
+  onUpdate: (recibos: Recibo[]) => void,
+  onError?: (err: Error) => void
+) {
+  return onSnapshot(
+    collection(db, RECEIPTS_COLLECTION),
+    (snapshot) => {
+      const items: Recibo[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push(normalizarRecibo({ ...(docSnap.data() as Recibo), id: docSnap.id }));
+      });
+      // Mais recentes primeiro: pelo dia do pagamento, e no mesmo dia pela emissão
+      items.sort((a, b) =>
+        (b.dataPagamento + b.createdAt).localeCompare(a.dataPagamento + a.createdAt)
+      );
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Recibos: offline/cota diária atingida.');
+      } else {
+        console.error('Recibos subscription error:', error);
+      }
+      onError?.(error);
+    }
+  );
+}
+
+/** Assinatura compartilhada de `receipts` — a tela de Orçamentos e a página da paciente leem a mesma. */
+export function subscribeToRecibos(
+  onUpdate: (data: Recibo[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<Recibo[]>('receipts', subscribeToRecibosDireto, onUpdate, onError);
+}
+
+/**
+ * Emite o recibo e reserva o número na mesma transação, como o orçamento: falhou a gravação, a
+ * sequência não anda. Numeração própria (`counters/receipts_<ano>`), reiniciando a cada ano.
+ *
+ * O id vem de quem chama porque o comprovante sobe **antes**, para a pasta do recibo — e o
+ * recibo só é gravado se o arquivo tiver chegado.
+ */
+export async function criarRecibo(id: string, draft: ReciboDraft): Promise<Recibo> {
+  const ano = new Date().getFullYear();
+  const counterRef = doc(db, COUNTERS_COLLECTION, `receipts_${ano}`);
+  const reciboRef = doc(db, RECEIPTS_COLLECTION, id);
+
+  return await comConfirmacaoDoServidor(
+    runTransaction(db, async (tx) => {
+      const counterSnap = await tx.get(counterRef);
+      const ultimo = counterSnap.exists() ? Number(counterSnap.data().ultimo) || 0 : 0;
+      const sequencia = ultimo + 1;
+
+      const recibo: Recibo = {
+        ...draft,
+        id,
+        numero: formatQuoteNumber(ano, sequencia),
+        ano,
+        sequencia,
+        createdAt: new Date().toISOString(),
+      };
+
+      tx.set(counterRef, { ultimo: sequencia }, { merge: true });
+      tx.set(reciboRef, cleanForFirestore(recibo));
+      return recibo;
+    }),
+    'do recibo'
+  );
+}
+
+/** Corrige um recibo já emitido. Número e emissão ficam; o resto é o que o formulário mandou. */
+export async function atualizarRecibo(recibo: Recibo, draft: ReciboDraft): Promise<Recibo> {
+  const atualizado: Recibo = {
+    ...draft,
+    id: recibo.id,
+    numero: recibo.numero,
+    ano: recibo.ano,
+    sequencia: recibo.sequencia,
+    createdAt: recibo.createdAt,
+    updatedAt: new Date().toISOString(),
+  };
+  // Sem merge: o comprovante removido e a observação apagada precisam sumir do documento
+  await comConfirmacaoDoServidor(
+    setDoc(doc(db, RECEIPTS_COLLECTION, recibo.id), cleanForFirestore(atualizado)),
+    'do recibo'
+  );
+  return atualizado;
+}
+
+/** Exclui o recibo. O arquivo do comprovante, se havia, quem apaga é quem chama. */
+export async function excluirRecibo(reciboId: string): Promise<void> {
+  await deleteDoc(doc(db, RECEIPTS_COLLECTION, reciboId));
 }
 
 

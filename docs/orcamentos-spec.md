@@ -37,14 +37,16 @@ Status: **aprovado, pronto para implementar** — 2026-09-08.
     tanto na tela de Orçamentos quanto na aba de orçamentos da paciente.
     Orçamento substituído não recebe desfecho: quem vale é o novo.
   - **Pagou** abre a folha de pagamento: data do pagamento (padrão hoje; é a data
-    que o faturamento usa, em `pagoEm`) e o **comprovante, opcional** — foto ou
-    PDF, até 10 MB. Sem o arquivo em mãos, registra-se só o pagamento e a linha
-    passa a oferecer "Anexar comprovante"; com ele, "Comprovante anexo" abre a
-    mesma folha para ver, trocar ou remover o arquivo, ou desfazer o pagamento.
+    que o faturamento usa, em `pagoEm`). "Confirmar e criar nota de recibo" grava o
+    pago e abre o formulário da **nota de recibo** (forma de pagamento, comprovante —
+    ver `docs/recibos-spec.md`); "Só confirmar o pagamento" grava sem recibo, e a
+    linha passa a oferecer **"Criar nota de recibo"** no lugar do antigo "Anexar
+    comprovante". O comprovante anexado direto ao orçamento, de antes do recibo,
+    continua na folha para ver, trocar ou remover.
   - **Recusou** pede confirmação e grava `recusadoEm`. O link da cliente não muda.
   - Pago e recusado podem ser **desfeitos** (engano): o orçamento volta para
     enviado, ou para rascunho se nunca foi compartilhado, e as datas saem junto.
-    Desfazer o pagamento apaga também o comprovante.
+    Desfazer o pagamento apaga também o comprovante e as notas de recibo dele.
   - O antigo `aceito` virou `pago`: documentos gravados como aceitos são lidos
     como pagos (`normalizarQuote`), com a data de aceite no lugar da de pagamento.
   - `cancelado` é o "excluir" de um orçamento já enviado.
@@ -220,6 +222,11 @@ cabeçalho reduzido → "Comprovante de pagamento" com "Pago em DD/MM/AAAA" → 
 inteira e sem distorção, no espaço que sobra. Foto é uma folha; PDF é uma folha por
 página, até 6. Entra na numeração "N/total" e vale para a prévia do painel e para o
 PDF que a cliente baixa pelo link.
+
+**Notas de recibo:** na prévia do painel, o orçamento pago traz no fim as notas de
+recibo dele, cada uma com as folhas do seu comprovante, na mesma numeração "N/total"
+— é o "orçamento completo com o recibo". A página pública não as inclui (a coleção
+`receipts` é só da equipe). Ver `docs/recibos-spec.md`.
 - Fica fora do `paginar()`, como o manequim: a paginação medida continua só do orçamento.
 - O arquivo é baixado e convertido em imagem (data URL) **antes** da exportação, em
   `usePaginasDoComprovante`. O PDF é desenhado pelo pdf.js (build `legacy`,
@@ -292,8 +299,9 @@ Quatro parâmetros, com os valores do design como padrão:
 | `src/components/quotes/QuotePreviewModal.tsx` | prévia e download do PDF |
 | `src/components/quotes/usePaginasDoComprovante.ts` | comprovante (foto ou PDF) convertido nas folhas do fim do PDF |
 | `src/components/quotes/QuoteShareModal.tsx` | link, WhatsApp e marcação de enviado |
-| `src/components/quotes/QuoteDesfecho.tsx` | status na lista, "Pagou/Recusou" e folha de pagamento com comprovante |
-| `src/services/comprovantes.ts` | envio do comprovante ao Storage (`orcamentos/<id>/comprovantes/`) |
+| `src/components/quotes/QuoteDesfecho.tsx` | status na lista, "Pagou/Recusou", folha de pagamento e o atalho da nota de recibo |
+| `src/components/quotes/CampoDeComprovante.tsx` | escolher e mostrar o comprovante (folha de pagamento e recibo) |
+| `src/services/comprovantes.ts` | envio do comprovante ao Storage (`orcamentos/<id>/comprovantes/` e `recibos/<id>/comprovantes/`) |
 | `src/utils/publicLinks.ts` | base dos links públicos — nunca um endereço que pede login |
 | `src/components/quotes/QuotesPanel.tsx` | listagem, filtros e ações |
 | `src/components/quotes/PublicQuoteEntry.tsx` | página da cliente (`?orcamento=`) |

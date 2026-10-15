@@ -21,6 +21,7 @@ véu e botão voltar do Android — e, se o formulário foi mexido, **pergunta a
 | `AnamnesisFormFillModal` | larga | ficha clínica inteira, com fotos e mapa corporal |
 | `AttendanceFormModal` | padrão | data, hora, procedimento, plano, profissional, observações |
 | `QuoteFormModal` | larga | cada procedimento é uma linha com valor, desconto e sessões |
+| `ReciboFormPanel` | padrão | nota de recibo: cliente e CPF, data, valor, forma, referente a e comprovante |
 | `FichaFillModal` | larga | avaliação e acompanhamento: perguntas da ficha mais duas imagens anotáveis; no acompanhamento, os materiais usados (sem valor) |
 | `EmissaoDeAvaliacao` | padrão | paciente, procedimento, data e profissional da avaliação emitida |
 | `MateriaisDoAtendimentoPanel` | padrão | materiais de um atendimento com quantidade, valores e total — aberto só pelo Financeiro |
@@ -50,7 +51,7 @@ Sem mudança, porque não são formulário nem escolha: são **superfície de tr
 **documento**, e os dois querem o máximo de área em qualquer tamanho de tela.
 
 `ImageCropperModal`, `AjusteDaFotoModal`, `PhotoAnnotationEditor`, `LaserAreasManagerModal`, `LaserQuoteMapModal`,
-`ProcedureDetailModal`, `ShareExportModal`, `QuotePreviewModal`, `ProcedureMultiSelect`,
+`ProcedureDetailModal`, `ShareExportModal`, `QuotePreviewModal`, `ReciboPreviewModal`, `ProcedureMultiSelect`,
 `ProcedureTemplatesManager`, `GeneralQuestionsManager`, `FichasModeloManager`,
 `OrientationImageCard`, e os componentes de impressão (`Printable*`, `BlankAnamnesisSheet`),
 que são a folha A4 na tela.

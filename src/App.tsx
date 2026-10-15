@@ -10,6 +10,7 @@ import { AnamnesisModule, AnamnesisOpenRequest } from './components/anamnesis/An
 import { PatientsModule } from './components/patients/PatientsModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
 import { QuotesPanel } from './components/quotes/QuotesPanel';
+import { RecibosProvider } from './components/recibos/RecibosContext';
 import { EvaluationsModule } from './components/evaluations/EvaluationsModule';
 import { AcompanhamentoModule } from './components/acompanhamento/AcompanhamentoModule';
 import { EstoqueModule } from './components/estoque/EstoqueModule';
@@ -813,403 +814,406 @@ function MainCatalogApp() {
   }
 
   return (
-    <div className="min-h-screen bg-surface text-ink sm:flex selection:bg-brand/25 selection:text-ink">
-      {/* Toast Notification */}
-      {toastMessage && (
-        /* No celular o aviso sobe acima da barra flutuante de baixo, senão nasce escondido por ela. */
-        <div
-          role="status"
-          className={`fixed left-4 right-4 sm:left-auto bottom-[calc(var(--altura-barra-inferior)+max(16px,env(safe-area-inset-bottom)))] sm:bottom-6 sm:right-6 z-50 sm:max-w-sm text-white px-5 py-3.5 rounded-2xl shadow-2xl border flex items-start gap-3 text-body font-medium animate-fadeIn ${
-            toastTone === 'erro'
-              ? 'bg-[#7F1D1D]/95 border-red-300/40'
-              : 'bg-ink border-white/15'
-          }`}
-        >
-          {toastTone === 'erro' ? (
-            <AlertTriangle className="w-4 h-4 text-red-200 shrink-0 mt-px" />
-          ) : (
-            <Check className="w-4 h-4 text-brand-light shrink-0 mt-px" />
-          )}
-          <span className="leading-relaxed">{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Navigation: mobile header+links, tablet icon rail, desktop sidebar */}
-      <Navbar
-        currentView={currentView}
-        onSelectView={(view) => setCurrentView(view)}
-        onOpenExport={() => {
-          setSingleProcedureToExport(null);
-          setIsExportModalOpen(true);
-        }}
-        onOpenSettings={() => navegar({ view: 'settings' })}
-        clinic={clinic}
-        proceduresCount={procedures.length}
-        agendamentosPendentesCount={agendamentosPendentes}
-        ehAdmin={isAdminUser}
-        currentProfessionalName={currentProfessional?.name}
-        onOpenBusca={() => setBuscaAberta(true)}
-        onLogout={logout}
-      />
-
-      {/* Navegação do celular. Fica fora da coluna de conteúdo por ser `fixed`: dentro dela,
-          o `overflow` de qualquer ancestral poderia prendê-la. */}
-      <BottomNav
-        currentView={currentView}
-        onSelectView={(view) => setCurrentView(view)}
-        onCriar={criar}
-        onOpenSettings={() => navegar({ view: 'settings' })}
-        onOpenExport={() => {
-          setSingleProcedureToExport(null);
-          setIsExportModalOpen(true);
-        }}
-        onLogout={logout}
-        agendamentosPendentesCount={agendamentosPendentes}
-        ehAdmin={isAdminUser}
-        profissional={currentProfessional}
-      />
-
-      {/* Coluna de conteúdo.
-
-          `pb-barra-inferior` reserva, no celular, a altura da barra de baixo mais a faixa do
-          gesto do iPhone. Fica aqui, depois do rodapé, e não dentro de cada tela: assim nenhuma
-          tela nova precisa lembrar disso, e o rodapé também não termina escondido. */}
-      <div className="flex-1 min-w-0 flex flex-col pb-barra-inferior sm:pb-0">
-        {isQuotaExceeded && (
-          <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
-            <div className="flex items-start sm:items-center gap-2.5">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
-              <span>
-                <strong>Modo Offline (Cota diária do Firebase atingida):</strong> O limite gratuito diário do Firestore foi atingido hoje — pode ser o de leitura ou o de gravação. Consultar os dados segue funcionando; salvar pode falhar até a cota virar. A cota é renovada automaticamente pelo Google às 04:00 BRT.
-              </span>
-            </div>
-            <a
-              href={URL_DO_BANCO_NO_CONSOLE}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 font-semibold text-amber-900 hover:text-amber-950 underline underline-offset-2 shrink-0 self-start sm:self-auto"
-            >
-              Ver o uso no Firebase &rarr;
-            </a>
+    // Notas de recibo: uma assinatura e um formulário para o painel inteiro — ver RecibosContext.
+    <RecibosProvider clinic={clinic} pacientes={allPatients}>
+      <div className="min-h-screen bg-surface text-ink sm:flex selection:bg-brand/25 selection:text-ink">
+        {/* Toast Notification */}
+        {toastMessage && (
+          /* No celular o aviso sobe acima da barra flutuante de baixo, senão nasce escondido por ela. */
+          <div
+            role="status"
+            className={`fixed left-4 right-4 sm:left-auto bottom-[calc(var(--altura-barra-inferior)+max(16px,env(safe-area-inset-bottom)))] sm:bottom-6 sm:right-6 z-50 sm:max-w-sm text-white px-5 py-3.5 rounded-2xl shadow-2xl border flex items-start gap-3 text-body font-medium animate-fadeIn ${
+              toastTone === 'erro'
+                ? 'bg-[#7F1D1D]/95 border-red-300/40'
+                : 'bg-ink border-white/15'
+            }`}
+          >
+            {toastTone === 'erro' ? (
+              <AlertTriangle className="w-4 h-4 text-red-200 shrink-0 mt-px" />
+            ) : (
+              <Check className="w-4 h-4 text-brand-light shrink-0 mt-px" />
+            )}
+            <span className="leading-relaxed">{toastMessage}</span>
           </div>
         )}
-        <main className="flex-1 w-full">
-          {currentView === 'hoje' ? (
-            <HojeView
-              clinic={clinic}
-              catalogProcedures={procedures}
-              atendimentos={attendances}
-              pacientes={allPatients}
-              quotes={quotes}
-              templatesAnamnese={anamnesisTemplates}
-              professionalLogada={currentProfessional}
-              carregando={atendimentosCarregando}
-              onAbrirBusca={() => setBuscaAberta(true)}
-              onCriar={criar}
-              onIrParaAgenda={(data) => navegar({ view: 'agenda', data })}
-              onIrPara={(view) => navegar({ view })}
-              onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
-            />
-          ) : currentView === 'financeiro' ? (
-            <FinanceiroView
-              quotes={quotes}
-              atendimentos={attendances}
-              catalogProcedures={procedures}
-              professionals={clinic.professionals || []}
-              ehAdmin={isAdminUser}
-              carregando={atendimentosCarregando}
-              onVoltar={() => setCurrentView(viewAnteriorRef.current)}
-            />
-          ) : currentView === 'settings' ? (
-            <ClinicSettingsModal
-              isOpen
-              /* Voltar da tela de Configurações leva de volta ao que estava aberto antes —
-                 quem foi ali ajustar o expediente quer voltar para a agenda, não para a Hoje. */
-              onClose={() => setCurrentView(viewAnteriorRef.current)}
-              clinic={clinic}
-              onSave={handleSaveClinic}
-              currentUserUid={authUser?.uid}
-              isAdminUser={isAdminUser}
-              onAbrirMapaDeAreas={() => setIsLaserAreasOpen(true)}
-            />
-          ) : currentView === 'agenda' ? (
-            <AgendaModule
-              clinic={clinic}
-              catalogProcedures={procedures}
-              atendimentos={attendances}
-              pacientes={allPatients}
-              professionals={clinic.professionals || []}
-              currentProfessionalId={currentProfessional?.id}
-              carregando={atendimentosCarregando}
-              pedido={currentView === 'agenda' ? pedido : null}
-              onPedidoAtendido={() => setPedido(null)}
-            />
-          ) : currentView === 'procedures' ? (
-            <ProcedureManager
-              procedures={procedures}
-              clinic={clinic}
-              categories={categories}
-              templatesPorProcedimento={templatesPorProcedimento}
-              templatesCarregando={templatesCarregando}
-              carregando={proceduresCarregando}
-              onOpenAnamnesis={handleOpenAnamnesis}
-              onCreateAnamnesisTemplate={handleCreateAnamnesisTemplate}
-              onOpenNewProcedure={() => {
-                setSelectedProcedureForEdit(null);
-                setIsFormModalOpen(true);
-              }}
-              onEditProcedure={(proc) => {
-                setSelectedProcedureForEdit(proc);
-                setIsFormModalOpen(true);
-              }}
-              onDeleteProcedure={handleDeleteProcedure}
-              onDuplicateProcedure={handleDuplicateProcedure}
-              onToggleFeatured={handleToggleFeatured}
-              onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
-              onShareSingle={handleShareSingle}
-            />
-          ) : currentView === 'patients' ? (
-            <PatientsModule
-              clinic={clinic}
-              catalogProcedures={procedures}
-              templates={anamnesisTemplates}
-              currentProfessionalId={currentProfessional?.id}
-              pedido={currentView === 'patients' ? pedido : null}
-              onPedidoAtendido={() => setPedido(null)}
-            />
-          ) : currentView === 'estoque' ? (
-            <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6">
-              <EstoqueModule catalogProcedures={procedures} />
-            </div>
-          ) : currentView === 'anamnesis' ||
-            currentView === 'evaluations' ||
-            currentView === 'acompanhamento' ? (
-            /* As três fichas da paciente numa tela só, "Fichas clínicas", com as abas no topo:
-               anamnese (o histórico de saúde), avaliação (antes do procedimento) e acompanhamento
-               (depois do atendimento). Cada aba continua sendo a seção que era — o menu leva
-               direto a cada uma. */
-            <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4">
-              <TituloDaTela titulo="Fichas clínicas" />
-              <AbasSublinhadas
-                abas={[
-                  { id: 'anamnesis' as const, rotulo: 'Anamneses' },
-                  { id: 'evaluations' as const, rotulo: 'Avaliações' },
-                  { id: 'acompanhamento' as const, rotulo: 'Acompanhamento' },
-                ]}
-                ativa={currentView}
-                onSelecionar={(view) => {
-                  setCurrentView(view);
-                  window.scrollTo({ top: 0 });
-                }}
-              />
-              {currentView === 'anamnesis' ? (
-                <AnamnesisModule
-                  clinicProfile={clinic}
-                  catalogProcedures={procedures}
-                  templates={anamnesisTemplates}
-                  openRequest={anamnesisRequest}
-                  onOpenRequestHandled={() => setAnamnesisRequest(null)}
-                />
-              ) : currentView === 'evaluations' ? (
-                <EvaluationsModule
-                  clinicProfile={clinic}
-                  catalogProcedures={procedures}
-                  fichas={evaluationTemplates}
-                  pacientes={allPatients}
-                  professionals={clinic.professionals || []}
-                  gerais={evaluationGerais}
-                  currentProfessionalId={currentProfessional?.id}
-                />
-              ) : (
-                <AcompanhamentoModule
-                  clinicProfile={clinic}
-                  catalogProcedures={procedures}
-                  pacientes={allPatients}
-                  professionals={clinic.professionals || []}
-                />
-              )}
-            </div>
-          ) : (
-            <QuotesPanel
-              clinic={clinic}
-              catalogProcedures={procedures}
-              pedido={currentView === 'quotes' ? pedido : null}
-              onPedidoAtendido={() => setPedido(null)}
-            />
-          )}
-        </main>
 
-        {/* Frosted Luxury Footer */}
-        <footer className="bg-ink text-line-soft border-t border-white/10 mt-16 transition-all">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 pb-8 border-b border-white/10">
-              {/* Col 1: Brand */}
-              <div className="md:col-span-2 space-y-3">
-                <div className="flex items-center gap-3">
-                  <ClinicLogo
-                    clinic={clinic}
-                    className="w-8 h-8 rounded-sm shrink-0"
-                    monogramClassName="bg-brand text-white font-serif-luxury text-sm font-bold shadow-sm"
+        {/* Navigation: mobile header+links, tablet icon rail, desktop sidebar */}
+        <Navbar
+          currentView={currentView}
+          onSelectView={(view) => setCurrentView(view)}
+          onOpenExport={() => {
+            setSingleProcedureToExport(null);
+            setIsExportModalOpen(true);
+          }}
+          onOpenSettings={() => navegar({ view: 'settings' })}
+          clinic={clinic}
+          proceduresCount={procedures.length}
+          agendamentosPendentesCount={agendamentosPendentes}
+          ehAdmin={isAdminUser}
+          currentProfessionalName={currentProfessional?.name}
+          onOpenBusca={() => setBuscaAberta(true)}
+          onLogout={logout}
+        />
+
+        {/* Navegação do celular. Fica fora da coluna de conteúdo por ser `fixed`: dentro dela,
+            o `overflow` de qualquer ancestral poderia prendê-la. */}
+        <BottomNav
+          currentView={currentView}
+          onSelectView={(view) => setCurrentView(view)}
+          onCriar={criar}
+          onOpenSettings={() => navegar({ view: 'settings' })}
+          onOpenExport={() => {
+            setSingleProcedureToExport(null);
+            setIsExportModalOpen(true);
+          }}
+          onLogout={logout}
+          agendamentosPendentesCount={agendamentosPendentes}
+          ehAdmin={isAdminUser}
+          profissional={currentProfessional}
+        />
+
+        {/* Coluna de conteúdo.
+
+            `pb-barra-inferior` reserva, no celular, a altura da barra de baixo mais a faixa do
+            gesto do iPhone. Fica aqui, depois do rodapé, e não dentro de cada tela: assim nenhuma
+            tela nova precisa lembrar disso, e o rodapé também não termina escondido. */}
+        <div className="flex-1 min-w-0 flex flex-col pb-barra-inferior sm:pb-0">
+          {isQuotaExceeded && (
+            <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                <span>
+                  <strong>Modo Offline (Cota diária do Firebase atingida):</strong> O limite gratuito diário do Firestore foi atingido hoje — pode ser o de leitura ou o de gravação. Consultar os dados segue funcionando; salvar pode falhar até a cota virar. A cota é renovada automaticamente pelo Google às 04:00 BRT.
+                </span>
+              </div>
+              <a
+                href={URL_DO_BANCO_NO_CONSOLE}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-amber-900 hover:text-amber-950 underline underline-offset-2 shrink-0 self-start sm:self-auto"
+              >
+                Ver o uso no Firebase &rarr;
+              </a>
+            </div>
+          )}
+          <main className="flex-1 w-full">
+            {currentView === 'hoje' ? (
+              <HojeView
+                clinic={clinic}
+                catalogProcedures={procedures}
+                atendimentos={attendances}
+                pacientes={allPatients}
+                quotes={quotes}
+                templatesAnamnese={anamnesisTemplates}
+                professionalLogada={currentProfessional}
+                carregando={atendimentosCarregando}
+                onAbrirBusca={() => setBuscaAberta(true)}
+                onCriar={criar}
+                onIrParaAgenda={(data) => navegar({ view: 'agenda', data })}
+                onIrPara={(view) => navegar({ view })}
+                onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
+              />
+            ) : currentView === 'financeiro' ? (
+              <FinanceiroView
+                quotes={quotes}
+                atendimentos={attendances}
+                catalogProcedures={procedures}
+                professionals={clinic.professionals || []}
+                ehAdmin={isAdminUser}
+                carregando={atendimentosCarregando}
+                onVoltar={() => setCurrentView(viewAnteriorRef.current)}
+              />
+            ) : currentView === 'settings' ? (
+              <ClinicSettingsModal
+                isOpen
+                /* Voltar da tela de Configurações leva de volta ao que estava aberto antes —
+                   quem foi ali ajustar o expediente quer voltar para a agenda, não para a Hoje. */
+                onClose={() => setCurrentView(viewAnteriorRef.current)}
+                clinic={clinic}
+                onSave={handleSaveClinic}
+                currentUserUid={authUser?.uid}
+                isAdminUser={isAdminUser}
+                onAbrirMapaDeAreas={() => setIsLaserAreasOpen(true)}
+              />
+            ) : currentView === 'agenda' ? (
+              <AgendaModule
+                clinic={clinic}
+                catalogProcedures={procedures}
+                atendimentos={attendances}
+                pacientes={allPatients}
+                professionals={clinic.professionals || []}
+                currentProfessionalId={currentProfessional?.id}
+                carregando={atendimentosCarregando}
+                pedido={currentView === 'agenda' ? pedido : null}
+                onPedidoAtendido={() => setPedido(null)}
+              />
+            ) : currentView === 'procedures' ? (
+              <ProcedureManager
+                procedures={procedures}
+                clinic={clinic}
+                categories={categories}
+                templatesPorProcedimento={templatesPorProcedimento}
+                templatesCarregando={templatesCarregando}
+                carregando={proceduresCarregando}
+                onOpenAnamnesis={handleOpenAnamnesis}
+                onCreateAnamnesisTemplate={handleCreateAnamnesisTemplate}
+                onOpenNewProcedure={() => {
+                  setSelectedProcedureForEdit(null);
+                  setIsFormModalOpen(true);
+                }}
+                onEditProcedure={(proc) => {
+                  setSelectedProcedureForEdit(proc);
+                  setIsFormModalOpen(true);
+                }}
+                onDeleteProcedure={handleDeleteProcedure}
+                onDuplicateProcedure={handleDuplicateProcedure}
+                onToggleFeatured={handleToggleFeatured}
+                onViewDetails={(proc) => setSelectedProcedureForDetails(proc)}
+                onShareSingle={handleShareSingle}
+              />
+            ) : currentView === 'patients' ? (
+              <PatientsModule
+                clinic={clinic}
+                catalogProcedures={procedures}
+                templates={anamnesisTemplates}
+                currentProfessionalId={currentProfessional?.id}
+                pedido={currentView === 'patients' ? pedido : null}
+                onPedidoAtendido={() => setPedido(null)}
+              />
+            ) : currentView === 'estoque' ? (
+              <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6">
+                <EstoqueModule catalogProcedures={procedures} />
+              </div>
+            ) : currentView === 'anamnesis' ||
+              currentView === 'evaluations' ||
+              currentView === 'acompanhamento' ? (
+              /* As três fichas da paciente numa tela só, "Fichas clínicas", com as abas no topo:
+                 anamnese (o histórico de saúde), avaliação (antes do procedimento) e acompanhamento
+                 (depois do atendimento). Cada aba continua sendo a seção que era — o menu leva
+                 direto a cada uma. */
+              <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4">
+                <TituloDaTela titulo="Fichas clínicas" />
+                <AbasSublinhadas
+                  abas={[
+                    { id: 'anamnesis' as const, rotulo: 'Anamneses' },
+                    { id: 'evaluations' as const, rotulo: 'Avaliações' },
+                    { id: 'acompanhamento' as const, rotulo: 'Acompanhamento' },
+                  ]}
+                  ativa={currentView}
+                  onSelecionar={(view) => {
+                    setCurrentView(view);
+                    window.scrollTo({ top: 0 });
+                  }}
+                />
+                {currentView === 'anamnesis' ? (
+                  <AnamnesisModule
+                    clinicProfile={clinic}
+                    catalogProcedures={procedures}
+                    templates={anamnesisTemplates}
+                    openRequest={anamnesisRequest}
+                    onOpenRequestHandled={() => setAnamnesisRequest(null)}
                   />
-                  <h3 className="font-serif-luxury text-xl font-medium tracking-tight text-white">
-                    {clinic.name}
-                  </h3>
-                </div>
-                <p className="text-xs text-gray-400 max-w-md leading-relaxed">
-                  {clinic.tagline}. Plataforma de catálogo editorial e compartilhamento inteligente de procedimentos em PDF e Imagem.
-                </p>
-                {clinic.professionals && clinic.professionals.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {clinic.professionals.map((doc, dIdx) => (
-                      <span key={dIdx} className="text-label text-brand-light tracking-wider uppercase font-medium bg-white/5 px-2.5 py-1 rounded-xs border border-white/10">
-                        {doc.name} {doc.specialty || doc.title ? `• ${doc.specialty || doc.title}` : ''}
-                      </span>
-                    ))}
-                  </div>
+                ) : currentView === 'evaluations' ? (
+                  <EvaluationsModule
+                    clinicProfile={clinic}
+                    catalogProcedures={procedures}
+                    fichas={evaluationTemplates}
+                    pacientes={allPatients}
+                    professionals={clinic.professionals || []}
+                    gerais={evaluationGerais}
+                    currentProfessionalId={currentProfessional?.id}
+                  />
                 ) : (
-                  <p className="text-label text-brand tracking-wider uppercase font-medium">
-                    {clinic.professionalName} {clinic.professionalTitle ? `• ${clinic.professionalTitle}` : ''}
-                  </p>
+                  <AcompanhamentoModule
+                    clinicProfile={clinic}
+                    catalogProcedures={procedures}
+                    pacientes={allPatients}
+                    professionals={clinic.professionals || []}
+                  />
                 )}
               </div>
+            ) : (
+              <QuotesPanel
+                clinic={clinic}
+                catalogProcedures={procedures}
+                pedido={currentView === 'quotes' ? pedido : null}
+                onPedidoAtendido={() => setPedido(null)}
+              />
+            )}
+          </main>
 
-              {/* Col 2: Fast Navigation */}
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-widest text-brand mb-3">
-                  Navegação
-                </h4>
-                <ul className="space-y-2 text-xs text-gray-400">
-                  <li>
-                    <button
-                      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                      className="hover:text-white transition-colors"
-                    >
-                      Gerenciador de Procedimentos
-                    </button>
-                  </li>
-                  <li>
-                    <button onClick={() => setIsExportModalOpen(true)} className="hover:text-white transition-colors">
-                      Exportar Catálogo em PDF
-                    </button>
-                  </li>
-                  <li>
-                    <button onClick={() => navegar({ view: 'settings' })} className="hover:text-white transition-colors">
-                      Personalizar Dados da Clínica
-                    </button>
-                  </li>
-                </ul>
+          {/* Frosted Luxury Footer */}
+          <footer className="bg-ink text-line-soft border-t border-white/10 mt-16 transition-all">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 pb-8 border-b border-white/10">
+                {/* Col 1: Brand */}
+                <div className="md:col-span-2 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <ClinicLogo
+                      clinic={clinic}
+                      className="w-8 h-8 rounded-sm shrink-0"
+                      monogramClassName="bg-brand text-white font-serif-luxury text-sm font-bold shadow-sm"
+                    />
+                    <h3 className="font-serif-luxury text-xl font-medium tracking-tight text-white">
+                      {clinic.name}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-gray-400 max-w-md leading-relaxed">
+                    {clinic.tagline}. Plataforma de catálogo editorial e compartilhamento inteligente de procedimentos em PDF e Imagem.
+                  </p>
+                  {clinic.professionals && clinic.professionals.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {clinic.professionals.map((doc, dIdx) => (
+                        <span key={dIdx} className="text-label text-brand-light tracking-wider uppercase font-medium bg-white/5 px-2.5 py-1 rounded-xs border border-white/10">
+                          {doc.name} {doc.specialty || doc.title ? `• ${doc.specialty || doc.title}` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-label text-brand tracking-wider uppercase font-medium">
+                      {clinic.professionalName} {clinic.professionalTitle ? `• ${clinic.professionalTitle}` : ''}
+                    </p>
+                  )}
+                </div>
+
+                {/* Col 2: Fast Navigation */}
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-widest text-brand mb-3">
+                    Navegação
+                  </h4>
+                  <ul className="space-y-2 text-xs text-gray-400">
+                    <li>
+                      <button
+                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="hover:text-white transition-colors"
+                      >
+                        Gerenciador de Procedimentos
+                      </button>
+                    </li>
+                    <li>
+                      <button onClick={() => setIsExportModalOpen(true)} className="hover:text-white transition-colors">
+                        Exportar Catálogo em PDF
+                      </button>
+                    </li>
+                    <li>
+                      <button onClick={() => navegar({ view: 'settings' })} className="hover:text-white transition-colors">
+                        Personalizar Dados da Clínica
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Col 3: Contact & Demo Actions */}
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-widest text-brand mb-3">
+                    Atendimento
+                  </h4>
+                  <p className="text-xs text-gray-400 mb-1">📱 {clinic.phone}</p>
+                  <p className="text-xs text-gray-400 mb-1">📸 {clinic.instagram}</p>
+                  <p className="text-xs text-gray-400 mb-3">{clinic.cityState}</p>
+                  <button
+                    onClick={handleResetToDefaultSamples}
+                    className="text-label text-gray-500 hover:text-brand flex items-center gap-1 transition-colors uppercase tracking-wider"
+                    title="Restaurar dados de exemplo"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Restaurar demonstração
+                  </button>
+                </div>
               </div>
 
-              {/* Col 3: Contact & Demo Actions */}
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-widest text-brand mb-3">
-                  Atendimento
-                </h4>
-                <p className="text-xs text-gray-400 mb-1">📱 {clinic.phone}</p>
-                <p className="text-xs text-gray-400 mb-1">📸 {clinic.instagram}</p>
-                <p className="text-xs text-gray-400 mb-3">{clinic.cityState}</p>
-                <button
-                  onClick={handleResetToDefaultSamples}
-                  className="text-label text-gray-500 hover:text-brand flex items-center gap-1 transition-colors uppercase tracking-wider"
-                  title="Restaurar dados de exemplo"
-                >
-                  <RefreshCw className="w-3 h-3" /> Restaurar demonstração
-                </button>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
+                <p>© {new Date().getFullYear()} {clinic.name}. Todos os direitos reservados.</p>
+                <div className="flex items-center space-x-2 text-brand">
+                  <div className="w-8 h-[1px] bg-brand/40"></div>
+                  <span className="text-label tracking-widest uppercase font-medium">Design Frosted Glass</span>
+                </div>
               </div>
             </div>
+          </footer>
+        </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
-              <p>© {new Date().getFullYear()} {clinic.name}. Todos os direitos reservados.</p>
-              <div className="flex items-center space-x-2 text-brand">
-                <div className="w-8 h-[1px] bg-brand/40"></div>
-                <span className="text-label tracking-widest uppercase font-medium">Design Frosted Glass</span>
-              </div>
-            </div>
-          </div>
-        </footer>
+        {/* Modals & Drawers */}
+        {/* 1. Detail Modal */}
+        <ProcedureDetailModal
+          procedure={selectedProcedureForDetails}
+          clinic={clinic}
+          isOpen={Boolean(selectedProcedureForDetails)}
+          onClose={() => setSelectedProcedureForDetails(null)}
+          onEdit={(proc) => {
+            setSelectedProcedureForDetails(null);
+            setSelectedProcedureForEdit(proc);
+            setIsFormModalOpen(true);
+          }}
+          onShareSingle={handleShareSingle}
+        />
+
+        {/* 2. Create / Edit Form Modal */}
+        <ProcedureFormModal
+          isOpen={isFormModalOpen}
+          onClose={() => {
+            setIsFormModalOpen(false);
+            setSelectedProcedureForEdit(null);
+          }}
+          onSave={handleSaveProcedure}
+          procedureToEdit={selectedProcedureForEdit}
+          existingCategories={categories}
+          availableDoctors={clinic.professionals || []}
+          allProcedures={procedures}
+          clinic={clinic}
+          onAbrirConfiguracoes={() => {
+            setIsFormModalOpen(false);
+            setSelectedProcedureForEdit(null);
+            navegar({ view: 'settings' });
+          }}
+        />
+
+        {/* 3. Export / Share Modal (PDF, Image, WhatsApp, QR) */}
+        <ShareExportModal
+          isOpen={isExportModalOpen}
+          onClose={() => {
+            setIsExportModalOpen(false);
+            setSingleProcedureToExport(null);
+          }}
+          procedures={procedures}
+          clinic={clinic}
+          categories={categories}
+          singleProcedureToExport={singleProcedureToExport}
+        />
+
+        {/* Gestão das áreas do laser — conferir o mapa inteiro, reposicionar botões, remover áreas.
+            Mora aqui, e não dentro das Configurações, porque precisa do catálogo e da gravação de
+            procedimento, que são de outro módulo. */}
+        <LaserAreasManagerModal
+          isOpen={isLaserAreasOpen}
+          onClose={() => setIsLaserAreasOpen(false)}
+          procedures={procedures}
+          clinic={clinic}
+          onSalvarProcedimento={handleSaveProcedure}
+        />
+
+        {/* 5. Confirmação de ações destrutivas */}
+        <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+
+        {/* 6. Busca global — filtra o que já está em memória, sem leitura nova no Firestore. */}
+        <CommandPalette
+          aberta={buscaAberta}
+          onFechar={() => setBuscaAberta(false)}
+          pacientes={allPatients}
+          procedimentos={procedures}
+          orcamentos={quotes}
+          onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
+          onAbrirProcedimento={(procedureId) => {
+            const proc = procedures.find((p) => p.id === procedureId);
+            if (proc) {
+              setCurrentView('procedures');
+              setSelectedProcedureForDetails(proc);
+            }
+          }}
+          onAbrirOrcamento={(quoteId) => navegar({ view: 'quotes', quoteId })}
+          onAcaoRapida={acaoRapida}
+        />
       </div>
-
-      {/* Modals & Drawers */}
-      {/* 1. Detail Modal */}
-      <ProcedureDetailModal
-        procedure={selectedProcedureForDetails}
-        clinic={clinic}
-        isOpen={Boolean(selectedProcedureForDetails)}
-        onClose={() => setSelectedProcedureForDetails(null)}
-        onEdit={(proc) => {
-          setSelectedProcedureForDetails(null);
-          setSelectedProcedureForEdit(proc);
-          setIsFormModalOpen(true);
-        }}
-        onShareSingle={handleShareSingle}
-      />
-
-      {/* 2. Create / Edit Form Modal */}
-      <ProcedureFormModal
-        isOpen={isFormModalOpen}
-        onClose={() => {
-          setIsFormModalOpen(false);
-          setSelectedProcedureForEdit(null);
-        }}
-        onSave={handleSaveProcedure}
-        procedureToEdit={selectedProcedureForEdit}
-        existingCategories={categories}
-        availableDoctors={clinic.professionals || []}
-        allProcedures={procedures}
-        clinic={clinic}
-        onAbrirConfiguracoes={() => {
-          setIsFormModalOpen(false);
-          setSelectedProcedureForEdit(null);
-          navegar({ view: 'settings' });
-        }}
-      />
-
-      {/* 3. Export / Share Modal (PDF, Image, WhatsApp, QR) */}
-      <ShareExportModal
-        isOpen={isExportModalOpen}
-        onClose={() => {
-          setIsExportModalOpen(false);
-          setSingleProcedureToExport(null);
-        }}
-        procedures={procedures}
-        clinic={clinic}
-        categories={categories}
-        singleProcedureToExport={singleProcedureToExport}
-      />
-
-      {/* Gestão das áreas do laser — conferir o mapa inteiro, reposicionar botões, remover áreas.
-          Mora aqui, e não dentro das Configurações, porque precisa do catálogo e da gravação de
-          procedimento, que são de outro módulo. */}
-      <LaserAreasManagerModal
-        isOpen={isLaserAreasOpen}
-        onClose={() => setIsLaserAreasOpen(false)}
-        procedures={procedures}
-        clinic={clinic}
-        onSalvarProcedimento={handleSaveProcedure}
-      />
-
-      {/* 5. Confirmação de ações destrutivas */}
-      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
-
-      {/* 6. Busca global — filtra o que já está em memória, sem leitura nova no Firestore. */}
-      <CommandPalette
-        aberta={buscaAberta}
-        onFechar={() => setBuscaAberta(false)}
-        pacientes={allPatients}
-        procedimentos={procedures}
-        orcamentos={quotes}
-        onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
-        onAbrirProcedimento={(procedureId) => {
-          const proc = procedures.find((p) => p.id === procedureId);
-          if (proc) {
-            setCurrentView('procedures');
-            setSelectedProcedureForDetails(proc);
-          }
-        }}
-        onAbrirOrcamento={(quoteId) => navegar({ view: 'quotes', quoteId })}
-        onAcaoRapida={acaoRapida}
-      />
-    </div>
+    </RecibosProvider>
   );
 }
 

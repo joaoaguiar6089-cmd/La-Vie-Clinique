@@ -230,6 +230,8 @@ export interface ClinicProfile {
   instagram: string;
   address: string;
   cityState: string;
+  /** CNPJ de quem emite — sai no rodapé da nota de recibo. Opcional; guardado só com os dígitos. */
+  cnpj?: string;
   /**
    * Endereço público do app, usado como base dos links enviados à paciente (ficha de anamnese,
    * orçamento, agendamento e QR Code do catálogo). Vazio = usa `ENDERECO_DO_SITE`.
@@ -687,6 +689,72 @@ export type QuoteDraft = Omit<
   | 'createdAt'
   | 'updatedAt'
 >;
+
+// ==========================================
+// NOTAS DE RECIBO DE PAGAMENTO — TIPOS
+// ==========================================
+
+/**
+ * Como a cliente pagou. Diferente de `PaymentMethod`, que é o que o orçamento *aceita*: aqui é o
+ * que de fato aconteceu, e o recibo separa débito de crédito porque só crédito parcela.
+ */
+export type FormaDoRecibo = 'pix' | 'debito' | 'credito' | 'dinheiro';
+
+/**
+ * Retrato da clínica gravado no recibo — o mesmo motivo de `QuoteClinicSnapshot`: o documento que
+ * a cliente recebeu continua dizendo quem o emitiu, mesmo que o telefone mude depois.
+ */
+export interface ReciboClinica {
+  name: string;
+  tagline?: string;
+  cityState?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  instagram?: string;
+  cnpj?: string;
+}
+
+/**
+ * Nota de recibo de pagamento: o documento que diz à cliente "recebemos de você tanto, em tal
+ * data, por tal forma, referente a isto". Sai em PDF para enviar a ela.
+ *
+ * Pode nascer de um orçamento pago (fica vinculada a ele por `quoteId`, e o PDF do orçamento
+ * passa a trazê-la junto) ou sozinha, para o pagamento que chegou sem orçamento nenhum. Um
+ * orçamento pode ter mais de um recibo — a entrada num dia e o restante noutro.
+ *
+ * Mora em `receipts`, coleção só da equipe: diferente de `quotes`, ninguém a abre sem login —
+ * ela leva o CPF da cliente.
+ */
+export interface Recibo {
+  id: string; // crypto.randomUUID()
+  numero: string; // "2026-0007", gerado no primeiro salvamento e imutável
+  ano: number;
+  sequencia: number;
+  dataPagamento: string; // YYYY-MM-DD — o dia em que o dinheiro entrou
+  valor: number; // Em reais
+  forma: FormaDoRecibo;
+  /** Só no crédito: 1 (ou ausente) é à vista; acima de 1, parcelado em tantas vezes. */
+  parcelas?: number;
+  pacienteId?: string; // Ausente quando a cliente não tem cadastro
+  pacienteNome: string;
+  pacienteCpf?: string; // Só os dígitos
+  /** Para o envio pelo WhatsApp — não sai no PDF. */
+  pacienteContato?: string;
+  /** "Referente a" — o que foi pago. No recibo de orçamento nasce com os procedimentos dele. */
+  referente?: string;
+  observacoes?: string;
+  quoteId?: string;
+  quoteNumero?: string;
+  /** Foto ou PDF do comprovante (Pix, maquininha). Entra como folha anexa no fim do PDF. */
+  comprovante?: QuoteComprovante;
+  clinica: ReciboClinica;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/** O que o formulário preenche. Número e datas de controle são do serviço. */
+export type ReciboDraft = Omit<Recibo, 'id' | 'numero' | 'ano' | 'sequencia' | 'createdAt' | 'updatedAt'>;
 
 
 // ==========================================

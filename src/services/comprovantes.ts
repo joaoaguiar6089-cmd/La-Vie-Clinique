@@ -11,7 +11,9 @@ import { downscaleImage } from '../utils/imageCompressor';
  * página pública. Se o Storage recusar, quem enviou precisa saber — a tela mostra o motivo e o
  * pagamento pode ser registrado sem o arquivo.
  *
- * Caminho: `orcamentos/<id do orçamento>/comprovantes/<aleatório>`. Ver `storage.rules`.
+ * Caminhos: `orcamentos/<id do orçamento>/comprovantes/<aleatório>` (o comprovante antigo, preso
+ * ao orçamento) e `recibos/<id do recibo>/comprovantes/<aleatório>` (o da nota de recibo, que é
+ * onde ele mora agora). Ver `storage.rules`.
  */
 
 const storage = getStorage(app);
@@ -68,6 +70,19 @@ const EXTENSAO: Record<string, string> = {
 
 /** Sobe o comprovante e devolve o registro a gravar no orçamento. Lança com mensagem legível. */
 export async function enviarComprovante(quoteId: string, arquivo: File): Promise<QuoteComprovante> {
+  return enviarComprovanteParaPasta(`orcamentos/${quoteId}/comprovantes`, '"orcamentos/"', arquivo);
+}
+
+/** O mesmo, para o comprovante anexado a uma nota de recibo. */
+export async function enviarComprovanteDoRecibo(reciboId: string, arquivo: File): Promise<QuoteComprovante> {
+  return enviarComprovanteParaPasta(`recibos/${reciboId}/comprovantes`, '"recibos/"', arquivo);
+}
+
+async function enviarComprovanteParaPasta(
+  pasta: string,
+  nomeDaRegra: string,
+  arquivo: File
+): Promise<QuoteComprovante> {
   const problema = problemaNoArquivoDeComprovante(arquivo);
   if (problema) throw new Error(problema);
 
@@ -77,7 +92,7 @@ export async function enviarComprovante(quoteId: string, arquivo: File): Promise
   }
 
   const extensao = EXTENSAO[tipo] || (tipo.startsWith('image/') ? 'jpg' : 'bin');
-  const objeto = ref(storage, `orcamentos/${quoteId}/comprovantes/${crypto.randomUUID()}.${extensao}`);
+  const objeto = ref(storage, `${pasta}/${crypto.randomUUID()}.${extensao}`);
 
   try {
     await uploadBytes(objeto, corpo, { contentType: tipo });
@@ -93,7 +108,7 @@ export async function enviarComprovante(quoteId: string, arquivo: File): Promise
     if (codigo === 'storage/unauthorized') {
       throw new Error(
         'O Firebase Storage recusou o arquivo. As regras de storage.rules com o caminho ' +
-          '"orcamentos/" precisam estar publicadas no Firebase.'
+          `${nomeDaRegra} precisam estar publicadas no Firebase.`
       );
     }
     throw new Error(`Não foi possível enviar o comprovante: ${(err as Error).message}`);
