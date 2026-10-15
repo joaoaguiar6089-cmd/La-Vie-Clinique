@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ClinicProfile, Patient, Quote, Recibo } from '../../types';
+import { ClinicProfile, Patient, Procedure, Quote, Recibo } from '../../types';
 import { excluirRecibo, subscribeToRecibos } from '../../services/databaseService';
 import { apagarComprovante } from '../../services/comprovantes';
 import { recibosDoOrcamento } from '../../utils/recibos';
@@ -42,8 +42,10 @@ const RecibosContext = createContext<RecibosContextValue | null>(null);
 export const RecibosProvider: React.FC<{
   clinic: ClinicProfile;
   pacientes: Patient[];
+  /** O catálogo, para a lista de procedimentos do formulário. */
+  procedimentos: Procedure[];
   children: React.ReactNode;
-}> = ({ clinic, pacientes, children }) => {
+}> = ({ clinic, pacientes, procedimentos, children }) => {
   const [recibos, setRecibos] = useState<Recibo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -146,6 +148,7 @@ export const RecibosProvider: React.FC<{
         orcamento={formulario?.orcamento || null}
         pacienteInicial={formulario?.paciente || null}
         pacientes={pacientes}
+        procedimentos={procedimentos}
         clinic={clinic}
         onSalvo={(salvo) => {
           // Emitido, o passo seguinte é mandar para a cliente: a prévia abre com o "Enviar".

@@ -21,7 +21,8 @@ import { CartaoDeOrcamento } from './CartaoDeOrcamento';
 import { SkeletonLista } from '../common/Skeleton';
 import { useRecibos } from '../recibos/RecibosContext';
 import { CartaoDeRecibo } from '../recibos/CartaoDeRecibo';
-import { AbasSublinhadas, BotaoPilula, CampoDeBusca, TituloDaTela } from '../common/Tinta';
+import { resumoDosItens } from '../../utils/recibos';
+import { AbaTinta, AbasSublinhadas, BotaoPilula, CampoDeBusca, TituloDaTela } from '../common/Tinta';
 
 /**
  * As abas da lista. "Outros" junta os três finais que não pedem ação — recusado, vencido e
@@ -132,7 +133,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
         r.pacienteNome.toLowerCase().includes(termo) ||
         r.numero.toLowerCase().includes(termo) ||
         (r.quoteNumero || '').toLowerCase().includes(termo) ||
-        (r.referente || '').toLowerCase().includes(termo) ||
+        resumoDosItens(r).toLowerCase().includes(termo) ||
         (digitos.length >= 3 && (r.pacienteCpf || '').includes(digitos))
     );
   }, [recibos?.recibos, busca]);
@@ -243,15 +244,17 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
         }
       />
 
-      <AbasSublinhadas
-        abas={[
-          { id: 'todos', rotulo: 'Todos', contagem: quotes.length },
-          { id: 'rascunho', rotulo: 'Rascunho' },
-          { id: 'enviado', rotulo: 'Enviados' },
-          { id: 'pago', rotulo: 'Pagos' },
-          { id: 'outros', rotulo: 'Outros' },
-          ...(recibos ? [{ id: 'recibos' as const, rotulo: 'Recibos', contagem: recibos.recibos.length }] : []),
-        ]}
+      <AbasSublinhadas<AbaDaLista>
+        abas={
+          [
+            { id: 'todos', rotulo: 'Todos', contagem: quotes.length },
+            { id: 'rascunho', rotulo: 'Rascunho' },
+            { id: 'enviado', rotulo: 'Enviados' },
+            { id: 'pago', rotulo: 'Pagos' },
+            { id: 'outros', rotulo: 'Outros' },
+            ...(recibos ? [{ id: 'recibos', rotulo: 'Recibos', contagem: recibos.recibos.length }] : []),
+          ] as AbaTinta<AbaDaLista>[]
+        }
         ativa={aba}
         onSelecionar={setAba}
       />

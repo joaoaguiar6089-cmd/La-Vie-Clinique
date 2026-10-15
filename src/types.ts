@@ -715,6 +715,15 @@ export interface ReciboClinica {
   cnpj?: string;
 }
 
+/** Uma linha da tabela do recibo: o procedimento, quantas sessões e, se quiser, o valor dele. */
+export interface ReciboItem {
+  id: string;
+  titulo: string;
+  sessoes?: number; // Ausente = 1
+  valor?: number; // Opcional: sem ele, a coluna mostra "—" e vale só o total recebido
+  procedureId?: string; // Origem no catálogo, quando veio de lá
+}
+
 /**
  * Nota de recibo de pagamento: o documento que diz à cliente "recebemos de você tanto, em tal
  * data, por tal forma, referente a isto". Sai em PDF para enviar a ela.
@@ -741,8 +750,15 @@ export interface Recibo {
   pacienteCpf?: string; // Só os dígitos
   /** Para o envio pelo WhatsApp — não sai no PDF. */
   pacienteContato?: string;
-  /** "Referente a" — o que foi pago. No recibo de orçamento nasce com os procedimentos dele. */
+  /**
+   * O que foi pago, uma linha por procedimento — a tabela do recibo. No recibo de orçamento nasce
+   * com os procedimentos dele; o nome de cada linha é livre ("Harmonização Glútea — Fases 1 e 2"),
+   * porque o mesmo procedimento tem protocolos diferentes de uma cliente para outra.
+   */
+  itens?: ReciboItem[];
+  /** Legado: o "Referente a" de texto livre, de antes da lista. Lido como um item só. */
   referente?: string;
+  /** Legado: só os recibos emitidos antes da lista têm; continua saindo no PDF deles. */
   observacoes?: string;
   quoteId?: string;
   quoteNumero?: string;

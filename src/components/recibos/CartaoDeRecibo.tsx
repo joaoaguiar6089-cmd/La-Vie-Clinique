@@ -2,7 +2,7 @@ import React from 'react';
 import { Eye, FileText, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import { Recibo } from '../../types';
 import { formatBRL } from '../../utils/formatters';
-import { rotuloCurtoDoPagamento } from '../../utils/recibos';
+import { resumoDosItens, rotuloCurtoDoPagamento } from '../../utils/recibos';
 import { AcaoDoMenu, MenuDeAcoes, Selo } from '../common/Tinta';
 import { useRecibos } from './RecibosContext';
 
@@ -40,7 +40,7 @@ export const CartaoDeRecibo: React.FC<{
   menu.push({ rotulo: 'Excluir recibo', icone: Trash2, tom: 'perigo', onClick: () => ctx.pedirExclusao(recibo) });
 
   const origem = recibo.quoteNumero ? `orçamento ${recibo.quoteNumero}` : 'sem orçamento';
-  const linha = [recibo.referente, origem].filter(Boolean).join(' · ');
+  const linha = [resumoDosItens(recibo), origem].filter(Boolean).join(' · ');
 
   return (
     <article className="rounded-[20px] bg-card border border-ink/8 p-4 flex flex-col gap-3">

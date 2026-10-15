@@ -1,6 +1,6 @@
-import { ClinicProfile, FormaDoRecibo, Quote, Recibo, ReciboClinica } from '../types';
+import { ClinicProfile, FormaDoRecibo, Quote, Recibo, ReciboClinica, ReciboItem } from '../types';
 import { formatBRL, formatCpf } from './formatters';
-import { calcularOrcamento } from './quoteCalc';
+import { calcularOrcamento, itemSessoes } from './quoteCalc';
 
 /**
  * As regras da nota de recibo que não dependem de tela nem de banco: os nomes das formas de
@@ -178,28 +178,63 @@ export const formatCnpj = (raw?: string): string =>
     .replace(/(\d{4})(\d)/, '$1-$2');
 
 /**
- * A declaração do recibo em partes, para a página poder destacar o nome e o valor sem montar a
- * frase duas vezes: "Recebemos de [nome], CPF …, a importância de [R$ …] (por extenso), referente
- * a …. Para clareza, firmamos o presente, dando quitação do valor recebido."
+ * A frase que abre o recibo, antes da tabela dos procedimentos: "Declaramos o recebimento de
+ * [nome], CPF …, da importância de R$ … (por extenso), referente a:".
  */
-export const declaracaoDoRecibo = (
-  r: Pick<Recibo, 'pacienteNome' | 'pacienteCpf' | 'valor' | 'referente' | 'quoteNumero'>
-) => {
+export const declaracaoDoRecibo = (r: Pick<Recibo, 'pacienteNome' | 'pacienteCpf' | 'valor'>): string => {
   const cpf = cpfLegivel(r.pacienteCpf);
-  const referente = (r.referente || '').trim().replace(/[.\s]+$/, '');
-  const doOrcamento = r.quoteNumero && !referente.includes(r.quoteNumero)
-    ? `, conforme o orçamento Nº\u00A0${r.quoteNumero}`
-    : '';
-  return {
-    antesDoNome: 'Recebemos de ',
-    nome: r.pacienteNome,
-    depoisDoNome: `${cpf ? `, CPF ${cpf},` : ''} a importância de `,
-    valor: formatBRL(r.valor),
-    extenso: `(${valorPorExtenso(r.valor)})`,
-    fim:
-      `${referente ? `, referente a ${referente}` : ''}${doOrcamento}. ` +
-      'Para clareza, firmamos o presente, dando quitação do valor recebido.',
-  };
+  return (
+    `Declaramos o recebimento de ${r.pacienteNome}${cpf ? `, CPF ${cpf},` : ''} da importância de ` +
+    `${formatBRL(r.valor)} (${valorPorExtenso(r.valor)}), referente a:`
+  );
+};
+
+/** "três mil reais" → "Três mil reais" — o extenso sozinho, no bloco preto do valor. */
+export const comMaiuscula = (texto: string): string => texto.charAt(0).toUpperCase() + texto.slice(1);
+
+// ==========================================
+// ITENS
+// ==========================================
+
+/** Quantos itens cabem: o recibo é uma folha só, e não pagina. */
+export const MAXIMO_DE_ITENS = 8;
+
+/**
+ * As linhas da tabela. O recibo antigo, de antes da lista, tinha só o "Referente a" em texto —
+ * vira uma linha com ele, para continuar abrindo, imprimindo e editando como os novos.
+ */
+export const itensDoRecibo = (r: Pick<Recibo, 'itens' | 'referente'>): ReciboItem[] => {
+  const itens = (r.itens || []).filter((i) => (i.titulo || '').trim());
+  if (itens.length > 0) return itens;
+  const referente = (r.referente || '').trim();
+  return referente ? [{ id: 'referente', titulo: referente, sessoes: 1 }] : [];
+};
+
+/** "1 sessão", "5 sessões". */
+export const sessoesLegivel = (sessoes?: number): string => {
+  const n = Math.max(1, Math.round(sessoes || 1));
+  return `${n} ${n === 1 ? 'sessão' : 'sessões'}`;
+};
+
+/** "Botox, Preenchimento labial" — a linha curta dos cartões da lista. */
+export const resumoDosItens = (r: Pick<Recibo, 'itens' | 'referente'>): string =>
+  itensDoRecibo(r)
+    .map((i) => i.titulo.trim())
+    .join(', ');
+
+// ==========================================
+// NOME DA CLÍNICA
+// ==========================================
+
+/**
+ * "La Vie Clinique – Clínica de Estética Facial e Corporal" → o nome curto, que vai grande no
+ * cabeçalho, e o complemento, que vai em caixa alta logo abaixo. Sem travessão, o nome inteiro é
+ * o nome curto.
+ */
+export const partesDoNomeDaClinica = (nome: string): { curto: string; complemento?: string } => {
+  const [curto, ...resto] = (nome || '').split(/\s+[–—-]\s+/);
+  const complemento = resto.join(' – ').trim();
+  return { curto: curto.trim() || nome, complemento: complemento || undefined };
 };
 
 /** Congela os dados da clínica que o recibo mostra. */
@@ -218,12 +253,21 @@ export const montarClinicaDoRecibo = (clinic: ClinicProfile): ReciboClinica => (
 // O QUE O RECIBO HERDA DO ORÇAMENTO
 // ==========================================
 
-/** "Botox — terço superior, Preenchimento labial". */
-export const referenteDoOrcamento = (quote: Pick<Quote, 'itens'>): string =>
+/**
+ * Os procedimentos do orçamento como linhas do recibo: o nome e as sessões. O valor fica em
+ * branco de propósito — o orçamento tem desconto de item, de plano e de forma de pagamento, e
+ * repartir o que entrou entre os itens seria inventar número.
+ */
+export const itensDoOrcamento = (quote: Pick<Quote, 'itens'>): ReciboItem[] =>
   quote.itens
-    .map((i) => i.titulo.trim())
-    .filter(Boolean)
-    .join(', ');
+    .filter((i) => i.titulo.trim())
+    .slice(0, MAXIMO_DE_ITENS)
+    .map((i) => ({
+      id: crypto.randomUUID(),
+      titulo: i.titulo.trim(),
+      sessoes: itemSessoes(i),
+      procedureId: i.procedureId,
+    }));
 
 /** Uma forma de pagamento aceita pelo orçamento, já como o recibo a registraria. */
 export interface PagamentoSugerido {
@@ -286,6 +330,17 @@ export const normalizarRecibo = (bruto: Partial<Recibo> & { id: string }): Recib
     ? (bruto.forma as FormaDoRecibo)
     : 'pix',
   pacienteNome: String(bruto.pacienteNome || ''),
+  itens: Array.isArray(bruto.itens)
+    ? bruto.itens
+        .filter((i) => i && typeof i === 'object')
+        .map((i, n) => ({
+          ...i,
+          id: String(i.id || `item-${n}`),
+          titulo: String(i.titulo || ''),
+          sessoes: Number(i.sessoes) > 0 ? Number(i.sessoes) : undefined,
+          valor: typeof i.valor === 'number' && i.valor > 0 ? i.valor : undefined,
+        }))
+    : undefined,
   clinica: bruto.clinica && typeof bruto.clinica === 'object' ? bruto.clinica : { name: 'La Vie Clinique' },
   createdAt: String(bruto.createdAt || ''),
 });
