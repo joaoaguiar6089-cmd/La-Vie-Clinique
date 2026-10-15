@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { criarRotasGoogleAgenda } from './server/googleAgenda';
 import { criarResolvedorDePreview } from './server/previewDosLinks';
+import { servirPrivacidade } from './server/privacidade';
 import { aplicarPreviewNoHtml } from './src/utils/linkPreview';
 
 /**
@@ -41,6 +42,8 @@ app.disable('x-powered-by');
 
 // Conexão das profissionais com o Google Agenda e envio dos eventos (ver server/googleAgenda.ts).
 app.use('/api/google-agenda', criarRotasGoogleAgenda());
+// Política de privacidade pública — o Google exige o link dela na tela de consentimento.
+app.get('/privacidade', servirPrivacidade);
 
 // Arquivos com hash no nome nunca mudam; o resto (foto da doutora, por exemplo) revalida.
 app.use('/assets', express.static(path.join(dist, 'assets'), { immutable: true, maxAge: '1y', fallthrough: true }));
