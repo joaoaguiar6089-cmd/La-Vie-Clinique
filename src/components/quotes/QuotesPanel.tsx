@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, FileText, AlertCircle } from 'lucide-react';
+import { Plus, FileText, AlertCircle, ReceiptText } from 'lucide-react';
 import {
   ClinicProfile,
   Patient,
@@ -19,13 +19,18 @@ import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { useAcoesDeOrcamento } from './useAcoesDeOrcamento';
 import { CartaoDeOrcamento } from './CartaoDeOrcamento';
 import { SkeletonLista } from '../common/Skeleton';
+import { useRecibos } from '../recibos/RecibosContext';
+import { CartaoDeRecibo } from '../recibos/CartaoDeRecibo';
 import { AbasSublinhadas, BotaoPilula, CampoDeBusca, TituloDaTela } from '../common/Tinta';
 
 /**
  * As abas da lista. "Outros" junta os três finais que não pedem ação — recusado, vencido e
  * cancelado —: são consulta, e ocupavam três botões de filtro sozinhos.
+ *
+ * "Recibos" não é um status: é a lista das notas de recibo, com e sem orçamento. Mora aqui porque
+ * é aqui que o recibo avulso nasce ("Novo recibo"), e ele precisa aparecer em algum lugar depois.
  */
-type AbaDaLista = 'todos' | 'rascunho' | 'enviado' | 'pago' | 'outros';
+type AbaDaLista = 'todos' | 'rascunho' | 'enviado' | 'pago' | 'outros' | 'recibos';
 
 const ABA_DO_STATUS: Record<QuoteStatus, AbaDaLista> = {
   rascunho: 'rascunho',
@@ -37,7 +42,12 @@ const ABA_DO_STATUS: Record<QuoteStatus, AbaDaLista> = {
 };
 
 const ehAbaDaLista = (valor?: string): valor is AbaDaLista =>
-  valor === 'todos' || valor === 'rascunho' || valor === 'enviado' || valor === 'pago' || valor === 'outros';
+  valor === 'todos' ||
+  valor === 'rascunho' ||
+  valor === 'enviado' ||
+  valor === 'pago' ||
+  valor === 'outros' ||
+  valor === 'recibos';
 
 interface QuotesPanelProps {
   clinic: ClinicProfile;
@@ -61,6 +71,8 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
   const [busca, setBusca] = useState('');
   const [aba, setAba] = useState<AbaDaLista>('todos');
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
+
+  const recibos = useRecibos();
 
   const acoes = useAcoesDeOrcamento({
     clinic,
@@ -110,9 +122,35 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
     });
   }, [quotes, busca, aba]);
 
+  const recibosFiltrados = useMemo(() => {
+    const lista = recibos?.recibos ?? [];
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return lista;
+    const digitos = termo.replace(/\D/g, '');
+    return lista.filter(
+      (r) =>
+        r.pacienteNome.toLowerCase().includes(termo) ||
+        r.numero.toLowerCase().includes(termo) ||
+        (r.quoteNumero || '').toLowerCase().includes(termo) ||
+        (r.referente || '').toLowerCase().includes(termo) ||
+        (digitos.length >= 3 && (r.pacienteCpf || '').includes(digitos))
+    );
+  }, [recibos?.recibos, busca]);
+
   const abrirNovo = () => {
     setErro(null);
     acoes.abrirNovo();
+  };
+
+  /** Recibo do pagamento que chegou sem orçamento: a cliente é escolhida no formulário. */
+  const abrirNovoRecibo = () => {
+    setErro(null);
+    recibos?.abrirNovo();
+  };
+
+  const abrirOrcamentoDoRecibo = (quoteId: string) => {
+    const quote = quotes.find((q) => q.id === quoteId);
+    if (quote) acoes.abrirPrevia(quote);
   };
 
   /**
@@ -186,10 +224,22 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
       <TituloDaTela
         titulo="Orçamentos"
         acao={
-          <BotaoPilula icone={Plus} onClick={abrirNovo}>
-            <span className="sm:hidden">Novo</span>
-            <span className="hidden sm:inline">Novo orçamento</span>
-          </BotaoPilula>
+          <div className="flex flex-col items-end gap-0.5">
+            <BotaoPilula icone={Plus} onClick={abrirNovo}>
+              <span className="sm:hidden">Novo</span>
+              <span className="hidden sm:inline">Novo orçamento</span>
+            </BotaoPilula>
+            {recibos && (
+              <button
+                type="button"
+                onClick={abrirNovoRecibo}
+                className="inline-flex items-center gap-1.5 min-h-[36px] px-1 text-[14px] font-semibold text-info hover:underline underline-offset-4"
+              >
+                <ReceiptText className="w-4 h-4" />
+                Novo recibo
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -200,6 +250,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
           { id: 'enviado', rotulo: 'Enviados' },
           { id: 'pago', rotulo: 'Pagos' },
           { id: 'outros', rotulo: 'Outros' },
+          ...(recibos ? [{ id: 'recibos' as const, rotulo: 'Recibos', contagem: recibos.recibos.length }] : []),
         ]}
         ativa={aba}
         onSelecionar={setAba}
@@ -208,8 +259,12 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
       <CampoDeBusca
         valor={busca}
         onMudar={setBusca}
-        placeholder="Cliente, número ou profissional"
-        rotulo="Buscar orçamento por cliente, número ou profissional"
+        placeholder={aba === 'recibos' ? 'Cliente, número, CPF ou orçamento' : 'Cliente, número ou profissional'}
+        rotulo={
+          aba === 'recibos'
+            ? 'Buscar recibo por cliente, número, CPF ou orçamento'
+            : 'Buscar orçamento por cliente, número ou profissional'
+        }
       />
 
       {erro && (
@@ -235,8 +290,34 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
         </div>
       )}
 
+      {aba === 'recibos' && recibos?.erro && (
+        <div className="px-4 py-3 rounded-[14px] bg-danger-bg text-[14px] text-danger flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+          {recibos.erro}
+        </div>
+      )}
+
       {/* Lista */}
-      {carregando ? (
+      {aba === 'recibos' && recibos ? (
+        recibos.carregando ? (
+          <SkeletonLista linhas={4} comAvatar={false} />
+        ) : recibosFiltrados.length === 0 ? (
+          <div className="rounded-[20px] bg-card border border-ink/8 py-12 px-5 text-center">
+            <ReceiptText className="w-8 h-8 text-ink-soft mx-auto mb-3" />
+            <p className="text-[14px] text-ink-soft">
+              {recibos.recibos.length === 0
+                ? 'Nenhuma nota de recibo ainda. Emita uma pelo orçamento pago ou em "Novo recibo".'
+                : 'Nenhum recibo encontrado com essa busca.'}
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {recibosFiltrados.map((recibo) => (
+              <CartaoDeRecibo key={recibo.id} recibo={recibo} onAbrirOrcamento={abrirOrcamentoDoRecibo} />
+            ))}
+          </div>
+        )
+      ) : carregando ? (
         <SkeletonLista linhas={6} comAvatar={false} />
       ) : listaFiltrada.length === 0 ? (
         <div className="rounded-[20px] bg-card border border-ink/8 py-12 px-5 text-center">

@@ -13,37 +13,27 @@ import { isLaserCategory } from '../../utils/templateMatching';
 import { nomeCurtoDaArea } from '../../utils/laserAreas';
 import { LaserBodyMapView } from '../laser/LaserBodyMapView';
 import { PaginaDoComprovante } from './usePaginasDoComprovante';
+import {
+  ALTURA_UTIL,
+  BRONZE,
+  CINZA,
+  CONTENT_W,
+  GAP,
+  HAIRLINE,
+  OFFWHITE,
+  PAD_BOTTOM,
+  PAD_X,
+  PRETO,
+  TEXTO_DETALHE,
+  dataCurta,
+  estiloDaPagina,
+} from '../documentos/estiloA4';
 
-/** A4 a 96dpi — mesma métrica que o exportElementAsPDF já usa no catálogo. */
-const PAGE_W = 794;
-const PAGE_H = 1123;
-const MM = 96 / 25.4;
-const PAD_TOP = 15 * MM;
-const PAD_X = 14 * MM;
-const PAD_BOTTOM = 12 * MM;
-const GAP = 13;
-const ALTURA_RODAPE_PAGINACAO = 18;
-const CONTENT_W = PAGE_W - PAD_X * 2;
-const ALTURA_UTIL = PAGE_H - PAD_TOP - PAD_BOTTOM - ALTURA_RODAPE_PAGINACAO;
 /** Espaço da folha do comprovante: a página útil menos o cabeçalho compacto e o título. */
 const CAIXA_COMPROVANTE_W = CONTENT_W;
 const CAIXA_COMPROVANTE_H = ALTURA_UTIL - 110;
 
-const BRONZE = '#A67C52';
-const PRETO = '#1A1A1A';
-const OFFWHITE = '#F9F8F6';
-const HAIRLINE = '#E2DFD8';
-const CINZA = '#6B6862';
-const TEXTO_DETALHE = '#3A3833';
 const MARCA_TEXTO_AMARELO = '#FEF08A';
-
-const dataCurta = (iso?: string): string => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-};
 
 const Hairline: React.FC = () => (
   <div style={{ height: 1, background: HAIRLINE, flexShrink: 0 }} />
@@ -565,6 +555,13 @@ interface QuotePrintableProps {
    * uma página do orçamento para cada folha. Vazio ou ausente: sem páginas de comprovante.
    */
   paginasDoComprovante?: PaginaDoComprovante[];
+  /**
+   * Páginas que outro componente desenha logo depois destas — as notas de recibo do orçamento
+   * pago. Só entram na conta do "N/total", para a numeração seguir contínua no arquivo inteiro.
+   */
+  paginasAnexas?: number;
+  /** Quantas páginas este orçamento ocupou, assim que a paginação medida termina. */
+  onPaginas?: (total: number) => void;
   /** Chamado quando as páginas já estão montadas e o elemento pode virar PDF. */
   onReady?: () => void;
 }
@@ -574,6 +571,8 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
   clinic,
   mapaCorporal,
   paginasDoComprovante = [],
+  paginasAnexas = 0,
+  onPaginas,
   onReady,
 }) => {
   const [layout, setLayout] = useState<PaginaLayout[] | null>(null);
@@ -610,6 +609,13 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
       if (document.fonts) await document.fonts.ready;
       if (cancelado) return;
 
+      // Remedindo com as páginas na tela (o orçamento mudou), o passe de medição só volta ao DOM
+      // no render seguinte ao `setLayout(null)` — e `fonts.ready` já resolvido não espera por ele.
+      // Sem esta espera a medição desistia, e as páginas do orçamento sumiam da prévia.
+      for (let tentativa = 0; !medicaoRef.current && tentativa < 30; tentativa++) {
+        await new Promise((r) => requestAnimationFrame(() => r(null)));
+        if (cancelado) return;
+      }
       const root = medicaoRef.current;
       if (!root) return;
 
@@ -646,7 +652,12 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
   }, [layout, onReady]);
 
   const paginasDoMapa = temPaginaDoMapa ? 1 : 0;
-  const totalDePaginas = (layout?.length ?? 0) + paginasDoMapa + paginasDoComprovante.length;
+  const paginasProprias = layout ? layout.length + paginasDoMapa + paginasDoComprovante.length : 0;
+  const totalDePaginas = paginasProprias + paginasAnexas;
+
+  useEffect(() => {
+    if (paginasProprias > 0) onPaginas?.(paginasProprias);
+  }, [paginasProprias, onPaginas]);
 
   const numeroDaPagina = (numero: number) => (
     <div
@@ -663,19 +674,7 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
     </div>
   );
 
-  const estiloPagina: React.CSSProperties = {
-    width: PAGE_W,
-    height: PAGE_H,
-    background: OFFWHITE,
-    padding: `${PAD_TOP}px ${PAD_X}px ${PAD_BOTTOM}px`,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: GAP,
-    position: 'relative',
-    boxSizing: 'border-box',
-    fontFamily: 'var(--font-sans)',
-    color: PRETO,
-  };
+  const estiloPagina = estiloDaPagina;
 
   return (
     <div>

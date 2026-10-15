@@ -45,6 +45,7 @@ import { AttendanceFormModal, ModoDoFormulario } from './AttendanceFormModal';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { salvarAtendimento } from '../../services/attendanceWorkflow';
+import { useRecibos } from '../recibos/RecibosContext';
 
 interface PatientsModuleProps {
   clinic: ClinicProfile;
@@ -102,6 +103,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   const [erro, setErro] = useState<string | null>(null);
   /** Só os cadastros por completar — o quadro âmbar da lista, ou a pendência vinda da Hoje. */
   const [soPendentes, setSoPendentes] = useState(false);
+  const recibosCtx = useRecibos();
 
   useEffect(() => {
     const unsubPacientes = subscribeToPatients(
@@ -181,7 +183,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
    */
   const doPacienteAberto = useMemo(() => {
     if (!pacienteAberto) {
-      return { fichas: [], orcamentos: [], atendimentos: [], planos: [] };
+      return { fichas: [], orcamentos: [], atendimentos: [], planos: [], recibos: [] };
     }
     const chave = chaveDoNome(pacienteAberto.nome);
     const dele = (doc: { pacienteId?: string; pacienteNome?: string }) =>
@@ -189,15 +191,21 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
       (!idsCadastrados.has(doc.pacienteId || '') &&
         chaveDoNome(doc.pacienteNome || '') === chave);
 
+    const orcamentos = quotes.filter(dele);
+    const idsDosOrcamentos = new Set(orcamentos.map((q) => q.id));
     return {
       fichas: records.filter(dele),
-      orcamentos: quotes.filter(dele),
+      orcamentos,
       atendimentos: attendances
         .filter(dele)
         .sort((a, b) => instanteDoAtendimento(b) - instanteDoAtendimento(a)),
       planos: sessionPlans.filter((p) => p.pacienteId === pacienteAberto.id),
+      // O recibo de um orçamento dela é dela, mesmo que quem pagou tenha sido outra pessoa
+      recibos: (recibosCtx?.recibos ?? []).filter(
+        (r) => dele(r) || (!!r.quoteId && idsDosOrcamentos.has(r.quoteId))
+      ),
     };
-  }, [records, quotes, attendances, sessionPlans, pacienteAberto, idsCadastrados]);
+  }, [records, quotes, attendances, sessionPlans, pacienteAberto, idsCadastrados, recibosCtx?.recibos]);
 
   /** O palpite de procedimento quando o paciente ainda não tem atendimento nenhum. */
   const ultimaAnamnese = useMemo(() => {
@@ -387,6 +395,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           patient={pacienteAberto}
           records={doPacienteAberto.fichas}
           quotes={doPacienteAberto.orcamentos}
+          recibos={doPacienteAberto.recibos}
           atendimentos={doPacienteAberto.atendimentos}
           planos={doPacienteAberto.planos}
           avaliacoes={avaliacoes}

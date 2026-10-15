@@ -8,6 +8,7 @@ import { createProfessionalLogin } from '../services/authService';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
 import { ENDERECO_DO_SITE, motivoEnderecoFechado, normalizarEnderecoPublico } from '../utils/publicLinks';
+import { formatCnpj } from '../utils/recibos';
 
 /**
  * A foto da profissional entra em dois lugares com recortes diferentes: o bloco 92×104 da capa do
@@ -949,6 +950,20 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   onChange={(e) => handleChange('cityState', e.target.value)}
                   placeholder="Indaiatuba - SP"
                   className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">
+                  CNPJ (sai na nota de recibo)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={formData.cnpj ? formatCnpj(formData.cnpj) : ''}
+                  onChange={(e) => handleChange('cnpj', e.target.value.replace(/\D/g, '').slice(0, 14))}
+                  placeholder="00.000.000/0001-00"
+                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink tabular-nums focus:outline-hidden focus:border-brand"
                 />
               </div>
 

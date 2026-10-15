@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  Banknote,
   Calendar,
   CalendarClock,
   CalendarPlus,
@@ -16,6 +17,7 @@ import {
   MessageCircle,
   Plus,
   Receipt,
+  ReceiptText,
   RefreshCw,
   Share2,
   Unlock,
@@ -31,6 +33,7 @@ import {
   Patient,
   Procedure,
   Quote,
+  Recibo,
   SessionPlan,
 } from '../../types';
 import { formatBRL, formatDate, formatDateOnly } from '../../utils/formatters';
@@ -59,6 +62,8 @@ import { BeforeAfterCompare } from './BeforeAfterCompare';
 import { EmissaoDeAvaliacao } from '../evaluations/EmissaoDeAvaliacao';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { alvoDoRegistro } from '../../utils/fichasClinicas';
+import { useRecibos } from '../recibos/RecibosContext';
+import { CartaoDeRecibo } from '../recibos/CartaoDeRecibo';
 
 interface PatientDetailViewProps {
   patient: Patient;
@@ -66,6 +71,8 @@ interface PatientDetailViewProps {
   records: AnamnesisRecord[];
   /** Orçamentos deste paciente, dos mais recentes para os mais antigos. */
   quotes: Quote[];
+  /** Notas de recibo dela — com e sem orçamento —, dos pagamentos mais recentes para os antigos. */
+  recibos: Recibo[];
   /** Atendimentos e agendamentos dele. */
   atendimentos: Attendance[];
   /** Planos de sessão dele — quem agrupa os atendimentos na aba. */
@@ -111,10 +118,10 @@ interface PatientDetailViewProps {
  * "Atendimentos" virou "Fichas" no rótulo — o conteúdo é o mesmo — porque com a aba Resumo ao
  * lado a palavra "atendimento" passou a significar duas coisas na mesma linha de botões.
  */
-type Aba = 'resumo' | 'atendimentos' | 'fotos' | 'orcamentos' | 'anamneses';
+type Aba = 'resumo' | 'atendimentos' | 'fotos' | 'orcamentos' | 'pagamentos' | 'anamneses';
 
 /** O que o menu "Novo" cria — na ordem da jornada da paciente. */
-type TipoNovo = 'orcamento' | 'anamnese' | 'avaliacao' | 'atendimento';
+type TipoNovo = 'orcamento' | 'recibo' | 'anamnese' | 'avaliacao' | 'atendimento';
 
 /** A data de atendimento pode estar em "YYYY-MM-DD" ou em ISO completo, conforme a origem da ficha. */
 const formatarDataAtendimento = (valor: string): string =>
@@ -129,6 +136,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   patient,
   records,
   quotes,
+  recibos,
   atendimentos,
   planos,
   avaliacoes,
@@ -177,6 +185,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
     patients: todosPacientes,
     onErro: (mensagem) => setConfirmacao(aviso('Nem tudo foi salvo', mensagem, 'perigo')),
   });
+  const recibosCtx = useRecibos();
   const [emitindoAvaliacao, setEmitindoAvaliacao] = useState(false);
   const [avaliacaoAberta, setAvaliacaoAberta] = useState<EvaluationRecord | null>(null);
 
@@ -200,6 +209,9 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
     } else if (tipo === 'anamnese') {
       setAba('anamneses');
       setFichaModalAberto(true);
+    } else if (tipo === 'recibo') {
+      setAba('pagamentos');
+      recibosCtx?.abrirNovo(patient);
     } else if (tipo === 'avaliacao') {
       // A avaliação aparece na linha do tempo do Resumo, que é onde ela mora nesta página.
       setAba('resumo');
@@ -326,6 +338,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
             {(
               [
                 { tipo: 'orcamento' as const, icone: Receipt, rotulo: 'Orçamento' },
+                ...(recibosCtx ? [{ tipo: 'recibo' as const, icone: ReceiptText, rotulo: 'Recibo' }] : []),
                 { tipo: 'anamnese' as const, icone: ClipboardList, rotulo: 'Anamnese' },
                 { tipo: 'avaliacao' as const, icone: ClipboardCheck, rotulo: 'Avaliação' },
                 { tipo: 'atendimento' as const, icone: CalendarClock, rotulo: 'Atendimento' },
@@ -366,6 +379,12 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                 icone: Receipt,
                 rotulo: 'Orçamentos',
                 total: quotes.length,
+              },
+              {
+                id: 'pagamentos' as const,
+                icone: Banknote,
+                rotulo: 'Pagamentos',
+                total: recibos.length,
               },
               {
                 id: 'anamneses' as const,
@@ -699,6 +718,24 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           </div>
         ))}
 
+      {/* Pagamentos: as notas de recibo dela, vinculadas ou não a um orçamento. */}
+      {aba === 'pagamentos' && (
+        <AbaDePagamentos
+          primeiroNome={patient.nome.split(' ')[0]}
+          recibos={recibos}
+          orcamentosPagosSemRecibo={quotes.filter(
+            (q) => q.status === 'pago' && !recibos.some((r) => r.quoteId === q.id)
+          )}
+          onNovo={() => recibosCtx?.abrirNovo(patient)}
+          onCriarDoOrcamento={(q) => recibosCtx?.abrirDoOrcamento(q)}
+          onAbrirOrcamento={(quoteId) => {
+            const q = quotes.find((o) => o.id === quoteId);
+            if (q) acoesDeOrcamento.abrirPrevia(q);
+          }}
+          erro={recibosCtx?.erro || null}
+        />
+      )}
+
       {/* Nova anamnese — já com este paciente escolhido */}
       <AnamnesisFormFillModal
         isOpen={fichaModalAberto}
@@ -767,6 +804,86 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
       )}
 
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+    </div>
+  );
+};
+
+/**
+ * A aba "Pagamentos" da paciente: o total recebido, as notas de recibo (cada uma abre a prévia,
+ * de onde sai o PDF para ela) e o "Novo recibo" já com ela escolhida.
+ *
+ * Orçamento dela pago sem nota de recibo aparece em cima, com o atalho — é o pagamento que ficou
+ * sem documento.
+ */
+const AbaDePagamentos: React.FC<{
+  primeiroNome: string;
+  recibos: Recibo[];
+  orcamentosPagosSemRecibo: Quote[];
+  onNovo: () => void;
+  onCriarDoOrcamento: (quote: Quote) => void;
+  onAbrirOrcamento: (quoteId: string) => void;
+  erro: string | null;
+}> = ({ primeiroNome, recibos, orcamentosPagosSemRecibo, onNovo, onCriarDoOrcamento, onAbrirOrcamento, erro }) => {
+  const total = recibos.reduce((soma, r) => soma + r.valor, 0);
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-label uppercase tracking-wider font-semibold text-muted">Total recebido</p>
+          <p className="font-serif-luxury text-title-lg text-ink tabular-nums">{formatBRL(total)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onNovo}
+          className="inline-flex items-center gap-2 h-11 px-4 rounded-full bg-ink text-white text-[14px] font-semibold hover:bg-black transition-colors shrink-0"
+        >
+          <Plus className="w-[18px] h-[18px]" />
+          Novo recibo
+        </button>
+      </div>
+
+      {erro && (
+        <p className="px-4 py-3 rounded-[14px] bg-danger-bg text-[14px] text-danger">{erro}</p>
+      )}
+
+      {orcamentosPagosSemRecibo.length > 0 && (
+        <div className="rounded-[16px] bg-info-bg border border-info-line px-4 py-3 space-y-2">
+          <p className="text-[14px] text-info font-semibold">
+            {orcamentosPagosSemRecibo.length === 1
+              ? 'Orçamento pago sem nota de recibo'
+              : `${orcamentosPagosSemRecibo.length} orçamentos pagos sem nota de recibo`}
+          </p>
+          {orcamentosPagosSemRecibo.map((q) => (
+            <div key={q.id} className="flex items-center justify-between gap-3">
+              <span className="text-[14px] text-ink tabular-nums truncate">
+                Nº {q.numero} · {formatBRL(q.total)}
+                {q.pagoEm ? ` · pago em ${formatDate(q.pagoEm)}` : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => onCriarDoOrcamento(q)}
+                className="shrink-0 inline-flex items-center gap-1.5 min-h-[36px] text-[14px] font-semibold text-info hover:underline underline-offset-4"
+              >
+                <ReceiptText className="w-4 h-4" />
+                Criar nota de recibo
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {recibos.length === 0 ? (
+        <div className="glass-card rounded-sm py-14 text-center">
+          <Banknote className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+          <p className="text-sm text-gray-500">Nenhuma nota de recibo para {primeiroNome} ainda.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {recibos.map((r) => (
+            <CartaoDeRecibo key={r.id} recibo={r} onAbrirOrcamento={onAbrirOrcamento} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

@@ -1,10 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Download, Loader2, AlertCircle } from 'lucide-react';
 import { ClinicProfile, LaserBodyMap, Quote } from '../../types';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
 import { montarSnapshotClinica, SNAPSHOT_CLINICA_PADRAO } from '../../utils/quoteFactory';
 import { QuotePrintable } from './QuotePrintable';
-import { usePaginasDoComprovante } from './usePaginasDoComprovante';
+import { useComprovantesDosRecibos, usePaginasDoComprovante } from './usePaginasDoComprovante';
+import { useRecibos } from '../recibos/RecibosContext';
+import { PaginasDoRecibo, paginasDoRecibo } from '../recibos/ReciboPrintable';
+import { Recibo } from '../../types';
 
 interface QuotePreviewModalProps {
   quote: Quote | null;
@@ -47,7 +50,41 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
   const paginasRef = useRef<HTMLDivElement>(null);
   // Antes do `return null` abaixo: hooks não podem depender de haver orçamento aberto
   const comprovante = usePaginasDoComprovante(quote?.comprovante);
-  const carregandoComprovante = comprovante.estado === 'carregando';
+
+  /**
+   * As notas de recibo do orçamento pago, que entram no fim do PDF — o "orçamento completo com o
+   * recibo". Só no painel: a página pública não tem o contexto (a coleção é só da equipe).
+   */
+  const recibosCtx = useRecibos();
+  const quoteId = quote?.id;
+  const recibos = useMemo(
+    () => (quoteId && recibosCtx ? recibosCtx.doOrcamento(quoteId) : []),
+    [quoteId, recibosCtx]
+  );
+  const comprovantesDosRecibos = useComprovantesDosRecibos(
+    recibos.map((r) => ({ chave: r.id, comprovante: r.comprovante }))
+  );
+  const folhasDoRecibo = (r: Recibo) => {
+    const estado = comprovantesDosRecibos.porChave[r.id];
+    return estado?.estado === 'pronto' ? estado.paginas : [];
+  };
+  const paginasDosRecibos = recibos.reduce((n, r) => n + paginasDoRecibo(folhasDoRecibo(r).length), 0);
+  /** Páginas do orçamento em si — os recibos começam a numerar depois delas. */
+  const [paginasDoOrcamento, setPaginasDoOrcamento] = useState(0);
+  useEffect(() => setPaginasDoOrcamento(0), [quoteId]);
+  const recibosComErro = recibos.filter((r) => comprovantesDosRecibos.porChave[r.id]?.estado === 'erro');
+
+  /**
+   * Orçamentos antigos não têm o retrato da clínica: cai no perfil atual. Memorizado porque um
+   * objeto novo a cada render faria o `QuotePrintable` remedir a paginação inteira — e esta prévia
+   * re-renderiza enquanto os comprovantes carregam e quando a contagem de páginas chega.
+   */
+  const clinicaDoDocumento = useMemo(
+    () => quote?.clinica || (clinic ? montarSnapshotClinica(clinic) : SNAPSHOT_CLINICA_PADRAO),
+    [quote?.clinica, clinic]
+  );
+
+  const carregandoComprovante = comprovante.estado === 'carregando' || comprovantesDosRecibos.carregando;
 
   useEffect(() => {
     if (!quote) return;
@@ -83,7 +120,9 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
       <div className="flex items-center justify-between px-6 py-4 bg-ink shrink-0">
         <div>
           <p className="text-label font-semibold uppercase tracking-widest text-brand">
-            Prévia do orçamento
+            {recibos.length > 0
+              ? `Prévia do orçamento com ${recibos.length === 1 ? 'o recibo' : `${recibos.length} recibos`}`
+              : 'Prévia do orçamento'}
           </p>
           <h2 className="text-xl text-white font-serif-luxury tabular-nums">
             Nº {quote.numero} · {quote.pacienteNome}
@@ -145,6 +184,15 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
           </span>
         </div>
       )}
+      {recibosComErro.length > 0 && (
+        <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 text-xs text-amber-800 flex items-center gap-2 shrink-0">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>
+            O comprovante do recibo {recibosComErro.map((r) => `Nº ${r.numero}`).join(', ')} não entrou no
+            PDF — o arquivo não pôde ser carregado. O recibo entra sem ele.
+          </span>
+        </div>
+      )}
       {comprovante.estado === 'pronto' && comprovante.paginasOmitidas > 0 && (
         <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 text-xs text-amber-800 flex items-center gap-2 shrink-0">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -162,16 +210,29 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
           }}
         >
           <div ref={paginasRef} className="flex flex-col gap-6">
-            {/* Orçamentos antigos não têm o retrato da clínica: cai no perfil atual */}
             <QuotePrintable
               quote={quote}
               mapaCorporal={mapaCorporal}
               paginasDoComprovante={comprovante.estado === 'pronto' ? comprovante.paginas : undefined}
-              clinic={
-                quote.clinica ||
-                (clinic ? montarSnapshotClinica(clinic) : SNAPSHOT_CLINICA_PADRAO)
-              }
+              paginasAnexas={paginasDosRecibos}
+              onPaginas={setPaginasDoOrcamento}
+              clinic={clinicaDoDocumento}
             />
+            {paginasDoOrcamento > 0 &&
+              recibos.map((r, i) => {
+                const antes = recibos
+                  .slice(0, i)
+                  .reduce((n, anterior) => n + paginasDoRecibo(folhasDoRecibo(anterior).length), 0);
+                return (
+                  <PaginasDoRecibo
+                    key={r.id}
+                    recibo={r}
+                    folhasDoComprovante={folhasDoRecibo(r)}
+                    numeroInicial={paginasDoOrcamento + antes + 1}
+                    totalDePaginas={paginasDoOrcamento + paginasDosRecibos}
+                  />
+                );
+              })}
           </div>
         </div>
       </div>

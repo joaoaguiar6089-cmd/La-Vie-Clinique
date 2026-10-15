@@ -7,6 +7,7 @@ import {
   MessageCircle,
   Paperclip,
   Pencil,
+  ReceiptText,
   RefreshCw,
   Share2,
   Trash2,
@@ -66,7 +67,8 @@ interface CartaoDeOrcamentoProps {
  * de antes. O que não é principal mora no "…".
  *
  * A ação principal é o próximo passo do orçamento: rascunho se envia; enviado se marca pago;
- * pago pede o comprovante; recusado se reabre; vencido se renova com número novo.
+ * pago pede a nota de recibo (ou mostra a que já existe); recusado se reabre; vencido se renova
+ * com número novo.
  */
 export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
   quote,
@@ -96,12 +98,14 @@ export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
       : status === 'enviado' && podeDecidir
       ? { rotulo: 'Marcar pago', icone: CheckCircle2, onClick: desfecho.abrirPagamento, escuro: true }
       : quote.status === 'pago'
-      ? {
-          rotulo: quote.comprovante ? 'Ver comprovante' : 'Anexar comprovante',
-          icone: Paperclip,
-          onClick: desfecho.abrirPagamento,
-          escuro: false,
-        }
+      ? desfecho.recibos.length === 0
+        ? { rotulo: 'Criar nota de recibo', icone: ReceiptText, onClick: desfecho.criarRecibo, escuro: true }
+        : {
+            rotulo: desfecho.recibos.length === 1 ? 'Ver recibo' : `Ver recibos (${desfecho.recibos.length})`,
+            icone: ReceiptText,
+            onClick: desfecho.verRecibos,
+            escuro: false,
+          }
       : status === 'recusado'
       ? { rotulo: 'Reabrir', icone: Undo2, onClick: desfecho.reabrir, escuro: false }
       : status === 'expirado' && substituivel
@@ -133,6 +137,13 @@ export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
   if (podeDecidir) {
     menu.push({ rotulo: 'A cliente recusou', icone: XCircle, onClick: desfecho.recusar });
   }
+  if (quote.status === 'pago' && desfecho.recibos.length > 0) {
+    menu.push({ rotulo: 'Nova nota de recibo', icone: ReceiptText, onClick: desfecho.criarRecibo });
+  }
+  // O comprovante anexado direto ao orçamento, de antes da nota de recibo
+  if (quote.status === 'pago' && quote.comprovante) {
+    menu.push({ rotulo: 'Comprovante anexado', icone: Paperclip, onClick: desfecho.abrirPagamento });
+  }
   // Pago não se substitui: o dinheiro entrou por este, com este número.
   if (substituivel && principal.icone !== RefreshCw) {
     menu.push({
@@ -147,7 +158,10 @@ export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
     onClick: () => acoes.abrirDuplicacao(quote),
   });
   // Rascunho ou cancelado podem ser excluídos. Pago não tem nenhum dos dois: primeiro se desfaz o
-  // pagamento, na folha do comprovante.
+  // pagamento — que leva junto as notas de recibo dele.
+  if (quote.status === 'pago') {
+    menu.push({ rotulo: 'Desfazer pagamento', icone: Undo2, tom: 'perigo', onClick: desfecho.desfazerPagamento });
+  }
   if (editavel) {
     menu.push({ rotulo: 'Excluir rascunho', icone: Trash2, tom: 'perigo', onClick: () => onExcluir(quote) });
   } else if (status === 'cancelado') {
@@ -176,7 +190,13 @@ export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
         </p>
         <Selo className={SELO_DO_STATUS[status]}>
           {QUOTE_STATUS_LABEL[status]}
-          {quote.status === 'pago' && quote.comprovante ? ' · comprovante' : ''}
+          {quote.status === 'pago'
+            ? desfecho.recibos.length > 0
+              ? ' · recibo'
+              : quote.comprovante
+              ? ' · comprovante'
+              : ''
+            : ''}
         </Selo>
       </div>
 

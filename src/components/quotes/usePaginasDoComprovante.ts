@@ -121,21 +121,9 @@ export function usePaginasDoComprovante(
     let cancelado = false;
     setEstado({ estado: 'carregando' });
 
-    (async () => {
-      try {
-        const resposta = await fetch(url).catch(() => {
-          throw new Error('não foi possível baixar o arquivo — confira a conexão');
-        });
-        if (!resposta.ok) throw new Error(`o arquivo não foi encontrado (${resposta.status})`);
-        const arquivo = await resposta.blob();
-        const resultado = ehPdf
-          ? await paginasDoPdf(arquivo)
-          : { paginas: await paginasDaImagem(arquivo), paginasOmitidas: 0 };
-        if (!cancelado) setEstado({ estado: 'pronto', ...resultado });
-      } catch (e) {
-        if (!cancelado) setEstado({ estado: 'erro', mensagem: (e as Error).message });
-      }
-    })();
+    carregarPaginasDoComprovante(url, ehPdf).then((resultado) => {
+      if (!cancelado) setEstado(resultado);
+    });
 
     return () => {
       cancelado = true;
@@ -143,4 +131,71 @@ export function usePaginasDoComprovante(
   }, [url, ehPdf]);
 
   return estado;
+}
+
+/** Baixa e converte um comprovante. Nunca lança: a falha volta como `{ estado: 'erro' }`. */
+async function carregarPaginasDoComprovante(
+  url: string,
+  ehPdf: boolean
+): Promise<Exclude<EstadoDoComprovante, { estado: 'ausente' } | { estado: 'carregando' }>> {
+  try {
+    const resposta = await fetch(url).catch(() => {
+      throw new Error('não foi possível baixar o arquivo — confira a conexão');
+    });
+    if (!resposta.ok) throw new Error(`o arquivo não foi encontrado (${resposta.status})`);
+    const arquivo = await resposta.blob();
+    const resultado = ehPdf
+      ? await paginasDoPdf(arquivo)
+      : { paginas: await paginasDaImagem(arquivo), paginasOmitidas: 0 };
+    return { estado: 'pronto', ...resultado };
+  } catch (e) {
+    return { estado: 'erro', mensagem: (e as Error).message };
+  }
+}
+
+/**
+ * Vários comprovantes de uma vez — os das notas de recibo que entram no fim do PDF do orçamento.
+ * Devolve o estado de cada um pela chave (o id do recibo) e se algum ainda está carregando.
+ *
+ * Os do pdf.js entram um depois do outro, e não em paralelo: o worker é um só.
+ */
+export function useComprovantesDosRecibos(
+  itens: { chave: string; comprovante?: QuoteComprovante | null }[]
+): { carregando: boolean; porChave: Record<string, EstadoDoComprovante> } {
+  const [porChave, setPorChave] = useState<Record<string, EstadoDoComprovante>>({});
+  // A lista muda de identidade a cada render; o que importa é quais arquivos ela pede
+  const assinatura = itens.map((i) => `${i.chave}=${i.comprovante?.url || ''}`).join('|');
+
+  useEffect(() => {
+    let cancelado = false;
+    const inicial: Record<string, EstadoDoComprovante> = {};
+    itens.forEach((i) => {
+      inicial[i.chave] = i.comprovante?.url ? { estado: 'carregando' } : { estado: 'ausente' };
+    });
+    setPorChave(inicial);
+
+    (async () => {
+      for (const i of itens) {
+        if (!i.comprovante?.url) continue;
+        const resultado = await carregarPaginasDoComprovante(
+          i.comprovante.url,
+          comprovanteEhPdf(i.comprovante)
+        );
+        if (cancelado) return;
+        setPorChave((atual) => ({ ...atual, [i.chave]: resultado }));
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assinatura]);
+
+  const carregando = itens.some((i) => {
+    const e = porChave[i.chave];
+    return !!i.comprovante?.url && (!e || e.estado === 'carregando');
+  });
+
+  return { carregando, porChave };
 }
