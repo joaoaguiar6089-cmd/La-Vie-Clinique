@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { subscribeShared } from './sharedSubscription';
+import { removerDoGoogleAgenda } from './googleAgenda';
 import {
   Procedure,
   ClinicProfile,
@@ -2055,6 +2056,10 @@ export async function deleteAttendance(atendimento: Attendance): Promise<void> {
   }
   await batch.commit();
 
+  // O evento do Google Agenda também fica de fora: é um espelho, e o Google fora do ar não pode
+  // impedir a exclusão. Sem esperar — a tela não precisa aguardar o Google responder.
+  void removerDoGoogleAgenda(atendimento);
+
   // O link fica de fora do lote: o token só existe em quem já o compartilhou, e um documento
   // ausente ou uma regra ainda não publicada não podem impedir a exclusão da visita.
   if (atendimento.linkToken) {
@@ -2172,6 +2177,9 @@ export async function remarcarAtendimento(
     // O aviso de ausência e o pedido de outro horário eram sobre a visita que caiu.
     avisoAusenciaEm: undefined,
     pedidoRemarcacao: undefined,
+    // O evento do Google é do agendamento antigo, que sai do Google por ter virado `remarcado`.
+    // O novo ganha o seu na próxima sincronização.
+    googleAgenda: undefined,
     createdAt: agora,
     updatedAt: agora,
   };

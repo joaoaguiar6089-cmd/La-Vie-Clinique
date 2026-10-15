@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { criarRotasGoogleAgenda } from './server/googleAgenda';
 import { criarResolvedorDePreview } from './server/previewDosLinks';
 import { aplicarPreviewNoHtml } from './src/utils/linkPreview';
 
@@ -9,10 +10,13 @@ import { aplicarPreviewNoHtml } from './src/utils/linkPreview';
  * Serve o site já construído (`dist/`) e, nos links que a clínica manda para as clientes, troca o
  * título e a descrição do `<head>` antes de responder.
  *
- * Existe por um motivo só: o cartão que o WhatsApp mostra sobre o link vem das tags `og:title` e
- * `og:description` do HTML, lidas por um robô que não executa JavaScript. Num site de uma página
- * só, todos os links tinham o mesmo título. Aqui cada um sai com o seu — "Anamnese - Botox",
+ * Existe por dois motivos. O primeiro: o cartão que o WhatsApp mostra sobre o link vem das tags
+ * `og:title` e `og:description` do HTML, lidas por um robô que não executa JavaScript. Num site de
+ * uma página só, todos os links tinham o mesmo título. Aqui cada um sai com o seu — "Anamnese - Botox",
  * "Confirmação de agendamento - Limpeza de pele", "Orçamento - ..." (ver `src/utils/linkPreview.ts`).
+ *
+ * O segundo: a ligação com o Google Agenda de cada profissional, que guarda uma autorização que
+ * não pode ficar no navegador (`/api/google-agenda`, ver `server/googleAgenda.ts`).
  *
  * O resto do app não muda: o painel e as páginas públicas continuam sendo o mesmo bundle do Vite.
  * Se a busca do título falhar, a resposta é o `index.html` de sempre.
@@ -34,6 +38,9 @@ const resolverPreview = criarResolvedorDePreview();
 
 const app = express();
 app.disable('x-powered-by');
+
+// Conexão das profissionais com o Google Agenda e envio dos eventos (ver server/googleAgenda.ts).
+app.use('/api/google-agenda', criarRotasGoogleAgenda());
 
 // Arquivos com hash no nome nunca mudam; o resto (foto da doutora, por exemplo) revalida.
 app.use('/assets', express.static(path.join(dist, 'assets'), { immutable: true, maxAge: '1y', fallthrough: true }));

@@ -67,6 +67,7 @@ import {
 } from './services/databaseService';
 import { DEFAULT_PROCEDURE_TEMPLATES } from './data/anamnesisInitialData';
 import { onAuthChange, logout, type User } from './services/authService';
+import { useSincronizacaoGoogleAgenda } from './hooks/useSincronizacaoGoogleAgenda';
 import { firebaseConfig } from './lib/firebase';
 import {
   ENDERECO_DO_SITE,
@@ -476,6 +477,15 @@ function MainCatalogApp() {
     ];
     return () => unsubs.forEach((u) => u());
   }, [authUser]);
+
+  // Leva os agendamentos para o Google Agenda de cada profissional que conectou o dela.
+  useSincronizacaoGoogleAgenda({
+    ativo: !!authUser,
+    atendimentos: attendances,
+    carregando: atendimentosCarregando || proceduresCarregando,
+    catalogo: procedures,
+    clinica: clinic,
+  });
 
   /**
    * Respostas que as clientes deram pelo link do agendamento. A página pública não pode escrever
