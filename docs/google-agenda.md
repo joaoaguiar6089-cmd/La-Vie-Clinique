@@ -32,6 +32,13 @@ Se aparecer **Primeiros passos** (*Get started*), preencha o assistente: nome do
 "La Vie Clinique", e-mail de suporte, público **Externo**, e-mail de contato, aceite a política →
 **Criar**. Depois, no menu da esquerda:
 
+- **Branding** — sem estes dois links o Google não libera o "Publicar app":
+  - *Página inicial do aplicativo:* `https://drakaroline-lavie.ai.studio`
+  - *Link da Política de Privacidade:* `https://drakaroline-lavie.ai.studio/privacidade` (página
+    servida pelo `server/privacidade.ts`; só existe depois de publicar o site).
+  - *Termos de Serviço:* pode ficar em branco.
+  - *Domínios autorizados:* `drakaroline-lavie.ai.studio`.
+  - **Salvar.**
 - **Público-alvo** (*Audience*): em "Status de publicação", clique em **Publicar app** e confirme.
   Tem de ficar **Em produção**: no modo "Teste" o Google derruba a autorização a cada 7 dias.
 - **Acesso a dados** (*Data access*): **Adicionar ou remover escopos** → cole

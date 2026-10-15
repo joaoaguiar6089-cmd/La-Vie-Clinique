@@ -18,6 +18,7 @@ import {
   planejarSincronizacao,
 } from '../src/utils/googleAgenda';
 import { cifrar, criarRotasGoogleAgenda, decifrar, verificarLoginDoPainel } from '../server/googleAgenda';
+import { paginaDePrivacidade } from '../server/privacidade';
 
 let falhas = 0;
 const ok = (nome: string, condicao: boolean, extra = '') => {
@@ -312,6 +313,26 @@ console.log('\nRotas do servidor');
   } finally {
     servidor2.close();
   }
+}
+
+console.log('\nPolítica de privacidade');
+{
+  const pagina = paginaDePrivacidade({
+    name: 'La Vie Clinique',
+    phone: '11 99292-6658',
+    address: 'Rua Bernardinho de Campos, 193, Centro.',
+    cityState: 'Indaiatuba - SP',
+  });
+  ok('mostra o nome e o telefone da clínica', pagina.includes('La Vie Clinique') && pagina.includes('11 99292-6658'));
+  ok('diz qual permissão do Google é pedida', pagina.includes('auth/calendar.app.created'));
+  ok('declara o Uso Limitado exigido pelo Google', pagina.includes('Uso Limitado') && pagina.includes('api-services-user-data-policy'));
+  ok('ensina a revogar o acesso', pagina.includes('myaccount.google.com/permissions'));
+
+  const injetada = paginaDePrivacidade({ name: '<script>alert(1)</script>' });
+  ok('texto do perfil não vira HTML', !injetada.includes('<script>alert') && injetada.includes('&lt;script&gt;'));
+
+  const vazia = paginaDePrivacidade({});
+  ok('sem perfil (banco fora do ar) a página sai com o nome padrão', vazia.includes('La Vie Clinique'));
 }
 
 console.log(falhas ? `\n${falhas} falha(s).` : '\nTudo certo.');
