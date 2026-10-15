@@ -837,8 +837,49 @@ export interface Attendance {
    * morar aqui: sem uma leitura por atendimento. Ausente = nenhuma.
    */
   materiaisSemValor?: number;
+  /**
+   * Onde este agendamento já está no Google Agenda da profissional, e com que conteúdo. Ausente =
+   * nunca foi enviado. Escrito só pela sincronização (`useSincronizacaoGoogleAgenda`), depois de o
+   * Google aceitar o evento. Ver `utils/googleAgenda.ts`.
+   */
+  googleAgenda?: MarcaGoogleAgenda;
   createdAt: string;
   updatedAt?: string;
+}
+
+// ==========================================
+// GOOGLE AGENDA — TIPOS
+// ==========================================
+
+/**
+ * A ligação de uma profissional com o Google Agenda dela. Mora em
+ * `clinic_settings/google_agenda`, no mapa `contas`, por id da profissional.
+ */
+export interface ContaGoogleAgenda {
+  /** A conta Google que autorizou. */
+  email: string;
+  /** O calendário "La Vie Clinique" que o sistema criou na conta dela. */
+  calendarioId: string;
+  /**
+   * A autorização permanente do Google, cifrada pelo servidor do site. Só o servidor consegue
+   * abri-la: no banco ela não serve para nada.
+   */
+  tokenCifrado: string;
+  conectadoEm: string; // ISO
+  /** Preenchido quando o Google recusou a autorização — a profissional precisa reconectar. */
+  erro?: string;
+}
+
+export interface GoogleAgendaConfig {
+  contas?: Record<string, ContaGoogleAgenda>;
+}
+
+/** O que o Google Agenda já tem de um agendamento — ver `Attendance.googleAgenda`. */
+export interface MarcaGoogleAgenda {
+  profissionalId: string;
+  calendarioId: string;
+  /** Resumo do evento enviado. Diferente do evento de agora = precisa reenviar. */
+  assinatura: string;
 }
 
 // ==========================================

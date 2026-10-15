@@ -3,6 +3,7 @@ import { X, ArrowLeft, Building2, Check, Sparkles, Phone, Instagram, MapPin, Awa
 import { AgendaExpedienteDia, ClinicProfile, LaserCategoryDefaults, Professional } from '../types';
 import { AGENDA_DEFAULTS, INTERVALOS_DISPONIVEIS } from '../utils/agenda';
 import { mascararHora } from './common/MaskedDateTimeInput';
+import { GoogleAgendaConexoes } from './agenda/GoogleAgendaConexoes';
 import { createProfessionalLogin } from '../services/authService';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
@@ -1014,8 +1015,9 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
             </div>
           </div>
 
-          <div id="cfg-agenda" className="scroll-mt-24">
+          <div id="cfg-agenda" className="scroll-mt-24 space-y-4">
             <SecaoAgendaDaClinica formData={formData} onChange={handleChange} />
+            <GoogleAgendaConexoes profissionais={clinic.professionals || []} />
           </div>
 
           {/* Mapa corporal da depilação a laser */}
