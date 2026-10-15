@@ -81,6 +81,8 @@ aba Recibos mostra o aviso de permissão e o envio do comprovante falha com a me
 firebase deploy --only firestore:rules,storage
 ```
 
+ou, com a conta de serviço configurada (ver `docs/publicar-regras.md`), `npm run publicar-regras`.
+
 ## 7. Fora de escopo
 
 - O **faturamento** (Financeiro, tela Hoje) continua somando os orçamentos pagos pelo total deles.
