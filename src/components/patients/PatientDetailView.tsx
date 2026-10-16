@@ -114,8 +114,7 @@ interface PatientDetailViewProps {
  * As abas da ficha.
  *
  * `resumo` é a primeira e a padrão: é ela que responde "o que eu preciso saber antes de atender
- * esta pessoa", e é nela, numa linha recolhida no topo, que moram os dados pessoais. As outras
- * juntam documentos parentes numa aba só, separados por filtro:
+ * esta pessoa". As outras juntam documentos parentes numa aba só, separados por filtro:
  *
  * - **Fichas**: anamneses e acompanhamentos. O acompanhamento é aberto pela linha do atendimento,
  *   então o filtro "Acompanhamentos" é a lista de atendimentos — com os pacotes e os agendados.
@@ -133,9 +132,9 @@ const formatarDataAtendimento = (valor: string): string =>
   valor?.length === 10 ? formatDateOnly(valor) : formatDate(valor);
 
 /**
- * Página de um paciente: o cabeçalho com as ações rápidas e, abaixo, as abas — Resumo (com os
- * dados pessoais editáveis numa linha recolhida no topo), Fichas, Fotos e Financeiro. O "Novo"
- * já abre cada formulário com o paciente escolhido.
+ * Página de um paciente: o cabeçalho, os dados pessoais editáveis numa linha recolhida, as ações
+ * rápidas e, abaixo, as abas — Resumo, Fichas, Fotos e Financeiro. O "Novo" já abre cada
+ * formulário com o paciente escolhido.
  */
 export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   patient,
@@ -291,6 +290,13 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         </div>
       </div>
 
+      {/* Dados pessoais, numa linha recolhida logo abaixo do cabeçalho — fora das abas, ficam à
+          mão em qualquer uma delas, e trocar de aba no meio de uma edição não perde o que foi
+          digitado. */}
+      <div className="mb-4">
+        <PatientPersonalDataCard patient={patient} onSalvar={onSalvarPaciente} />
+      </div>
+
       {/* As três ações que valem um toque a partir daqui. Larguras iguais no celular: com a
           paciente na frente, o dedo mira pela posição, não pelo rótulo. */}
       <div className="grid grid-cols-3 gap-2 mb-5">
@@ -429,31 +435,27 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Resumo: os dados pessoais recolhidos numa linha e, abaixo, alerta da anamnese, pacotes
-          em curso, antes/depois e linha do tempo. */}
+      {/* Resumo: alerta da anamnese, pacotes em curso, antes/depois e linha do tempo. */}
       {aba === 'resumo' && (
-        <div className="space-y-6">
-          <PatientPersonalDataCard patient={patient} onSalvar={onSalvarPaciente} />
-          <PatientResumoTab
-            records={records}
-            atendimentos={atendimentos}
-            planos={planos}
-            quotes={quotes}
-            avaliacoes={avaliacoes}
-            catalogProcedures={catalogProcedures}
-            acoes={{
-              orcamento: acoesDeOrcamento,
-              onVerAnamnese: setFichaAberta,
-              onVerAvaliacao: setAvaliacaoAberta,
-              onAcompanhamento: onAcompanhamentoAtendimento,
-            }}
-            onIrParaFichas={irParaFichas}
-            onAgendarSessao={(plano) => {
-              irParaFichas('acompanhamentos');
-              onAdicionarSessao(plano.id);
-            }}
-          />
-        </div>
+        <PatientResumoTab
+          records={records}
+          atendimentos={atendimentos}
+          planos={planos}
+          quotes={quotes}
+          avaliacoes={avaliacoes}
+          catalogProcedures={catalogProcedures}
+          acoes={{
+            orcamento: acoesDeOrcamento,
+            onVerAnamnese: setFichaAberta,
+            onVerAvaliacao: setAvaliacaoAberta,
+            onAcompanhamento: onAcompanhamentoAtendimento,
+          }}
+          onIrParaFichas={irParaFichas}
+          onAgendarSessao={(plano) => {
+            irParaFichas('acompanhamentos');
+            onAdicionarSessao(plano.id);
+          }}
+        />
       )}
 
       {/* Fotos: a galeria da paciente e o comparador. */}

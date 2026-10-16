@@ -32,9 +32,9 @@ const Campo: React.FC<{ rotulo: string; valor?: string; className?: string }> = 
  * e o contato que valiam no dia da emissão, e isso é proposital — documento já enviado não muda
  * retroativamente porque o cadastro mudou.
  *
- * Começa recolhido, numa linha só: ele abre o Resumo, e aberto empurraria o alerta da anamnese
- * para fora da primeira dobra. Recolher no meio de uma edição só esconde o formulário — o que foi
- * digitado continua lá ao abrir de novo.
+ * Começa recolhido, numa linha só: ele fica logo abaixo do cabeçalho, e aberto empurraria as ações
+ * rápidas e as abas para fora da primeira dobra. Recolher no meio de uma edição só esconde o
+ * formulário — o que foi digitado continua lá ao abrir de novo.
  */
 export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = ({
   patient,
