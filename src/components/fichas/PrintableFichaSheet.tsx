@@ -81,7 +81,10 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
     ? registro.fotoModeloAnotadaUrl || registro.fotoModeloUrl
     : ficha?.fotoModeloFemininoUrl || ficha?.fotoModeloUrl || ficha?.fotoModeloMasculinoUrl;
 
-  const fotosSessao = fotosDaSessao(registro).map((f) => f.anotadaUrl || f.url);
+  const fotosSessao = fotosDaSessao(registro).map((f) => ({
+    url: f.anotadaUrl || f.url,
+    legenda: (f.legenda || '').trim(),
+  }));
 
   const handlePrint = () => window.print();
 
@@ -271,18 +274,23 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
                 title={fotosSessao.length > 1 ? rotulos.rotuloDasFotos : rotulos.rotuloDaFoto}
               />
               <div className={`grid gap-3 ${fotosSessao.length > 1 ? 'grid-cols-2' : ''}`}>
-                {fotosSessao.map((url, i) => (
-                  <div
+                {fotosSessao.map(({ url, legenda }, i) => (
+                  <figure
                     key={`${i}-${url}`}
-                    className="border border-gray-200 rounded-sm bg-white p-3 flex justify-center page-break-inside-avoid"
+                    className="m-0 border border-gray-200 rounded-sm bg-white p-3 flex flex-col items-center page-break-inside-avoid"
                   >
                     <img
                       src={url}
-                      alt={`${rotulos.rotuloDaFoto} ${i + 1}`}
+                      alt={legenda || `${rotulos.rotuloDaFoto} ${i + 1}`}
                       className="block w-full h-auto object-contain rounded-xs"
                       style={{ maxHeight: fotosSessao.length > 1 ? '360px' : '620px' }}
                     />
-                  </div>
+                    {legenda && (
+                      <figcaption className="text-[10px] font-semibold text-ink-soft text-center mt-2">
+                        {legenda}
+                      </figcaption>
+                    )}
+                  </figure>
                 ))}
               </div>
             </div>

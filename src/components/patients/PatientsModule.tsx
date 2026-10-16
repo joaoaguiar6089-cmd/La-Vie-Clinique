@@ -43,6 +43,7 @@ import { PatientDetailView } from './PatientDetailView';
 import { NewPatientModal } from './NewPatientModal';
 import { AttendanceFormModal, ModoDoFormulario } from './AttendanceFormModal';
 import { FichaFillModal } from '../fichas/FichaFillModal';
+import { perguntaDoAcompanhamento } from '../fichas/perguntaDoAcompanhamento';
 import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { salvarAtendimento } from '../../services/attendanceWorkflow';
 import { useRecibos } from '../recibos/RecibosContext';
@@ -266,6 +267,11 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
       anamneses: records,
       limparConfirmacao: opcoes?.limparConfirmacao,
     });
+    // Compareceu: o acompanhamento é o passo seguinte, e é agora que a profissional lembra.
+    if (formAtendimento?.modo === 'confirmacao') {
+      const pergunta = perguntaDoAcompanhamento(formAtendimento.atendimento, registro, setAcompanhando);
+      if (pergunta) setConfirmacao(pergunta);
+    }
   };
 
 

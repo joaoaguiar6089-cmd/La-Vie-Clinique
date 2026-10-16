@@ -54,6 +54,7 @@ import { AgendaDetalheModal } from './AgendaDetalheModal';
 import { AgendamentoShareModal } from './AgendamentoShareModal';
 import { AgendaRespostasClientes } from './AgendaRespostasClientes';
 import { FichaFillModal } from '../fichas/FichaFillModal';
+import { perguntaDoAcompanhamento } from '../fichas/perguntaDoAcompanhamento';
 import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { SkeletonAgenda } from '../common/Skeleton';
 
@@ -584,6 +585,11 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
       pacienteACriar: cadastroSeraCriado ? pacienteDoForm || undefined : undefined,
       limparConfirmacao: opcoes?.limparConfirmacao,
     });
+    // Compareceu: o acompanhamento é o passo seguinte, e é agora que a profissional lembra.
+    if (formulario?.modo === 'confirmacao') {
+      const pergunta = perguntaDoAcompanhamento(formulario.atendimento, registro, setAcompanhando);
+      if (pergunta) setConfirmacao(pergunta);
+    }
   };
 
   return (

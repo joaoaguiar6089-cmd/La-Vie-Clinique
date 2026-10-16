@@ -136,6 +136,25 @@ export const acompanhamentoComRegistro = (a: Attendance): boolean =>
 export const acompanhamentoVisivel = (a: Attendance): boolean =>
   acompanhamentoComRegistro(a) || atendimentoAconteceu(a);
 
+/**
+ * Logo depois do "compareceu", perguntar se a equipe quer preencher o acompanhamento?
+ *
+ * Só na passagem de agendado para compareceu — editar uma visita já confirmada não pergunta de
+ * novo. E não pergunta quando o acompanhamento já existe: aí o ícone verde da linha já leva a ele,
+ * e a pergunta só atrasaria quem está fechando a agenda do dia.
+ *
+ * `anterior` é o registro como estava antes de salvar; `salvo`, o que acabou de ser gravado.
+ */
+export const deveOferecerAcompanhamento = (
+  anterior: Attendance | null | undefined,
+  salvo: Attendance
+): boolean =>
+  !!anterior &&
+  anterior.status !== 'compareceu' &&
+  salvo.status === 'compareceu' &&
+  atendimentoAconteceu(salvo) &&
+  !anterior.acompanhamentoPreenchidoEm;
+
 // ==========================================
 // O ALVO DE UMA FICHA
 // ==========================================

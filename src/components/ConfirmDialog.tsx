@@ -21,6 +21,11 @@ export interface ConfirmRequest {
    * alguém clicar, o que num aviso de "falha ao gerar o PDF" é um preço alto.
    */
   somenteOk?: boolean;
+  /**
+   * Ícone do quadrado ao lado do título. O padrão é o triângulo de alerta, que serve à exclusão e
+   * ao aviso — numa pergunta de rotina ("Preencher acompanhamento?") ele soaria como problema.
+   */
+  icone?: React.ComponentType<{ className?: string }>;
 }
 
 interface ConfirmDialogProps {
@@ -53,6 +58,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ pedido, onFechar }
   if (!pedido) return null;
 
   const perigo = pedido.tom !== 'neutro';
+  const Icone = pedido.icone || AlertTriangle;
 
   const confirmar = () => {
     pedido.onConfirmar();
@@ -83,7 +89,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ pedido, onFechar }
                 perigo ? 'bg-danger-bg text-danger' : 'bg-brand-bg text-brand'
               }`}
             >
-              <AlertTriangle className="w-4 h-4" />
+              <Icone className="w-4 h-4" />
             </div>
             <div className="min-w-0">
               <h2

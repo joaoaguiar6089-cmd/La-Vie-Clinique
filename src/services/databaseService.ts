@@ -43,6 +43,7 @@ import {
   EvaluationTemplate,
   EvaluationRecord,
   FotoDaSessao,
+  GrupoDePerguntasExtra,
   MaterialUsado,
   ProdutoDeEstoque,
   ConsumoPadrao,
@@ -2654,6 +2655,13 @@ function normalizarRegistroDeFichaLido(id: string, dados: unknown): EvaluationRe
         : paraArray<FotoDaSessao>(bruto.fotosSessao),
     consumoEstimado:
       bruto.consumoEstimado === undefined ? undefined : paraArray<MaterialUsado>(bruto.consumoEstimado),
+    gruposExtras:
+      bruto.gruposExtras === undefined || bruto.gruposExtras === null
+        ? undefined
+        : paraArray<GrupoDePerguntasExtra>(bruto.gruposExtras).map((g) => ({
+            ...g,
+            perguntas: paraArray<AnamnesisQuestion>((g as unknown as Record<string, unknown>).perguntas),
+          })),
   };
 }
 
@@ -2877,7 +2885,12 @@ export async function saveRegistroDeFicha(
           subirImagemOuManter(foto.url, pasta),
           subirImagemOuManter(foto.anotadaUrl || '', pasta),
         ]);
-        return { url, anotadaUrl: anotadaUrl || undefined, anotacoesJson: foto.anotacoesJson };
+        return {
+          url,
+          anotadaUrl: anotadaUrl || undefined,
+          anotacoesJson: foto.anotacoesJson,
+          legenda: (foto.legenda || '').trim() || undefined,
+        };
       })
     ),
   ]);
@@ -2885,6 +2898,7 @@ export async function saveRegistroDeFicha(
   const agora = new Date().toISOString();
   const primeira = fotosSessao[0];
   const consumoEstimado = registro.consumoEstimado || [];
+  const gruposExtras = (registro.gruposExtras || []).filter((g) => (g.perguntas || []).length > 0);
 
   const dados = {
     ...cleanForFirestore({
@@ -2909,6 +2923,9 @@ export async function saveRegistroDeFicha(
     fotoSessaoAnotacoesJson: primeira?.anotacoesJson || deleteField(),
     consumoEstimado:
       consumoEstimado.length > 0 ? consumoEstimado.map((m) => cleanForFirestore(m)) : deleteField(),
+    // Mesma razão: tirar o último grupo extra precisa apagar o campo, não deixá-lo como estava.
+    gruposExtras:
+      gruposExtras.length > 0 ? gruposExtras.map((g) => cleanForFirestore(g)) : deleteField(),
   };
 
   // As fotos vão para o Storage; se ele falhar, cada uma volta em base64 para dentro do documento
