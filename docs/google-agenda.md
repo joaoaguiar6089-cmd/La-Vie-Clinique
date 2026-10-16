@@ -96,6 +96,49 @@ tocar em **Avançado** → **Acessar La Vie Clinique** e deixar marcada a permis
 Depois de conectar, a sincronização funciona de qualquer lugar onde o painel estiver aberto,
 inclusive dentro do AI Studio.
 
+## Quando não conecta
+
+Antes de tudo, veja se o servidor tem as duas chaves:
+
+```
+curl https://drakaroline-lavie.ai.studio/api/google-agenda/status
+```
+
+`{"configurado":false}` = falta `GOOGLE_AGENDA_CLIENT_ID` ou `GOOGLE_AGENDA_CLIENT_SECRET` nos
+Secrets, ou o app não foi publicado depois de salvá-los.
+
+| O que aparece no painel | O que é | O que fazer |
+|---|---|---|
+| **a chave secreta que o servidor tem não é a deste ID de cliente** (`invalid_client`) | A tela do Google apareceu e devolveu o código, então o ID e o endereço de retorno estão certos — quem não bate é a chave secreta | Ver abaixo |
+| **o código do Google venceu ou já tinha sido usado** (`invalid_grant`) | A janela ficou aberta tempo demais | Conectar de novo |
+| **a permissão do Google Agenda não foi marcada** | A caixa da agenda foi desmarcada na tela do Google | Conectar de novo deixando a caixa marcada |
+| **o Google não entregou a autorização permanente** | Raro; o Google não devolveu o *refresh token* | Conectar de novo |
+| **a integração ainda não foi configurada no servidor** | `/status` responde `configurado:false` | Secrets + publicar |
+| Nada acontece e a janela fica na tela | A janela não é do site publicado | Conectar **pelo site**, não pelo painel dentro do AI Studio |
+
+### `invalid_client`: o ID e a chave são de clientes diferentes
+
+É o engano mais fácil de cometer, porque a tela de consentimento aparece normalmente — o ID está
+certo, só a chave que não. As três causas, em ordem de frequência:
+
+1. **A chave é de outro cliente OAuth.** Na lista de *Clientes* existe o
+   *"Web client (auto created by Google Service)"*, criado sozinho pelo Firebase. Pegar a chave
+   dele e o ID do nosso dá exatamente este erro.
+2. **A chave foi trocada no Google** depois de copiada (ou o cliente foi recriado e só o ID foi
+   atualizado nos Secrets).
+3. **O app não foi publicado de novo** depois de salvar a chave. Secret novo só chega ao servidor
+   na publicação — até lá ele continua usando o valor antigo, e `/status` responde
+   `configurado:true` do mesmo jeito.
+
+Como resolver sem adivinhar: em *Clientes*, abra o cliente cujo **URI de redirecionamento** é
+`https://drakaroline-lavie.ai.studio/api/google-agenda/retorno` — é esse, e só esse, que o
+sistema usa. Confira se o **ID do cliente** dele é igual ao `GOOGLE_AGENDA_CLIENT_ID` dos
+Secrets. Nesse mesmo cliente, **Adicionar chave secreta**, copie a nova (`GOCSPX-…`), salve em
+`GOOGLE_AGENDA_CLIENT_SECRET` e **publique o app**. Depois, conectar de novo.
+
+> Trocar a chave secreta invalida as autorizações já guardadas no banco (é ela que as cifra), e
+> as profissionais conectadas precisam reconectar. Se ninguém está conectado ainda, não há perda.
+
 ## Como funciona
 
 ```
