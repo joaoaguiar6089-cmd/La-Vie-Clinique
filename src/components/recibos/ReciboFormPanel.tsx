@@ -53,6 +53,7 @@ import { PatientSearchSelect } from '../quotes/PatientSearchSelect';
 import { ComprovanteAnexado, EscolhaDeComprovante } from '../quotes/CampoDeComprovante';
 import { ProcedureSearchAdd } from '../quotes/ProcedureSearchAdd';
 import { ProdutoSearchAdd } from '../quotes/ProdutoSearchAdd';
+import { rotuloDaEmbalagem } from '../../utils/estoque';
 
 const FORMAS: { id: FormaDoRecibo; rotulo: string }[] = [
   { id: 'pix', rotulo: 'Pix' },
@@ -694,7 +695,11 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
               </div>
               <div className="grid grid-cols-2 gap-2.5 sm:pl-[42px] sm:pr-[50px]">
                 {item.produtoId ? (
-                  <CampoTinta rotulo={`Quantidade (${item.unidade || 'un'})`} htmlFor={`recibo-item-qtd-${item.id}`}>
+                  <CampoTinta
+                    rotulo={`Quantidade (${item.unidade || 'un'})`}
+                    htmlFor={`recibo-item-qtd-${item.id}`}
+                    ajuda={rotuloDaEmbalagem(produtos.find((p) => p.id === item.produtoId)) ?? undefined}
+                  >
                     <input
                       id={`recibo-item-qtd-${item.id}`}
                       type="number"

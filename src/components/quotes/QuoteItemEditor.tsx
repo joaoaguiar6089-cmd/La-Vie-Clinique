@@ -18,7 +18,13 @@ import {
   itemValorUnitario,
 } from '../../utils/quoteCalc';
 import { ajustarItemDoProduto } from '../../utils/quoteFactory';
-import { LinhaDeMaterial, arredondar, numeroValido, totaisDosMateriais } from '../../utils/estoque';
+import {
+  LinhaDeMaterial,
+  arredondar,
+  numeroValido,
+  rotuloDaEmbalagem,
+  totaisDosMateriais,
+} from '../../utils/estoque';
 import { EditorDeMateriais } from '../estoque/EditorDeMateriais';
 
 interface QuoteItemEditorProps {
@@ -75,6 +81,8 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
   }, [item.calculadoPorConsumo]);
 
   const produto = itemEhProduto(item);
+  /** "(5 por embalagem)", lido do cadastro do estoque — só para quem monta o orçamento. */
+  const embalagem = produto ? rotuloDaEmbalagem(produtos.find((p) => p.id === item.produtoId)) : null;
   const porConsumo = !produto && !!item.calculadoPorConsumo;
   const consumo = totaisDosMateriais(linhasDoConsumo);
   const margemDoConsumo = arredondar(consumo.valorCliente - consumo.custo);
@@ -170,6 +178,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
               onBlur={() => setQuantidadeStr(numeroDigitado(itemQuantidade(item)))}
               className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
             />
+            {embalagem && <p className="mt-1 text-body text-muted">{embalagem}</p>}
           </div>
           <div>
             <label className="block text-body font-medium text-ink mb-1" htmlFor={`item-unitario-${item.id}`}>

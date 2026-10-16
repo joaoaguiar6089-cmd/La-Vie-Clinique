@@ -45,6 +45,7 @@ import {
   precoPorUnidade,
   produtoEmUso,
   quantidadeComUnidade,
+  rotuloDaEmbalagem,
   tirarConsumoDoItem,
   totaisDosMateriais,
   valoresPorUnidadeDaCaixa,
@@ -267,6 +268,12 @@ console.log('== produto do estoque como item do orçamento');
     String(ajustarItemDoProduto(gelVendido, { quantidade: 1000 }).valorTabela)
   );
   ok('valor unitário derivado num item sem ele', itemValorUnitario({ valorTabela: 90, quantidade: 3 }) === 30);
+  ok(
+    'produto de caixa mostra quantas unidades vêm na embalagem',
+    rotuloDaEmbalagem({ caixa: { unidades: 5, custo: 100, valorCliente: 250 } }) === '(5 por embalagem)'
+  );
+  ok('embalagem fracionada sai com vírgula', rotuloDaEmbalagem({ caixa: { unidades: 2.5, custo: 1, valorCliente: 1 } }) === '(2,5 por embalagem)');
+  ok('produto por unidade (ou excluído) não mostra embalagem', rotuloDaEmbalagem(toxina) === null && rotuloDaEmbalagem(undefined) === null);
   const custoDoProduto = materiaisDoItem(cinquenta, consumos, produtos, catalogo);
   ok(
     'o custo de material do item de produto é o próprio produto na quantidade vendida',

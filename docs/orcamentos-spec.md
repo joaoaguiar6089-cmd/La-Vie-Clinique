@@ -140,7 +140,9 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
   nos produtos ativos do Estoque. O item nasce com `produtoId`, `categoria: 'Produto'`, o nome do
   produto, **quantidade 1** e o **valor repassado à cliente** como valor unitário.
 - No item de produto: nome editável, **Quantidade (unidade)** e **Valor por unidade**; o total da
-  linha (`valorTabela`) = quantidade × valor unitário, refeito a cada mudança. O desconto do item
+  linha (`valorTabela`) = quantidade × valor unitário, refeito a cada mudança. Produto cadastrado em
+  caixa mostra embaixo da quantidade quantas unidades vêm nela — "(5 por embalagem)", lido do
+  estoque (`rotuloDaEmbalagem`); o mesmo vale na linha de produto do recibo. O desconto do item
   vale sobre esse total. Sem profissional, sem sessões e sem "calcular por consumo".
 - O valor unitário é gravado (`valorUnitario`) porque o estoque tem preço de quatro casas: derivado
   do total arredondado, R$ 0,0035 o ml viraria zero ao mudar a quantidade. **O custo do produto
@@ -149,6 +151,11 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
 - No custo de material (interno), o material do item de produto é o próprio produto na
   quantidade vendida, e a margem já conta o que a clínica pagou por ele.
 - Produto não conta como procedimento na sugestão do desconto de plano combinado.
+
+**Navegação entre etapas**
+- O rodapé leva à etapa seguinte; só o botão **"Salvar orçamento"**, na etapa 4, grava. Os dois
+  botões têm `key` próprio e nenhum é `type="submit"`: com o mesmo elemento nos dois ramos, o clique
+  em "Revisar" terminava num botão que já era o de salvar, e o orçamento era gravado sem revisão.
 
 **Totais**
 - Subtotal = soma dos valores finais.

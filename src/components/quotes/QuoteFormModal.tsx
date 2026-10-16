@@ -703,8 +703,13 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
           {formatBRL(totais.total)}
         </p>
       </div>
+      {/* Os dois botões têm `key` próprio e nenhum é `submit`. Com o mesmo elemento nos dois
+          ramos, o clique em "Revisar" trocava a etapa, o React re-renderizava no meio do clique, e
+          o navegador terminava o clique num botão que já era o de salvar — o orçamento era gravado
+          sem ninguém ter revisado. */}
       {etapa < 4 && proximaEtapa ? (
         <button
+          key="proxima"
           type="button"
           onClick={() => setEtapa(proximaEtapa.numero)}
           className="shrink-0 h-[52px] px-[22px] rounded-full bg-brand-light text-ink text-[16px] font-bold flex items-center gap-2 hover:brightness-105 active:scale-[.97] transition"
@@ -714,8 +719,9 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
         </button>
       ) : (
         <button
-          type="submit"
-          form="form-orcamento"
+          key="salvar"
+          type="button"
+          onClick={() => handleSubmit()}
           disabled={isSaving}
           className="shrink-0 h-[52px] px-[22px] rounded-full bg-brand-light text-ink text-[16px] font-bold flex items-center gap-2 hover:brightness-105 active:scale-[.97] transition disabled:opacity-50"
         >

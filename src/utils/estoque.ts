@@ -310,6 +310,15 @@ export const quantidadeDoProduto = (quantidade: number, unidade: string): string
   return quantidadeComUnidade(quantidade, arredondar(numeroValido(quantidade)) > 1 ? unidadeNoPlural(nome) : nome);
 };
 
+/**
+ * "(5 por embalagem)" — o lembrete, embaixo da quantidade do produto vendido, de quantas unidades
+ * vêm na caixa cadastrada no estoque. `null` para o produto comprado por unidade (ou excluído).
+ */
+export const rotuloDaEmbalagem = (produto?: Pick<ProdutoDeEstoque, 'caixa'> | null): string | null => {
+  const unidades = numeroValido(produto?.caixa?.unidades);
+  return unidades > 0 ? `(${quantidadeComUnidade(unidades, '')} por embalagem)` : null;
+};
+
 // ==========================================
 // CUSTO ESTIMADO DO ORÇAMENTO
 // ==========================================
