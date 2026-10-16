@@ -39,6 +39,47 @@ const MAX_OPERACOES = 50;
 const clientId = () => process.env.GOOGLE_AGENDA_CLIENT_ID?.trim() || '';
 const clientSecret = () => process.env.GOOGLE_AGENDA_CLIENT_SECRET?.trim() || '';
 const configurado = () => !!clientId() && !!clientSecret();
+
+const PARECE_ID = /\.apps\.googleusercontent\.com$/;
+const PARECE_SEGREDO = /^GOCSPX-/;
+
+/**
+ * Os dois valores estão cada um no seu campo?
+ *
+ * Trocá-los é fácil, e o sintoma engana: o Google responde `invalid_client` nos dois casos — com
+ * os campos trocados ele diz isso na tela de autorização, e com a chave errada só depois, na troca
+ * do código. Nenhuma das duas mensagens fala em inversão.
+ *
+ * O motivo de conferir **antes** de redirecionar, porém, não é a mensagem: o ID vai como parâmetro
+ * na URL da tela do Google. Com os campos trocados, é a chave secreta que viaja na URL — e aí ela
+ * fica no histórico do navegador, no `Referer` e nos registros de quem estiver no caminho. Uma
+ * chave que vazou assim tem de ser trocada no Google. Esta checagem existe para que isso não
+ * chegue a acontecer.
+ *
+ * Só o **campo do ID** barra a conexão, porque é ele que põe a chave na URL. O formato da chave
+ * secreta vira aviso no `/status` e nada mais: travar a integração porque o Google mudou o
+ * prefixo `GOCSPX-` um dia seria derrubar uma instalação que funciona por causa de cosmético.
+ */
+const problemaQueImpedeConectar = (): string => {
+  if (PARECE_SEGREDO.test(clientId())) {
+    return (
+      'os dois valores estão trocados nos Secrets do AI Studio: GOOGLE_AGENDA_CLIENT_ID está com ' +
+      'a chave secreta (a que começa com GOCSPX-). O ID do cliente é o que termina em ' +
+      '.apps.googleusercontent.com'
+    );
+  }
+  if (!PARECE_ID.test(clientId())) {
+    return 'GOOGLE_AGENDA_CLIENT_ID não parece um ID de cliente — ele termina em .apps.googleusercontent.com';
+  }
+  return '';
+};
+
+/** O que o `/status` conta: o que barra, mais o formato da chave secreta. */
+const problemaNasChaves = (): string =>
+  problemaQueImpedeConectar() ||
+  (PARECE_SEGREDO.test(clientSecret())
+    ? ''
+    : 'GOOGLE_AGENDA_CLIENT_SECRET não parece uma chave secreta do Google — ela começa com GOCSPX-');
 const enderecoDeRetorno = () =>
   process.env.GOOGLE_AGENDA_REDIRECT_URI?.trim() || `${ENDERECO_DO_SITE}/api/google-agenda/retorno`;
 
@@ -401,7 +442,8 @@ export const criarRotasGoogleAgenda = (): Router => {
   });
 
   rotas.get('/status', (_req, res) => {
-    res.json({ configurado: configurado() });
+    const problema = configurado() ? problemaNasChaves() : '';
+    res.json({ configurado: configurado(), ...(problema ? { problema } : {}) });
   });
 
   rotas.get('/conectar', (req, res) => {
@@ -414,6 +456,13 @@ export const criarRotasGoogleAgenda = (): Router => {
       res.status(400).send('Pedido inválido.');
       return;
     }
+    // Depois da validação do estado, para o painel receber a explicação em vez de ficar esperando.
+    const problema = problemaQueImpedeConectar();
+    if (problema) {
+      res.status(503).type('html').send(paginaDeRetorno({ ok: false, estado, erro: problema }));
+      return;
+    }
+
     const calendario = typeof req.query.calendario === 'string' ? req.query.calendario.slice(0, 300) : '';
     const email = typeof req.query.email === 'string' ? req.query.email.trim().slice(0, 200) : '';
 

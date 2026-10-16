@@ -109,12 +109,43 @@ Secrets, ou o app não foi publicado depois de salvá-los.
 
 | O que aparece no painel | O que é | O que fazer |
 |---|---|---|
+| **os dois valores estão trocados nos Secrets** | O `GOOGLE_AGENDA_CLIENT_ID` está com a chave (`GOCSPX-…`) | Trocar os dois de lugar, publicar e **gerar chave nova** (ver abaixo) |
 | **a chave secreta que o servidor tem não é a deste ID de cliente** (`invalid_client`) | A tela do Google apareceu e devolveu o código, então o ID e o endereço de retorno estão certos — quem não bate é a chave secreta | Ver abaixo |
+| **Erro 401: invalid_client** na página do Google (`flowName=GeneralOAuthFlow`) | Erro do Google, não nosso: ele não reconheceu o ID que mandamos | ID errado, ou cliente criado há poucos minutos — ver abaixo |
 | **o código do Google venceu ou já tinha sido usado** (`invalid_grant`) | A janela ficou aberta tempo demais | Conectar de novo |
 | **a permissão do Google Agenda não foi marcada** | A caixa da agenda foi desmarcada na tela do Google | Conectar de novo deixando a caixa marcada |
 | **o Google não entregou a autorização permanente** | Raro; o Google não devolveu o *refresh token* | Conectar de novo |
 | **a integração ainda não foi configurada no servidor** | `/status` responde `configurado:false` | Secrets + publicar |
 | Nada acontece e a janela fica na tela | A janela não é do site publicado | Conectar **pelo site**, não pelo painel dentro do AI Studio |
+
+### Os dois no campo errado
+
+Se o `GOOGLE_AGENDA_CLIENT_ID` recebe a chave (`GOCSPX-…`) e o `GOOGLE_AGENDA_CLIENT_SECRET`
+recebe o ID, o Google responde **Erro 401: invalid_client** na página dele — o mesmo nome do erro
+do caso anterior, mas em outro momento (na tela de autorização, não na troca do código).
+
+O servidor agora barra isso antes de redirecionar, e a razão não é a mensagem: **o ID vai como
+parâmetro na URL da tela do Google.** Com os campos trocados, quem viaja na URL é a chave secreta
+— e aí ela fica no histórico do navegador e nos registros de quem estiver no caminho.
+
+> **Se isso já aconteceu, a chave vazou.** Troque-a no Google: *Clientes* → o cliente →
+> **Adicionar chave secreta**, use a nova nos Secrets e **apague a antiga**. Trocar os campos de
+> lugar não basta.
+
+Para conferir qual ID está no ar sem clicar em nada:
+
+```
+curl https://drakaroline-lavie.ai.studio/api/google-agenda/status
+```
+
+O campo `problema`, quando aparece, diz o que está errado nas duas variáveis.
+
+### Erro 401 na página do Google
+
+É erro do Google, antes de o nosso servidor entrar: ele não reconheceu o ID. Ou o ID está errado
+(ver a seção acima), ou o cliente foi criado agora — o próprio console avisa que **pode levar de
+cinco minutos a algumas horas** para a credencial nova valer. Nesse caso é só esperar e tentar de
+novo.
 
 ### `invalid_client`: o ID e a chave são de clientes diferentes
 

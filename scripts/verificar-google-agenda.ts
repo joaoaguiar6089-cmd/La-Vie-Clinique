@@ -233,7 +233,7 @@ console.log('\nLogin do painel');
 console.log('\nRotas do servidor');
 {
   process.env.GOOGLE_AGENDA_CLIENT_ID = 'cliente-teste.apps.googleusercontent.com';
-  process.env.GOOGLE_AGENDA_CLIENT_SECRET = 'segredo-teste';
+  process.env.GOOGLE_AGENDA_CLIENT_SECRET = 'GOCSPX-segredo-teste';
   const app = express();
   app.use('/api/google-agenda', criarRotasGoogleAgenda());
   const servidor = app.listen(0);
@@ -302,6 +302,29 @@ console.log('\nRotas do servidor');
     servidor.close();
   }
 
+  // Chaves trocadas de campo: o ID recebe a chave secreta. Tem de barrar **antes** de redirecionar
+  // — senão a chave vai como parâmetro na URL da tela do Google e vaza para o histórico.
+  process.env.GOOGLE_AGENDA_CLIENT_ID = 'GOCSPX-chave-no-campo-errado';
+  process.env.GOOGLE_AGENDA_CLIENT_SECRET = 'cliente-teste.apps.googleusercontent.com';
+  const trocadas = express();
+  trocadas.use('/api/google-agenda', criarRotasGoogleAgenda());
+  const servidor3 = trocadas.listen(0);
+  try {
+    const base3 = `http://127.0.0.1:${(servidor3.address() as AddressInfo).port}/api/google-agenda`;
+
+    const conectar = await fetch(`${base3}/conectar?estado=${crypto.randomUUID()}`, { redirect: 'manual' });
+    ok('chaves trocadas → não redireciona para o Google', conectar.status !== 302);
+    const pagina = await conectar.text();
+    ok('chaves trocadas → a página diz que estão trocadas', pagina.includes('trocados nos Secrets'));
+    ok('chaves trocadas → a chave secreta não aparece na resposta', !pagina.includes('GOCSPX-chave-no-campo-errado'));
+
+    const status3 = await (await fetch(`${base3}/status`)).json();
+    ok('status avisa do problema nas chaves', typeof status3.problema === 'string' && status3.problema.length > 0);
+  } finally {
+    servidor3.close();
+  }
+
+  delete process.env.GOOGLE_AGENDA_CLIENT_ID;
   delete process.env.GOOGLE_AGENDA_CLIENT_SECRET;
   const semChaves = express();
   semChaves.use('/api/google-agenda', criarRotasGoogleAgenda());
