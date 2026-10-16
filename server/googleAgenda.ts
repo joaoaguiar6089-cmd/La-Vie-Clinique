@@ -343,6 +343,30 @@ const decodificarEstado = (bruto: unknown): { estado: string; calendario: string
   }
 };
 
+/**
+ * O que deu errado na **troca do código pela autorização**, em português e com o que fazer.
+ *
+ * `invalid_client` é o caso que acontece de verdade, e é enganoso: a tela de consentimento
+ * apareceu e o Google devolveu o código, então o ID do cliente existe e o endereço de retorno
+ * bate. O que não bate é a chave secreta. Quase sempre uma destas três: a chave é de outro
+ * cliente OAuth (o do Firebase, criado sozinho, é o que mais confunde), a chave foi trocada no
+ * Google depois de copiada, ou a chave nova entrou nos Secrets sem publicar o app de novo — o
+ * servidor só recebe Secret ao publicar.
+ */
+const mensagemDaTrocaDaAutorizacao = (erro: string, status: number): string => {
+  if (erro === 'invalid_client') {
+    return (
+      'a chave secreta que o servidor tem não é a deste ID de cliente. Confira, nos Secrets do ' +
+      'AI Studio, se GOOGLE_AGENDA_CLIENT_ID e GOOGLE_AGENDA_CLIENT_SECRET são do mesmo cliente ' +
+      'OAuth, e publique o app de novo — Secret novo só chega ao servidor na publicação'
+    );
+  }
+  if (erro === 'invalid_grant') {
+    return 'o código do Google venceu ou já tinha sido usado. Tente conectar de novo';
+  }
+  return `o Google recusou a troca da autorização (${erro || status})`;
+};
+
 /** O código vem pela URL: só é mostrado se tiver cara de código do Google. */
 const mensagemDoErroDoGoogle = (erro: string): string =>
   erro === 'access_denied'
@@ -440,7 +464,7 @@ export const criarRotasGoogleAgenda = (): Router => {
       });
       const tokens: any = await troca.json().catch(() => ({}));
       if (!troca.ok) {
-        responder({ ok: false, erro: `o Google recusou a troca da autorização (${tokens?.error || troca.status})` });
+        responder({ ok: false, erro: mensagemDaTrocaDaAutorizacao(String(tokens?.error || ''), troca.status) });
         return;
       }
       // Na tela do Google dá para desmarcar a permissão da agenda e autorizar só o resto.
