@@ -346,11 +346,13 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
                 <p className="text-[11px] text-gray-600 leading-relaxed mb-2.5">{orientationImage.descricao}</p>
               )}
               <div className="border border-gray-200 rounded-sm bg-surface p-3 flex justify-center">
+                {/* Altura limitada para o bloco inteiro — título, descrição e imagem — caber numa
+                    folha A4 do PDF (~1047px úteis na largura de 794px da exportação). */}
                 <img
                   src={orientationImage.url}
                   alt={orientationImage.titulo || 'Imagem orientativa do procedimento'}
                   className="block w-full h-auto object-contain rounded-xs"
-                  style={{ maxHeight: '1040px' }}
+                  style={{ maxHeight: '860px' }}
                 />
               </div>
             </div>

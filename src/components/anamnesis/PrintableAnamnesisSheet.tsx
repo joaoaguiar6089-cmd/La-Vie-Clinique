@@ -274,7 +274,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
           </div>
 
           {/* Patient Info Box */}
-          <div className="bg-surface border border-gray-200 rounded-sm p-4 mb-6 grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+          <div className="bg-surface border border-gray-200 rounded-sm p-4 mb-6 grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs page-break-inside-avoid">
             <div className="sm:col-span-2">
               <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Paciente</span>
               <span className="text-sm font-bold text-ink block mt-0.5">{record.pacienteNome}</span>
@@ -378,7 +378,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                 </div>
 
                 {mapaCorporal && (
-                  <div className="flex gap-3 shrink-0">
+                  <div className="flex gap-3 shrink-0 page-break-inside-avoid">
                     {(['frente', 'costas'] as const).map((vista) => {
                       const daVista = mapaCorporal.areas.filter((a) => a.vista === vista);
                       const imagem =
@@ -419,7 +419,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
             <div className="mb-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">
                 {patientGeneralQuestions.map((q) => (
-                  <div key={q.id} className="py-1 border-b border-gray-100">
+                  <div key={q.id} className="py-1 border-b border-gray-100 page-break-inside-avoid">
                     <span className="text-[11px] text-gray-500 block leading-tight">{q.texto}</span>
                     <span className="text-xs font-bold text-ink block mt-0.5">
                       {displayValue(q, record.respostasGerais[q.id])}
@@ -459,7 +459,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                       key={q.id}
                       className={`p-2.5 rounded-xs border ${
                         isWarning ? 'bg-amber-50/40 border-amber-200/80' : 'bg-white border-gray-200/80'
-                      } text-xs`}
+                      } text-xs page-break-inside-avoid`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="font-medium text-gray-700 leading-snug">
@@ -478,7 +478,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
           )}
 
           {/* Respostas do Profissional — apenas para a equipe */}
-          {isStaff && (
+          {showMedicoSection && (
             <div className="mb-6 print:break-inside-avoid">
               <div className="flex items-center justify-between border-b border-indigo-300/60 pb-1.5 mb-3">
                 <div className="flex items-center gap-2">
@@ -502,7 +502,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                 {medicoRespondidas.map((q, idx) => (
                   <div
                     key={q.id}
-                    className="p-2.5 rounded-xs border bg-indigo-50/20 border-indigo-100 text-xs"
+                    className="p-2.5 rounded-xs border bg-indigo-50/20 border-indigo-100 text-xs page-break-inside-avoid"
                   >
                     <span className="font-medium text-gray-700 leading-snug block">
                       {idx + 1}. {q.texto}
@@ -533,12 +533,13 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
 
               <div className="border border-gray-200 rounded-sm bg-surface p-3 flex justify-center">
                 {/* Sem caixa de altura fixa: a imagem sai na proporção exata do arquivo enviado, só
-                    limitada em altura para não estourar uma página A4 no PDF. */}
+                    limitada em altura para o bloco inteiro — título, descrição e imagem — caber
+                    numa folha A4 do PDF (~1047px úteis na largura de 794px da exportação). */}
                 <img
                   src={orientationImage.url}
                   alt={orientationImage.titulo || 'Imagem orientativa do procedimento'}
                   className="block w-full h-auto object-contain rounded-xs"
-                  style={{ maxHeight: '1040px' }}
+                  style={{ maxHeight: '860px' }}
                 />
               </div>
             </div>
@@ -557,7 +558,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
               <div className="space-y-4">
                 <div className="flex flex-col items-center gap-4">
                   {(record.fotoModeloUrl || record.fotoModeloAnotadaUrl) && (
-                    <div className="w-full max-w-xl border border-gray-200 rounded-sm p-3.5 bg-surface flex flex-col justify-between">
+                    <div className="w-full max-w-xl border border-gray-200 rounded-sm p-3.5 bg-surface flex flex-col justify-between page-break-inside-avoid">
                       <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 mb-2">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-ink">
                           Referência / Mapeamento
@@ -589,7 +590,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                   )}
 
                   {(record.fotoPacienteUrl || record.fotoUrl) && (
-                    <div className="w-full max-w-xl border border-gray-200 rounded-sm p-3.5 bg-surface flex flex-col justify-between">
+                    <div className="w-full max-w-xl border border-gray-200 rounded-sm p-3.5 bg-surface flex flex-col justify-between page-break-inside-avoid">
                       <div>
                         <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 mb-2">
                           <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-950">
@@ -628,7 +629,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
 
           {/* Observações Finais — clínica apenas */}
           {isStaff && record.observacoesFinais && (
-            <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded-sm text-xs">
+            <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded-sm text-xs page-break-inside-avoid">
               <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-1">
                 Observações Finais & Orientações
               </span>
