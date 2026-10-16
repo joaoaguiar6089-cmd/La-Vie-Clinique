@@ -541,6 +541,26 @@ export interface QuoteItem {
    * pode mostrá-lo à concorrência.
    */
   produtosDoConsumo?: string[];
+  /**
+   * Item de **produto** do estoque, e não de procedimento: o que a clínica vende à cliente — o
+   * protetor solar, o frasco do home care. Nasce com `categoria: 'Produto'`, a quantidade 1 e o
+   * valor repassado à cliente do estoque.
+   *
+   * `valorTabela` continua sendo o total da linha (quantidade × valor unitário), para o cálculo,
+   * o desconto e os indicadores não precisarem saber que o item é produto. O custo do produto
+   * **nunca** entra aqui — este documento é lido sem login pelo link; ele vai para `quote_costs`.
+   */
+  produtoId?: string;
+  /** Unidade de uso do produto ("un", "ml", "frasco"), espelhada do estoque. Só no item de produto. */
+  unidade?: string;
+  /** Quantas unidades. Só no item de produto; ausente = 1. Diferente de `sessoes`, multiplica o valor. */
+  quantidade?: number;
+  /**
+   * O preço de uma unidade para a cliente, nasce do valor repassado do estoque. Gravado, e não
+   * derivado do total, porque o estoque tem preço de quatro casas (R$ 0,0035 o ml): arredondado
+   * para centavos e dividido de volta, ele viraria zero ao mudar a quantidade.
+   */
+  valorUnitario?: number;
 }
 
 export type PaymentMethod = 'pix' | 'cartao' | 'dinheiro';
@@ -715,13 +735,20 @@ export interface ReciboClinica {
   cnpj?: string;
 }
 
-/** Uma linha da tabela do recibo: o procedimento, quantas sessões e, se quiser, o valor dele. */
+/**
+ * Uma linha da tabela do recibo: o procedimento (ou o produto), quantas sessões (ou unidades) e,
+ * se quiser, o valor dele.
+ */
 export interface ReciboItem {
   id: string;
   titulo: string;
-  sessoes?: number; // Ausente = 1
-  valor?: number; // Opcional: sem ele, a coluna mostra "—" e vale só o total recebido
+  sessoes?: number; // Ausente = 1. Só no procedimento
+  valor?: number; // Total da linha. Opcional: sem ele, a coluna mostra "—" e vale só o total recebido
   procedureId?: string; // Origem no catálogo, quando veio de lá
+  /** Produto do estoque: a coluna Qtd. mostra a quantidade com a unidade ("2 frascos"). */
+  produtoId?: string;
+  unidade?: string;
+  quantidade?: number; // Ausente = 1. Só no produto
 }
 
 /**
@@ -756,6 +783,11 @@ export interface Recibo {
    * porque o mesmo procedimento tem protocolos diferentes de uma cliente para outra.
    */
   itens?: ReciboItem[];
+  /**
+   * Desconto em reais, abatido da soma dos itens — digitado à mão, ou vindo do orçamento (plano
+   * combinado + desconto da forma de pagamento). Informativo: o que vale é `valor`, o recebido.
+   */
+  desconto?: number;
   /** Legado: o "Referente a" de texto livre, de antes da lista. Lido como um item só. */
   referente?: string;
   /** Legado: só os recibos emitidos antes da lista têm; continua saindo no PDF deles. */

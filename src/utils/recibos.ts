@@ -1,6 +1,7 @@
 import { ClinicProfile, FormaDoRecibo, Quote, Recibo, ReciboClinica, ReciboItem } from '../types';
 import { formatBRL, formatCpf } from './formatters';
-import { calcularOrcamento, itemSessoes } from './quoteCalc';
+import { calcularOrcamento, itemEhProduto, itemQuantidade, itemSessoes, itemValorFinal } from './quoteCalc';
+import { quantidadeDoProduto } from './estoque';
 
 /**
  * As regras da nota de recibo que não dependem de tela nem de banco: os nomes das formas de
@@ -216,6 +217,23 @@ export const sessoesLegivel = (sessoes?: number): string => {
   return `${n} ${n === 1 ? 'sessão' : 'sessões'}`;
 };
 
+/** A coluna Qtd. da tabela: "5 sessões" no procedimento, "2 frascos" ou "50 U" no produto. */
+export const quantidadeLegivel = (item: ReciboItem): string =>
+  item.produtoId || item.unidade
+    ? quantidadeDoProduto(item.quantidade || 1, item.unidade || 'un')
+    : sessoesLegivel(item.sessoes);
+
+const centavos = (valor: number): number => Math.round((valor + Number.EPSILON) * 100) / 100;
+
+/**
+ * A soma dos itens, para as linhas "Subtotal" e "Desconto" da tabela — ou `null` quando algum item
+ * está sem valor: somar só parte dos itens daria um subtotal que não é o de nada.
+ */
+export const subtotalDoRecibo = (itens: Pick<ReciboItem, 'valor'>[]): number | null => {
+  if (itens.length === 0 || itens.some((i) => !(typeof i.valor === 'number' && i.valor > 0))) return null;
+  return centavos(itens.reduce((soma, i) => soma + (i.valor || 0), 0));
+};
+
 /** "Botox, Preenchimento labial" — a linha curta dos cartões da lista. */
 export const resumoDosItens = (r: Pick<Recibo, 'itens' | 'referente'>): string =>
   itensDoRecibo(r)
@@ -254,20 +272,27 @@ export const montarClinicaDoRecibo = (clinic: ClinicProfile): ReciboClinica => (
 // ==========================================
 
 /**
- * Os procedimentos do orçamento como linhas do recibo: o nome e as sessões. O valor fica em
- * branco de propósito — o orçamento tem desconto de item, de plano e de forma de pagamento, e
- * repartir o que entrou entre os itens seria inventar número.
+ * Os itens do orçamento como linhas do recibo: o nome, as sessões (ou a quantidade, no produto) e
+ * o valor que o item tinha no orçamento — já com o desconto dele. O que o orçamento abateu do
+ * total inteiro (plano combinado, desconto da forma de pagamento) vai para o desconto do recibo:
+ * ver `pagamentosSugeridos`.
  */
 export const itensDoOrcamento = (quote: Pick<Quote, 'itens'>): ReciboItem[] =>
   quote.itens
     .filter((i) => i.titulo.trim())
     .slice(0, MAXIMO_DE_ITENS)
-    .map((i) => ({
-      id: crypto.randomUUID(),
-      titulo: i.titulo.trim(),
-      sessoes: itemSessoes(i),
-      procedureId: i.procedureId,
-    }));
+    .map((i) => {
+      const valor = itemValorFinal(i);
+      const base = {
+        id: crypto.randomUUID(),
+        titulo: i.titulo.trim(),
+        valor: valor > 0 ? valor : undefined,
+        procedureId: i.procedureId,
+      };
+      return itemEhProduto(i)
+        ? { ...base, produtoId: i.produtoId, unidade: i.unidade || 'un', quantidade: itemQuantidade(i) }
+        : { ...base, sessoes: itemSessoes(i) };
+    });
 
 /** Uma forma de pagamento aceita pelo orçamento, já como o recibo a registraria. */
 export interface PagamentoSugerido {
@@ -276,11 +301,16 @@ export interface PagamentoSugerido {
   forma: FormaDoRecibo;
   parcelas: number;
   valor: number;
+  /** O que o orçamento abateu da soma dos itens nesta forma: plano combinado + o desconto dela. */
+  desconto: number;
 }
 
 /**
  * As formas que o orçamento aceitava, cada uma com o valor que ela cobra — o atalho "como a
  * cliente pagou?" do formulário. A primeira é a principal, que é também o total do orçamento.
+ *
+ * Cada uma traz também o desconto: os itens do recibo nascem com o valor de cada um no orçamento,
+ * e a soma deles menos este desconto é o valor da forma — o Pix com 10% abate mais que o cartão.
  *
  * Cartão do orçamento vira crédito: o orçamento não distingue débito, e é o crédito que parcela.
  */
@@ -294,6 +324,7 @@ export const pagamentosSugeridos = (quote: Quote): PagamentoSugerido[] => {
       forma,
       parcelas,
       valor: o.valorFinal,
+      desconto: centavos(totais.descontoCombinadoValor + o.descontoValor),
       rotulo: `${rotuloCurtoDoPagamento({ forma, parcelas })} · ${formatBRL(o.valorFinal)}`,
     };
   });
@@ -339,8 +370,10 @@ export const normalizarRecibo = (bruto: Partial<Recibo> & { id: string }): Recib
           titulo: String(i.titulo || ''),
           sessoes: Number(i.sessoes) > 0 ? Number(i.sessoes) : undefined,
           valor: typeof i.valor === 'number' && i.valor > 0 ? i.valor : undefined,
+          quantidade: Number(i.quantidade) > 0 ? Number(i.quantidade) : undefined,
         }))
     : undefined,
+  desconto: typeof bruto.desconto === 'number' && bruto.desconto > 0 ? bruto.desconto : undefined,
   clinica: bruto.clinica && typeof bruto.clinica === 'object' ? bruto.clinica : { name: 'La Vie Clinique' },
   createdAt: String(bruto.createdAt || ''),
 });

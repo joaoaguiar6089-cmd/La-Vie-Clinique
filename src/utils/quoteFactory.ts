@@ -2,6 +2,7 @@ import {
   ClinicProfile,
   PaymentMethod,
   Procedure,
+  ProdutoDeEstoque,
   Professional,
   QuoteClinicSnapshot,
   QuoteItem,
@@ -92,6 +93,57 @@ export const montarItemAvulso = (): QuoteItem => ({
   sessoes: 1,
   detalhes: [],
 });
+
+/** A categoria com que o item de produto sai no PDF, no lugar da do procedimento. */
+export const CATEGORIA_DO_PRODUTO = "Produto";
+
+const centavos = (valor: number): number => Math.round((valor + Number.EPSILON) * 100) / 100;
+
+const positivo = (valor: unknown): number =>
+  typeof valor === "number" && isFinite(valor) && valor > 0 ? valor : 0;
+
+/**
+ * Item de orçamento a partir de um produto do estoque: o nome, uma unidade e o valor repassado à
+ * cliente. Tudo editável. Só o preço de venda entra — o custo do produto fica no estoque, porque
+ * este documento é lido sem login pelo link.
+ */
+export const montarItemDoProduto = (
+  produto: Pick<ProdutoDeEstoque, "id" | "nome" | "unidade" | "valorCliente">
+): QuoteItem => {
+  const unitario = positivo(produto.valorCliente);
+  return {
+    id: novoId("qi"),
+    produtoId: produto.id,
+    categoria: CATEGORIA_DO_PRODUTO,
+    titulo: produto.nome,
+    unidade: (produto.unidade || "un").trim(),
+    quantidade: 1,
+    valorUnitario: unitario,
+    valorTabela: centavos(unitario),
+    temDesconto: false,
+    maisDeUmaSessao: false,
+    sessoes: 1,
+    detalhes: [],
+  };
+};
+
+/**
+ * O item de produto com outra quantidade ou outro valor unitário — o total da linha
+ * (`valorTabela`) é refeito na mesma hora, e o desconto do item continua valendo sobre ele.
+ */
+export const ajustarItemDoProduto = (
+  item: QuoteItem,
+  mudanca: { quantidade?: number; valorUnitario?: number }
+): QuoteItem => {
+  const quantidade = mudanca.quantidade ?? item.quantidade ?? 1;
+  const valorUnitario = mudanca.valorUnitario ?? item.valorUnitario ?? 0;
+  return {
+    ...item,
+    quantidade,
+    valorUnitario,
+    valorTabela: centavos(positivo(quantidade) * positivo(valorUnitario)),
+  };
+};
 
 /** Nova linha de forma de pagamento, com os valores padrão do design (sem juros em todas as parcelas). */
 export const criarOpcaoPagamento = (forma: PaymentMethod = "pix"): QuotePaymentOption => ({

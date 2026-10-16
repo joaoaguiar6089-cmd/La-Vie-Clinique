@@ -29,7 +29,8 @@ import {
   formatCnpj,
   itensDoRecibo,
   partesDoNomeDaClinica,
-  sessoesLegivel,
+  quantidadeLegivel,
+  subtotalDoRecibo,
   valorPorExtenso,
 } from '../../utils/recibos';
 import { formatBRL } from '../../utils/formatters';
@@ -185,9 +186,14 @@ const Destaque: React.FC<{ recibo: Recibo; densidade: Densidade }> = ({ recibo, 
   );
 };
 
-/** A frase de abertura e, logo abaixo, a tabela do que foi pago com o total recebido. */
+/**
+ * A frase de abertura e, logo abaixo, a tabela do que foi pago com o total recebido. Com desconto,
+ * o total vem precedido do subtotal dos itens (só quando todos têm valor) e do desconto.
+ */
 const OQueFoiPago: React.FC<{ recibo: Recibo; densidade: Densidade }> = ({ recibo, densidade }) => {
   const itens = itensDoRecibo(recibo);
+  const desconto = recibo.desconto && recibo.desconto > 0 ? recibo.desconto : 0;
+  const subtotal = desconto > 0 ? subtotalDoRecibo(itens) : null;
   const celula: React.CSSProperties =
     densidade === 0
       ? { padding: '10px 18px', fontSize: 11.5, lineHeight: 1.35 }
@@ -241,13 +247,40 @@ const OQueFoiPago: React.FC<{ recibo: Recibo; densidade: Densidade }> = ({ recib
           >
             <div style={{ ...celula, flex: 1, minWidth: 0, color: PRETO }}>{item.titulo}</div>
             <div style={{ ...celula, width: COLUNA_QTD, textAlign: 'center', color: CINZA, fontSize: 10.5 }}>
-              {sessoesLegivel(item.sessoes)}
+              {quantidadeLegivel(item)}
             </div>
             <div style={{ ...celula, width: COLUNA_VALOR, textAlign: 'right', color: PRETO }}>
               {item.valor ? formatBRL(item.valor) : '—'}
             </div>
           </div>
         ))}
+
+        {[
+          subtotal !== null ? { rotulo: 'Subtotal', valor: formatBRL(subtotal) } : null,
+          desconto > 0 ? { rotulo: 'Desconto', valor: `− ${formatBRL(desconto)}` } : null,
+        ]
+          .filter((l): l is { rotulo: string; valor: string } => !!l)
+          .map((linha) => (
+            <div
+              key={linha.rotulo}
+              style={{ display: 'flex', alignItems: 'center', background: '#FFFFFF', borderBottom: `1px solid ${HAIRLINE}` }}
+            >
+              <div
+                style={{
+                  ...celula,
+                  flex: 1,
+                  fontSize: 10,
+                  letterSpacing: '.04em',
+                  textTransform: 'uppercase',
+                  color: CINZA,
+                  textAlign: 'right',
+                }}
+              >
+                {linha.rotulo}
+              </div>
+              <div style={{ ...celula, width: COLUNA_VALOR, textAlign: 'right', color: PRETO }}>{linha.valor}</div>
+            </div>
+          ))}
 
         <div
           style={{

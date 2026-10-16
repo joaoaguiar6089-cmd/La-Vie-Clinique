@@ -16,12 +16,15 @@ import { formatBRL } from '../../utils/formatters';
 import {
   calcularOrcamento,
   itemDescontoPercentual,
+  itemEhProduto,
+  itemQuantidade,
   itemSessoes,
   itemTemDescontoVisivel,
   itemValorFinal,
   NOME_FORMA_PAGAMENTO,
   resolveQuoteStatus,
 } from '../../utils/quoteCalc';
+import { quantidadeDoProduto } from '../../utils/estoque';
 import { SNAPSHOT_CLINICA_PADRAO } from '../../utils/quoteFactory';
 import { QuotePreviewModal } from './QuotePreviewModal';
 
@@ -212,7 +215,11 @@ export const PublicQuoteEntry: React.FC = () => {
             const sessoes = itemSessoes(item);
             const notas = [
               comDesconto ? `desconto de ${Math.round(itemDescontoPercentual(item))}%` : null,
-              sessoes > 1 ? `${sessoes} sessões` : null,
+              itemEhProduto(item)
+                ? quantidadeDoProduto(itemQuantidade(item), item.unidade || 'un')
+                : sessoes > 1
+                  ? `${sessoes} sessões`
+                  : null,
             ].filter(Boolean);
 
             return (

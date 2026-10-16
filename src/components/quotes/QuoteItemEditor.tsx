@@ -9,8 +9,16 @@ import {
 } from 'lucide-react';
 import { ProdutoDeEstoque, Professional, QuoteItem } from '../../types';
 import { formatBRL } from '../../utils/formatters';
-import { itemValorFinal, itemDescontoPercentual, itemSessoes } from '../../utils/quoteCalc';
-import { LinhaDeMaterial, arredondar, totaisDosMateriais } from '../../utils/estoque';
+import {
+  itemValorFinal,
+  itemDescontoPercentual,
+  itemEhProduto,
+  itemQuantidade,
+  itemSessoes,
+  itemValorUnitario,
+} from '../../utils/quoteCalc';
+import { ajustarItemDoProduto } from '../../utils/quoteFactory';
+import { LinhaDeMaterial, arredondar, numeroValido, totaisDosMateriais } from '../../utils/estoque';
 import { EditorDeMateriais } from '../estoque/EditorDeMateriais';
 
 interface QuoteItemEditorProps {
@@ -55,6 +63,9 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
   // O item já pode nascer com o número do cadastro (10 sessões de laser) e a profissional só ajusta.
   // Guardar o texto, e não forçar `>= 2` a cada tecla, é o que deixa apagar o "10" para digitar "12".
   const [sessoesStr, setSessoesStr] = useState(numeroDigitado(item.sessoes));
+  // Item de produto: quantidade e valor de uma unidade; o total da linha sai dos dois.
+  const [quantidadeStr, setQuantidadeStr] = useState(numeroDigitado(item.quantidade));
+  const [unitarioStr, setUnitarioStr] = useState(numeroDigitado(itemValorUnitario(item)));
 
   // O campo guarda o texto digitado, e não acompanha o valor sozinho: ao desligar o consumo, o
   // valor volta ao do catálogo, e o campo precisa mostrar esse — não o que foi digitado antes.
@@ -63,7 +74,8 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.calculadoPorConsumo]);
 
-  const porConsumo = !!item.calculadoPorConsumo;
+  const produto = itemEhProduto(item);
+  const porConsumo = !produto && !!item.calculadoPorConsumo;
   const consumo = totaisDosMateriais(linhasDoConsumo);
   const margemDoConsumo = arredondar(consumo.valorCliente - consumo.custo);
   const sessoes = itemSessoes(item);
@@ -89,19 +101,21 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
             type="text"
             value={item.titulo}
             onChange={(e) => patch({ titulo: e.target.value })}
-            placeholder="Nome do procedimento"
+            placeholder={produto ? 'Nome do produto' : 'Nome do procedimento'}
             className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
           />
           {/* O orçamento personalizado: o valor sai do que o procedimento vai gastar nesta cliente. */}
-          <label className="mt-2 inline-flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={porConsumo}
-              onChange={(e) => onAlternarConsumo(e.target.checked)}
-              className="w-3.5 h-3.5 accent-brand"
-            />
-            <span className="text-xs font-medium text-ink">Calcular por consumo de produto</span>
-          </label>
+          {!produto && (
+            <label className="mt-2 inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={porConsumo}
+                onChange={(e) => onAlternarConsumo(e.target.checked)}
+                className="w-3.5 h-3.5 accent-brand"
+              />
+              <span className="text-xs font-medium text-ink">Calcular por consumo de produto</span>
+            </label>
+          )}
         </div>
 
         <div className="flex items-center gap-0.5 pt-4 shrink-0">
@@ -134,56 +148,102 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
         </div>
       </div>
 
-      {/* Profissional e valor */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-body font-medium text-ink mb-1">
-            Profissional deste procedimento
-          </label>
-          <select
-            value={item.professionalId || ''}
-            onChange={(e) => {
-              const id = e.target.value || undefined;
-              patch({
-                professionalId: id,
-                profissionalNome: professionals.find((p) => p.id === id)?.name,
-              });
-            }}
-            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
-          >
-            <option value="">Sem profissional definida</option>
-            {professionals.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {porConsumo ? (
+      {/* Produto: quantidade × valor de uma unidade. Sem profissional — ninguém "realiza" um produto. */}
+      {produto ? (
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <span className="block text-body font-medium text-ink mb-1">Valor pelo consumo</span>
-            <p className="w-full px-3 py-1.5 rounded-sm border border-line bg-surface-2 text-sm font-semibold text-ink tabular-nums">
-              {formatBRL(item.valorTabela)}
-            </p>
-          </div>
-        ) : (
-          <div>
-            <label className="block text-body font-medium text-ink mb-1">Valor de tabela</label>
+            <label className="block text-body font-medium text-ink mb-1" htmlFor={`item-qtd-${item.id}`}>
+              Quantidade ({item.unidade || 'un'})
+            </label>
             <input
+              id={`item-qtd-${item.id}`}
               type="number"
               min="0"
               step="0.01"
-              value={valorTabelaStr}
+              inputMode="decimal"
+              value={quantidadeStr}
               onChange={(e) => {
-                setValorTabelaStr(e.target.value);
-                patch({ valorTabela: e.target.value === '' ? 0 : Number(e.target.value) });
+                setQuantidadeStr(e.target.value);
+                const n = numeroValido(e.target.value);
+                if (n > 0) onChange(ajustarItemDoProduto(item, { quantidade: n }));
+              }}
+              onBlur={() => setQuantidadeStr(numeroDigitado(itemQuantidade(item)))}
+              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
+            />
+          </div>
+          <div>
+            <label className="block text-body font-medium text-ink mb-1" htmlFor={`item-unitario-${item.id}`}>
+              Valor por {item.unidade || 'un'}
+            </label>
+            <input
+              id={`item-unitario-${item.id}`}
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={unitarioStr}
+              onChange={(e) => {
+                setUnitarioStr(e.target.value);
+                onChange(ajustarItemDoProduto(item, { valorUnitario: numeroValido(e.target.value) }));
               }}
               className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
             />
           </div>
-        )}
-      </div>
+          <p className="col-span-2 -mt-1 text-body text-muted tabular-nums">
+            Total da linha: <strong className="text-ink">{formatBRL(item.valorTabela)}</strong>
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-body font-medium text-ink mb-1">
+              Profissional deste procedimento
+            </label>
+            <select
+              value={item.professionalId || ''}
+              onChange={(e) => {
+                const id = e.target.value || undefined;
+                patch({
+                  professionalId: id,
+                  profissionalNome: professionals.find((p) => p.id === id)?.name,
+                });
+              }}
+              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
+            >
+              <option value="">Sem profissional definida</option>
+              {professionals.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {porConsumo ? (
+            <div>
+              <span className="block text-body font-medium text-ink mb-1">Valor pelo consumo</span>
+              <p className="w-full px-3 py-1.5 rounded-sm border border-line bg-surface-2 text-sm font-semibold text-ink tabular-nums">
+                {formatBRL(item.valorTabela)}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-body font-medium text-ink mb-1">Valor de tabela</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={valorTabelaStr}
+                onChange={(e) => {
+                  setValorTabelaStr(e.target.value);
+                  patch({ valorTabela: e.target.value === '' ? 0 : Number(e.target.value) });
+                }}
+                className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Desconto e sessões */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -234,43 +294,45 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
           )}
         </div>
 
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={item.maisDeUmaSessao}
-              onChange={(e) => {
-                const sessoes = e.target.checked ? Math.max(2, item.sessoes || 2) : 1;
-                setSessoesStr(numeroDigitado(sessoes));
-                patch({ maisDeUmaSessao: e.target.checked, sessoes });
-              }}
-              className="w-3.5 h-3.5 accent-brand"
-            />
-            <span className="text-xs font-medium text-ink">Mais de 1 sessão</span>
-          </label>
-
-          {item.maisDeUmaSessao && (
-            <div>
+        {!produto && (
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
-                type="number"
-                min="2"
-                step="1"
-                value={sessoesStr}
+                type="checkbox"
+                checked={item.maisDeUmaSessao}
                 onChange={(e) => {
-                  setSessoesStr(e.target.value);
-                  // Só grava o que já é um número válido; o resto espera a saída do campo.
-                  const n = Math.floor(Number(e.target.value));
-                  if (n >= 2) patch({ sessoes: n });
+                  const sessoes = e.target.checked ? Math.max(2, item.sessoes || 2) : 1;
+                  setSessoesStr(numeroDigitado(sessoes));
+                  patch({ maisDeUmaSessao: e.target.checked, sessoes });
                 }}
-                onBlur={() => setSessoesStr(numeroDigitado(item.sessoes))}
-                className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
+                className="w-3.5 h-3.5 accent-brand"
               />
-              <p className="mt-1 text-body text-gray-400">
-                Informativo no PDF — não multiplica o valor
-              </p>
-            </div>
-          )}
-        </div>
+              <span className="text-xs font-medium text-ink">Mais de 1 sessão</span>
+            </label>
+
+            {item.maisDeUmaSessao && (
+              <div>
+                <input
+                  type="number"
+                  min="2"
+                  step="1"
+                  value={sessoesStr}
+                  onChange={(e) => {
+                    setSessoesStr(e.target.value);
+                    // Só grava o que já é um número válido; o resto espera a saída do campo.
+                    const n = Math.floor(Number(e.target.value));
+                    if (n >= 2) patch({ sessoes: n });
+                  }}
+                  onBlur={() => setSessoesStr(numeroDigitado(item.sessoes))}
+                  className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
+                />
+                <p className="mt-1 text-body text-gray-400">
+                  Informativo no PDF — não multiplica o valor
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/*

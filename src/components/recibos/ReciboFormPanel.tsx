@@ -5,6 +5,7 @@ import {
   FormaDoRecibo,
   Patient,
   Procedure,
+  ProdutoDeEstoque,
   Quote,
   QuoteComprovante,
   Recibo,
@@ -22,6 +23,7 @@ import {
   montarClinicaDoRecibo,
   pagamentosSugeridos,
   parcelasDoRecibo,
+  subtotalDoRecibo,
 } from '../../utils/recibos';
 import { sessoesDoProcedimento } from '../../utils/quoteFactory';
 import {
@@ -34,6 +36,7 @@ import {
   criarRecibo,
   marcarQuoteComoPago,
   savePatient,
+  subscribeToProdutosDeEstoque,
 } from '../../services/databaseService';
 import { SidePanel } from '../common/SidePanel';
 import {
@@ -49,6 +52,7 @@ import {
 import { PatientSearchSelect } from '../quotes/PatientSearchSelect';
 import { ComprovanteAnexado, EscolhaDeComprovante } from '../quotes/CampoDeComprovante';
 import { ProcedureSearchAdd } from '../quotes/ProcedureSearchAdd';
+import { ProdutoSearchAdd } from '../quotes/ProdutoSearchAdd';
 
 const FORMAS: { id: FormaDoRecibo; rotulo: string }[] = [
   { id: 'pix', rotulo: 'Pix' },
@@ -66,6 +70,12 @@ const valorDoCampo = (valor?: number): string =>
 
 const numeroDoCampo = (texto: string): number => Number(String(texto).replace(',', '.')) || 0;
 
+const centavos = (valor: number): number => Math.round((valor + Number.EPSILON) * 100) / 100;
+
+/** O preço de catálogo, como o orçamento usa: o promocional, quando há. */
+const precoDoCatalogo = (proc: Procedure): number =>
+  proc.promotionalPrice && proc.promotionalPrice > 0 ? proc.promotionalPrice : proc.price;
+
 /** Uma linha da lista no formulário — os números como texto, do jeito que os campos devolvem. */
 interface ItemEmEdicao {
   id: string;
@@ -73,17 +83,39 @@ interface ItemEmEdicao {
   sessoes: string;
   valor: string;
   procedureId?: string;
+  /** Linha de produto do estoque: a quantidade (texto do campo) e a unidade. */
+  produtoId?: string;
+  unidade?: string;
+  quantidade: string;
+  /**
+   * O preço de uma unidade, só na tela: é o que permite mudar a quantidade e o valor acompanhar.
+   * Nasce do estoque, ou do valor ÷ quantidade da linha que já existia.
+   */
+  valorUnitario?: number;
 }
 
-const paraEdicao = (i: ReciboItem): ItemEmEdicao => ({
-  id: i.id,
-  titulo: i.titulo,
-  sessoes: String(i.sessoes || 1),
-  valor: valorDoCampo(i.valor),
-  procedureId: i.procedureId,
-});
+const paraEdicao = (i: ReciboItem): ItemEmEdicao => {
+  const quantidade = i.quantidade && i.quantidade > 0 ? i.quantidade : 1;
+  return {
+    id: i.id,
+    titulo: i.titulo,
+    sessoes: String(i.sessoes || 1),
+    valor: valorDoCampo(i.valor),
+    procedureId: i.procedureId,
+    produtoId: i.produtoId,
+    unidade: i.unidade,
+    quantidade: String(quantidade),
+    valorUnitario: i.produtoId && i.valor ? i.valor / quantidade : undefined,
+  };
+};
 
-const itemEmBranco = (): ItemEmEdicao => ({ id: crypto.randomUUID(), titulo: '', sessoes: '1', valor: '' });
+const itemEmBranco = (): ItemEmEdicao => ({
+  id: crypto.randomUUID(),
+  titulo: '',
+  sessoes: '1',
+  valor: '',
+  quantidade: '1',
+});
 
 export interface ReciboFormPanelProps {
   aberto: boolean;
@@ -138,10 +170,14 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
   const [forma, setForma] = useState<FormaDoRecibo>('pix');
   const [parcelas, setParcelas] = useState(1);
   const [itens, setItens] = useState<ItemEmEdicao[]>([itemEmBranco()]);
+  const [desconto, setDesconto] = useState('');
+  const [produtos, setProdutos] = useState<ProdutoDeEstoque[]>([]);
   /** O comprovante que continua no recibo — o já gravado, até ser trocado ou removido. */
   const [comprovanteAtual, setComprovanteAtual] = useState<QuoteComprovante | undefined>(undefined);
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [erros, setErros] = useState<Partial<Record<'nome' | 'cpf' | 'data' | 'valor' | 'itens', string>>>({});
+  const [erros, setErros] = useState<
+    Partial<Record<'nome' | 'cpf' | 'data' | 'valor' | 'itens' | 'desconto', string>>
+  >({});
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -154,6 +190,12 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
     orcamento,
     editando,
   ]);
+
+  // Os produtos do estoque, para o "+ Adicionar produto" — só enquanto o formulário está aberto.
+  useEffect(() => {
+    if (!aberto) return;
+    return subscribeToProdutosDeEstoque(setProdutos);
+  }, [aberto]);
 
   // Cada abertura começa do que foi pedido — nunca do que sobrou da anterior.
   useEffect(() => {
@@ -174,6 +216,7 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
       setParcelas(parcelasDoRecibo(recibo));
       const doRecibo = itensDoRecibo(recibo).map(paraEdicao);
       setItens(doRecibo.length > 0 ? doRecibo : [itemEmBranco()]);
+      setDesconto(valorDoCampo(recibo.desconto));
       setComprovanteAtual(recibo.comprovante);
       return;
     }
@@ -193,6 +236,8 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
     setParcelas(principal?.parcelas || 1);
     const doOrcamento = orcamento ? itensDoOrcamento(orcamento).map(paraEdicao) : [];
     setItens(doOrcamento.length > 0 ? doOrcamento : [itemEmBranco()]);
+    // Os itens chegam com o valor de cada um no orçamento; o que ele abateu do total vem aqui.
+    setDesconto(valorDoCampo(principal?.desconto));
     setComprovanteAtual(undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto, recibo?.id, orcamento?.id]);
@@ -201,17 +246,38 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
   const parcelado = forma === 'credito' && parcelas > 1;
 
   const itensPreenchidos = itens.filter((i) => i.titulo.trim());
-  /** Todos os itens com valor e a soma longe do recebido: aviso, sem impedir — pode ser de propósito. */
-  const somaDosItens = itensPreenchidos.reduce((soma, i) => soma + numeroDoCampo(i.valor), 0);
+  const descontoNumero = numeroDoCampo(desconto);
+  /** A soma dos itens — só quando todos têm valor; com algum em branco, não é a soma de nada. */
+  const subtotal = subtotalDoRecibo(itensPreenchidos.map((i) => ({ valor: numeroDoCampo(i.valor) })));
+  const totalDosItens = subtotal !== null ? centavos(subtotal - Math.max(0, descontoNumero)) : null;
+  /** Subtotal menos desconto longe do recebido: aviso, sem impedir — pode ser de propósito (a entrada). */
   const somaDiferente =
-    itensPreenchidos.length > 0 &&
-    itensPreenchidos.every((i) => numeroDoCampo(i.valor) > 0) &&
-    valorNumero > 0 &&
-    Math.abs(somaDosItens - valorNumero) >= 0.01;
+    totalDosItens !== null && totalDosItens > 0 && Math.abs(totalDosItens - valorNumero) >= 0.01;
 
   const mudarItem = (id: string, patch: Partial<ItemEmEdicao>) => {
     setItens((atual) => atual.map((i) => (i.id === id ? { ...i, ...patch } : i)));
     setErros((e) => ({ ...e, itens: undefined }));
+  };
+
+  /** No produto, mudar a quantidade refaz o valor da linha pelo preço de uma unidade. */
+  const mudarQuantidade = (item: ItemEmEdicao, texto: string) => {
+    const n = numeroDoCampo(texto);
+    const anterior = numeroDoCampo(item.quantidade) || 1;
+    const unitario = item.valorUnitario ?? (numeroDoCampo(item.valor) > 0 ? numeroDoCampo(item.valor) / anterior : 0);
+    mudarItem(item.id, {
+      quantidade: texto,
+      valorUnitario: unitario,
+      ...(n > 0 && unitario > 0 ? { valor: valorDoCampo(centavos(n * unitario)) } : {}),
+    });
+  };
+
+  /** Valor digitado na linha do produto: passa a ser ele o preço de uma unidade dali em diante. */
+  const mudarValor = (item: ItemEmEdicao, texto: string) => {
+    const quantidade = numeroDoCampo(item.quantidade) || 1;
+    mudarItem(item.id, {
+      valor: texto,
+      valorUnitario: item.produtoId ? numeroDoCampo(texto) / quantidade : undefined,
+    });
   };
 
   const removerItem = (id: string) =>
@@ -220,15 +286,8 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
       return resto.length > 0 ? resto : [itemEmBranco()];
     });
 
-  /** Do catálogo: ocupa a linha em branco que estiver sobrando, ou entra no fim. */
-  const adicionarDoCatalogo = (proc: Procedure) => {
-    const novo: ItemEmEdicao = {
-      id: crypto.randomUUID(),
-      titulo: proc.title,
-      sessoes: String(sessoesDoProcedimento(proc)),
-      valor: '',
-      procedureId: proc.id,
-    };
+  /** Ocupa a linha em branco que estiver sobrando, ou entra no fim. */
+  const adicionarLinha = (novo: ItemEmEdicao) => {
     setItens((atual) => {
       const emBranco = atual.findIndex((i) => !i.titulo.trim());
       if (emBranco >= 0) return atual.map((i, n) => (n === emBranco ? novo : i));
@@ -236,6 +295,30 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
     });
     setErros((e) => ({ ...e, itens: undefined }));
   };
+
+  /** Do catálogo, com o preço dele — editável, como tudo na linha. */
+  const adicionarDoCatalogo = (proc: Procedure) =>
+    adicionarLinha({
+      id: crypto.randomUUID(),
+      titulo: proc.title,
+      sessoes: String(sessoesDoProcedimento(proc)),
+      valor: valorDoCampo(precoDoCatalogo(proc)),
+      procedureId: proc.id,
+      quantidade: '1',
+    });
+
+  /** Do estoque: uma unidade, pelo valor repassado à cliente. */
+  const adicionarProduto = (produto: ProdutoDeEstoque) =>
+    adicionarLinha({
+      id: crypto.randomUUID(),
+      titulo: produto.nome,
+      sessoes: '1',
+      valor: valorDoCampo(centavos(produto.valorCliente)),
+      produtoId: produto.id,
+      unidade: produto.unidade || 'un',
+      quantidade: '1',
+      valorUnitario: produto.valorCliente > 0 ? produto.valorCliente : undefined,
+    });
 
   const escolherPaciente = (escolha: { id?: string; nome: string; contato?: string }) => {
     setPacienteId(escolha.id);
@@ -263,7 +346,9 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
     if (!data) novos.data = 'Informe a data do pagamento.';
     else if (data > hojeISO()) novos.data = 'O recibo é de um pagamento que já aconteceu.';
     if (!(valorNumero > 0)) novos.valor = 'Informe o valor recebido.';
-    if (itensPreenchidos.length === 0) novos.itens = 'Informe ao menos um procedimento.';
+    if (itensPreenchidos.length === 0) novos.itens = 'Informe ao menos um procedimento ou produto.';
+    if (descontoNumero < 0) novos.desconto = 'O desconto não pode ser negativo.';
+    else if (subtotal !== null && descontoNumero > subtotal) novos.desconto = 'O desconto passa da soma dos itens.';
     setErros(novos);
     return Object.keys(novos).length === 0;
   };
@@ -290,14 +375,22 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
         pacienteContato: pacienteContato || undefined,
         itens: itensPreenchidos.map((i) => {
           const valorDoItem = numeroDoCampo(i.valor);
-          return {
+          const comum = {
             id: i.id,
             titulo: i.titulo.trim(),
-            sessoes: Math.max(1, Math.round(numeroDoCampo(i.sessoes) || 1)),
-            valor: valorDoItem > 0 ? Math.round(valorDoItem * 100) / 100 : undefined,
+            valor: valorDoItem > 0 ? centavos(valorDoItem) : undefined,
             procedureId: i.procedureId,
           };
+          return i.produtoId
+            ? {
+                ...comum,
+                produtoId: i.produtoId,
+                unidade: i.unidade || 'un',
+                quantidade: numeroDoCampo(i.quantidade) > 0 ? numeroDoCampo(i.quantidade) : 1,
+              }
+            : { ...comum, sessoes: Math.max(1, Math.round(numeroDoCampo(i.sessoes) || 1)) };
         }),
+        desconto: descontoNumero > 0 ? centavos(descontoNumero) : undefined,
         // O "Referente a" de texto virou a lista; a observação dos recibos antigos fica como estava.
         referente: undefined,
         observacoes: recibo?.observacoes,
@@ -448,7 +541,8 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
                         setForma(s.forma);
                         setParcelas(s.parcelas);
                         setValor(valorDoCampo(s.valor));
-                        setErros((x) => ({ ...x, valor: undefined }));
+                        setDesconto(valorDoCampo(s.desconto));
+                        setErros((x) => ({ ...x, valor: undefined, desconto: undefined }));
                       }}
                       className={`h-10 px-4 rounded-full text-[14px] font-semibold tabular-nums transition-colors ${
                         ativa ? 'bg-ink text-white' : 'bg-line-soft text-ink hover:bg-[#E6E2DA]'
@@ -460,7 +554,7 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
                 })}
               </div>
               <p className="mt-1.5 px-1 text-[13px] text-ink-soft">
-                As formas que o orçamento aceitava — um toque preenche a forma e o valor.
+                As formas que o orçamento aceitava — um toque preenche a forma, o valor e o desconto.
               </p>
             </div>
           )}
@@ -551,10 +645,10 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
         {/* O que foi pago — a tabela do recibo */}
         <section className="flex flex-col gap-3">
           <div>
-            <h3 className="font-serif-luxury text-[22px] font-semibold text-ink">Procedimentos</h3>
+            <h3 className="font-serif-luxury text-[22px] font-semibold text-ink">Procedimentos e produtos</h3>
             <p className="text-[13px] text-ink-soft leading-snug">
-              Cada linha vira uma linha da tabela do recibo. O nome pode ser mudado — por exemplo,
-              o protocolo de cada fase.
+              Cada linha vira uma linha da tabela do recibo. O nome e o valor podem ser mudados — por
+              exemplo, o protocolo de cada fase.
             </p>
           </div>
 
@@ -573,7 +667,11 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
                 >
                   {n + 1}
                 </span>
-                <CampoTinta rotulo="Procedimento" htmlFor={`recibo-item-${item.id}`} className="flex-1 min-w-0">
+                <CampoTinta
+                  rotulo={item.produtoId ? 'Produto' : 'Procedimento'}
+                  htmlFor={`recibo-item-${item.id}`}
+                  className="flex-1 min-w-0"
+                >
                   <input
                     id={`recibo-item-${item.id}`}
                     type="text"
@@ -587,7 +685,7 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => removerItem(item.id)}
-                  aria-label={`Remover o procedimento ${n + 1}`}
+                  aria-label={`Remover o item ${n + 1}`}
                   title="Remover"
                   className="w-10 h-10 mt-2 shrink-0 rounded-full flex items-center justify-center text-ink-soft hover:text-danger hover:bg-danger-bg transition-colors"
                 >
@@ -595,18 +693,33 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-2.5 sm:pl-[42px] sm:pr-[50px]">
-                <CampoTinta rotulo="Sessões" htmlFor={`recibo-item-sessoes-${item.id}`}>
-                  <input
-                    id={`recibo-item-sessoes-${item.id}`}
-                    type="number"
-                    min="1"
-                    step="1"
-                    inputMode="numeric"
-                    value={item.sessoes}
-                    onChange={(e) => mudarItem(item.id, { sessoes: e.target.value })}
-                    className={`${INPUT_TINTA} tabular-nums`}
-                  />
-                </CampoTinta>
+                {item.produtoId ? (
+                  <CampoTinta rotulo={`Quantidade (${item.unidade || 'un'})`} htmlFor={`recibo-item-qtd-${item.id}`}>
+                    <input
+                      id={`recibo-item-qtd-${item.id}`}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={item.quantidade}
+                      onChange={(e) => mudarQuantidade(item, e.target.value)}
+                      className={`${INPUT_TINTA} tabular-nums`}
+                    />
+                  </CampoTinta>
+                ) : (
+                  <CampoTinta rotulo="Sessões" htmlFor={`recibo-item-sessoes-${item.id}`}>
+                    <input
+                      id={`recibo-item-sessoes-${item.id}`}
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      value={item.sessoes}
+                      onChange={(e) => mudarItem(item.id, { sessoes: e.target.value })}
+                      className={`${INPUT_TINTA} tabular-nums`}
+                    />
+                  </CampoTinta>
+                )}
                 <CampoTinta rotulo="Valor (opcional)" htmlFor={`recibo-item-valor-${item.id}`} prefixo={prefixoReais}>
                   <input
                     id={`recibo-item-valor-${item.id}`}
@@ -615,7 +728,7 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
                     step="0.01"
                     inputMode="decimal"
                     value={item.valor}
-                    onChange={(e) => mudarItem(item.id, { valor: e.target.value })}
+                    onChange={(e) => mudarValor(item, e.target.value)}
                     placeholder="—"
                     className={`${INPUT_TINTA} tabular-nums`}
                   />
@@ -627,6 +740,7 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
           {itens.length < MAXIMO_DE_ITENS ? (
             <div className="flex flex-wrap items-center gap-2">
               <ProcedureSearchAdd procedures={procedimentos} onAdd={adicionarDoCatalogo} />
+              <ProdutoSearchAdd produtos={produtos} onAdd={adicionarProduto} />
               <button
                 type="button"
                 onClick={() => setItens((atual) => [...atual, itemEmBranco()])}
@@ -642,10 +756,66 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
             </p>
           )}
 
-          {somaDiferente && (
+          <CampoTinta
+            rotulo="Desconto (opcional)"
+            htmlFor="recibo-desconto"
+            erro={erros.desconto}
+            prefixo={prefixoReais}
+            ajuda="Sai na tabela do recibo, entre o subtotal dos itens e o total recebido."
+            className="max-w-[260px]"
+          >
+            <input
+              id="recibo-desconto"
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={desconto}
+              onChange={(e) => {
+                setDesconto(e.target.value);
+                setErros((x) => ({ ...x, desconto: undefined }));
+              }}
+              placeholder="0,00"
+              className={`${INPUT_TINTA} tabular-nums`}
+            />
+          </CampoTinta>
+
+          {subtotal !== null && (
+            <div className="rounded-2xl bg-card border border-ink/10 p-4 space-y-1.5 text-[14px] tabular-nums">
+              <div className="flex justify-between text-ink-soft">
+                <span>Subtotal</span>
+                <span>{formatBRL(subtotal)}</span>
+              </div>
+              {descontoNumero > 0 && (
+                <div className="flex justify-between text-ink-soft">
+                  <span>Desconto</span>
+                  <span>− {formatBRL(descontoNumero)}</span>
+                </div>
+              )}
+              <div className="flex justify-between pt-2 mt-1 border-t border-ink/8 text-ink font-bold">
+                <span>Total</span>
+                <span className="text-[17px]">{formatBRL(totalDosItens ?? 0)}</span>
+              </div>
+            </div>
+          )}
+
+          {somaDiferente && totalDosItens !== null && (
             <AvisoTinta tom="alerta" icone={AlertCircle}>
-              A soma dos itens ({formatBRL(somaDosItens)}) é diferente do valor recebido (
-              {formatBRL(valorNumero)}). No recibo, o total é o valor recebido.
+              <span>
+                {valorNumero > 0
+                  ? `O total dos itens (${formatBRL(totalDosItens)}) é diferente do valor recebido (${formatBRL(valorNumero)}). No recibo, o total é o valor recebido.`
+                  : `O total dos itens é ${formatBRL(totalDosItens)}.`}{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setValor(valorDoCampo(totalDosItens));
+                    setErros((x) => ({ ...x, valor: undefined }));
+                  }}
+                  className="font-semibold underline underline-offset-2 hover:no-underline"
+                >
+                  Usar {formatBRL(totalDosItens)} como valor recebido
+                </button>
+              </span>
             </AvisoTinta>
           )}
         </section>

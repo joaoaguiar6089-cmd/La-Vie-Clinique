@@ -1,6 +1,6 @@
 # Notas de recibo de pagamento
 
-Status: **implementado** — 2026-10-15.
+Status: **implementado** — 2026-10-15. Produtos do estoque e desconto — 2026-10-16.
 
 A nota de recibo é o documento que a clínica manda à cliente dizendo "recebemos de você tanto, em
 tal data, por tal forma, referente a isto". Sai em PDF, com a identidade do orçamento (monograma,
@@ -25,16 +25,23 @@ Cormorant, bronze, bloco preto do valor), para enviar pelo WhatsApp.
   cadastro.
 - **Pagamento**: data (não aceita futuro), valor, forma — **Pix, cartão de débito, cartão de
   crédito, dinheiro** — e, no crédito, **à vista ou parcelado** (2 a 12×, com o valor da parcela).
-- Vindo de orçamento: cliente, procedimentos, data do pagamento e a forma principal com o valor
-  dela já preenchidos. Se o orçamento aceitava mais de uma forma, pílulas "Como a cliente pagou?"
-  trocam forma e valor de uma vez (ex.: Pix com 10% de desconto).
-- **Procedimentos**: lista numerada, como a do orçamento — "+ Adicionar procedimento" (busca no
-  catálogo) e "+ Item fora do catálogo". Cada linha tem **nome editável**, **sessões** e **valor
-  opcional**. O nome livre existe para os protocolos de cada cliente dentro do mesmo procedimento
-  ("Harmonização Glútea — Fases 1 e 2", "Harmonização Glútea — Fase 3"). Vindo de orçamento, as
-  linhas nascem dos itens dele, com as sessões e **sem valor**: repartir o que entrou entre itens
-  com descontos diferentes seria inventar número. Até 8 linhas. Se todos os itens têm valor e a
-  soma não bate com o recebido, o formulário avisa (não impede).
+- Vindo de orçamento: cliente, itens **com o valor de cada um**, data do pagamento, a forma
+  principal com o valor dela e o **desconto** já preenchidos. Se o orçamento aceitava mais de uma
+  forma, pílulas "Como a cliente pagou?" trocam forma, valor e desconto de uma vez (ex.: Pix com
+  10% de desconto).
+- **Procedimentos e produtos**: lista numerada, como a do orçamento — "+ Adicionar procedimento"
+  (busca no catálogo, entra **com o preço do catálogo**, o promocional quando há), "+ Adicionar
+  produto" (busca no Estoque, entra com **1 unidade × o valor repassado à cliente**) e "+ Item fora
+  do catálogo". Cada linha tem **nome editável**, **sessões** (no produto, **quantidade** — mudá-la
+  refaz o valor pelo preço de uma unidade) e **valor opcional**. O nome livre existe para os
+  protocolos de cada cliente dentro do mesmo procedimento ("Harmonização Glútea — Fases 1 e 2",
+  "Harmonização Glútea — Fase 3"). Até 8 linhas.
+- **Do orçamento**: cada item vem com o valor que saiu nele (`itemValorFinal`, já com o desconto do
+  próprio item), e o **desconto do recibo = plano combinado + desconto da forma escolhida**. Assim
+  a soma dos itens menos o desconto dá exatamente o valor da forma (`pagamentosSugeridos`).
+- **Desconto (R$)**, opcional e digitado à mão. Com todos os itens com valor, o formulário mostra
+  Subtotal / Desconto / Total; se o total não bate com o recebido, avisa (não impede — pode ser a
+  entrada) e oferece "Usar R$ X como valor recebido". Desconto maior que o subtotal não salva.
 - Substituiu os antigos "Referente a" e "Observações". Recibo antigo abre com o "Referente a"
   como a linha 1, e a observação dele continua no PDF.
 - **Comprovante** (opcional): foto ou PDF, até 10 MB, em `recibos/<id>/comprovantes/` no Storage.
@@ -48,6 +55,8 @@ Cormorant, bronze, bloco preto do valor), para enviar pelo WhatsApp.
 - Numeração `AAAA-####` própria em `counters/receipts_<ano>`, na mesma transação da gravação.
 - `clinica`: retrato da clínica (nome, tagline, cidade, endereço, contatos e **CNPJ**, novo campo
   em Configurações → Contato). Refeito ao editar o recibo.
+- `itens[]`: `titulo`, `valor` (total da linha), e `sessoes` no procedimento ou `produtoId`,
+  `unidade` e `quantidade` no produto. `desconto` em reais, ausente quando não há.
 - Vínculo com orçamento por `quoteId` + `quoteNumero`. Um orçamento pode ter vários recibos
   (entrada e restante). O recibo de um orçamento da paciente aparece na página dela mesmo que quem
   pagou tenha sido outra pessoa.
@@ -62,8 +71,9 @@ Cormorant, bronze, bloco preto do valor), para enviar pelo WhatsApp.
   Estética Facial e Corporal" em caixa alta —; tagline • cidade; "Recibo Nº", emissão) →
   "Recebido de" + nome + CPF ao lado do bloco preto arredondado do valor, com o extenso →
   "Declaramos o recebimento de …, CPF …, da importância de R$ … (por extenso), referente a:" →
-  **tabela** (Item / procedimento · Qtd. · Valor, linhas alternadas, "—" sem valor, **Total
-  recebido**) → "O presente recibo comprova o pagamento descrito acima, dando plena quitação do
+  **tabela** (Item / procedimento · Qtd. · Valor, linhas alternadas, "—" sem valor; no produto a
+  Qtd. é a quantidade com a unidade, "2 frascos"; com desconto, **Subtotal** — só se todos os itens
+  têm valor — e **Desconto**; por fim o **Total recebido**) → "O presente recibo comprova o pagamento descrito acima, dando plena quitação do
   valor recebido." → grade de data, forma, condição, orçamento e comprovante → selo "PAGO" com o
   local e a data por extenso e o nome da clínica (e CNPJ) → monograma apagado → rodapé.
   Margens laterais de 20 mm (o orçamento usa 14). O comprovante entra como páginas seguintes,
