@@ -64,6 +64,7 @@ import { FichaFillModal } from '../fichas/FichaFillModal';
 import { alvoDoRegistro } from '../../utils/fichasClinicas';
 import { useRecibos } from '../recibos/RecibosContext';
 import { CartaoDeRecibo } from '../recibos/CartaoDeRecibo';
+import { Chip } from '../common/Tinta';
 
 interface PatientDetailViewProps {
   patient: Patient;
@@ -113,12 +114,16 @@ interface PatientDetailViewProps {
  * As abas da ficha.
  *
  * `resumo` é a primeira e a padrão: é ela que responde "o que eu preciso saber antes de atender
- * esta pessoa". As outras três são consulta de um tipo de documento.
+ * esta pessoa", e é nela, numa linha recolhida no topo, que moram os dados pessoais. As outras
+ * juntam documentos parentes numa aba só, separados por filtro:
  *
- * "Atendimentos" virou "Fichas" no rótulo — o conteúdo é o mesmo — porque com a aba Resumo ao
- * lado a palavra "atendimento" passou a significar duas coisas na mesma linha de botões.
+ * - **Fichas**: anamneses e acompanhamentos. O acompanhamento é aberto pela linha do atendimento,
+ *   então o filtro "Acompanhamentos" é a lista de atendimentos — com os pacotes e os agendados.
+ * - **Financeiro**: orçamentos e recibos.
  */
-type Aba = 'resumo' | 'atendimentos' | 'fotos' | 'orcamentos' | 'pagamentos' | 'anamneses';
+type Aba = 'resumo' | 'fichas' | 'fotos' | 'financeiro';
+type FiltroDeFichas = 'todas' | 'anamneses' | 'acompanhamentos';
+type FiltroDoFinanceiro = 'orcamentos' | 'recibos';
 
 /** O que o menu "Novo" cria — na ordem da jornada da paciente. */
 type TipoNovo = 'orcamento' | 'recibo' | 'anamnese' | 'avaliacao' | 'atendimento';
@@ -128,9 +133,9 @@ const formatarDataAtendimento = (valor: string): string =>
   valor?.length === 10 ? formatDateOnly(valor) : formatDate(valor);
 
 /**
- * Página de um paciente: os dados pessoais dele no topo (editáveis) e, abaixo, o histórico
- * dividido em anamneses e orçamentos — cada lado com o seu "novo", que já abre o formulário
- * correspondente com o paciente escolhido.
+ * Página de um paciente: o cabeçalho com as ações rápidas e, abaixo, as abas — Resumo (com os
+ * dados pessoais editáveis numa linha recolhida no topo), Fichas, Fotos e Financeiro. O "Novo"
+ * já abre cada formulário com o paciente escolhido.
  */
 export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   patient,
@@ -172,6 +177,8 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   );
 
   const [aba, setAba] = useState<Aba>('resumo');
+  const [filtroFichas, setFiltroFichas] = useState<FiltroDeFichas>('todas');
+  const [filtroFinanceiro, setFiltroFinanceiro] = useState<FiltroDoFinanceiro>('orcamentos');
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [menuNovoAberto, setMenuNovoAberto] = useState(false);
   const menuNovoRef = useRef<HTMLDivElement>(null);
@@ -200,24 +207,33 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
     return () => document.removeEventListener('mousedown', clicouFora);
   }, [menuNovoAberto]);
 
-  /** O menu leva para a aba do que foi criado — o resultado aparece onde a pessoa olhou. */
+  const irParaFichas = (filtro: FiltroDeFichas) => {
+    setAba('fichas');
+    setFiltroFichas(filtro);
+  };
+  const irParaFinanceiro = (filtro: FiltroDoFinanceiro) => {
+    setAba('financeiro');
+    setFiltroFinanceiro(filtro);
+  };
+
+  /** O menu leva para a aba (e o filtro) do que foi criado — o resultado aparece onde a pessoa olhou. */
   const criarNovo = (tipo: TipoNovo) => {
     setMenuNovoAberto(false);
     if (tipo === 'atendimento') {
-      setAba('atendimentos');
+      irParaFichas('acompanhamentos');
       onNovoAtendimento();
     } else if (tipo === 'anamnese') {
-      setAba('anamneses');
+      irParaFichas('anamneses');
       setFichaModalAberto(true);
     } else if (tipo === 'recibo') {
-      setAba('pagamentos');
+      irParaFinanceiro('recibos');
       recibosCtx?.abrirNovo(patient);
     } else if (tipo === 'avaliacao') {
       // A avaliação aparece na linha do tempo do Resumo, que é onde ela mora nesta página.
       setAba('resumo');
       setEmitindoAvaliacao(true);
     } else {
-      setAba('orcamentos');
+      irParaFinanceiro('orcamentos');
       acoesDeOrcamento.abrirNovo(patient);
     }
   };
@@ -359,7 +375,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         )}
       </div>
 
-      {/* As cinco abas. Deslizam no celular em vez de quebrar em três linhas: com o contador em
+      {/* As quatro abas. Deslizam no celular em vez de quebrar em duas linhas: com o contador em
           cada uma, elas não cabem lado a lado em 375px, e empilhar empurraria o conteúdo para
           fora da primeira dobra. */}
       <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto mb-4">
@@ -368,29 +384,17 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
             [
               { id: 'resumo' as const, icone: LayoutList, rotulo: 'Resumo', total: undefined },
               {
-                id: 'atendimentos' as const,
-                icone: CalendarClock,
+                id: 'fichas' as const,
+                icone: ClipboardList,
                 rotulo: 'Fichas',
-                total: totalAtendimentos,
+                total: records.length + totalAtendimentos,
               },
               { id: 'fotos' as const, icone: Images, rotulo: 'Fotos', total: fotos.length },
               {
-                id: 'orcamentos' as const,
-                icone: Receipt,
-                rotulo: 'Orçamentos',
-                total: quotes.length,
-              },
-              {
-                id: 'pagamentos' as const,
+                id: 'financeiro' as const,
                 icone: Banknote,
-                rotulo: 'Pagamentos',
-                total: recibos.length,
-              },
-              {
-                id: 'anamneses' as const,
-                icone: ClipboardList,
-                rotulo: 'Anamneses',
-                total: records.length,
+                rotulo: 'Financeiro',
+                total: quotes.length + recibos.length,
               },
             ]
           ).map((filtro) => {
@@ -425,27 +429,31 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Resumo: alerta da anamnese, pacotes em curso, antes/depois e linha do tempo. */}
+      {/* Resumo: os dados pessoais recolhidos numa linha e, abaixo, alerta da anamnese, pacotes
+          em curso, antes/depois e linha do tempo. */}
       {aba === 'resumo' && (
-        <PatientResumoTab
-          records={records}
-          atendimentos={atendimentos}
-          planos={planos}
-          quotes={quotes}
-          avaliacoes={avaliacoes}
-          catalogProcedures={catalogProcedures}
-          acoes={{
-            orcamento: acoesDeOrcamento,
-            onVerAnamnese: setFichaAberta,
-            onVerAvaliacao: setAvaliacaoAberta,
-            onAcompanhamento: onAcompanhamentoAtendimento,
-          }}
-          onIrParaAba={setAba}
-          onAgendarSessao={(plano) => {
-            setAba('atendimentos');
-            onAdicionarSessao(plano.id);
-          }}
-        />
+        <div className="space-y-6">
+          <PatientPersonalDataCard patient={patient} onSalvar={onSalvarPaciente} />
+          <PatientResumoTab
+            records={records}
+            atendimentos={atendimentos}
+            planos={planos}
+            quotes={quotes}
+            avaliacoes={avaliacoes}
+            catalogProcedures={catalogProcedures}
+            acoes={{
+              orcamento: acoesDeOrcamento,
+              onVerAnamnese: setFichaAberta,
+              onVerAvaliacao: setAvaliacaoAberta,
+              onAcompanhamento: onAcompanhamentoAtendimento,
+            }}
+            onIrParaFichas={irParaFichas}
+            onAgendarSessao={(plano) => {
+              irParaFichas('acompanhamentos');
+              onAdicionarSessao(plano.id);
+            }}
+          />
+        </div>
       )}
 
       {/* Fotos: a galeria da paciente e o comparador. */}
@@ -482,258 +490,290 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         </div>
       )}
 
-      {/* Lista de atendimentos, com os dados pessoais acima — é aqui que eles são editados. */}
-      {aba === 'atendimentos' && (
-        <div className="mb-5">
-          <PatientPersonalDataCard patient={patient} onSalvar={onSalvarPaciente} />
+      {/* Fichas: anamneses e acompanhamentos, com o filtro em cima. "Todas" mostra as duas listas,
+          uma abaixo da outra. */}
+      {aba === 'fichas' && (
+        <div className="space-y-5">
+          <FiltrosDaAba
+            rotulo="Tipo de ficha"
+            ativo={filtroFichas}
+            onSelecionar={setFiltroFichas}
+            opcoes={[
+              { id: 'todas', rotulo: 'Todas', total: records.length + totalAtendimentos },
+              { id: 'anamneses', rotulo: 'Anamneses', total: records.length },
+              { id: 'acompanhamentos', rotulo: 'Acompanhamentos', total: totalAtendimentos },
+            ]}
+          />
+
+          {filtroFichas !== 'acompanhamentos' && (
+            <section className="space-y-2">
+              {filtroFichas === 'todas' && (
+                <h3 className="font-serif-luxury text-title text-ink">Anamneses</h3>
+              )}
+              {records.length === 0 ? (
+                <div className="glass-card rounded-sm py-14 text-center">
+                  <FileText className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500">
+                    Nenhuma anamnese para {patient.nome.split(' ')[0]} ainda.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {records.map((ficha) => (
+                    <div
+                      key={ficha.id}
+                      className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
+                    >
+                      <div className="flex-1 min-w-[160px]">
+                        <p className="text-sm text-ink truncate">{ficha.procedimentoNome}</p>
+                        <p className="flex items-center gap-1.5 text-body text-gray-400 truncate">
+                          <Calendar className="w-3 h-3 shrink-0" />
+                          {formatarDataAtendimento(ficha.dataAtendimento)}
+                          {ficha.profissionalNome && ` · ${ficha.profissionalNome}`}
+                        </p>
+                      </div>
+
+                      {ficha.origemPreenchimento === 'online_paciente' && !anamneseFechada(ficha) && (
+                        <span className="px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border bg-amber-50 text-amber-700 border-amber-200">
+                          Aguardando atendimento
+                        </span>
+                      )}
+
+                      <div className="flex items-center gap-0.5 ml-auto">
+                        <button
+                          type="button"
+                          onClick={() => setFichaAberta(ficha)}
+                          aria-label={`Abrir a ficha de ${ficha.procedimentoNome}`}
+                          title="Ver ficha e imprimir"
+                          className="p-2 text-gray-400 hover:text-brand transition-colors"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+
+                        {/*
+                          Saída manual da trava automática, que depende de haver atendimento realizado
+                          lançado no sistema. A clínica que não usa o módulo de atendimentos com
+                          disciplina deixaria o link da paciente aberto indefinidamente — este botão
+                          fecha sem depender de inferência nenhuma. Reabrir é possível, mas não
+                          destrava o que o atendimento fechou: ali o que vale é o fato da visita.
+                        */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setConfirmacao(
+                              ficha.encerradaEm
+                                ? {
+                                    titulo: 'Reabrir esta ficha?',
+                                    mensagem:
+                                      'A paciente volta a poder editar as respostas pelo link que ' +
+                                      'recebeu. Se já houver atendimento realizado deste procedimento, ' +
+                                      'a ficha fecha de novo sozinha.',
+                                    textoConfirmar: 'Reabrir',
+                                    tom: 'neutro',
+                                    onConfirmar: () => {
+                                      reabrirAnamnese(ficha.id).catch((e) =>
+                                        console.warn('Não foi possível reabrir a ficha:', e)
+                                      );
+                                    },
+                                  }
+                                : {
+                                    titulo: 'Encerrar esta ficha?',
+                                    mensagem:
+                                      'O link da paciente fecha e as respostas param de poder ser ' +
+                                      'editadas por ela. O PDF continua disponível para as duas partes.',
+                                    textoConfirmar: 'Encerrar',
+                                    tom: 'neutro',
+                                    onConfirmar: () => {
+                                      encerrarAnamnese(ficha.id).catch((e) =>
+                                        console.warn('Não foi possível encerrar a ficha:', e)
+                                      );
+                                    },
+                                  }
+                            )
+                          }
+                          aria-label={
+                            ficha.encerradaEm
+                              ? `Reabrir a ficha de ${ficha.procedimentoNome}`
+                              : `Encerrar a ficha de ${ficha.procedimentoNome}`
+                          }
+                          title={
+                            ficha.profissionalPreenchidoEm && !ficha.encerradaEm
+                              ? 'Ficha antiga, já complementada — permanece fechada'
+                              : ficha.encerradaEm
+                                ? 'Reabrir para a paciente editar'
+                                : 'Encerrar: fecha o link da paciente'
+                          }
+                          disabled={!!ficha.profissionalPreenchidoEm && !ficha.encerradaEm}
+                          className="p-2 text-gray-400 hover:text-brand transition-colors disabled:opacity-40 disabled:hover:text-gray-400"
+                        >
+                          {anamneseFechada(ficha) ? (
+                            <Lock className="w-4 h-4" />
+                          ) : (
+                            <Unlock className="w-4 h-4" />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setConfirmacao({
+                              titulo: 'Excluir esta ficha?',
+                              mensagem: `Ficha de ${ficha.pacienteNome} — ${ficha.procedimentoNome}.\n\nTodas as respostas e anotações registradas nela são apagadas para sempre.`,
+                              textoConfirmar: 'Excluir ficha',
+                              onConfirmar: () => onExcluirFicha(ficha.id),
+                            })
+                          }
+                          aria-label={`Excluir a ficha de ${ficha.procedimentoNome}`}
+                          title="Excluir ficha"
+                          className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {filtroFichas !== 'anamneses' && (
+            <section className="space-y-2">
+              {filtroFichas === 'todas' && (
+                <h3 className="font-serif-luxury text-title text-ink">Acompanhamentos</h3>
+              )}
+              <AttendancesTab
+                atendimentos={atendimentos}
+                planos={planos}
+                primeiroNome={patient.nome.split(' ')[0]}
+                onNovo={onNovoAtendimento}
+                onEditar={onEditarAtendimento}
+                onExcluir={onExcluirAtendimento}
+                onConfirmar={onConfirmarAtendimento}
+                onAcompanhamento={onAcompanhamentoAtendimento}
+                onFaltou={onFaltouAtendimento}
+                onRemarcar={onRemarcarAtendimento}
+                onAdicionarSessao={onAdicionarSessao}
+                onEncerrarPlano={onEncerrarPlano}
+                onReabrirPlano={onReabrirPlano}
+                onExcluirPlano={onExcluirPlano}
+              />
+            </section>
+          )}
         </div>
       )}
-      {aba === 'atendimentos' && (
-        <AttendancesTab
-          atendimentos={atendimentos}
-          planos={planos}
-          primeiroNome={patient.nome.split(' ')[0]}
-          onNovo={onNovoAtendimento}
-          onEditar={onEditarAtendimento}
-          onExcluir={onExcluirAtendimento}
-          onConfirmar={onConfirmarAtendimento}
-          onAcompanhamento={onAcompanhamentoAtendimento}
-          onFaltou={onFaltouAtendimento}
-          onRemarcar={onRemarcarAtendimento}
-          onAdicionarSessao={onAdicionarSessao}
-          onEncerrarPlano={onEncerrarPlano}
-          onReabrirPlano={onReabrirPlano}
-          onExcluirPlano={onExcluirPlano}
-        />
-      )}
 
-      {/* Lista de anamneses */}
-      {aba === 'anamneses' &&
-        (records.length === 0 ? (
-          <div className="glass-card rounded-sm py-14 text-center">
-            <FileText className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">
-              Nenhuma anamnese para {patient.nome.split(' ')[0]} ainda.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {records.map((ficha) => (
-              <div
-                key={ficha.id}
-                className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
-              >
-                <div className="flex-1 min-w-[160px]">
-                  <p className="text-sm text-ink truncate">{ficha.procedimentoNome}</p>
-                  <p className="flex items-center gap-1.5 text-body text-gray-400 truncate">
-                    <Calendar className="w-3 h-3 shrink-0" />
-                    {formatarDataAtendimento(ficha.dataAtendimento)}
-                    {ficha.profissionalNome && ` · ${ficha.profissionalNome}`}
-                  </p>
-                </div>
+      {/* Financeiro: orçamentos e recibos (as notas de recibo dela, vinculadas ou não a um
+          orçamento), separados pelo filtro. */}
+      {aba === 'financeiro' && (
+        <div className="space-y-4">
+          <FiltrosDaAba
+            rotulo="Tipo de documento"
+            ativo={filtroFinanceiro}
+            onSelecionar={setFiltroFinanceiro}
+            opcoes={[
+              { id: 'orcamentos', rotulo: 'Orçamentos', total: quotes.length },
+              { id: 'recibos', rotulo: 'Recibos', total: recibos.length },
+            ]}
+          />
 
-                {ficha.origemPreenchimento === 'online_paciente' && !anamneseFechada(ficha) && (
-                  <span className="px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border bg-amber-50 text-amber-700 border-amber-200">
-                    Aguardando atendimento
-                  </span>
-                )}
+          {filtroFinanceiro === 'recibos' ? (
+            <ListaDeRecibos
+              primeiroNome={patient.nome.split(' ')[0]}
+              recibos={recibos}
+              orcamentosPagosSemRecibo={quotes.filter(
+                (q) => q.status === 'pago' && !recibos.some((r) => r.quoteId === q.id)
+              )}
+              onNovo={() => recibosCtx?.abrirNovo(patient)}
+              onCriarDoOrcamento={(q) => recibosCtx?.abrirDoOrcamento(q)}
+              onAbrirOrcamento={(quoteId) => {
+                const q = quotes.find((o) => o.id === quoteId);
+                if (q) acoesDeOrcamento.abrirPrevia(q);
+              }}
+              erro={recibosCtx?.erro || null}
+            />
+          ) : quotes.length === 0 ? (
+            <div className="glass-card rounded-sm py-14 text-center">
+              <Receipt className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-500">
+                Nenhum orçamento para {patient.nome.split(' ')[0]} ainda.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {quotes.map((orcamento) => (
+                <div
+                  key={orcamento.id}
+                  className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
+                >
+                  <div className="min-w-[110px]">
+                    <p className="font-serif-luxury text-lg text-ink tabular-nums">
+                      {orcamento.numero}
+                    </p>
+                    <p className="text-body text-gray-400">{formatDate(orcamento.dataEmissao)}</p>
+                  </div>
 
-                <div className="flex items-center gap-0.5 ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => setFichaAberta(ficha)}
-                    aria-label={`Abrir a ficha de ${ficha.procedimentoNome}`}
-                    title="Ver ficha e imprimir"
-                    className="p-2 text-gray-400 hover:text-brand transition-colors"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
+                  <div className="flex-1 min-w-[140px]">
+                    <p className="text-sm font-semibold text-ink tabular-nums">
+                      {formatBRL(orcamento.total)}
+                    </p>
+                    <p className="text-body text-gray-400 truncate">
+                      {orcamento.itens.length} procedimento
+                      {orcamento.itens.length === 1 ? '' : 's'} · válido até{' '}
+                      {formatDate(orcamento.dataValidade)}
+                    </p>
+                  </div>
 
-                  {/*
-                    Saída manual da trava automática, que depende de haver atendimento realizado
-                    lançado no sistema. A clínica que não usa o módulo de atendimentos com
-                    disciplina deixaria o link da paciente aberto indefinidamente — este botão
-                    fecha sem depender de inferência nenhuma. Reabrir é possível, mas não
-                    destrava o que o atendimento fechou: ali o que vale é o fato da visita.
-                  */}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setConfirmacao(
-                        ficha.encerradaEm
-                          ? {
-                              titulo: 'Reabrir esta ficha?',
-                              mensagem:
-                                'A paciente volta a poder editar as respostas pelo link que ' +
-                                'recebeu. Se já houver atendimento realizado deste procedimento, ' +
-                                'a ficha fecha de novo sozinha.',
-                              textoConfirmar: 'Reabrir',
-                              tom: 'neutro',
-                              onConfirmar: () => {
-                                reabrirAnamnese(ficha.id).catch((e) =>
-                                  console.warn('Não foi possível reabrir a ficha:', e)
-                                );
-                              },
-                            }
-                          : {
-                              titulo: 'Encerrar esta ficha?',
-                              mensagem:
-                                'O link da paciente fecha e as respostas param de poder ser ' +
-                                'editadas por ela. O PDF continua disponível para as duas partes.',
-                              textoConfirmar: 'Encerrar',
-                              tom: 'neutro',
-                              onConfirmar: () => {
-                                encerrarAnamnese(ficha.id).catch((e) =>
-                                  console.warn('Não foi possível encerrar a ficha:', e)
-                                );
-                              },
-                            }
-                      )
-                    }
-                    aria-label={
-                      ficha.encerradaEm
-                        ? `Reabrir a ficha de ${ficha.procedimentoNome}`
-                        : `Encerrar a ficha de ${ficha.procedimentoNome}`
-                    }
-                    title={
-                      ficha.profissionalPreenchidoEm && !ficha.encerradaEm
-                        ? 'Ficha antiga, já complementada — permanece fechada'
-                        : ficha.encerradaEm
-                          ? 'Reabrir para a paciente editar'
-                          : 'Encerrar: fecha o link da paciente'
-                    }
-                    disabled={!!ficha.profissionalPreenchidoEm && !ficha.encerradaEm}
-                    className="p-2 text-gray-400 hover:text-brand transition-colors disabled:opacity-40 disabled:hover:text-gray-400"
-                  >
-                    {anamneseFechada(ficha) ? (
-                      <Lock className="w-4 h-4" />
-                    ) : (
-                      <Unlock className="w-4 h-4" />
-                    )}
-                  </button>
+                  <QuoteDesfecho quote={orcamento} />
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setConfirmacao({
-                        titulo: 'Excluir esta ficha?',
-                        mensagem: `Ficha de ${ficha.pacienteNome} — ${ficha.procedimentoNome}.\n\nTodas as respostas e anotações registradas nela são apagadas para sempre.`,
-                        textoConfirmar: 'Excluir ficha',
-                        onConfirmar: () => onExcluirFicha(ficha.id),
-                      })
-                    }
-                    aria-label={`Excluir a ficha de ${ficha.procedimentoNome}`}
-                    title="Excluir ficha"
-                    className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ))}
-
-      {/* Lista de orçamentos */}
-      {aba === 'orcamentos' &&
-        (quotes.length === 0 ? (
-          <div className="glass-card rounded-sm py-14 text-center">
-            <Receipt className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">
-              Nenhum orçamento para {patient.nome.split(' ')[0]} ainda.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {quotes.map((orcamento) => (
-              <div
-                key={orcamento.id}
-                className="glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
-              >
-                <div className="min-w-[110px]">
-                  <p className="font-serif-luxury text-lg text-ink tabular-nums">
-                    {orcamento.numero}
-                  </p>
-                  <p className="text-body text-gray-400">{formatDate(orcamento.dataEmissao)}</p>
-                </div>
-
-                <div className="flex-1 min-w-[140px]">
-                  <p className="text-sm font-semibold text-ink tabular-nums">
-                    {formatBRL(orcamento.total)}
-                  </p>
-                  <p className="text-body text-gray-400 truncate">
-                    {orcamento.itens.length} procedimento
-                    {orcamento.itens.length === 1 ? '' : 's'} · válido até{' '}
-                    {formatDate(orcamento.dataValidade)}
-                  </p>
-                </div>
-
-                <QuoteDesfecho quote={orcamento} />
-
-                <div className="flex items-center gap-0.5 ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => acoesDeOrcamento.abrirCompartilhamento(orcamento)}
-                    aria-label={`Compartilhar ${orcamento.numero}`}
-                    title="Compartilhar link com a cliente"
-                    className="p-2 text-gray-400 hover:text-brand transition-colors"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => acoesDeOrcamento.abrirPrevia(orcamento)}
-                    aria-label={`Visualizar ${orcamento.numero}`}
-                    title="Visualizar — o botão de salvar PDF fica dentro da prévia"
-                    className="p-2 text-gray-400 hover:text-brand transition-colors"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-
-                  {podeSubstituir(orcamento) && (
+                  <div className="flex items-center gap-0.5 ml-auto">
                     <button
                       type="button"
-                      onClick={() => acoesDeOrcamento.abrirSubstituicao(orcamento)}
-                      aria-label={`Substituir ${orcamento.numero}`}
-                      title="Substituir — cria um novo com número próprio"
+                      onClick={() => acoesDeOrcamento.abrirCompartilhamento(orcamento)}
+                      aria-label={`Compartilhar ${orcamento.numero}`}
+                      title="Compartilhar link com a cliente"
                       className="p-2 text-gray-400 hover:text-brand transition-colors"
                     >
-                      <RefreshCw className="w-4 h-4" />
+                      <Share2 className="w-4 h-4" />
                     </button>
-                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => acoesDeOrcamento.abrirDuplicacao(orcamento)}
-                    aria-label={`Duplicar ${orcamento.numero}`}
-                    title="Duplicar"
-                    className="p-2 text-gray-400 hover:text-brand transition-colors"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => acoesDeOrcamento.abrirPrevia(orcamento)}
+                      aria-label={`Visualizar ${orcamento.numero}`}
+                      title="Visualizar — o botão de salvar PDF fica dentro da prévia"
+                      className="p-2 text-gray-400 hover:text-brand transition-colors"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+
+                    {podeSubstituir(orcamento) && (
+                      <button
+                        type="button"
+                        onClick={() => acoesDeOrcamento.abrirSubstituicao(orcamento)}
+                        aria-label={`Substituir ${orcamento.numero}`}
+                        title="Substituir — cria um novo com número próprio"
+                        className="p-2 text-gray-400 hover:text-brand transition-colors"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => acoesDeOrcamento.abrirDuplicacao(orcamento)}
+                      aria-label={`Duplicar ${orcamento.numero}`}
+                      title="Duplicar"
+                      className="p-2 text-gray-400 hover:text-brand transition-colors"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ))}
-
-      {/* Pagamentos: as notas de recibo dela, vinculadas ou não a um orçamento. */}
-      {aba === 'pagamentos' && (
-        <AbaDePagamentos
-          primeiroNome={patient.nome.split(' ')[0]}
-          recibos={recibos}
-          orcamentosPagosSemRecibo={quotes.filter(
-            (q) => q.status === 'pago' && !recibos.some((r) => r.quoteId === q.id)
+              ))}
+            </div>
           )}
-          onNovo={() => recibosCtx?.abrirNovo(patient)}
-          onCriarDoOrcamento={(q) => recibosCtx?.abrirDoOrcamento(q)}
-          onAbrirOrcamento={(quoteId) => {
-            const q = quotes.find((o) => o.id === quoteId);
-            if (q) acoesDeOrcamento.abrirPrevia(q);
-          }}
-          erro={recibosCtx?.erro || null}
-        />
+        </div>
       )}
 
       {/* Nova anamnese — já com este paciente escolhido */}
@@ -809,13 +849,41 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
 };
 
 /**
- * A aba "Pagamentos" da paciente: o total recebido, as notas de recibo (cada uma abre a prévia,
+ * Os filtros de dentro de uma aba — os mesmos chips das outras listas do sistema, cada um com o
+ * seu contador. Quebram linha em vez de deslizar: em 375px "Acompanhamentos" ficaria cortado no
+ * meio, e são poucos chips — a segunda linha custa menos que um filtro escondido.
+ */
+function FiltrosDaAba<T extends string>({
+  rotulo,
+  opcoes,
+  ativo,
+  onSelecionar,
+}: {
+  rotulo: string;
+  opcoes: { id: T; rotulo: string; total: number }[];
+  ativo: T;
+  onSelecionar: (id: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={rotulo} className="flex flex-wrap items-center gap-1.5">
+      {opcoes.map((o) => (
+        <Chip key={o.id} ativo={ativo === o.id} onClick={() => onSelecionar(o.id)}>
+          {o.rotulo}
+          <span className="tabular-nums opacity-60">{o.total}</span>
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * O filtro "Recibos" do Financeiro: o total recebido, as notas de recibo (cada uma abre a prévia,
  * de onde sai o PDF para ela) e o "Novo recibo" já com ela escolhida.
  *
  * Orçamento dela pago sem nota de recibo aparece em cima, com o atalho — é o pagamento que ficou
  * sem documento.
  */
-const AbaDePagamentos: React.FC<{
+const ListaDeRecibos: React.FC<{
   primeiroNome: string;
   recibos: Recibo[];
   orcamentosPagosSemRecibo: Quote[];

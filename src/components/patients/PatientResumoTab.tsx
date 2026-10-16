@@ -26,6 +26,9 @@ import { AcoesDaLinha, ItemDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoT
  * é a única informação desta tela que muda a conduta de um atendimento que está prestes a
  * acontecer. Depois o progresso dos planos (o que está em curso), depois a evolução em foto, e
  * por último a linha do tempo, que é consulta.
+ *
+ * Acima de tudo isso fica só a linha recolhida dos dados pessoais, montada pela página — uma linha
+ * não tira o alerta da primeira dobra.
  */
 
 interface PatientResumoTabProps {
@@ -38,7 +41,8 @@ interface PatientResumoTabProps {
   catalogProcedures: Procedure[];
   /** Os atalhos da linha do tempo — os mesmos da linha da clínica, na tela Hoje. */
   acoes: AcoesDaLinha;
-  onIrParaAba: (aba: 'atendimentos' | 'anamneses' | 'orcamentos') => void;
+  /** Leva para a aba Fichas, já no filtro do que foi tocado. */
+  onIrParaFichas: (filtro: 'anamneses' | 'acompanhamentos') => void;
   onAgendarSessao: (plano: SessionPlan) => void;
 }
 
@@ -50,7 +54,7 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
   avaliacoes,
   catalogProcedures,
   acoes,
-  onIrParaAba,
+  onIrParaFichas,
   onAgendarSessao,
 }) => {
   const alerta = useMemo(
@@ -71,7 +75,7 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
     if (item.tipo === 'anamnese') acoes.onVerAnamnese(item.ref);
     else if (item.tipo === 'avaliacao') acoes.onVerAvaliacao(item.ref);
     else if (item.tipo === 'orcamento') acoes.orcamento.abrirPrevia(item.ref);
-    else onIrParaAba('atendimentos');
+    else onIrParaFichas('acompanhamentos');
   };
 
   return (
@@ -119,7 +123,7 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
 
               <button
                 type="button"
-                onClick={() => onIrParaAba('anamneses')}
+                onClick={() => onIrParaFichas('anamneses')}
                 className="mt-2.5 text-body font-semibold text-brand hover:underline"
               >
                 Ver a ficha completa
