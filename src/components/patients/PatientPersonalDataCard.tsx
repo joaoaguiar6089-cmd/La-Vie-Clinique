@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { AlertCircle, Check, IdCard, Pencil, X } from 'lucide-react';
+import React, { useEffect, useId, useState } from 'react';
+import { AlertCircle, Check, ChevronDown, IdCard, Pencil, X } from 'lucide-react';
 import { Patient } from '../../types';
 import { formatCpf, formatDateOnly } from '../../utils/formatters';
 import { PatientFields, PatientFormValues, formToPatient, patientToForm } from './PatientFields';
@@ -31,11 +31,17 @@ const Campo: React.FC<{ rotulo: string; valor?: string; className?: string }> = 
  * O que é gravado é só o documento do paciente: as fichas e orçamentos já emitidos guardam o nome
  * e o contato que valiam no dia da emissão, e isso é proposital — documento já enviado não muda
  * retroativamente porque o cadastro mudou.
+ *
+ * Começa recolhido, numa linha só: ele abre o Resumo, e aberto empurraria o alerta da anamnese
+ * para fora da primeira dobra. Recolher no meio de uma edição só esconde o formulário — o que foi
+ * digitado continua lá ao abrir de novo.
  */
 export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = ({
   patient,
   onSalvar,
 }) => {
+  const conteudoId = useId();
+  const [aberto, setAberto] = useState(false);
   const [editando, setEditando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -75,75 +81,95 @@ export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = (
   };
 
   return (
-    <section className="glass-card rounded-sm p-5 sm:p-6">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-brand">
+    <section className="glass-card rounded-sm">
+      <h2>
+        <button
+          type="button"
+          onClick={() => setAberto((a) => !a)}
+          aria-expanded={aberto}
+          aria-controls={conteudoId}
+          className="w-full flex items-center gap-2 min-h-[52px] px-5 sm:px-6 text-left text-xs font-semibold uppercase tracking-widest text-brand"
+        >
           <IdCard className="w-4 h-4" />
           Dados pessoais
-        </h2>
+          {editando && !aberto && (
+            <span className="normal-case tracking-normal font-medium text-gray-400">
+              · edição em andamento
+            </span>
+          )}
+          <ChevronDown
+            className={`w-4 h-4 ml-auto text-gray-400 transition-transform ${
+              aberto ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+      </h2>
+
+      <div id={conteudoId} hidden={!aberto} className="px-5 pb-5 sm:px-6 sm:pb-6">
+        {erro && (
+          <div className="mb-4 px-3 py-2 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            {erro}
+          </div>
+        )}
 
         {editando ? (
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={cancelar}
-              disabled={salvando}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white/70 border border-gray-200 text-xs font-medium text-gray-600 hover:text-ink transition-colors disabled:opacity-50"
-            >
-              <X className="w-3.5 h-3.5" />
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={salvar}
-              disabled={salvando}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover transition-colors disabled:opacity-60"
-            >
-              <Check className="w-3.5 h-3.5" />
-              {salvando ? 'Salvando...' : 'Salvar'}
-            </button>
-          </div>
+          <PatientFields values={form} onChange={alterar} idPrefix="paciente-edicao" />
         ) : (
-          <button
-            type="button"
-            onClick={() => setEditando(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white/70 border border-gray-200 text-xs font-medium text-gray-600 hover:text-brand hover:border-brand/40 transition-colors"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            Editar
-          </button>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+            <Campo rotulo="Nome completo" valor={patient.nome} className="sm:col-span-2" />
+            <Campo rotulo="Telefone / WhatsApp" valor={patient.contato} />
+            <Campo rotulo="E-mail" valor={patient.email} />
+            <Campo rotulo="Data de nascimento" valor={formatDateOnly(patient.dataNascimento)} />
+            <Campo rotulo="CPF" valor={patient.cpf ? formatCpf(patient.cpf) : ''} />
+            <Campo
+              rotulo="Gênero"
+              valor={
+                patient.genero === 'feminino'
+                  ? 'Feminino'
+                  : patient.genero === 'masculino'
+                  ? 'Masculino'
+                  : ''
+              }
+            />
+            <Campo rotulo="Observações" valor={patient.observacoes} className="sm:col-span-2" />
+          </dl>
         )}
-      </div>
 
-      {erro && (
-        <div className="mb-4 px-3 py-2 rounded-sm bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-          {erro}
+        <div className="flex justify-end gap-1.5 mt-5">
+          {editando ? (
+            <>
+              <button
+                type="button"
+                onClick={cancelar}
+                disabled={salvando}
+                className="flex items-center gap-1.5 min-h-[40px] px-3 rounded-sm bg-white/70 border border-gray-200 text-xs font-medium text-gray-600 hover:text-ink transition-colors disabled:opacity-50"
+              >
+                <X className="w-3.5 h-3.5" />
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={salvar}
+                disabled={salvando}
+                className="flex items-center gap-1.5 min-h-[40px] px-3.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand-hover transition-colors disabled:opacity-60"
+              >
+                <Check className="w-3.5 h-3.5" />
+                {salvando ? 'Salvando...' : 'Salvar'}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditando(true)}
+              className="flex items-center gap-1.5 min-h-[40px] px-3 rounded-sm bg-white/70 border border-gray-200 text-xs font-medium text-gray-600 hover:text-brand hover:border-brand/40 transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Editar
+            </button>
+          )}
         </div>
-      )}
-
-      {editando ? (
-        <PatientFields values={form} onChange={alterar} idPrefix="paciente-edicao" />
-      ) : (
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-          <Campo rotulo="Nome completo" valor={patient.nome} className="sm:col-span-2" />
-          <Campo rotulo="Telefone / WhatsApp" valor={patient.contato} />
-          <Campo rotulo="E-mail" valor={patient.email} />
-          <Campo rotulo="Data de nascimento" valor={formatDateOnly(patient.dataNascimento)} />
-          <Campo rotulo="CPF" valor={patient.cpf ? formatCpf(patient.cpf) : ''} />
-          <Campo
-            rotulo="Gênero"
-            valor={
-              patient.genero === 'feminino'
-                ? 'Feminino'
-                : patient.genero === 'masculino'
-                ? 'Masculino'
-                : ''
-            }
-          />
-          <Campo rotulo="Observações" valor={patient.observacoes} className="sm:col-span-2" />
-        </dl>
-      )}
+      </div>
     </section>
   );
 };
