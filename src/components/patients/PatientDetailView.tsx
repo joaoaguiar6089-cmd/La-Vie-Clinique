@@ -297,9 +297,9 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         <PatientPersonalDataCard patient={patient} onSalvar={onSalvarPaciente} />
       </div>
 
-      {/* As três ações que valem um toque a partir daqui. Larguras iguais no celular: com a
+      {/* As duas ações que valem um toque a partir daqui. Larguras iguais no celular: com a
           paciente na frente, o dedo mira pela posição, não pelo rótulo. */}
-      <div className="grid grid-cols-3 gap-2 mb-5">
+      <div className="grid grid-cols-2 gap-2 mb-5">
         <a
           href={whatsAppUrl || undefined}
           target="_blank"
@@ -327,18 +327,10 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           <CalendarPlus className="w-5 h-5 text-brand" />
           <span className="text-body font-semibold">Agendar</span>
         </button>
-
-        <button
-          type="button"
-          onClick={() => criarNovo('orcamento')}
-          className="flex flex-col items-center justify-center gap-1 min-h-[64px] rounded-xl border border-line bg-card text-ink hover:border-brand transition-colors"
-        >
-          <Receipt className="w-5 h-5 text-brand" />
-          <span className="text-body font-semibold">Orçamento</span>
-        </button>
       </div>
 
-      {/* "Novo" continua existindo para o que não cabe nas três ações rápidas. */}
+      {/* "Novo" continua existindo para o que não cabe nas duas ações rápidas — o orçamento
+          inclusive. */}
       <div ref={menuNovoRef} className="relative mb-4 flex justify-end">
         <button
           type="button"
