@@ -26,9 +26,6 @@ import { AcoesDaLinha, ItemDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoT
  * é a única informação desta tela que muda a conduta de um atendimento que está prestes a
  * acontecer. Depois o progresso dos planos (o que está em curso), depois a evolução em foto, e
  * por último a linha do tempo, que é consulta.
- *
- * Acima de tudo isso fica só a linha recolhida dos dados pessoais, montada pela página — uma linha
- * não tira o alerta da primeira dobra.
  */
 
 interface PatientResumoTabProps {
