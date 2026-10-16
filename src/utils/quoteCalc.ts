@@ -55,6 +55,25 @@ export const itemTemDescontoVisivel = (item: QuoteItem): boolean =>
 export const itemSessoes = (item: QuoteItem): number =>
   item.maisDeUmaSessao && isPositive(item.sessoes) ? Math.floor(item.sessoes) : 1;
 
+/** Item de produto do estoque, e não de procedimento. Ver `QuoteItem.produtoId`. */
+export const itemEhProduto = (item: Pick<QuoteItem, "produtoId">): boolean => !!item.produtoId;
+
+/** Quantas unidades o item de produto leva — nunca zero, para o valor unitário poder ser derivado. */
+export const itemQuantidade = (item: Pick<QuoteItem, "quantidade">): number =>
+  isPositive(item.quantidade) ? item.quantidade : 1;
+
+/**
+ * Valor de uma unidade do item de produto: o gravado, ou — num item sem ele — o total da linha
+ * dividido pela quantidade. Quatro casas, como o preço por unidade do estoque.
+ */
+export const itemValorUnitario = (
+  item: Pick<QuoteItem, "valorTabela" | "quantidade" | "valorUnitario">
+): number => {
+  if (isPositive(item.valorUnitario)) return item.valorUnitario;
+  const tabela = isPositive(item.valorTabela) ? item.valorTabela : 0;
+  return Math.round((tabela / itemQuantidade(item)) * 10000) / 10000;
+};
+
 /** Nome de exibição de cada forma — usado no formulário, no PDF e na página pública. */
 export const NOME_FORMA_PAGAMENTO: Record<PaymentMethod, string> = {
   pix: "Pix",
@@ -167,11 +186,16 @@ export const calcularOrcamento = (input: QuoteCalcInput): QuoteTotals => {
  * corporal torna trivial marcar cinco. Sem esta contagem, todo orçamento de laser nasceria com a
  * sugestão no teto de 10% — um desconto que ninguém decidiu dar, aceito por quem estivesse com
  * pressa. Num orçamento misto, laser + botox continuam valendo 2.
+ *
+ * Produto do estoque não conta: o protetor solar vendido junto não faz do botox um plano combinado.
  */
-export const contarProcedimentosParaDesconto = (itens: Pick<QuoteItem, "categoria">[]): number => {
+export const contarProcedimentosParaDesconto = (
+  itens: Pick<QuoteItem, "categoria" | "produtoId">[]
+): number => {
   let naoLaser = 0;
   let temLaser = false;
   for (const item of itens) {
+    if (itemEhProduto(item)) continue;
     if (isLaserCategory(item.categoria)) temLaser = true;
     else naoLaser += 1;
   }

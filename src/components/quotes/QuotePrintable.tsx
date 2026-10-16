@@ -4,11 +4,14 @@ import { formatBRL } from '../../utils/formatters';
 import {
   calcularOrcamento,
   itemDescontoPercentual,
+  itemEhProduto,
+  itemQuantidade,
   itemSessoes,
   itemTemDescontoVisivel,
   itemValorFinal,
   NOME_FORMA_PAGAMENTO,
 } from '../../utils/quoteCalc';
+import { quantidadeDoProduto } from '../../utils/estoque';
 import { isLaserCategory } from '../../utils/templateMatching';
 import { nomeCurtoDaArea } from '../../utils/laserAreas';
 import { LaserBodyMapView } from '../laser/LaserBodyMapView';
@@ -198,8 +201,12 @@ const BlocoItem: React.FC<{ item: QuoteItem; semSeparador: boolean }> = ({ item,
 
   const notas = [
     temDesconto ? `desconto de ${Math.round(itemDescontoPercentual(item))}%` : null,
-    // Contagem de sessões só entra quando é mais de uma
-    sessoes > 1 ? `${sessoes} sessões` : null,
+    // Produto mostra sempre a quantidade; a contagem de sessões só entra quando é mais de uma
+    itemEhProduto(item)
+      ? quantidadeDoProduto(itemQuantidade(item), item.unidade || 'un')
+      : sessoes > 1
+        ? `${sessoes} sessões`
+        : null,
   ].filter(Boolean);
 
   return (

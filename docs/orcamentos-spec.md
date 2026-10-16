@@ -135,6 +135,21 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
 - **Sem nota de preço.** A linha abaixo do valor mostra apenas o desconto e, quando
   houver, a quantidade de sessões.
 
+**Produtos do estoque** (2026-10-16)
+- Ao lado de "+ Adicionar procedimento", **"+ Adicionar produto"** (`ProdutoSearchAdd`) busca
+  nos produtos ativos do Estoque. O item nasce com `produtoId`, `categoria: 'Produto'`, o nome do
+  produto, **quantidade 1** e o **valor repassado à cliente** como valor unitário.
+- No item de produto: nome editável, **Quantidade (unidade)** e **Valor por unidade**; o total da
+  linha (`valorTabela`) = quantidade × valor unitário, refeito a cada mudança. O desconto do item
+  vale sobre esse total. Sem profissional, sem sessões e sem "calcular por consumo".
+- O valor unitário é gravado (`valorUnitario`) porque o estoque tem preço de quatro casas: derivado
+  do total arredondado, R$ 0,0035 o ml viraria zero ao mudar a quantidade. **O custo do produto
+  nunca entra no item** — o orçamento é público pelo link.
+- No PDF e na página pública, a nota do item mostra a quantidade ("2 frascos", "50 U").
+- No custo de material (interno), o material do item de produto é o próprio produto na
+  quantidade vendida, e a margem já conta o que a clínica pagou por ele.
+- Produto não conta como procedimento na sugestão do desconto de plano combinado.
+
 **Totais**
 - Subtotal = soma dos valores finais.
 - Checkbox **desconto plano combinado** → percentual digitado, com sugestão de

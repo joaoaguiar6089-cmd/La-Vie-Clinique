@@ -24,6 +24,8 @@ import { formatBRL, formatDateOnly } from '../../utils/formatters';
 import {
   calcularOrcamento,
   calcularDataValidade,
+  itemEhProduto,
+  itemQuantidade,
   itemSessoes,
   itemValorFinal,
   montarTextoApresentacao,
@@ -35,11 +37,13 @@ import {
   criarOpcaoPagamento,
   montarItemAvulso,
   montarItemDoProcedimento,
+  montarItemDoProduto,
   montarSnapshotClinica,
   sessoesDoProcedimento,
 } from '../../utils/quoteFactory';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { ProcedureSearchAdd } from './ProcedureSearchAdd';
+import { ProdutoSearchAdd } from './ProdutoSearchAdd';
 import { QuoteItemEditor } from './QuoteItemEditor';
 import { QuotePaymentOptionEditor } from './QuotePaymentOptionEditor';
 import { LaserQuoteMapModal } from '../laser/LaserQuoteMapModal';
@@ -57,6 +61,7 @@ import {
   LinhaDeMaterial,
   aplicarConsumoNoItem,
   materiaisDoItem,
+  quantidadeDoProduto,
   tirarConsumoDoItem,
 } from '../../utils/estoque';
 import { CustoDeMaterialDoOrcamento } from './CustoDeMaterialDoOrcamento';
@@ -504,8 +509,23 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     removeItem(existente.id);
   };
 
-  const updateItem = (item: QuoteItem) =>
+  const updateItem = (item: QuoteItem) => {
+    // O custo do item de produto é o próprio produto na quantidade vendida: mudou a quantidade, o
+    // custo volta a acompanhar, mesmo que tenha vindo gravado.
+    const anterior = itens.find((i) => i.id === item.id);
+    if (itemEhProduto(item) && anterior && itemQuantidade(anterior) !== itemQuantidade(item)) {
+      setCustoFixo((atual) => {
+        const novo = new Set(atual);
+        novo.delete(item.id);
+        return novo;
+      });
+    }
     setItens((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+  };
+
+  /** Do estoque: cada produto entra como uma linha nova, com uma unidade. */
+  const addProduto = (produto: ProdutoDeEstoque) =>
+    setItens((prev) => [...prev, montarItemDoProduto(produto)]);
 
   const removeItem = (id: string) => setItens((prev) => prev.filter((i) => i.id !== id));
 
@@ -854,7 +874,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
           <>
             <div className="space-y-3">
               <SectionHeader icon={<Sparkles className="w-4 h-4" />}>
-                Procedimentos ({itens.length})
+                Procedimentos e produtos ({itens.length})
               </SectionHeader>
 
               {errors.itens && (
@@ -890,6 +910,7 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   onAbrirMapa={() => setMapaAberto(true)}
                   areasNoMapa={areasNoOrcamento.size}
                 />
+                <ProdutoSearchAdd produtos={produtos} onAdd={addProduto} />
                 {areasNoOrcamento.size > 0 && (
                   <label className="w-full flex items-center gap-2 text-body text-ink cursor-pointer">
                     <input
@@ -1115,12 +1136,14 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                       <span className="min-w-0">
                         <span className="block text-[15px] font-semibold text-ink">{item.titulo || 'Sem título'}</span>
                         <span className="block text-[13px] text-ink-soft truncate">
-                          {[
-                            item.profissionalNome,
-                            itemSessoes(item) > 1 ? `${itemSessoes(item)} sessões` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ') || 'Sem profissional'}
+                          {itemEhProduto(item)
+                            ? `Produto · ${quantidadeDoProduto(itemQuantidade(item), item.unidade || 'un')}`
+                            : [
+                                item.profissionalNome,
+                                itemSessoes(item) > 1 ? `${itemSessoes(item)} sessões` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ') || 'Sem profissional'}
                         </span>
                       </span>
                       <span className="shrink-0 text-[15px] font-bold text-ink tabular-nums">

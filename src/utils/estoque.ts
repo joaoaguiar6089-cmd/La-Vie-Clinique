@@ -9,7 +9,7 @@ import {
   Quote,
   QuoteItem,
 } from '../types';
-import { itemSessoes } from './quoteCalc';
+import { itemQuantidade, itemSessoes } from './quoteCalc';
 import { procedimentoDoAtendimento } from './evaluations';
 
 /**
@@ -293,6 +293,23 @@ export const quantidadeComUnidade = (quantidade: number, unidade: string): strin
   return /^\d/.test(nome) ? `${numero} × ${nome}` : `${numero} ${nome}`;
 };
 
+/**
+ * A unidade no plural, para o documento da cliente: "frasco" → "frascos", "par" → "pares". Só as
+ * palavras — símbolo ("U", "ml", "un", "g") e o que já tem número ou espaço ficam como estão.
+ */
+const unidadeNoPlural = (unidade: string): string => {
+  if (!/^[a-zà-ú]{3,}$/.test(unidade) || unidade.endsWith('s')) return unidade;
+  if (/[rz]$/.test(unidade)) return `${unidade}es`;
+  if (unidade.endsWith('m')) return `${unidade.slice(0, -1)}ns`;
+  return `${unidade}s`;
+};
+
+/** "2 frascos", "50 U", "1 seringa" — a quantidade do produto vendido, no orçamento e no recibo. */
+export const quantidadeDoProduto = (quantidade: number, unidade: string): string => {
+  const nome = (unidade || '').trim();
+  return quantidadeComUnidade(quantidade, arredondar(numeroValido(quantidade)) > 1 ? unidadeNoPlural(nome) : nome);
+};
+
 // ==========================================
 // CUSTO ESTIMADO DO ORÇAMENTO
 // ==========================================
@@ -302,20 +319,28 @@ export const quantidadeComUnidade = (quantidade: number, unidade: string): strin
  * número de sessões do item — um pacote de 10 sessões de laser gasta dez vezes o gel de uma.
  *
  * O item digitado à mão, fora do catálogo, ainda pode achar o procedimento pelo nome.
+ *
+ * O item de produto não tem consumo padrão: o material dele é o próprio produto, na quantidade
+ * vendida — é o que faz o custo e a margem do orçamento contarem o que a clínica pagou por ele.
  */
 export const materiaisDoItem = (
-  item: Pick<QuoteItem, 'procedureId' | 'titulo' | 'maisDeUmaSessao' | 'sessoes'>,
+  item: Pick<QuoteItem, 'procedureId' | 'titulo' | 'maisDeUmaSessao' | 'sessoes' | 'produtoId' | 'quantidade'>,
   consumos: ConsumoPadrao[],
   produtos: ProdutoDeEstoque[],
   catalogo: Procedure[]
-): MaterialUsado[] =>
-  materiaisSugeridos(
+): MaterialUsado[] => {
+  if (item.produtoId) {
+    const produto = (produtos || []).find((p) => p.id === item.produtoId);
+    return produto ? [linhaDoProduto(produto, itemQuantidade(item))] : [];
+  }
+  return materiaisSugeridos(
     { procedureId: item.procedureId, procedimentoNome: item.titulo },
     consumos,
     produtos,
     catalogo,
     itemSessoes(item as QuoteItem)
   );
+};
 
 /**
  * Os nomes dos produtos de uma lista de consumo — sem repetir e sem linha em branco. É tudo o que

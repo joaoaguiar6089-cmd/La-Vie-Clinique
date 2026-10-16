@@ -17,7 +17,8 @@ import {
   ProdutoDeEstoque,
   QuoteItem,
 } from '../src/types';
-import { clonarItens } from '../src/utils/quoteFactory';
+import { ajustarItemDoProduto, clonarItens, montarItemDoProduto } from '../src/utils/quoteFactory';
+import { contarProcedimentosParaDesconto, itemValorFinal, itemValorUnitario } from '../src/utils/quoteCalc';
 import {
   atendimentosComMateriaisNoPeriodo,
   custoDeMaterialNoPeriodo,
@@ -233,6 +234,57 @@ ok(
   clonarItens([porConsumo])[0].calculadoPorConsumo === true &&
     (clonarItens([porConsumo])[0].produtosDoConsumo || []).length === 2
 );
+
+console.log('== produto do estoque como item do orçamento');
+{
+  const doProduto = montarItemDoProduto(toxina);
+  ok(
+    'nasce com uma unidade pelo valor repassado',
+    doProduto.produtoId === 'toxina' &&
+      doProduto.categoria === 'Produto' &&
+      doProduto.quantidade === 1 &&
+      doProduto.valorTabela === 25 &&
+      doProduto.unidade === 'U'
+  );
+  ok(
+    'o custo do produto não entra no item (o orçamento é público pelo link)',
+    !JSON.stringify(doProduto).includes('custoUnitario') && !Object.values(doProduto).includes(toxina.custoUnitario)
+  );
+  const cinquenta = ajustarItemDoProduto(doProduto, { quantidade: 50 });
+  ok('50 U × R$ 25 = R$ 1.250', cinquenta.valorTabela === 1250, String(cinquenta.valorTabela));
+  const comDesconto = { ...cinquenta, temDesconto: true, valorComDesconto: 1000 };
+  ok('o desconto do item vale sobre o total da linha', itemValorFinal(comDesconto) === 1000);
+  const novoPreco = ajustarItemDoProduto(cinquenta, { valorUnitario: 20 });
+  ok('mudar o valor unitário refaz o total', novoPreco.valorTabela === 1000 && novoPreco.quantidade === 50);
+  ok(
+    'mudar a quantidade mantém o valor unitário',
+    ajustarItemDoProduto(novoPreco, { quantidade: 10 }).valorTabela === 200
+  );
+  const gelVendido = ajustarItemDoProduto(montarItemDoProduto(gel), { quantidade: 1 });
+  ok(
+    'preço de quatro casas não vira zero ao mudar a quantidade',
+    ajustarItemDoProduto(gelVendido, { quantidade: 1000 }).valorTabela === 10,
+    String(ajustarItemDoProduto(gelVendido, { quantidade: 1000 }).valorTabela)
+  );
+  ok('valor unitário derivado num item sem ele', itemValorUnitario({ valorTabela: 90, quantidade: 3 }) === 30);
+  const custoDoProduto = materiaisDoItem(cinquenta, consumos, produtos, catalogo);
+  ok(
+    'o custo de material do item de produto é o próprio produto na quantidade vendida',
+    custoDoProduto.length === 1 && custoDoProduto[0].quantidade === 50 && custoDaLinha(custoDoProduto[0]) === 600
+  );
+  ok('produto excluído do estoque fica sem custo', materiaisDoItem(cinquenta, consumos, [agulha], catalogo).length === 0);
+  ok(
+    'produto não conta como procedimento no desconto de plano combinado',
+    contarProcedimentosParaDesconto([itens[0], doProduto, cinquenta]) === 1
+  );
+  ok(
+    'clonar mantém produto, unidade e quantidade',
+    (() => {
+      const [c] = clonarItens([cinquenta]);
+      return c.id !== cinquenta.id && c.produtoId === 'toxina' && c.quantidade === 50 && c.unidade === 'U';
+    })()
+  );
+}
 
 console.log('== financeiro');
 const at = (id: string, data: string, extra: Partial<Attendance> = {}): Attendance => ({
