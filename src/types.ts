@@ -312,6 +312,15 @@ export interface PedidoDeNavegacao {
   quoteId?: string;
   /** Procedimento a abrir nos detalhes, quando o destino é o catálogo. */
   procedureId?: string;
+  /** Atendimento a abrir no detalhe, quando o destino é a Agenda — o "Abrir na agenda" do painel. */
+  atendimentoId?: string;
+  /**
+   * Com `criarNovo` na Agenda: a semente do formulário (paciente, procedimento, profissional),
+   * no mesmo formato da remarcação. Vem do "Agendar" e do "Registrar o atendimento" do painel.
+   */
+  sementeDoAtendimento?: Attendance;
+  /** A visita é para o acompanhamento da avaliação: só aceita o que já aconteceu e, salva, o abre. */
+  paraAcompanhar?: boolean;
   nonce: number;
 }
 

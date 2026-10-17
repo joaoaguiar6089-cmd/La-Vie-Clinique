@@ -17,6 +17,7 @@ import {
   AppView,
   Attendance,
   ClinicProfile,
+  EvaluationRecord,
   Patient,
   Procedure,
   Professional,
@@ -33,6 +34,7 @@ import { dataPorExtenso, saudacaoDaHora } from '../../utils/indicadores';
 import { BotaoRedondo, GatilhoDeBusca, MenuDeAcoes, TituloDaTela } from '../common/Tinta';
 import { AcaoDeCriacao } from '../BottomNav';
 import { LinhaDoTempoDaClinica } from './LinhaDoTempoDaClinica';
+import { AlvoDoPasso } from '../linhaDoTempo/PainelDoEvento';
 
 /**
  * A tela inicial.
@@ -67,6 +69,11 @@ interface HojeViewProps {
   /** Abre uma seção — os atalhos da sequência do atendimento. */
   onIrPara: (view: AppView) => void;
   onAbrirPaciente: (pacienteId: string) => void;
+  /** Os passos do painel da linha do tempo que abrem em outra tela — ver `LinhaDoTempoDaClinica`. */
+  onAgendar: (alvo: AlvoDoPasso & { professionalId?: string }) => void;
+  onRegistrarVisita: (avaliacao: EvaluationRecord) => void;
+  onAbrirNaAgenda: (a: Attendance) => void;
+  onNovaAnamnese: (alvo: AlvoDoPasso & { templateId?: string }) => void;
 }
 
 /** Os documentos da paciente na ordem em que o atendimento acontece. */
@@ -219,6 +226,10 @@ export const HojeView: React.FC<HojeViewProps> = ({
   onIrParaAgenda,
   onIrPara,
   onAbrirPaciente,
+  onAgendar,
+  onRegistrarVisita,
+  onAbrirNaAgenda,
+  onNovaAnamnese,
 }) => {
   const hoje = hojeISO();
 
@@ -316,7 +327,12 @@ export const HojeView: React.FC<HojeViewProps> = ({
         quotes={quotes}
         templatesAnamnese={templatesAnamnese}
         carregando={carregando}
+        professionalLogadaId={professionalLogada?.id}
         onAbrirPaciente={onAbrirPaciente}
+        onAgendar={onAgendar}
+        onRegistrarVisita={onRegistrarVisita}
+        onAbrirNaAgenda={onAbrirNaAgenda}
+        onNovaAnamnese={onNovaAnamnese}
       />
     </div>
   );

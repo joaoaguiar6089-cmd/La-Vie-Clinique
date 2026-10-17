@@ -33,7 +33,10 @@ import {
   subscribeToRegistrosDeFicha,
 } from '../../services/databaseService';
 import { useAcoesDeOrcamento } from '../quotes/useAcoesDeOrcamento';
-import { AcoesDaLinha, ItemDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoTempo';
+import { ItemDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoTempo';
+import { AcoesDaLinha, AlvoDoPasso, PainelDoEvento } from '../linhaDoTempo/PainelDoEvento';
+import { EmissaoDeAvaliacao } from '../evaluations/EmissaoDeAvaliacao';
+import { ContextoDaJornada } from '../../utils/passosDaJornada';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { SkeletonLinhas } from '../common/Skeleton';
@@ -47,7 +50,17 @@ interface LinhaDoTempoDaClinicaProps {
   /** Fichas-modelo de anamnese — a ficha aberta resolve por elas a imagem orientativa e o termo. */
   templatesAnamnese: AnamnesisTemplate[];
   carregando?: boolean;
+  /** Profissional logada — já vem escolhida na avaliação nova. */
+  professionalLogadaId?: string;
   onAbrirPaciente: (pacienteId: string) => void;
+  /**
+   * Os passos que saem da tela Hoje: o agendamento, a visita para o acompanhamento e a anamnese
+   * nova abrem na Agenda e em Fichas, onde moram os formulários com tudo o que eles precisam.
+   */
+  onAgendar: (alvo: AlvoDoPasso & { professionalId?: string }) => void;
+  onRegistrarVisita: (avaliacao: EvaluationRecord) => void;
+  onAbrirNaAgenda: (a: Attendance) => void;
+  onNovaAnamnese: (alvo: AlvoDoPasso & { templateId?: string }) => void;
 }
 
 /** A última escolha de período fica no aparelho — é preferência de quem usa, não da clínica. */
@@ -82,7 +95,12 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
   quotes,
   templatesAnamnese,
   carregando,
+  professionalLogadaId,
   onAbrirPaciente,
+  onAgendar,
+  onRegistrarVisita,
+  onAbrirNaAgenda,
+  onNovaAnamnese,
 }) => {
   const hoje = hojeISO();
   const corte = corteDaLinha(hoje);
@@ -99,6 +117,10 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
   const [anamneseAberta, setAnamneseAberta] = useState<AnamnesisRecord | null>(null);
   const [avaliacaoAberta, setAvaliacaoAberta] = useState<EvaluationRecord | null>(null);
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
+  /** O evento tocado: abre o painel com o documento e o passo seguinte. */
+  const [aberto, setAberto] = useState<ItemDaLinha | null>(null);
+  /** A avaliação pedida pelo painel da anamnese, com a paciente e o procedimento dela. */
+  const [avaliacaoNova, setAvaliacaoNova] = useState<AlvoDoPasso | null>(null);
 
   const acoesDeOrcamento = useAcoesDeOrcamento({
     clinic,
@@ -162,15 +184,28 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
     onVerAnamnese: setAnamneseAberta,
     onVerAvaliacao: setAvaliacaoAberta,
     onAcompanhamento: setAcompanhando,
+    onNovaAnamnese,
+    onNovaAvaliacao: setAvaliacaoNova,
+    onAgendar,
+    onRegistrarVisita,
+    onAbrirNaAgenda,
+    onAbrirPaciente,
   };
 
-  /** O toque no título: a ficha, a prévia, ou — no atendimento — a página da paciente. */
-  const abrir = (item: ItemDaLinha) => {
-    if (item.tipo === 'anamnese') setAnamneseAberta(item.ref);
-    else if (item.tipo === 'avaliacao') setAvaliacaoAberta(item.ref);
-    else if (item.tipo === 'orcamento') acoesDeOrcamento.abrirPrevia(item.ref);
-    else onAbrirPaciente(item.ref.pacienteId);
-  };
+  /**
+   * O que o painel sabe da paciente. Anamneses e avaliações são as dos últimos 30 dias — basta:
+   * o passo seguinte de um evento vem depois dele, e a linha não mostra nada mais antigo.
+   */
+  const contexto: ContextoDaJornada = useMemo(
+    () => ({
+      atendimentos,
+      anamneses,
+      avaliacoes,
+      catalogo: catalogProcedures,
+      templatesAnamnese,
+    }),
+    [atendimentos, anamneses, avaliacoes, catalogProcedures, templatesAnamnese]
+  );
 
   const alternarTipo = (tipo: FiltroDeTipo) =>
     setTipos((atual) => (atual.includes(tipo) ? atual.filter((t) => t !== tipo) : [...atual, tipo]));
@@ -295,9 +330,8 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
                   <ItemDaLinhaDoTempo
                     key={`${item.tipo}-${item.id}`}
                     item={item}
-                    acoes={acoes}
                     onAbrirPaciente={onAbrirPaciente}
-                    onAbrir={abrir}
+                    onAbrir={setAberto}
                   />
                 ))}
               </ol>
@@ -317,6 +351,33 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
       )}
 
       {acoesDeOrcamento.modais}
+
+      {aberto && (
+        <PainelDoEvento
+          item={aberto}
+          contexto={contexto}
+          acoes={acoes}
+          onFechar={() => setAberto(null)}
+        />
+      )}
+
+      <EmissaoDeAvaliacao
+        aberto={!!avaliacaoNova}
+        onFechar={() => setAvaliacaoNova(null)}
+        pacientes={pacientes}
+        catalogo={catalogProcedures}
+        professionals={clinic.professionals || []}
+        clinic={clinic}
+        professionalIdPadrao={professionalLogadaId}
+        pacienteInicial={pacientes.find((p) => p.id === avaliacaoNova?.pacienteId) || null}
+        procedimentoInicial={avaliacaoNova?.tratamento || null}
+        onMontarOrcamento={(avaliacao) =>
+          acoesDeOrcamento.abrirDaAvaliacao(
+            avaliacao,
+            pacientes.find((p) => p.id === avaliacao.pacienteId)
+          )
+        }
+      />
 
       {anamneseAberta && (
         <PrintableAnamnesisSheet

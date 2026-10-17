@@ -30,6 +30,16 @@ import { useEffect } from 'react';
  */
 let largada: { marca: string; timer: ReturnType<typeof setTimeout> } | null = null;
 
+/**
+ * O navegador, ao voltar no histórico, devolve a rolagem que a página tinha naquela entrada. Aqui
+ * toda entrada é de um painel, e a página não muda de lugar ao fechar um — mas quando o painel
+ * leva a outra tela (o "Agendar" do painel da linha do tempo abre a Agenda), o `history.back()`
+ * do fechamento devolvia a rolagem da tela Hoje à Agenda, que abria lá no rodapé.
+ */
+if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual';
+}
+
 export function useVoltarFecha(aberto: boolean, fechar: () => void): void {
   useEffect(() => {
     if (!aberto || typeof window === 'undefined') return;

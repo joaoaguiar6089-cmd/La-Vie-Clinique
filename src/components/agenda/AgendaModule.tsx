@@ -39,7 +39,7 @@ import {
   diasVisiveisDaSemana,
 } from '../../utils/agenda';
 import { respostasParaResolver } from '../../utils/agendamentoLink';
-import { DataISO, hojeISO, progressoDoPlano, numeroDaSessao } from '../../utils/attendances';
+import { DataISO, ehRealizado, hojeISO, progressoDoPlano, numeroDaSessao } from '../../utils/attendances';
 import { aviso, ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { AttendanceFormModal, ModoDoFormulario } from '../patients/AttendanceFormModal';
 import { AgendaToolbar } from './AgendaToolbar';
@@ -95,6 +95,8 @@ interface EstadoDoFormulario {
   modo: ModoDoFormulario;
   atendimento?: Attendance | null;
   semente?: { data: DataISO; hora?: string };
+  /** A visita pedida pelo painel da avaliação: só o que já aconteceu, e salva abre o acompanhamento. */
+  paraAcompanhar?: boolean;
 }
 
 const visaoInicial = (): AgendaVisao => {
@@ -353,8 +355,22 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   useEffect(() => {
     if (!pedido) return;
     if (pedido.data) irParaDia(pedido.data as DataISO);
-    if (pedido.criarNovo) {
+    if (pedido.criarNovo && pedido.sementeDoAtendimento) {
+      // Do painel da linha do tempo: a paciente e o procedimento já escolhidos.
+      setErro(null);
+      setDetalhe(null);
+      setPacienteDoForm(pacientes.find((p) => p.id === pedido.sementeDoAtendimento!.pacienteId) || null);
+      setFormulario({
+        modo: 'novo',
+        atendimento: pedido.sementeDoAtendimento,
+        paraAcompanhar: pedido.paraAcompanhar,
+      });
+    } else if (pedido.criarNovo) {
       abrirNovo(pedido.data ? { data: pedido.data as DataISO, hora: pedido.hora } : undefined);
+    }
+    if (pedido.atendimentoId) {
+      const alvo = atendimentos.find((a) => a.id === pedido.atendimentoId);
+      if (alvo) setDetalhe(alvo);
     }
     onPedidoAtendido?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -585,6 +601,8 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
       pacienteACriar: cadastroSeraCriado ? pacienteDoForm || undefined : undefined,
       limparConfirmacao: opcoes?.limparConfirmacao,
     });
+    // Pedida pelo painel da avaliação: a visita existia só para levar o acompanhamento.
+    if (formulario?.paraAcompanhar && ehRealizado(registro)) setAcompanhando(registro);
     // Compareceu: o acompanhamento é o passo seguinte, e é agora que a profissional lembra.
     if (formulario?.modo === 'confirmacao') {
       const pergunta = perguntaDoAcompanhamento(formulario.atendimento, registro, setAcompanhando);
@@ -799,6 +817,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         professionalIdPadrao={currentProfessionalId}
         atendimento={formulario?.atendimento}
         modo={formulario?.modo || 'novo'}
+        soVisitaFeita={formulario?.paraAcompanhar}
         onSalvar={handleSalvar}
       />
 

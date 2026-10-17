@@ -42,6 +42,10 @@ import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
 import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
 import { AnamnesisFormFillModal } from '../anamnesis/AnamnesisFormFillModal';
+import { EscolhaDaAnamnese } from '../anamnesis/EscolhaDaAnamnese';
+import { ShareAnamnesisLinkModal } from '../anamnesis/ShareAnamnesisLinkModal';
+import { AlvoDoPasso } from '../linhaDoTempo/PainelDoEvento';
+import { isLaserCategory } from '../../utils/templateMatching';
 import { montarEspelhoPublico } from '../../utils/laserAreas';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
 import { useAcoesDeOrcamento } from '../quotes/useAcoesDeOrcamento';
@@ -111,6 +115,18 @@ interface PatientDetailViewProps {
   onEncerrarPlano: (plano: SessionPlan) => void;
   onReabrirPlano: (plano: SessionPlan) => void;
   onExcluirPlano: (plano: SessionPlan) => void;
+  /** "Agendar", do painel da linha do tempo: o formulário de atendimento já com o procedimento. */
+  onAgendar: (alvo: AlvoDoPasso & { professionalId?: string }) => void;
+  /** A visita que o acompanhamento da avaliação precisa — salva, abre o acompanhamento. */
+  onRegistrarVisita: (avaliacao: EvaluationRecord) => void;
+  onAbrirNaAgenda: (a: Attendance) => void;
+}
+
+/** A anamnese nova: a ficha e o procedimento com que ela já nasce. */
+interface SementeDaAnamnese {
+  templateId?: string;
+  procedureId?: string;
+  procedimentoNome?: string;
 }
 
 /**
@@ -169,6 +185,9 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   onEncerrarPlano,
   onReabrirPlano,
   onExcluirPlano,
+  onAgendar,
+  onRegistrarVisita,
+  onAbrirNaAgenda,
 }) => {
   /**
    * Mapa corporal do laser, montado do catálogo — a ficha impressa desta tela precisa desenhar as
@@ -187,6 +206,10 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   const menuNovoRef = useRef<HTMLDivElement>(null);
 
   const [fichaModalAberto, setFichaModalAberto] = useState(false);
+  /** Toda anamnese nova começa pela pergunta: enviar o link ou preencher aqui. */
+  const [escolhendoAnamnese, setEscolhendoAnamnese] = useState(false);
+  const [linkDaAnamneseAberto, setLinkDaAnamneseAberto] = useState(false);
+  const [sementeDaAnamnese, setSementeDaAnamnese] = useState<SementeDaAnamnese>({});
   const [fichaAberta, setFichaAberta] = useState<AnamnesisRecord | null>(null);
   /** Novo, visualizar, compartilhar, duplicar, substituir — as mesmas ações da tela de Orçamentos. */
   const acoesDeOrcamento = useAcoesDeOrcamento({
@@ -197,6 +220,10 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   });
   const recibosCtx = useRecibos();
   const [emitindoAvaliacao, setEmitindoAvaliacao] = useState(false);
+  /** O procedimento da anamnese, quando a avaliação foi pedida pelo painel dela. */
+  const [procedimentoDaAvaliacao, setProcedimentoDaAvaliacao] = useState<
+    { procedureId?: string; procedimentoNome: string } | null
+  >(null);
   const [avaliacaoAberta, setAvaliacaoAberta] = useState<EvaluationRecord | null>(null);
 
   useEffect(() => {
@@ -227,19 +254,31 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
       onNovoAtendimento();
     } else if (tipo === 'anamnese') {
       irParaFichas('anamneses');
-      setFichaModalAberto(true);
+      novaAnamnese({});
     } else if (tipo === 'recibo') {
       irParaFinanceiro('recibos');
       recibosCtx?.abrirNovo(patient);
     } else if (tipo === 'avaliacao') {
       // A avaliação aparece na linha do tempo do Resumo, que é onde ela mora nesta página.
       setAba('resumo');
+      setProcedimentoDaAvaliacao(null);
       setEmitindoAvaliacao(true);
     } else {
       irParaFinanceiro('orcamentos');
       acoesDeOrcamento.abrirNovo(patient);
     }
   };
+
+  const novaAnamnese = (semente: SementeDaAnamnese) => {
+    setSementeDaAnamnese(semente);
+    setEscolhendoAnamnese(true);
+  };
+
+  /** Na ficha única do laser, a área do procedimento já vem marcada no manequim. */
+  const areaDoLaserDaSemente = (() => {
+    const proc = catalogProcedures.find((p) => p.id === sementeDaAnamnese.procedureId);
+    return proc && isLaserCategory(proc.category) ? proc.id : undefined;
+  })();
 
   /** Agendamento futuro não é atendimento feito — o contador da aba conta só o que aconteceu. */
   const totalAtendimentos = contarAtendimentosRealizados(atendimentos);
@@ -447,11 +486,25 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           quotes={quotes}
           avaliacoes={avaliacoes}
           catalogProcedures={catalogProcedures}
+          templates={templates}
           acoes={{
             orcamento: acoesDeOrcamento,
             onVerAnamnese: setFichaAberta,
             onVerAvaliacao: setAvaliacaoAberta,
             onAcompanhamento: onAcompanhamentoAtendimento,
+            onNovaAnamnese: ({ tratamento, templateId }) =>
+              novaAnamnese({
+                templateId,
+                procedureId: tratamento?.procedureId,
+                procedimentoNome: tratamento?.procedimentoNome,
+              }),
+            onNovaAvaliacao: ({ tratamento }) => {
+              setProcedimentoDaAvaliacao(tratamento || null);
+              setEmitindoAvaliacao(true);
+            },
+            onAgendar,
+            onRegistrarVisita,
+            onAbrirNaAgenda,
           }}
           onIrParaFichas={irParaFichas}
           onAgendarSessao={(plano) => {
@@ -541,12 +594,6 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                           {ficha.profissionalNome && ` · ${ficha.profissionalNome}`}
                         </p>
                       </div>
-
-                      {ficha.origemPreenchimento === 'online_paciente' && !anamneseFechada(ficha) && (
-                        <span className="px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border bg-amber-50 text-amber-700 border-amber-200">
-                          Aguardando atendimento
-                        </span>
-                      )}
 
                       <div className="flex items-center gap-0.5 ml-auto">
                         <button
@@ -785,6 +832,28 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         </div>
       )}
 
+      <EscolhaDaAnamnese
+        aberto={escolhendoAnamnese}
+        onFechar={() => setEscolhendoAnamnese(false)}
+        pacienteNome={patient.nome}
+        procedimentoNome={sementeDaAnamnese.procedimentoNome}
+        podeEnviarLink={templates.length > 0}
+        onPreencherAqui={() => setFichaModalAberto(true)}
+        onEnviarLink={() => setLinkDaAnamneseAberto(true)}
+      />
+
+      {linkDaAnamneseAberto && (
+        <ShareAnamnesisLinkModal
+          isOpen
+          onClose={() => setLinkDaAnamneseAberto(false)}
+          templates={templates}
+          patients={todosPacientes}
+          clinicProfile={clinic}
+          initialPatientId={patient.id}
+          initialTemplateId={sementeDaAnamnese.templateId}
+        />
+      )}
+
       {/* Nova anamnese — já com este paciente escolhido */}
       <AnamnesisFormFillModal
         isOpen={fichaModalAberto}
@@ -795,6 +864,8 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         clinicProfile={clinic}
         catalogProcedures={catalogProcedures}
         initialPatientId={patient.id}
+        initialTemplateId={sementeDaAnamnese.templateId}
+        initialAreaLaserId={areaDoLaserDaSemente}
         onSavePatient={onSalvarPaciente}
         onSaveRecord={onSalvarFicha}
         onOpenRecordDetail={(rec) => setFichaAberta(rec)}
@@ -835,6 +906,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         clinic={clinic}
         professionalIdPadrao={currentProfessionalId}
         pacienteInicial={patient}
+        procedimentoInicial={procedimentoDaAvaliacao}
         onMontarOrcamento={(avaliacao) => acoesDeOrcamento.abrirDaAvaliacao(avaliacao, patient)}
       />
 
