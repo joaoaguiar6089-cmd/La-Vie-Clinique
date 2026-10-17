@@ -86,6 +86,10 @@ service firebase.storage {
     // Acompanhamento: mapa anatômico das fichas-modelo, foto de cada atendimento e as versões
     // anotadas. Mesma regra e mesmo motivo da avaliação logo acima — e a mesma consequência se
     // faltar: a foto voltaria a ser base64 dentro do documento do Firestore.
+    //
+    // Também as fotos do antes e depois enviadas do aparelho direto para um ângulo da paciente
+    // (`acompanhamentos/antes-depois/{pacienteId}/`) — são fotos clínicas da mesma natureza. Ali o
+    // envio que falha é recusado em vez de cair na base64.
     match /acompanhamentos/{allPaths=**} {
       allow read: if true;
       allow write: if request.auth != null && ehImagem() && cabeNoLimite();

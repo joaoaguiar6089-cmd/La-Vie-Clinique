@@ -430,8 +430,42 @@ export interface Patient {
   cpf?: string;
   email?: string;
   observacoes?: string;
+  /**
+   * O antes e depois dela, um par de fotos por ângulo (frente, perfil...). A equipe escolhe cada
+   * foto — o sistema não monta par nenhum sozinho. Ler sempre por `angulosDaPaciente()`.
+   */
+  angulosAntesDepois?: AnguloAntesDepois[];
   createdAt: string;
   updatedAt?: string;
+}
+
+/**
+ * Um ângulo do antes e depois. Uma comparação só não basta: o mesmo tratamento costuma ser
+ * fotografado de frente e de perfil, e cada ângulo só se compara com ele mesmo.
+ *
+ * Mora no documento da paciente, e não numa coleção própria: são poucos ângulos, cada um com duas
+ * URLs, e `savePatient` grava com `merge` — o quadro de dados pessoais não apaga o que está aqui.
+ */
+export interface AnguloAntesDepois {
+  id: string;
+  /** "Frente", "Perfil direito"... livre. */
+  nome: string;
+  antes?: FotoAntesDepois;
+  depois?: FotoAntesDepois;
+}
+
+/** Uma foto posta num lado do ângulo. A URL é sempre do Storage — nunca base64. */
+export interface FotoAntesDepois {
+  url: string;
+  /** YYYY-MM-DD — o dia da ficha de onde a foto veio, ou o dia em que foi enviada. */
+  data?: string;
+  /** A legenda de onde ela veio: "Acompanhamento · Limpeza de pele", "Enviada". */
+  origem?: string;
+  /**
+   * Enviada do aparelho direto para o ângulo. Só esta pode ser apagada do Storage ao sair do
+   * ângulo — a que veio de uma ficha continua sendo da ficha.
+   */
+  enviada?: boolean;
 }
 
 export interface AnamnesisRecord {

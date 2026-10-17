@@ -89,6 +89,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
   /** Avaliações da paciente aberta — lidas só enquanto a página dela está na tela. */
   const [avaliacoes, setAvaliacoes] = useState<EvaluationRecord[]>([]);
+  const [acompanhamentos, setAcompanhamentos] = useState<EvaluationRecord[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [records, setRecords] = useState<AnamnesisRecord[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -171,6 +172,23 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
       return;
     }
     return subscribeToRegistrosDeFicha('avaliacao', { pacienteId: pacienteAberto.id }, setAvaliacoes);
+  }, [pacienteAberto?.id, pacienteAbertoCadastrado]);
+
+  /**
+   * Os acompanhamentos dela, pela mesma consulta por paciente — a página usa só as fotos da sessão,
+   * que são o "depois" do antes e depois. Sem cadastro não há acompanhamento: ele nasce de um
+   * atendimento, e o atendimento cria o cadastro.
+   */
+  useEffect(() => {
+    if (!pacienteAberto || !pacienteAbertoCadastrado) {
+      setAcompanhamentos([]);
+      return;
+    }
+    return subscribeToRegistrosDeFicha(
+      'acompanhamento',
+      { pacienteId: pacienteAberto.id },
+      setAcompanhamentos
+    );
   }, [pacienteAberto?.id, pacienteAbertoCadastrado]);
 
   /** O cadastro dele ainda não existe — o formulário de atendimento avisa que vai criá-lo. */
@@ -405,6 +423,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           atendimentos={doPacienteAberto.atendimentos}
           planos={doPacienteAberto.planos}
           avaliacoes={avaliacoes}
+          acompanhamentos={acompanhamentos}
           todosPacientes={patients}
           templates={templates}
           generalQuestions={generalQuestions}
