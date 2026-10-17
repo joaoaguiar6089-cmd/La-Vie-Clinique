@@ -12,14 +12,15 @@ import {
 } from '../../types';
 import { hojeISO } from '../../utils/attendances';
 import {
+  FiltroDeTipo,
   MAIOR_PERIODO_DA_LINHA,
   PERIODOS_DA_LINHA,
   TIPOS_DA_LINHA,
-  TipoNaLinha,
   agruparPorDia,
   contarPorTipo,
   corteDaLinha,
   linhaDaClinica,
+  passaNoFiltroDeTipo,
 } from '../../utils/linhaDoTempoClinica';
 import { ItemDaLinha } from '../../utils/pacienteResumo';
 import { alvoDoAtendimento, alvoDoRegistro } from '../../utils/fichasClinicas';
@@ -88,7 +89,7 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
 
   const [dias, setDias] = useState<number>(periodoInicial);
   const [busca, setBusca] = useState('');
-  const [tipos, setTipos] = useState<TipoNaLinha[]>([]);
+  const [tipos, setTipos] = useState<FiltroDeTipo[]>([]);
   const [limite, setLimite] = useState(PAGINA);
   const [anamneses, setAnamneses] = useState<AnamnesisRecord[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<EvaluationRecord[]>([]);
@@ -145,7 +146,7 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
   );
   const contagem = useMemo(() => contarPorTipo(semTipo), [semTipo]);
   const filtrados = useMemo(
-    () => (tipos.length === 0 ? semTipo : semTipo.filter((i) => tipos.includes(i.tipo))),
+    () => semTipo.filter((i) => passaNoFiltroDeTipo(i, tipos)),
     [semTipo, tipos]
   );
   const visiveis = filtrados.slice(0, limite);
@@ -171,7 +172,7 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
     else onAbrirPaciente(item.ref.pacienteId);
   };
 
-  const alternarTipo = (tipo: TipoNaLinha) =>
+  const alternarTipo = (tipo: FiltroDeTipo) =>
     setTipos((atual) => (atual.includes(tipo) ? atual.filter((t) => t !== tipo) : [...atual, tipo]));
 
   const chip = (ativo: boolean) =>
@@ -279,7 +280,7 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
           <p className="text-body text-muted mt-1">
             {dias < MAIOR_PERIODO_DA_LINHA
               ? 'Aumente o período para ver mais.'
-              : 'Atendimentos, orçamentos, anamneses e avaliações aparecem aqui conforme acontecem.'}
+              : 'Orçamentos, anamneses, avaliações, atendimentos e acompanhamentos aparecem aqui conforme acontecem.'}
           </p>
         </div>
       ) : (

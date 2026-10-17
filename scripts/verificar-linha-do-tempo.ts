@@ -42,7 +42,13 @@ const atd = (id: string, data: string, extra: Partial<Attendance> = {}): Attenda
 
 const atendimentos: Attendance[] = [
   atd('realizado-hoje', HOJE, { hora: '10:00' }),
-  atd('compareceu-ontem', dia(1), { status: 'compareceu', hora: '15:00' }),
+  atd('compareceu-ontem', dia(1), {
+    status: 'compareceu',
+    hora: '15:00',
+    acompanhamentoPreenchidoEm: `${dia(1)}T16:00:00`,
+  }),
+  // Só os materiais lançados também é registro de acompanhamento.
+  atd('so-materiais', dia(4), { status: 'compareceu', materiaisRegistradosEm: `${dia(4)}T11:00:00` }),
   atd('faltou', dia(2), { status: 'faltou' }),
   atd('agendado-hoje', HOJE, { status: 'agendado', hora: '17:00' }),
   atd('remarcado', dia(3), { status: 'remarcado' }),
@@ -95,10 +101,11 @@ const ids = (itens: { id: string }[]) => itens.map((i) => i.id);
 console.log('== quem entra');
 ok('realizado de hoje entra', atendimentoEntraNaLinha(atendimentos[0], HOJE));
 ok('compareceu entra', atendimentoEntraNaLinha(atendimentos[1], HOJE));
-ok('faltou entra (com selo)', atendimentoEntraNaLinha(atendimentos[2], HOJE));
-ok('agendado fica de fora', !atendimentoEntraNaLinha(atendimentos[3], HOJE));
-ok('remarcado fica de fora', !atendimentoEntraNaLinha(atendimentos[4], HOJE));
-ok('data futura fica de fora', !atendimentoEntraNaLinha(atendimentos[5], HOJE));
+ok('só com materiais entra', atendimentoEntraNaLinha(atendimentos[2], HOJE));
+ok('faltou entra (com selo)', atendimentoEntraNaLinha(atendimentos[3], HOJE));
+ok('agendado fica de fora', !atendimentoEntraNaLinha(atendimentos[4], HOJE));
+ok('remarcado fica de fora', !atendimentoEntraNaLinha(atendimentos[5], HOJE));
+ok('data futura fica de fora', !atendimentoEntraNaLinha(atendimentos[6], HOJE));
 
 console.log('== períodos');
 const hoje = linhaDaClinica(dados, { dias: 1 }, HOJE);
@@ -126,7 +133,7 @@ ok(
 );
 
 console.log('== busca e tipo');
-ok('busca sem acento acha "Ana Lúcia"', linhaDaClinica(dados, { dias: 30, busca: 'ana lucia' }, HOJE).length === 4);
+ok('busca sem acento acha "Ana Lúcia"', linhaDaClinica(dados, { dias: 30, busca: 'ana lucia' }, HOJE).length === 5);
 ok('busca pelo procedimento', ids(linhaDaClinica(dados, { dias: 30, busca: 'laser' }, HOJE)).join() === 'an1');
 ok('busca pelo número do orçamento', ids(linhaDaClinica(dados, { dias: 30, busca: '0148' }, HOJE)).join() === 'q1');
 ok('busca pelo item do orçamento', ids(linhaDaClinica(dados, { dias: 30, busca: 'bioestim' }, HOJE)).join() === 'q1');
@@ -134,10 +141,28 @@ ok(
   'filtro por tipo',
   ids(linhaDaClinica(dados, { dias: 30, tipos: ['orcamento', 'avaliacao'] }, HOJE)).join() === 'q1,av1'
 );
+ok(
+  'filtro por acompanhamento: só atendimentos com registro',
+  ids(linhaDaClinica(dados, { dias: 30, tipos: ['acompanhamento'] }, HOJE)).join() === 'compareceu-ontem,so-materiais'
+);
+ok(
+  'acompanhamento junto com orçamento',
+  ids(linhaDaClinica(dados, { dias: 30, tipos: ['acompanhamento', 'orcamento'] }, HOJE)).join() ===
+    'compareceu-ontem,so-materiais,q1'
+);
+ok(
+  'atendimento e acompanhamento juntos não repetem a visita',
+  ids(linhaDaClinica(dados, { dias: 30, tipos: ['atendimento', 'acompanhamento'] }, HOJE)).join() ===
+    'realizado-hoje,compareceu-ontem,faltou,so-materiais'
+);
 const contagem = contarPorTipo(trinta);
 ok(
   'contagem por tipo',
-  contagem.atendimento === 3 && contagem.orcamento === 1 && contagem.anamnese === 1 && contagem.avaliacao === 1,
+  contagem.atendimento === 4 &&
+    contagem.orcamento === 1 &&
+    contagem.anamnese === 1 &&
+    contagem.avaliacao === 1 &&
+    contagem.acompanhamento === 2,
   JSON.stringify(contagem)
 );
 
