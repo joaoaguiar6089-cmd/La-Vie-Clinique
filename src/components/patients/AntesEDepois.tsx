@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, ImagePlus, Loader2, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { AnguloAntesDepois, FotoAntesDepois, Patient } from '../../types';
-import { FotoDaPaciente, ROTULO_DA_ORIGEM, angulosDaPaciente } from '../../utils/pacienteResumo';
+import { FotoDaPaciente, angulosDaPaciente, legendaDaFoto } from '../../utils/pacienteResumo';
 import { hojeISO } from '../../utils/attendances';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { apagarImagemDoStorage, subirImagem } from '../../services/imageStorage';
@@ -85,7 +85,7 @@ export const AntesEDepois: React.FC<AntesEDepoisProps> = ({ patient, fotos, onSa
       incluir({
         url: f.url,
         data: (f.data || '').slice(0, 10),
-        origem: [ROTULO_DA_ORIGEM[f.tipo], f.procedimentoNome].filter(Boolean).join(' · '),
+        origem: legendaDaFoto(f),
       })
     );
     salvos

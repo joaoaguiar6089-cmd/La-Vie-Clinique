@@ -52,8 +52,8 @@ import { AttendancesTab, contarAtendimentosRealizados } from './AttendancesTab';
 import { anamneseFechada } from '../../utils/evaluations';
 import { encerrarAnamnese, reabrirAnamnese } from '../../services/databaseService';
 import {
-  ROTULO_DA_ORIGEM,
   fotosDaPaciente,
+  legendaDaFoto,
   idadeDe,
   iniciaisDe,
   pacienteDesde,
@@ -488,7 +488,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                         {formatDateOnly(f.data.slice(0, 10))}
                       </span>
                       <span className="block text-body text-muted truncate">
-                        {[ROTULO_DA_ORIGEM[f.tipo], f.procedimentoNome].filter(Boolean).join(' · ')}
+                        {legendaDaFoto(f)}
                       </span>
                     </figcaption>
                   </figure>
