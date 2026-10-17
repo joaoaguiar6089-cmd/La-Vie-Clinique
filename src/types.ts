@@ -1285,6 +1285,38 @@ export interface FotoDaSessao {
   anotadaUrl?: string;
   /** Estado do canvas (JSON do Fabric.js), para reabrir e continuar anotando. */
   anotacoesJson?: string;
+  /**
+   * Legenda curta que identifica a foto — "frente", "perfil direito", "detalhe da cicatriz".
+   * Sem ela, seis fotos parecidas de uma sessão só se distinguem pela ordem em que subiram.
+   */
+  legenda?: string;
+}
+
+/**
+ * Perguntas que entraram **neste** registro sem virem da ficha-modelo do procedimento.
+ *
+ * Nasce do procedimento que não tem ficha de acompanhamento: a profissional puxa as perguntas de
+ * outra ficha-modelo (um grupo por ficha) ou cria um "Novo dado" à mão. Mora no registro, e não
+ * vira ficha-modelo, porque é a solução daquele atendimento — cadastrar a ficha do procedimento
+ * continua sendo o caminho para os próximos.
+ *
+ * O grupo inteiro fica gravado, inclusive as perguntas ainda sem resposta: o `perguntasSnapshot`
+ * só guarda as respondidas, e reabrir a ficha para completar faria sumir justamente o que faltava.
+ */
+export interface GrupoDePerguntasExtra {
+  id: string;
+  /** Nome da ficha-modelo de onde veio, ou "Outros dados" no grupo dos campos livres. */
+  titulo: string;
+  /** Ficha-modelo de origem. Ausente no grupo dos campos livres. */
+  origemFichaId?: string;
+  origemTipo?: 'avaliacao' | 'acompanhamento';
+  /** `true` = o grupo do "Novo dado": rótulo editável e campo de texto. */
+  livre?: boolean;
+  /**
+   * Cópia das perguntas, com ids próprios do grupo — duas fichas-modelo podem ter nascido uma da
+   * outra e repetir ids, e a resposta de uma não pode aparecer na outra.
+   */
+  perguntas: AnamnesisQuestion[];
 }
 
 /**
@@ -1325,6 +1357,8 @@ export interface EvaluationRecord {
    * que evita pagar KB por pergunta em branco em todo registro.
    */
   perguntasSnapshot: AnamnesisQuestion[];
+  /** Perguntas puxadas de outra ficha-modelo e campos livres — ver `GrupoDePerguntasExtra`. */
+  gruposExtras?: GrupoDePerguntasExtra[];
   fotoModeloUrl?: string;
   fotoModeloAnotadaUrl?: string;
   fotoModeloAnotacoesJson?: string;

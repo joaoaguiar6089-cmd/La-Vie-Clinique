@@ -1,11 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Camera, Check, Loader2, Pencil, Plus, Printer, Trash2 } from 'lucide-react';
+import {
+  AlertCircle,
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  Loader2,
+  Pencil,
+  Plus,
+  Printer,
+  Trash2,
+  X,
+} from 'lucide-react';
 import {
   AnamnesisQuestion,
   ClinicProfile,
   EvaluationRecord,
   EvaluationTemplate,
   FotoDaSessao,
+  GrupoDePerguntasExtra,
   Patient,
   Procedure,
   Professional,
@@ -21,6 +35,13 @@ import {
   perguntasRespondidas,
 } from '../../utils/evaluations';
 import { AlvoDaFicha, ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
+import {
+  ehPerguntaExtra,
+  grupoDaFichaModelo,
+  gruposParaGravar,
+  ID_DO_GRUPO_LIVRE,
+  novoDadoLivre,
+} from '../../utils/gruposExtras';
 import { montarMateriaisDoAtendimento } from '../../utils/estoque';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
 import { downscaleImage } from '../../utils/imageCompressor';
@@ -137,6 +158,25 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [imprimindo, setImprimindo] = useState(false);
 
+  /**
+   * Perguntas de outra ficha-modelo e campos do "Novo dado" — só no acompanhamento. Ver
+   * `GrupoDePerguntasExtra`.
+   */
+  const [grupos, setGrupos] = useState<GrupoDePerguntasExtra[]>([]);
+  /** Juntar ou tirar um grupo não gera `input`/`change` no painel. */
+  const [mexeuNosGrupos, setMexeuNosGrupos] = useState(false);
+  const [escolhendoFicha, setEscolhendoFicha] = useState(false);
+  /** As fichas-modelo de avaliação, para puxar perguntas — assinadas só com a escolha aberta. */
+  const [fichasDeAvaliacao, setFichasDeAvaliacao] = useState<EvaluationTemplate[] | null>(null);
+  /** O campo livre recém-criado — o rótulo dele já abre com o cursor. */
+  const [dadoRecemCriado, setDadoRecemCriado] = useState<string | null>(null);
+  const montavel = tipo === 'acompanhamento';
+
+  useEffect(() => {
+    if (!isOpen || !escolhendoFicha || tipo !== 'acompanhamento') return;
+    return subscribeToFichasModelo('avaliacao', setFichasDeAvaliacao);
+  }, [isOpen, escolhendoFicha, tipo]);
+
   useEffect(() => {
     if (!isOpen) return;
     const pararFichas = subscribeToFichasModelo(tipo, setFichas);
@@ -167,9 +207,15 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
    */
   const perguntasSoDoRegistro = useMemo(
     () =>
-      (registro?.perguntasSnapshot || []).filter((q) => !perguntas.some((p) => p.id === q.id)),
+      (registro?.perguntasSnapshot || []).filter(
+        // As de grupo extra têm lugar próprio na tela; as de um grupo tirado saíram de propósito.
+        (q) => !ehPerguntaExtra(q) && !perguntas.some((p) => p.id === q.id)
+      ),
     [registro, perguntas]
   );
+
+  const gruposDeFicha = grupos.filter((g) => !g.livre);
+  const dadosLivres = grupos.find((g) => g.livre)?.perguntas || [];
 
   /** A gravada, senão a da ficha-modelo resolvida pelo gênero da paciente. */
   const fotoModeloUrl =
@@ -195,12 +241,15 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     setLeituraFalhou(false);
     setAnotando(null);
     setMexeuNasFotos(false);
+    setMexeuNosGrupos(false);
+    setEscolhendoFicha(false);
 
     const aplicar = (existente: EvaluationRecord | null) => {
       setRegistro(existente);
       setRespostas(existente?.respostas || {});
       setObservacoes(existente?.observacoes || '');
       setFotos(fotosDaSessao(existente));
+      setGrupos(existente?.gruposExtras || []);
       setFotoModeloAnotadaUrl(existente?.fotoModeloAnotadaUrl || '');
       setFotoModeloAnotacoesJson(existente?.fotoModeloAnotacoesJson);
       setFotoModeloGravada(existente?.fotoModeloUrl || '');
@@ -299,6 +348,85 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     setMexeuNasFotos(true);
   };
 
+  const mudarLegenda = (indice: number, legenda: string) => {
+    setFotos((atual) => atual.map((f, i) => (i === indice ? { ...f, legenda } : f)));
+  };
+
+  // ==========================================
+  // GRUPOS EXTRAS E "NOVO DADO"
+  // ==========================================
+
+  /** Respostas de perguntas que saíram do formulário não podem ir para o snapshot. */
+  const esquecerRespostas = (ids: string[]) => {
+    if (ids.length === 0) return;
+    setRespostas((prev) => {
+      const prox = { ...prev };
+      ids.forEach((id) => delete prox[id]);
+      return prox;
+    });
+  };
+
+  const adicionarGrupo = (modelo: EvaluationTemplate, origem: TipoDeFicha) => {
+    const grupo = grupoDaFichaModelo(modelo, origem);
+    // Antes do grupo livre: os campos do "Novo dado" ficam sempre por último, junto do link.
+    setGrupos((atual) => [...atual.filter((g) => !g.livre), grupo, ...atual.filter((g) => g.livre)]);
+    setEscolhendoFicha(false);
+    setMexeuNosGrupos(true);
+  };
+
+  const removerGrupo = (grupo: GrupoDePerguntasExtra) => {
+    const tirar = () => {
+      setGrupos((atual) => atual.filter((g) => g.id !== grupo.id));
+      esquecerRespostas(grupo.perguntas.map((q) => q.id));
+      setMexeuNosGrupos(true);
+    };
+    // Sem resposta nenhuma não há o que perder, e a pergunta só atrasaria.
+    if (perguntasRespondidas(grupo.perguntas, respostas).length === 0) {
+      tirar();
+      return;
+    }
+    setConfirmacao({
+      titulo: `Tirar "${grupo.titulo}"?`,
+      mensagem: 'As respostas deste grupo saem deste acompanhamento.',
+      textoConfirmar: 'Tirar',
+      tom: 'perigo',
+      onConfirmar: tirar,
+    });
+  };
+
+  /** Os campos livres moram num grupo só; ele nasce com o primeiro "Novo dado". */
+  const mudarDadosLivres = (
+    mudar: (perguntas: AnamnesisQuestion[]) => AnamnesisQuestion[]
+  ) => {
+    setGrupos((atual) => {
+      const livre = atual.find((g) => g.livre);
+      const perguntas = mudar(livre?.perguntas || []);
+      const resto = atual.filter((g) => !g.livre);
+      return perguntas.length === 0
+        ? resto
+        : [
+            ...resto,
+            { id: ID_DO_GRUPO_LIVRE, titulo: 'Outros dados', livre: true, perguntas },
+          ];
+    });
+  };
+
+  const adicionarDadoLivre = () => {
+    const novo = novoDadoLivre(dadosLivres.length);
+    mudarDadosLivres((perguntas) => [...perguntas, novo]);
+    setDadoRecemCriado(novo.id);
+    setMexeuNosGrupos(true);
+  };
+
+  const renomearDadoLivre = (id: string, texto: string) =>
+    mudarDadosLivres((perguntas) => perguntas.map((q) => (q.id === id ? { ...q, texto } : q)));
+
+  const removerDadoLivre = (id: string) => {
+    mudarDadosLivres((perguntas) => perguntas.filter((q) => q.id !== id));
+    esquecerRespostas([id]);
+    setMexeuNosGrupos(true);
+  };
+
   const handleSalvarAnotacao = async (dataUrl: string, annotationsJson: string) => {
     const url = await subirImagemOuManter(dataUrl, `${rotulos.pastaDoStorage}/anotadas`);
     if (anotando === 'modelo') {
@@ -319,7 +447,12 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     setSalvando(true);
     setErro(null);
     const agora = new Date().toISOString();
-    const todasAsPerguntas = [...perguntas, ...perguntasSoDoRegistro];
+    const gruposExtras = montavel ? gruposParaGravar(grupos, respostas) : [];
+    const todasAsPerguntas = [
+      ...perguntas,
+      ...gruposExtras.flatMap((g) => g.perguntas),
+      ...perguntasSoDoRegistro,
+    ];
     const materiais = uso.plano();
     /*
       A ficha só é gravada se tem o que guardar, ou se já existia. Lançar só os materiais não
@@ -360,6 +493,8 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
           // Só o que foi respondido: congelar a ficha-modelo inteira faria cada ficha pagar KB
           // por pergunta em branco, e a cota do Firestore aqui é por KB gravado.
           perguntasSnapshot: perguntasRespondidas(todasAsPerguntas, respostas),
+          // Vai inteiro, respondido ou não: é o que permite reabrir e completar depois.
+          gruposExtras: gruposExtras.length > 0 ? gruposExtras : undefined,
           fotoModeloUrl: fotoModeloUrl || undefined,
           fotoModeloAnotadaUrl: fotoModeloAnotadaUrl || undefined,
           fotoModeloAnotacoesJson,
@@ -445,6 +580,21 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     });
   };
 
+  /**
+   * As fichas-modelo de onde dá para puxar perguntas: as de acompanhamento primeiro (são do mesmo
+   * momento da jornada), depois as de avaliação. Ficha sem pergunta nenhuma não entra — escolhê-la
+   * não acrescentaria nada.
+   */
+  type OpcaoDeGrupo = { tipo: TipoDeFicha; rotulo: string; fichas: EvaluationTemplate[] };
+  const opcoesDeGrupo: OpcaoDeGrupo[] = (
+    [
+      { tipo: 'acompanhamento', rotulo: 'Fichas de acompanhamento', fichas },
+      { tipo: 'avaliacao', rotulo: 'Fichas de avaliação', fichas: fichasDeAvaliacao || [] },
+    ] as OpcaoDeGrupo[]
+  )
+    .map((o) => ({ ...o, fichas: o.fichas.filter((f) => (f.perguntas || []).length > 0) }))
+    .filter((o) => o.fichas.length > 0);
+
   const fotoModeloExibida = fotoModeloAnotadaUrl || fotoModeloUrl;
   const fotoEmAnotacao = typeof anotando === 'number' ? fotos[anotando] : undefined;
 
@@ -505,7 +655,9 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       bloqueado={salvando}
       /* Anotar uma foto, anexar a foto da sessão ou tirar um material da lista não gera
          `input`/`change` no painel. */
-      alterado={mexeuNasFotos || !!fotoModeloAnotadaUrl || uso.mexido || consumo.mexido}
+      alterado={
+        mexeuNasFotos || mexeuNosGrupos || !!fotoModeloAnotadaUrl || uso.mexido || consumo.mexido
+      }
       rodape={rodape}
     >
       <div className="bg-card min-h-full">
@@ -534,24 +686,100 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                 profissional concluir que a funcionalidade está quebrada.
               */}
               {!ficha && (
-                <div className="flex flex-wrap items-center gap-3 text-[13px] text-ink-soft bg-surface border border-[rgba(26,26,26,.1)] rounded-xl px-3.5 py-3">
-                  <span className="flex-1 min-w-[200px]">
-                    Nenhuma ficha-modelo de {rotulos.minusculo} cadastrada para{' '}
-                    <strong className="text-ink">{alvo.procedimentoNome}</strong>.
-                  </span>
-                  {onCadastrarFicha && (
+                <div className="text-[13px] text-ink-soft bg-surface border border-[rgba(26,26,26,.1)] rounded-xl px-3.5 py-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="flex-1 min-w-[200px]">
+                      Nenhuma ficha-modelo de {rotulos.minusculo} cadastrada para{' '}
+                      <strong className="text-ink">{alvo.procedimentoNome}</strong>.
+                      {montavel &&
+                        ' Dá para usar as perguntas de outra ficha-modelo e criar campos com "Novo dado".'}
+                    </span>
+                    {onCadastrarFicha && (
+                      <button
+                        onClick={() =>
+                          onCadastrarFicha({
+                            procedureId: alvo.procedureId,
+                            procedimentoNome: alvo.procedimentoNome,
+                          })
+                        }
+                        className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand hover:underline"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Cadastrar ficha
+                      </button>
+                    )}
+                  </div>
+
+                  {montavel && (
                     <button
-                      onClick={() =>
-                        onCadastrarFicha({
-                          procedureId: alvo.procedureId,
-                          procedimentoNome: alvo.procedimentoNome,
-                        })
-                      }
-                      className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand hover:underline"
+                      type="button"
+                      onClick={() => setEscolhendoFicha((v) => !v)}
+                      aria-expanded={escolhendoFicha}
+                      className="w-full flex items-center gap-2 min-h-[44px] px-3.5 py-2 rounded-xl border border-[rgba(26,26,26,.15)] bg-card text-left text-[14px] font-semibold text-ink hover:border-brand transition-colors"
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      Cadastrar ficha
+                      <Layers className="w-4 h-4 text-brand shrink-0" />
+                      <span className="flex-1 min-w-0">
+                        Usar perguntas de uma ficha-modelo
+                      </span>
+                      {escolhendoFicha ? (
+                        <ChevronUp className="w-4 h-4 text-muted shrink-0" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+                      )}
                     </button>
+                  )}
+
+                  {montavel && escolhendoFicha && (
+                    <div className="space-y-3">
+                      {fichasDeAvaliacao === null && opcoesDeGrupo.length === 0 ? (
+                        <div className="flex justify-center py-3 text-gray-400">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        </div>
+                      ) : opcoesDeGrupo.length === 0 ? (
+                        <p className="text-[13px] text-muted">
+                          Nenhuma ficha-modelo com perguntas cadastrada ainda. Use "Novo dado" para
+                          criar os campos deste acompanhamento.
+                        </p>
+                      ) : (
+                        opcoesDeGrupo.map((opcao) => (
+                          <div key={opcao.tipo} className="space-y-1.5">
+                            <span className={labelClass}>{opcao.rotulo}</span>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {opcao.fichas.map((f) => {
+                                const jaUsada = grupos.some((g) => g.origemFichaId === f.id);
+                                const total = (f.perguntas || []).length;
+                                return (
+                                  <button
+                                    key={f.id}
+                                    type="button"
+                                    disabled={jaUsada}
+                                    onClick={() => adicionarGrupo(f, opcao.tipo)}
+                                    className="text-left rounded-xl border border-[rgba(26,26,26,.12)] bg-card px-3.5 py-2.5 hover:border-brand transition-colors disabled:opacity-50 disabled:hover:border-[rgba(26,26,26,.12)]"
+                                  >
+                                    <span className="block text-[14px] font-semibold text-ink">
+                                      {f.nome}
+                                    </span>
+                                    <span className="block text-[12px] text-muted mt-0.5">
+                                      {jaUsada
+                                        ? 'Já está neste acompanhamento'
+                                        : `${total} pergunta${total === 1 ? '' : 's'}`}
+                                    </span>
+                                    {!jaUsada && (
+                                      <span className="block text-[12px] text-gray-400 mt-1 line-clamp-2">
+                                        {(f.perguntas || [])
+                                          .slice(0, 3)
+                                          .map((q) => q.texto)
+                                          .join(' · ')}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -575,6 +803,88 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                       hideMandatoryAsterisk
                     />
                   ))}
+                </div>
+              )}
+
+              {/* Grupos puxados de outras fichas-modelo — cada um com o nome da ficha de origem */}
+              {gruposDeFicha.map((g) => (
+                <div key={g.id} className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
+                      {g.titulo}
+                      {g.origemTipo === 'avaliacao' && (
+                        <span className="normal-case tracking-normal font-normal"> · da avaliação</span>
+                      )}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => removerGrupo(g)}
+                      className="min-h-[36px] px-1 text-[13px] font-semibold text-muted hover:text-danger transition-colors"
+                    >
+                      Tirar grupo
+                    </button>
+                  </div>
+                  {g.perguntas.map((q) => (
+                    <QuestionFieldRenderer
+                      key={q.id}
+                      question={q}
+                      value={respostas[q.id]}
+                      onChange={(v) => handleResposta(q.id, v)}
+                      hideMandatoryAsterisk
+                    />
+                  ))}
+                </div>
+              ))}
+
+              {/* "Novo dado": campo livre, com o nome que a profissional quiser */}
+              {montavel && (
+                <div className="space-y-3">
+                  {dadosLivres.length > 0 && (
+                    <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
+                      Outros dados
+                    </h3>
+                  )}
+                  {dadosLivres.map((q) => (
+                    <div
+                      key={q.id}
+                      className="rounded-xl border border-[rgba(26,26,26,.12)] bg-surface p-3 space-y-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={q.texto}
+                          onChange={(e) => renomearDadoLivre(q.id, e.target.value)}
+                          autoFocus={q.id === dadoRecemCriado}
+                          maxLength={80}
+                          placeholder="Nome do dado — ex.: Energia usada"
+                          aria-label="Nome do dado"
+                          className="flex-1 min-w-0 bg-transparent px-1 py-1 text-[14px] font-semibold text-ink placeholder:text-gray-400 placeholder:font-normal focus:outline-none border-b border-transparent focus:border-brand transition-colors"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removerDadoLivre(q.id)}
+                          aria-label={`Tirar ${q.texto.trim() || 'este dado'}`}
+                          className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-muted hover:text-danger hover:bg-surface-2 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <input
+                        value={typeof respostas[q.id] === 'string' ? respostas[q.id] : ''}
+                        onChange={(e) => handleResposta(q.id, e.target.value)}
+                        placeholder="Valor"
+                        aria-label={`Valor de ${q.texto.trim() || 'novo dado'}`}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-[rgba(26,26,26,.15)] bg-card text-[14px] text-ink placeholder:text-gray-400 focus:outline-none focus:border-brand transition-colors"
+                      />
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={adicionarDadoLivre}
+                    className="inline-flex items-center gap-1.5 min-h-[36px] text-[13px] font-semibold text-brand hover:underline"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Novo dado
+                  </button>
                 </div>
               )}
 
@@ -611,31 +921,42 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                       {fotos.map((foto, i) => (
                         <div
                           key={`${i}-${foto.url}`}
-                          className="relative rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-surface"
+                          className="rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-surface"
                         >
-                          <img
-                            src={foto.anotadaUrl || foto.url}
-                            alt={`${rotulos.rotuloDaFoto} ${i + 1}`}
-                            className={`w-full object-contain ${fotos.length > 1 ? 'max-h-[300px]' : 'max-h-[420px]'}`}
-                          />
-                          <div className="absolute bottom-3 right-3 flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => removerFoto(i)}
-                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 text-ink text-[13px] font-semibold shadow-lg hover:bg-white transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              Remover
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setAnotando(i)}
-                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                              {foto.anotadaUrl ? 'Editar anotações' : 'Anotar'}
-                            </button>
+                          <div className="relative">
+                            <img
+                              src={foto.anotadaUrl || foto.url}
+                              alt={foto.legenda?.trim() || `${rotulos.rotuloDaFoto} ${i + 1}`}
+                              className={`w-full object-contain ${fotos.length > 1 ? 'max-h-[300px]' : 'max-h-[420px]'}`}
+                            />
+                            <div className="absolute bottom-3 right-3 flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => removerFoto(i)}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 text-ink text-[13px] font-semibold shadow-lg hover:bg-white transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Remover
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setAnotando(i)}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                {foto.anotadaUrl ? 'Editar anotações' : 'Anotar'}
+                              </button>
+                            </div>
                           </div>
+                          {/* Legenda: o que identifica a foto entre as outras da sessão */}
+                          <input
+                            value={foto.legenda || ''}
+                            onChange={(e) => mudarLegenda(i, e.target.value)}
+                            maxLength={60}
+                            placeholder="Legenda — ex.: frente, perfil direito"
+                            aria-label={`Legenda da foto ${i + 1}`}
+                            className="w-full px-3.5 py-2.5 bg-card border-t border-[rgba(26,26,26,.1)] text-[14px] text-ink placeholder:text-gray-400 focus:outline-none focus:bg-white transition-colors"
+                          />
                         </div>
                       ))}
                     </div>
@@ -738,6 +1059,8 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
           title={
             anotando === 'modelo'
               ? 'Mapa anatômico'
+              : fotoEmAnotacao?.legenda?.trim()
+              ? `${rotulos.rotuloDaFoto} · ${fotoEmAnotacao.legenda.trim()}`
               : fotos.length > 1 && typeof anotando === 'number'
               ? `${rotulos.rotuloDaFoto} ${anotando + 1}`
               : rotulos.rotuloDaFoto
