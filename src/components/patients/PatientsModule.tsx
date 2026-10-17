@@ -35,7 +35,8 @@ import {
   montarLinhasDePacientes,
   pacienteProvisorio,
 } from '../../utils/patientsPanel';
-import { instanteDoAtendimento } from '../../utils/attendances';
+import { ehRealizado, instanteDoAtendimento } from '../../utils/attendances';
+import { sementeDaVisita, sementeDoAgendamento } from '../../utils/passosDaJornada';
 import { salasDaClinica } from '../../utils/agenda';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PatientsListView } from './PatientsListView';
@@ -58,6 +59,8 @@ interface PatientsModuleProps {
   /** Pedido vindo da busca global ou da tela Hoje: abrir a ficha de alguém, cadastrar alguém. */
   pedido?: PedidoDeNavegacao | null;
   onPedidoAtendido?: () => void;
+  /** "Abrir na agenda", do painel da linha do tempo: a agenda no dia, com o atendimento aberto. */
+  onAbrirNaAgenda?: (a: Attendance) => void;
 }
 
 /** O que o formulário de atendimento está fazendo neste instante. */
@@ -67,6 +70,11 @@ interface EstadoDoFormulario {
   atendimento?: Attendance | null;
   /** "+ adicionar sessão": o registro nasce amarrado a este plano. */
   planoFixoId?: string;
+  /**
+   * A visita registrada para o acompanhamento da avaliação: só aceita o que já aconteceu e, salva,
+   * abre o acompanhamento dela.
+   */
+  paraAcompanhar?: boolean;
 }
 
 /**
@@ -84,6 +92,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   currentProfessionalId,
   pedido,
   onPedidoAtendido,
+  onAbrirNaAgenda,
 }) => {
   /** Visita cujo acompanhamento (com os materiais usados) está aberto. */
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
@@ -285,6 +294,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
       anamneses: records,
       limparConfirmacao: opcoes?.limparConfirmacao,
     });
+    // Pedida pelo painel da avaliação: a visita existia só para levar o acompanhamento.
+    if (formAtendimento?.paraAcompanhar && ehRealizado(registro)) setAcompanhando(registro);
     // Compareceu: o acompanhamento é o passo seguinte, e é agora que a profissional lembra.
     if (formAtendimento?.modo === 'confirmacao') {
       const pergunta = perguntaDoAcompanhamento(formAtendimento.atendimento, registro, setAcompanhando);
@@ -447,6 +458,25 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           onEncerrarPlano={(p) => alternarEncerramentoDoPlano(p, true)}
           onReabrirPlano={(p) => alternarEncerramentoDoPlano(p, false)}
           onExcluirPlano={pedirExclusaoDoPlano}
+          onAgendar={(alvo) =>
+            abrirFormulario({
+              modo: 'novo',
+              atendimento: sementeDoAgendamento({
+                ...alvo,
+                pacienteId: pacienteAberto.id,
+                pacienteNome: pacienteAberto.nome,
+                professionalId: alvo.professionalId || currentProfessionalId,
+              }),
+            })
+          }
+          onRegistrarVisita={(avaliacao) =>
+            abrirFormulario({
+              modo: 'novo',
+              atendimento: sementeDaVisita(avaliacao),
+              paraAcompanhar: true,
+            })
+          }
+          onAbrirNaAgenda={(a) => onAbrirNaAgenda?.(a)}
         />
 
         {/* `atendimentosDaClinica` sai de graça: a aba já assina a coleção inteira, e choque de
@@ -469,6 +499,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           atendimento={formAtendimento?.atendimento}
           modo={formAtendimento?.modo || 'novo'}
           planoFixoId={formAtendimento?.planoFixoId}
+          soVisitaFeita={formAtendimento?.paraAcompanhar}
           onSalvar={handleSalvarAtendimento}
         />
 

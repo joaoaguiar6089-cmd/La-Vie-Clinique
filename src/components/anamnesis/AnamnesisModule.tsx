@@ -26,6 +26,8 @@ import { ProcedureTemplatesManager } from './ProcedureTemplatesManager';
 import { ModuleTabs } from '../common/ModuleTabs';
 import { PatientHistoryView } from './PatientHistoryView';
 import { AnamnesisFormFillModal } from './AnamnesisFormFillModal';
+import { EscolhaDaAnamnese } from './EscolhaDaAnamnese';
+import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
@@ -47,6 +49,8 @@ export interface AnamnesisOpenRequest {
   procedure?: Procedure;
   /** Ficha-modelo já vinculada ao procedimento, quando existe. */
   templateId?: string;
+  /** A paciente, quando o pedido vem do painel da linha do tempo (o "Ir para a anamnese"). */
+  pacienteId?: string;
   nonce: number;
 }
 
@@ -111,6 +115,12 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
   /** Área do laser que já entra marcada, quando o pedido veio de um card de procedimento. */
   const [fillModalAreaInicial, setFillModalAreaInicial] = useState<string | undefined>(undefined);
   const [detailRecord, setDetailRecord] = useState<AnamnesisRecord | null>(null);
+  /**
+   * Toda anamnese nova começa pela pergunta: enviar o link ou preencher aqui. A paciente, a ficha
+   * e a área ficam nos mesmos estados do preenchimento — valem para as duas saídas.
+   */
+  const [escolhendo, setEscolhendo] = useState(false);
+  const [linkAberto, setLinkAberto] = useState(false);
 
   /** Procedimento que o catálogo pediu para ganhar uma ficha-modelo nova. */
   const [criarFichaPara, setCriarFichaPara] = useState<Procedure | null>(null);
@@ -141,27 +151,17 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
   useEffect(() => {
     if (!openRequest) return;
 
-    if (openRequest.tipo === 'nova-ficha') {
-      setActiveTab('records');
-      handleOpenFillModal();
-      onOpenRequestHandled?.();
-      return;
-    }
+    // A área do laser vem marcada: a ficha é uma só para as treze regiões, então sem isto o
+    // clique em "Virilha Completa" e o clique em "Axilas" abririam exatamente a mesma tela vazia,
+    // e a escolha que a profissional acabou de fazer se perderia.
+    const areaDoLaser =
+      openRequest.procedure && isLaserCategory(openRequest.procedure.category)
+        ? openRequest.procedure.id
+        : undefined;
 
-    if (openRequest.tipo === 'preencher') {
+    if (openRequest.tipo === 'nova-ficha' || openRequest.tipo === 'preencher') {
       setActiveTab('records');
-      setFillModalPatientId(undefined);
-      setFillModalTemplateId(openRequest.templateId);
-      // Clicar "Anamnese" num procedimento de laser abre a ficha única com **aquela** área já
-      // marcada no manequim. A ficha é uma só para as treze regiões, então sem isto o clique em
-      // "Virilha Completa" e o clique em "Axilas" abririam exatamente a mesma tela vazia, e a
-      // escolha que a profissional acabou de fazer no catálogo se perderia.
-      setFillModalAreaInicial(
-        openRequest.procedure && isLaserCategory(openRequest.procedure.category)
-          ? openRequest.procedure.id
-          : undefined
-      );
-      setFillModalOpen(true);
+      pedirNovaAnamnese(openRequest.pacienteId, openRequest.templateId, areaDoLaser);
     } else if (openRequest.procedure) {
       setActiveTab('templates');
       setCriarFichaPara(openRequest.procedure);
@@ -171,6 +171,13 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
     // `nonce` é o que torna dois pedidos iguais em pedidos distintos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openRequest?.nonce]);
+
+  const pedirNovaAnamnese = (patientId?: string, templateId?: string, areaLaserId?: string) => {
+    setFillModalPatientId(patientId);
+    setFillModalTemplateId(templateId);
+    setFillModalAreaInicial(areaLaserId);
+    setEscolhendo(true);
+  };
 
   const handleOpenFillModal = (patientId?: string, templateId?: string) => {
     setFillModalPatientId(patientId);
@@ -212,6 +219,7 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
           templates={templates}
           clinicProfile={clinicProfile}
           onOpenFillModal={handleOpenFillModal}
+          onNovaAnamnese={(patientId) => pedirNovaAnamnese(patientId)}
           onOpenRecordDetail={(rec) => setDetailRecord(rec)}
           onDeleteRecord={deleteAnamnesisRecord}
           onDeletePatient={deletePatient}
@@ -245,6 +253,28 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
             onDeleteTemplate={deleteAnamnesisTemplate}
           />
         </div>
+      )}
+
+      <EscolhaDaAnamnese
+        aberto={escolhendo}
+        onFechar={() => setEscolhendo(false)}
+        pacienteNome={patients.find((p) => p.id === fillModalPatientId)?.nome}
+        procedimentoNome={templatesVisiveis.find((t) => t.id === fillModalTemplateId)?.procedimentoNome}
+        podeEnviarLink={templatesVisiveis.length > 0}
+        onPreencherAqui={() => setFillModalOpen(true)}
+        onEnviarLink={() => setLinkAberto(true)}
+      />
+
+      {linkAberto && (
+        <ShareAnamnesisLinkModal
+          isOpen
+          onClose={() => setLinkAberto(false)}
+          templates={templatesVisiveis}
+          patients={patients}
+          clinicProfile={clinicProfile}
+          initialPatientId={fillModalPatientId}
+          initialTemplateId={fillModalTemplateId}
+        />
       )}
 
       {/* FORM FILL MODAL */}

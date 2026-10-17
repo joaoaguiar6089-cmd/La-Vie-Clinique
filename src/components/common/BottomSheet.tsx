@@ -21,6 +21,16 @@ interface BottomSheetProps {
   children: React.ReactNode;
   /** Classe extra do painel — altura máxima, por exemplo. */
   className?: string;
+  /**
+   * Cabeçalho próprio, no lugar do título em texto — quando o topo precisa de um link. O
+   * `titulo` continua servindo de nome do diálogo para o leitor de tela.
+   */
+  cabecalho?: React.ReactNode;
+  /**
+   * No computador, uma janela no meio da tela em vez da folha encostada no rodapé. Para o painel
+   * que se lê com calma — no celular continua subindo de baixo, onde está o polegar.
+   */
+  noCentroNoComputador?: boolean;
 }
 
 export const BottomSheet: React.FC<BottomSheetProps> = ({
@@ -30,6 +40,8 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   descricao,
   children,
   className = '',
+  cabecalho,
+  noCentroNoComputador,
 }) => {
   const painelRef = useRef<HTMLDivElement>(null);
   const arrastoInicio = useRef<number | null>(null);
@@ -55,7 +67,9 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 animate-fadeIn"
+      className={`fixed inset-0 z-[60] flex items-end justify-center bg-black/50 animate-fadeIn ${
+        noCentroNoComputador ? 'sm:items-center sm:p-6' : ''
+      }`}
       role="dialog"
       aria-modal="true"
       aria-label={titulo}
@@ -66,7 +80,9 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
       <div
         ref={painelRef}
         tabIndex={-1}
-        className={`w-full sm:max-w-md bg-card rounded-t-2xl sm:rounded-b-2xl sm:mb-6 shadow-2xl flex flex-col max-h-[85vh] focus:outline-none animate-slideUpSheet ${className}`}
+        className={`w-full sm:max-w-md bg-card rounded-t-2xl sm:rounded-b-2xl ${
+          noCentroNoComputador ? 'sm:rounded-2xl' : 'sm:mb-6'
+        } shadow-2xl flex flex-col max-h-[85vh] focus:outline-none animate-slideUpSheet ${className}`}
         /* Arrastar a alça para baixo fecha — o gesto que todo app de celular tem. 60px é o
            limite acima do qual o movimento deixa de ser um toque trêmulo. */
         onTouchStart={(e) => {
@@ -79,11 +95,13 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
         }}
       >
         {/* Alça. Decorativa, mas é ela que anuncia que a folha se arrasta. */}
-        <div className="pt-2.5 pb-1 shrink-0 flex justify-center">
+        <div className={`pt-2.5 pb-1 shrink-0 flex justify-center ${noCentroNoComputador ? 'sm:hidden' : ''}`}>
           <span aria-hidden className="w-10 h-1 rounded-full bg-line" />
         </div>
 
-        {titulo && (
+        {cabecalho ? (
+          <div className={`px-5 pb-3 shrink-0 ${noCentroNoComputador ? 'sm:pt-5' : ''}`}>{cabecalho}</div>
+        ) : titulo && (
           <div className="px-5 pb-3 shrink-0">
             <h2 className="font-serif-luxury text-title text-ink">{titulo}</h2>
             {descricao && <p className="text-body text-muted mt-0.5">{descricao}</p>}

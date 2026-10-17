@@ -34,12 +34,15 @@ import {
   AnamnesisTemplate,
   AnamnesisQuestion,
   Attendance,
+  EvaluationRecord,
   EvaluationTemplate,
   Patient,
   PedidoDeNavegacao,
   Quote,
 } from './types';
 import { mapearTemplatesPorProcedimento, isLaserCategory } from './utils/templateMatching';
+import { sementeDaVisita, sementeDoAgendamento } from './utils/passosDaJornada';
+import type { AlvoDoPasso } from './components/linhaDoTempo/PainelDoEvento';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { ClinicLogo } from './components/ClinicLogo';
 import { RefreshCw, Check, Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
@@ -275,6 +278,45 @@ function MainCatalogApp() {
       setCurrentView('anamnesis');
       window.scrollTo({ top: 0 });
     }
+  };
+
+  // ==========================================
+  // OS PASSOS DO PAINEL DA LINHA DO TEMPO
+  // ==========================================
+  // A tela Hoje não hospeda os formulários de atendimento e de anamnese: eles moram na Agenda e
+  // em Fichas, com tudo o que precisam (planos, salas, a escolha entre link e preenchimento).
+
+  const agendarPeloPainel = (alvo: AlvoDoPasso & { professionalId?: string }) =>
+    navegar({
+      view: 'agenda',
+      criarNovo: true,
+      sementeDoAtendimento: sementeDoAgendamento({
+        ...alvo,
+        professionalId: alvo.professionalId || currentProfessional?.id,
+      }),
+    });
+
+  const registrarVisitaPeloPainel = (avaliacao: EvaluationRecord) =>
+    navegar({
+      view: 'agenda',
+      criarNovo: true,
+      sementeDoAtendimento: sementeDaVisita(avaliacao),
+      paraAcompanhar: true,
+    });
+
+  const abrirNaAgenda = (a: Attendance) =>
+    navegar({ view: 'agenda', data: a.data, atendimentoId: a.id });
+
+  const novaAnamnesePeloPainel = (alvo: AlvoDoPasso & { templateId?: string }) => {
+    setAnamnesisRequest({
+      tipo: 'nova-ficha',
+      pacienteId: alvo.pacienteId,
+      templateId: alvo.templateId,
+      procedure: procedures.find((p) => p.id === alvo.tratamento?.procedureId),
+      nonce: Date.now(),
+    });
+    setCurrentView('anamnesis');
+    window.scrollTo({ top: 0 });
   };
 
   const acaoRapida = (acao: AcaoRapida) => {
@@ -912,6 +954,10 @@ function MainCatalogApp() {
                 onIrParaAgenda={(data) => navegar({ view: 'agenda', data })}
                 onIrPara={(view) => navegar({ view })}
                 onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
+                onAgendar={agendarPeloPainel}
+                onRegistrarVisita={registrarVisitaPeloPainel}
+                onAbrirNaAgenda={abrirNaAgenda}
+                onNovaAnamnese={novaAnamnesePeloPainel}
               />
             ) : currentView === 'financeiro' ? (
               <FinanceiroView
@@ -979,6 +1025,7 @@ function MainCatalogApp() {
                 currentProfessionalId={currentProfessional?.id}
                 pedido={currentView === 'patients' ? pedido : null}
                 onPedidoAtendido={() => setPedido(null)}
+                onAbrirNaAgenda={abrirNaAgenda}
               />
             ) : currentView === 'estoque' ? (
               <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6">

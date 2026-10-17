@@ -136,6 +136,12 @@ interface AttendanceFormModalProps {
   /** "+ adicionar sessão" de dentro de um plano: o registro nasce amarrado a ele. */
   planoFixoId?: string;
   /**
+   * Registrar uma visita que já aconteceu — o atendimento que o acompanhamento da avaliação
+   * precisa. Data no futuro viraria agendamento, e acompanhamento é sempre depois da visita;
+   * a hora também passa a ser obrigatória.
+   */
+  soVisitaFeita?: boolean;
+  /**
    * `limparConfirmacao` é verdadeiro quando a edição mexeu na data ou na hora: a paciente tinha
    * confirmado **aquele** horário, e manter o selo verde no novo faria a agenda de amanhã mentir.
    * Vale o mesmo para o aviso de ausência e o pedido de outro horário que ela fez pelo link — e
@@ -216,6 +222,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   atendimento,
   modo,
   planoFixoId,
+  soVisitaFeita,
   onSalvar,
 }) => {
   const [data, setData] = useState('');
@@ -557,6 +564,11 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
 
     if (!horaValida(hora)) novos.hora = 'Hora inválida.';
     else if (seraAgendamento && !hora.trim()) novos.hora = 'Agendamento precisa de horário.';
+    else if (soVisitaFeita && !hora.trim()) novos.hora = 'Informe o horário da visita.';
+
+    if (soVisitaFeita && seraAgendamento && !novos.data) {
+      novos.data = 'A visita precisa já ter acontecido: hoje, num horário que passou, ou antes.';
+    }
 
     if (!procedimento.procedimentoNome.trim()) novos.procedimento = 'Informe o procedimento.';
 

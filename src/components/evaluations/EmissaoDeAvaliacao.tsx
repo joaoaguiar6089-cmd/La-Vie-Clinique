@@ -35,6 +35,8 @@ interface EmissaoDeAvaliacaoProps {
   professionalIdPadrao?: string;
   /** Aberto a partir da página da paciente: ela já vem escolhida. */
   pacienteInicial?: Patient | null;
+  /** Aberto pelo painel da anamnese, na linha do tempo: o procedimento dela já vem escolhido. */
+  procedimentoInicial?: { procedureId?: string; procedimentoNome: string } | null;
   /** "Cadastrar ficha para este procedimento", de dentro do preenchimento. */
   onCadastrarFicha?: (alvo: { procedureId?: string; procedimentoNome: string }) => void;
   /** "Pré-preencher orçamento com este consumo", de dentro do preenchimento. */
@@ -63,6 +65,7 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
   clinic,
   professionalIdPadrao,
   pacienteInicial,
+  procedimentoInicial,
   onCadastrarFicha,
   onMontarOrcamento,
 }) => {
@@ -91,11 +94,15 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
     const cadastrada = !!pacienteInicial && pacientes.some((p) => p.id === pacienteInicial.id);
     setPacienteId(cadastrada ? pacienteInicial?.id : undefined);
     setPacienteNome(pacienteInicial?.nome || '');
-    setProcedimento({ procedimentoNome: '' });
+    setProcedimento(
+      procedimentoInicial
+        ? { procedureId: procedimentoInicial.procedureId, procedimentoNome: procedimentoInicial.procedimentoNome }
+        : { procedimentoNome: '' }
+    );
     setData(hojeISO());
     setProfessionalId(professionalIdPadrao || '');
     setErros({});
-  }, [aberto, pacienteInicial?.id, professionalIdPadrao]);
+  }, [aberto, pacienteInicial?.id, professionalIdPadrao, procedimentoInicial?.procedureId, procedimentoInicial?.procedimentoNome]);
 
   // A folha em branco precisa da ficha-modelo e das perguntas gerais.
   useEffect(() => {

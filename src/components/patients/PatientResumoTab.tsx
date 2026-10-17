@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AlertTriangle, CalendarPlus } from 'lucide-react';
 import {
   AnamnesisRecord,
+  AnamnesisTemplate,
   Attendance,
   EvaluationRecord,
   Procedure,
@@ -15,7 +16,9 @@ import {
   linhaDoTempo,
   progressoDosPlanos,
 } from '../../utils/pacienteResumo';
-import { AcoesDaLinha, ItemDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoTempo';
+import { ItemDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoTempo';
+import { AcoesDaLinha, PainelDoEvento } from '../linhaDoTempo/PainelDoEvento';
+import { ContextoDaJornada } from '../../utils/passosDaJornada';
 
 /**
  * A aba Resumo da ficha da paciente.
@@ -34,7 +37,9 @@ interface PatientResumoTabProps {
   /** Avaliações emitidas para ela — entram na linha do tempo. */
   avaliacoes: EvaluationRecord[];
   catalogProcedures: Procedure[];
-  /** Os atalhos da linha do tempo — os mesmos da linha da clínica, na tela Hoje. */
+  /** Fichas-modelo de anamnese — juntam as áreas do laser num tratamento só, no painel do evento. */
+  templates: AnamnesisTemplate[];
+  /** O que o painel do evento faz — o mesmo da linha da clínica, na tela Hoje. */
   acoes: AcoesDaLinha;
   /** Leva para a aba Fichas, já no filtro do que foi tocado. */
   onIrParaFichas: (filtro: 'anamneses' | 'acompanhamentos') => void;
@@ -53,6 +58,7 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
   quotes,
   avaliacoes,
   catalogProcedures,
+  templates,
   acoes,
   onIrParaFichas,
   onAgendarSessao,
@@ -71,12 +77,18 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
     [atendimentos, records, quotes, avaliacoes]
   );
 
-  const abrirItem = (item: ItemDaLinha) => {
-    if (item.tipo === 'anamnese') acoes.onVerAnamnese(item.ref);
-    else if (item.tipo === 'avaliacao') acoes.onVerAvaliacao(item.ref);
-    else if (item.tipo === 'orcamento') acoes.orcamento.abrirPrevia(item.ref);
-    else onIrParaFichas('acompanhamentos');
-  };
+  /** O evento tocado na linha do tempo: abre o painel com o documento e o passo seguinte. */
+  const [aberto, setAberto] = useState<ItemDaLinha | null>(null);
+  const contexto: ContextoDaJornada = useMemo(
+    () => ({
+      atendimentos,
+      anamneses: records,
+      avaliacoes,
+      catalogo: catalogProcedures,
+      templatesAnamnese: templates,
+    }),
+    [atendimentos, records, avaliacoes, catalogProcedures, templates]
+  );
 
   return (
     <div className="space-y-6">
@@ -224,14 +236,22 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
               <ItemDaLinhaDoTempo
                 key={`${item.tipo}-${item.id}`}
                 item={item}
-                acoes={acoes}
                 mostrarData
-                onAbrir={abrirItem}
+                onAbrir={setAberto}
               />
             ))}
           </ol>
         )}
       </section>
+
+      {aberto && (
+        <PainelDoEvento
+          item={aberto}
+          contexto={contexto}
+          acoes={acoes}
+          onFechar={() => setAberto(null)}
+        />
+      )}
     </div>
   );
 };

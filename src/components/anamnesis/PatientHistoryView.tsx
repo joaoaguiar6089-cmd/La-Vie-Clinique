@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Patient, AnamnesisRecord, AnamnesisTemplate, ClinicProfile } from '../../types';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
-import { anamneseFechada } from '../../utils/evaluations';
 import { ChevronDown, ClipboardList, Camera, Download, Eye, FileText, Share2, Trash2 } from 'lucide-react';
 import { Avatar, CampoDeBusca, MenuDeAcoes } from '../common/Tinta';
 
@@ -12,6 +11,8 @@ interface PatientHistoryViewProps {
   templates: AnamnesisTemplate[];
   clinicProfile: ClinicProfile;
   onOpenFillModal: (patientId?: string, templateId?: string) => void;
+  /** "Nova ficha" de uma paciente: a janela que pergunta se é para enviar o link ou preencher aqui. */
+  onNovaAnamnese: (patientId: string) => void;
   onOpenRecordDetail: (record: AnamnesisRecord) => void;
   onDeleteRecord: (recordId: string) => Promise<void>;
   onDeletePatient: (patientId: string) => Promise<void>;
@@ -23,6 +24,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
   templates,
   clinicProfile,
   onOpenFillModal,
+  onNovaAnamnese,
   onOpenRecordDetail,
   onDeleteRecord,
   onDeletePatient,
@@ -177,15 +179,6 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                   {rec.origemPreenchimento === 'online_paciente' && (
                     <span className={`${seloPequeno} bg-ok-bg text-ok`}>Online</span>
                   )}
-                  {/*
-                    "Aguardando atendimento", e não mais "aguardando médico": o que fecha a
-                    ficha agora é a visita acontecer, não a profissional completar um bloco
-                    dentro dela. Sem esta troca, o selo ficaria aceso para sempre em toda ficha
-                    preenchida online.
-                  */}
-                  {rec.origemPreenchimento === 'online_paciente' && !anamneseFechada(rec) && (
-                    <span className={`${seloPequeno} bg-warn-bg text-warn`}>Aguardando atendimento</span>
-                  )}
                   {(rec.fotoModeloUrl || temFotoPaciente) && (
                     <span className={`${seloPequeno} bg-line-soft text-ink-soft gap-1`}>
                       <Camera className="w-3.5 h-3.5" />
@@ -277,7 +270,7 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                 <div className="flex gap-2 mt-auto">
                   <button
                     type="button"
-                    onClick={() => onOpenFillModal(pat.id)}
+                    onClick={() => onNovaAnamnese(pat.id)}
                     className="flex-1 h-11 rounded-xl bg-ink text-white text-[14px] font-semibold hover:bg-black transition-colors"
                   >
                     Nova ficha
@@ -294,15 +287,6 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
                           setViewTab('records');
                         },
                       },
-                      ...(templates.length > 0
-                        ? [
-                            {
-                              rotulo: 'Enviar o link da ficha',
-                              icone: Share2,
-                              onClick: () => abrirEnvioDeLink(pat.id),
-                            },
-                          ]
-                        : []),
                     ]}
                   />
                 </div>
