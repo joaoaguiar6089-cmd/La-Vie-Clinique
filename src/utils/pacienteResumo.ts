@@ -220,6 +220,8 @@ export interface FotoDaPaciente {
   fichaId: string;
   /** De que ficha ela veio — vira a legenda no seletor do antes e depois. */
   tipo: 'anamnese' | 'avaliacao' | 'acompanhamento';
+  /** A legenda que a profissional deu à foto da sessão — "frente", "perfil direito". */
+  legenda?: string;
 }
 
 export const ROTULO_DA_ORIGEM: Record<FotoDaPaciente['tipo'], string> = {
@@ -227,6 +229,13 @@ export const ROTULO_DA_ORIGEM: Record<FotoDaPaciente['tipo'], string> = {
   avaliacao: 'Avaliação',
   acompanhamento: 'Acompanhamento',
 };
+
+/**
+ * De onde a foto veio, numa linha: a legenda primeiro, porque é ela que separa a foto de frente
+ * da de perfil — e, na miniatura estreita, o fim da linha é o que se corta.
+ */
+export const legendaDaFoto = (f: FotoDaPaciente): string =>
+  [f.legenda, ROTULO_DA_ORIGEM[f.tipo], f.procedimentoNome].filter(Boolean).join(' · ');
 
 /**
  * As fotos da paciente, da mais antiga para a mais nova — a ordem de uma evolução.
@@ -254,6 +263,7 @@ export const fotosDaPaciente = (
         procedimentoNome: r.procedimentoNome || '',
         fichaId: r.id,
         tipo,
+        legenda: f.legenda?.trim() || undefined,
       }))
     );
 
