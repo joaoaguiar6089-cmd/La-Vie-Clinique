@@ -12,11 +12,9 @@ import { formatDateOnly } from '../../utils/formatters';
 import {
   ItemDaLinha,
   alertaDaAnamnese,
-  fotosDaPaciente,
   linhaDoTempo,
   progressoDosPlanos,
 } from '../../utils/pacienteResumo';
-import { BeforeAfterCompare } from './BeforeAfterCompare';
 import { AcoesDaLinha, ItemDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoTempo';
 
 /**
@@ -41,6 +39,11 @@ interface PatientResumoTabProps {
   /** Leva para a aba Fichas, já no filtro do que foi tocado. */
   onIrParaFichas: (filtro: 'anamneses' | 'acompanhamentos') => void;
   onAgendarSessao: (plano: SessionPlan) => void;
+  /**
+   * O antes e depois por ângulo, montado pela página — é ela que tem o cadastro, as fotos das
+   * três fichas e o salvar. A aba Fotos mostra o mesmo.
+   */
+  antesEDepois: React.ReactNode;
 }
 
 export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
@@ -53,6 +56,7 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
   acoes,
   onIrParaFichas,
   onAgendarSessao,
+  antesEDepois,
 }) => {
   const alerta = useMemo(
     () => alertaDaAnamnese(records, catalogProcedures),
@@ -62,7 +66,6 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
     () => progressoDosPlanos(planos, atendimentos, catalogProcedures),
     [planos, atendimentos, catalogProcedures]
   );
-  const fotos = useMemo(() => fotosDaPaciente(records), [records]);
   const linha = useMemo(
     () => linhaDoTempo(atendimentos, records, quotes, avaliacoes),
     [atendimentos, records, quotes, avaliacoes]
@@ -201,7 +204,7 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
       {/* 3. Evolução em foto */}
       <section className="space-y-2">
         <h3 className="font-serif-luxury text-title text-ink">Antes e depois</h3>
-        <BeforeAfterCompare fotos={fotos} />
+        {antesEDepois}
       </section>
 
       {/* 4. Linha do tempo */}

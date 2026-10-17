@@ -52,13 +52,14 @@ import { AttendancesTab, contarAtendimentosRealizados } from './AttendancesTab';
 import { anamneseFechada } from '../../utils/evaluations';
 import { encerrarAnamnese, reabrirAnamnese } from '../../services/databaseService';
 import {
+  ROTULO_DA_ORIGEM,
   fotosDaPaciente,
   idadeDe,
   iniciaisDe,
   pacienteDesde,
 } from '../../utils/pacienteResumo';
 import { PatientResumoTab } from './PatientResumoTab';
-import { BeforeAfterCompare } from './BeforeAfterCompare';
+import { AntesEDepois } from './AntesEDepois';
 import { EmissaoDeAvaliacao } from '../evaluations/EmissaoDeAvaliacao';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { alvoDoRegistro } from '../../utils/fichasClinicas';
@@ -80,6 +81,8 @@ interface PatientDetailViewProps {
   planos: SessionPlan[];
   /** Avaliações emitidas para ela, das mais recentes para as mais antigas. */
   avaliacoes: EvaluationRecord[];
+  /** Acompanhamentos dela — entram só pelas fotos da sessão, no antes e depois e na aba Fotos. */
+  acompanhamentos: EvaluationRecord[];
   /** Cadastro completo — o formulário de ficha precisa dele para a busca de paciente. */
   todosPacientes: Patient[];
   templates: AnamnesisTemplate[];
@@ -144,6 +147,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   atendimentos,
   planos,
   avaliacoes,
+  acompanhamentos,
   todosPacientes,
   templates,
   generalQuestions,
@@ -244,7 +248,14 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   const iniciais = iniciaisDe(patient.nome);
   const idade = idadeDe(patient.dataNascimento);
   const desde = pacienteDesde(patient, atendimentos);
-  const fotos = React.useMemo(() => fotosDaPaciente(records), [records]);
+  const fotos = React.useMemo(
+    () => fotosDaPaciente(records, avaliacoes, acompanhamentos),
+    [records, avaliacoes, acompanhamentos]
+  );
+  /** Um elemento só, para o Resumo e a aba Fotos mostrarem o mesmo antes e depois. */
+  const antesEDepois = (
+    <AntesEDepois patient={patient} fotos={fotos} onSalvarPaciente={onSalvarPaciente} />
+  );
 
   return (
     <div className="max-w-4xl mx-auto px-5 sm:px-8 pt-4 sm:pt-8 pb-8 sm:pb-10">
@@ -447,13 +458,17 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
             irParaFichas('acompanhamentos');
             onAdicionarSessao(plano.id);
           }}
+          antesEDepois={antesEDepois}
         />
       )}
 
-      {/* Fotos: a galeria da paciente e o comparador. */}
+      {/* Fotos: o mesmo antes e depois do Resumo e, abaixo, todas as fotos das fichas dela. */}
       {aba === 'fotos' && (
-        <div className="space-y-5">
-          <BeforeAfterCompare fotos={fotos} />
+        <div className="space-y-6">
+          <section className="space-y-2">
+            <h3 className="font-serif-luxury text-title text-ink">Antes e depois</h3>
+            {antesEDepois}
+          </section>
           {fotos.length > 0 && (
             <div>
               <h3 className="font-serif-luxury text-title text-ink mb-2">
@@ -473,7 +488,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                         {formatDateOnly(f.data.slice(0, 10))}
                       </span>
                       <span className="block text-body text-muted truncate">
-                        {f.procedimentoNome}
+                        {[ROTULO_DA_ORIGEM[f.tipo], f.procedimentoNome].filter(Boolean).join(' · ')}
                       </span>
                     </figcaption>
                   </figure>

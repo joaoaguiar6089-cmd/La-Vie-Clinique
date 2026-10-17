@@ -1,6 +1,7 @@
 import {
   AnamnesisQuestion,
   AnamnesisRecord,
+  AnguloAntesDepois,
   Attendance,
   EvaluationRecord,
   Patient,
@@ -9,13 +10,15 @@ import {
   SessionPlan,
 } from '../types';
 import { DataISO, ehRealizado, hojeISO, instanteDoAtendimento, progressoDoPlano } from './attendances';
+import { fotosDaSessao } from './evaluations';
+import { paraArray } from './firestoreShapes';
 
 /**
  * O que a aba Resumo da ficha da paciente precisa saber.
  *
- * Tudo derivado dos documentos que a página já tem em mãos — cadastro, anamneses, atendimentos,
- * planos e orçamentos. Nenhuma leitura nova, nenhum campo novo no banco além do intervalo entre
- * sessões, que é do catálogo.
+ * Tudo derivado dos documentos que a página já tem em mãos — cadastro, fichas, atendimentos,
+ * planos e orçamentos. Os únicos campos novos no banco são o intervalo entre sessões, que é do
+ * catálogo, e os ângulos do antes e depois, que são do cadastro.
  */
 
 // ==========================================
@@ -215,25 +218,74 @@ export interface FotoDaPaciente {
   data: string;
   procedimentoNome: string;
   fichaId: string;
+  /** De que ficha ela veio — vira a legenda no seletor do antes e depois. */
+  tipo: 'anamnese' | 'avaliacao' | 'acompanhamento';
 }
+
+export const ROTULO_DA_ORIGEM: Record<FotoDaPaciente['tipo'], string> = {
+  anamnese: 'Anamnese',
+  avaliacao: 'Avaliação',
+  acompanhamento: 'Acompanhamento',
+};
 
 /**
  * As fotos da paciente, da mais antiga para a mais nova — a ordem de uma evolução.
+ *
+ * Vêm das três fichas: a foto que ela mandou na anamnese, e as fotos da sessão tiradas na clínica
+ * na avaliação (o antes, quase sempre) e em cada acompanhamento (o depois).
  *
  * A versão anotada não entra: o comparador serve para ver a pele, e a seta desenhada por cima
  * atrapalha justamente a comparação. Ela continua na ficha e no PDF, que é onde a anotação
  * existe para ser lida.
  */
-export const fotosDaPaciente = (records: AnamnesisRecord[]): FotoDaPaciente[] =>
-  records
-    .map((r) => ({
+export const fotosDaPaciente = (
+  records: AnamnesisRecord[],
+  avaliacoes: EvaluationRecord[] = [],
+  acompanhamentos: EvaluationRecord[] = []
+): FotoDaPaciente[] => {
+  const daSessao = (
+    fichas: EvaluationRecord[],
+    tipo: FotoDaPaciente['tipo']
+  ): FotoDaPaciente[] =>
+    fichas.flatMap((r) =>
+      fotosDaSessao(r).map((f) => ({
+        url: f.url,
+        data: r.dataAtendimento || r.createdAt || '',
+        procedimentoNome: r.procedimentoNome || '',
+        fichaId: r.id,
+        tipo,
+      }))
+    );
+
+  return [
+    ...records.map((r) => ({
       url: r.fotoPacienteUrl || r.fotoUrl || '',
       data: r.dataAtendimento || r.createdAt,
-      procedimentoNome: r.procedimentoNome,
+      procedimentoNome: r.procedimentoNome || '',
       fichaId: r.id,
-    }))
+      tipo: 'anamnese' as const,
+    })),
+    ...daSessao(avaliacoes, 'avaliacao'),
+    ...daSessao(acompanhamentos, 'acompanhamento'),
+  ]
     .filter((f) => !!f.url)
     .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+};
+
+/**
+ * Os ângulos do antes e depois, como vieram do banco. Lista gravada por versões antigas ou
+ * reimportada de backup pode voltar como mapa (`{0: …}`) — `paraArray` recupera —, e ângulo sem
+ * id ou foto sem URL não tem como ser mostrado.
+ */
+export const angulosDaPaciente = (patient: Patient): AnguloAntesDepois[] =>
+  paraArray<AnguloAntesDepois>(patient.angulosAntesDepois)
+    .filter((a) => !!a && !!a.id)
+    .map((a) => ({
+      id: a.id,
+      nome: a.nome || 'Ângulo',
+      antes: a.antes?.url ? a.antes : undefined,
+      depois: a.depois?.url ? a.depois : undefined,
+    }));
 
 // ==========================================
 // LINHA DO TEMPO
