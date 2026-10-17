@@ -12,6 +12,7 @@ import {
   Receipt,
   RefreshCw,
   Share2,
+  UserRound,
 } from 'lucide-react';
 import { AnamnesisRecord, Attendance, EvaluationRecord, Quote } from '../../types';
 import { ItemDaLinha } from '../../utils/pacienteResumo';
@@ -140,7 +141,7 @@ interface ItemDaLinhaDoTempoProps {
   onAbrirPaciente?: (pacienteId: string) => void;
   /** Mostrar a data no item (a página da paciente) ou só a hora (a tela Hoje, agrupada por dia). */
   mostrarData?: boolean;
-  /** Toque no título: o que "abrir este item" quer dizer em cada tela. */
+  /** Toque na linha: o que "abrir este item" quer dizer em cada tela. */
   onAbrir?: (item: ItemDaLinha) => void;
 }
 
@@ -151,6 +152,11 @@ interface ItemDaLinhaDoTempoProps {
  * são a mesma coisa em recortes diferentes, e com dois desenhos a equipe teria que aprender dois.
  *
  * No celular cabem dois atalhos por linha; os demais vão para o "⋯", que abre a folha de baixo.
+ *
+ * A linha inteira abre o item — no celular, mirar só no título era difícil. O botão do título
+ * estica um `::after` por cima da linha toda; os demais controles (atalhos, desfecho do orçamento)
+ * ficam acima dele com `z-10`. A ficha da paciente abre pelo botão com a pessoa, e não pelo nome:
+ * com a linha toda clicável, o nome não pode levar a outro lugar.
  */
 export const ItemDaLinhaDoTempo: React.FC<ItemDaLinhaDoTempoProps> = ({
   item,
@@ -161,11 +167,21 @@ export const ItemDaLinhaDoTempo: React.FC<ItemDaLinhaDoTempoProps> = ({
 }) => {
   const [folhaAberta, setFolhaAberta] = useState(false);
   const Icone = ICONE_DO_TIPO[item.tipo];
-  const atalhos = atalhosDoItem(item, acoes);
-  const temSecundarios = atalhos.some((a) => !a.principal);
-
   const hora = item.tipo === 'atendimento' ? item.ref.hora : undefined;
   const pacienteId = item.ref.pacienteId;
+
+  const atalhos = atalhosDoItem(item, acoes);
+  if (onAbrirPaciente && pacienteId) {
+    atalhos.push({
+      id: 'paciente',
+      rotulo: 'Abrir paciente',
+      detalhe: 'O painel da paciente',
+      icone: UserRound,
+      onClick: () => onAbrirPaciente(pacienteId),
+      principal: true,
+    });
+  }
+  const temSecundarios = atalhos.some((a) => !a.principal);
   const faltou = item.tipo === 'atendimento' && item.ref.status === 'faltou';
   const aguardando =
     item.tipo === 'anamnese' &&
@@ -188,7 +204,7 @@ export const ItemDaLinhaDoTempo: React.FC<ItemDaLinhaDoTempoProps> = ({
         <Icone className="w-2.5 h-2.5 text-brand" />
       </span>
 
-      <div className="flex items-start gap-2 py-2.5 pl-3 pr-1 rounded-lg hover:bg-surface-2 transition-colors">
+      <div className="group relative flex items-start gap-2 py-2.5 pl-3 pr-1 rounded-lg hover:bg-surface-2 transition-colors">
         <div className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             {(mostrarData || hora) && (
@@ -212,26 +228,19 @@ export const ItemDaLinhaDoTempo: React.FC<ItemDaLinhaDoTempoProps> = ({
           </span>
 
           {onAbrirPaciente && (
-            pacienteId ? (
-              <button
-                type="button"
-                onClick={() => onAbrirPaciente(pacienteId)}
-                className="block max-w-full text-left text-body-lg font-medium text-ink truncate hover:text-brand transition-colors"
-              >
-                {item.ref.pacienteNome}
-              </button>
-            ) : (
-              <span className="block text-body-lg font-medium text-ink truncate">
-                {item.ref.pacienteNome}
-              </span>
-            )
+            <span className="block text-body-lg font-medium text-ink truncate">
+              {item.ref.pacienteNome}
+            </span>
           )}
 
           {onAbrir ? (
             <button
               type="button"
               onClick={() => onAbrir(item)}
-              className={`block max-w-full text-left truncate hover:text-brand transition-colors ${
+              aria-label={`Abrir ${ROTULO_DO_TIPO[item.tipo].toLowerCase()}: ${item.titulo}${
+                onAbrirPaciente ? ` — ${item.ref.pacienteNome}` : ''
+              }`}
+              className={`block max-w-full text-left truncate group-hover:text-brand transition-colors after:absolute after:inset-0 after:rounded-lg after:content-[''] ${
                 onAbrirPaciente ? 'text-body text-ink-soft' : 'text-body-lg text-ink'
               }`}
             >
@@ -251,14 +260,14 @@ export const ItemDaLinhaDoTempo: React.FC<ItemDaLinhaDoTempoProps> = ({
 
           {/* Pagou / recusou / comprovante — o mesmo controle da tela de Orçamentos. */}
           {item.tipo === 'orcamento' && (
-            <div className="mt-1.5">
+            <div className="relative z-10 mt-1.5 w-fit">
               <QuoteDesfecho quote={item.ref} />
             </div>
           )}
         </div>
 
         {atalhos.length > 0 && (
-          <div className="flex items-center gap-0.5 shrink-0">
+          <div className="relative z-10 flex items-center gap-0.5 shrink-0">
             {atalhos.map((a) => {
               const IconeDoAtalho = a.icone;
               return (

@@ -23,7 +23,11 @@ import {
   passaNoFiltroDeTipo,
 } from '../../utils/linhaDoTempoClinica';
 import { ItemDaLinha } from '../../utils/pacienteResumo';
-import { alvoDoAtendimento, alvoDoRegistro } from '../../utils/fichasClinicas';
+import {
+  acompanhamentoVisivel,
+  alvoDoAtendimento,
+  alvoDoRegistro,
+} from '../../utils/fichasClinicas';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
 import { montarEspelhoPublico } from '../../utils/laserAreas';
@@ -164,11 +168,15 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
     onAcompanhamento: setAcompanhando,
   };
 
-  /** O toque no título: a ficha, a prévia, ou — no atendimento — a página da paciente. */
+  /**
+   * O toque na linha: a ficha, a prévia ou — no atendimento — o acompanhamento. A falta não tem
+   * acompanhamento; ali a linha leva à página da paciente, o mesmo que o botão da pessoa.
+   */
   const abrir = (item: ItemDaLinha) => {
     if (item.tipo === 'anamnese') setAnamneseAberta(item.ref);
     else if (item.tipo === 'avaliacao') setAvaliacaoAberta(item.ref);
     else if (item.tipo === 'orcamento') acoesDeOrcamento.abrirPrevia(item.ref);
+    else if (acompanhamentoVisivel(item.ref)) setAcompanhando(item.ref);
     else onAbrirPaciente(item.ref.pacienteId);
   };
 
