@@ -2923,6 +2923,8 @@ export async function saveRegistroDeFicha(
     fotoSessaoAnotacoesJson: primeira?.anotacoesJson || deleteField(),
     consumoEstimado:
       consumoEstimado.length > 0 ? consumoEstimado.map((m) => cleanForFirestore(m)) : deleteField(),
+    // Desmarcar o consumo desfaz o elo com o orçamento (que continua salvo em Orçamentos).
+    orcamentoId: registro.orcamentoId || deleteField(),
     // Mesma razão: tirar o último grupo extra precisa apagar o campo, não deixá-lo como estava.
     gruposExtras:
       gruposExtras.length > 0 ? gruposExtras.map((g) => cleanForFirestore(g)) : deleteField(),

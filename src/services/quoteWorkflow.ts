@@ -1,5 +1,12 @@
 import { Quote, QuoteDraft } from '../types';
-import { createQuote, markQuoteAsSent, replaceQuote, updateQuote } from './databaseService';
+import {
+  createQuote,
+  markQuoteAsSent,
+  replaceQuote,
+  saveCustoDoOrcamento,
+  updateQuote,
+} from './databaseService';
+import { CustoEmEdicao, montarCustoDoOrcamento } from '../utils/estoque';
 
 /**
  * Salvar um orçamento é uma de três coisas: editar o rascunho, substituir um já enviado (número
@@ -18,6 +25,32 @@ export const salvarOrcamento = async (
   if (opcoes.existente) return updateQuote(opcoes.existente, draft);
   if (opcoes.substituindo) return replaceQuote(opcoes.substituindo, draft);
   return createQuote(draft);
+};
+
+/**
+ * O orçamento primeiro, o custo depois — o custo precisa do id que o orçamento ganha, e das
+ * posições dos itens gravados. Se só o custo falhar, o orçamento continua salvo e a falha volta
+ * em `erroDoCusto`, em vez de fazer a profissional salvar o orçamento de novo (o que, num
+ * orçamento novo, criaria outro número).
+ */
+export const salvarOrcamentoComCusto = async (
+  draft: QuoteDraft,
+  opcoes: { existente?: Quote; substituindo?: Quote | null },
+  custo?: CustoEmEdicao
+): Promise<{ salvo: Quote; erroDoCusto?: string }> => {
+  const salvo = await salvarOrcamento(draft, opcoes);
+  if (!custo) return { salvo };
+  try {
+    await saveCustoDoOrcamento(montarCustoDoOrcamento(salvo, custo));
+    return { salvo };
+  } catch (e) {
+    return {
+      salvo,
+      erroDoCusto:
+        `O orçamento ${salvo.numero} foi salvo, mas o custo de material não: ${(e as Error).message}. ` +
+        'Se for erro de permissão, publique as regras novas do Firebase.',
+    };
+  }
 };
 
 /** O 1º compartilhamento do link tira o orçamento de rascunho e trava a edição. */

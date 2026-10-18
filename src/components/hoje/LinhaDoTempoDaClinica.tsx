@@ -371,12 +371,6 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
         professionalIdPadrao={professionalLogadaId}
         pacienteInicial={pacientes.find((p) => p.id === avaliacaoNova?.pacienteId) || null}
         procedimentoInicial={avaliacaoNova?.tratamento || null}
-        onMontarOrcamento={(avaliacao) =>
-          acoesDeOrcamento.abrirDaAvaliacao(
-            avaliacao,
-            pacientes.find((p) => p.id === avaliacao.pacienteId)
-          )
-        }
       />
 
       {anamneseAberta && (
@@ -402,12 +396,6 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
           catalogo={catalogProcedures}
           professionals={clinic.professionals || []}
           clinicProfile={clinic}
-          onMontarOrcamento={(avaliacao) =>
-            acoesDeOrcamento.abrirDaAvaliacao(
-              avaliacao,
-              pacientes.find((p) => p.id === avaliacao.pacienteId)
-            )
-          }
         />
       )}
 

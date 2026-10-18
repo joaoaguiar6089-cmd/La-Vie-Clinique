@@ -907,7 +907,6 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         professionalIdPadrao={currentProfessionalId}
         pacienteInicial={patient}
         procedimentoInicial={procedimentoDaAvaliacao}
-        onMontarOrcamento={(avaliacao) => acoesDeOrcamento.abrirDaAvaliacao(avaliacao, patient)}
       />
 
       {avaliacaoAberta && (
@@ -920,7 +919,6 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           catalogo={catalogProcedures}
           professionals={clinic.professionals || []}
           clinicProfile={clinic}
-          onMontarOrcamento={(avaliacao) => acoesDeOrcamento.abrirDaAvaliacao(avaliacao, patient)}
         />
       )}
 
