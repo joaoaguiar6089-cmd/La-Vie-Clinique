@@ -359,7 +359,22 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
       // Do painel da linha do tempo: a paciente e o procedimento já escolhidos.
       setErro(null);
       setDetalhe(null);
-      setPacienteDoForm(pacientes.find((p) => p.id === pedido.sementeDoAtendimento!.pacienteId) || null);
+      const semente = pedido.sementeDoAtendimento;
+      const cadastrada = semente.pacienteId
+        ? pacientes.find((p) => p.id === semente.pacienteId)
+        : undefined;
+      // Só o nome (o "Novo relatório" de quem ainda não tem cadastro): o cadastro nasce ao salvar,
+      // como na escolha de um nome solto no próprio formulário.
+      setPacienteDoForm(
+        cadastrada ||
+          (!semente.pacienteId && semente.pacienteNome.trim()
+            ? {
+                id: `pat-${Date.now()}`,
+                nome: semente.pacienteNome.trim(),
+                createdAt: new Date().toISOString(),
+              }
+            : null)
+      );
       setFormulario({
         modo: 'novo',
         atendimento: pedido.sementeDoAtendimento,

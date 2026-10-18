@@ -93,7 +93,7 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
     setGerandoPdf(true);
     try {
       const slug = titulo.toLowerCase().replace(/\s+/g, '-');
-      const base = tipo === 'avaliacao' ? 'avaliacao' : 'acompanhamento';
+      const base = tipo === 'avaliacao' ? 'avaliacao' : 'relatorio';
       const prefixo = emBranco ? `${base}-em-branco` : base;
       await exportElementAsPDF(contentRef.current, `${prefixo}-${slug}.pdf`);
     } catch (err) {
@@ -246,6 +246,18 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
                       hideMandatoryAsterisk
                     />
                   ))}
+            </div>
+          )}
+
+          {/* Folha em branco sem pergunta nenhuma (a avaliação personalizada): espaço para escrever
+              à mão as perguntas e as respostas da hora. */}
+          {emBranco && perguntas.length === 0 && (
+            <div className="mb-6">
+              <SectionHeading
+                title={tipo === 'avaliacao' ? 'Avaliação Clínica' : 'Registro do Atendimento'}
+                hint="Perguntas e respostas da hora"
+              />
+              <RuledLines count={14} />
             </div>
           )}
 

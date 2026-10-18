@@ -40,7 +40,7 @@ import { AlvoDoPasso } from '../linhaDoTempo/PainelDoEvento';
  * A tela inicial.
  *
  * Três coisas, nesta ordem: os atalhos para os documentos da paciente, na sequência em que o
- * atendimento acontece (orçamento, anamnese, avaliação, acompanhamento); o calendário do mês, com
+ * atendimento acontece (orçamento, anamnese, avaliação, relatório); o calendário do mês, com
  * um ponto em cada dia que tem atendimento — tocar num dia abre a agenda nele —; e a linha do
  * tempo da clínica, para consulta.
  *
@@ -81,7 +81,7 @@ const SEQUENCIA: { view: AppView; titulo: string; sub: string; icone: React.Elem
   { view: 'quotes', titulo: 'Orçamento', sub: 'Preços e pagamentos', icone: Receipt },
   { view: 'anamnesis', titulo: 'Anamnese', sub: 'Histórico de saúde', icone: ClipboardList },
   { view: 'evaluations', titulo: 'Avaliação', sub: 'Antes do procedimento', icone: ClipboardCheck },
-  { view: 'acompanhamento', titulo: 'Acompanhamento', sub: 'Depois do atendimento', icone: NotebookPen },
+  { view: 'acompanhamento', titulo: 'Relatório', sub: 'Depois do atendimento', icone: NotebookPen },
 ];
 
 const DIAS_DA_SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
@@ -243,6 +243,8 @@ export const HojeView: React.FC<HojeViewProps> = ({
     { rotulo: 'Nova paciente', icone: UserPlus, onClick: () => onCriar('paciente') },
     { rotulo: 'Novo orçamento', icone: FilePlus2, onClick: () => onCriar('orcamento') },
     { rotulo: 'Nova ficha de anamnese', icone: ClipboardList, onClick: () => onCriar('anamnese') },
+    { rotulo: 'Nova avaliação', icone: ClipboardCheck, onClick: () => onCriar('avaliacao') },
+    { rotulo: 'Novo relatório', icone: NotebookPen, onClick: () => onCriar('relatorio') },
   ];
 
   return (
@@ -266,7 +268,7 @@ export const HojeView: React.FC<HojeViewProps> = ({
             <span className="hidden sm:inline-flex">
               <MenuDeAcoes
                 acoes={acoesDeCriar}
-                rotulo="Criar agendamento, paciente, orçamento ou anamnese"
+                rotulo="Criar agendamento, paciente, orçamento, anamnese, avaliação ou relatório"
                 titulo="Criar"
                 gatilho={{ texto: 'Criar', icone: Plus }}
               />

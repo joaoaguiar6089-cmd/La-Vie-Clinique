@@ -135,12 +135,12 @@ interface SementeDaAnamnese {
  * `resumo` é a primeira e a padrão: é ela que responde "o que eu preciso saber antes de atender
  * esta pessoa". As outras juntam documentos parentes numa aba só, separados por filtro:
  *
- * - **Fichas**: anamneses e acompanhamentos. O acompanhamento é aberto pela linha do atendimento,
- *   então o filtro "Acompanhamentos" é a lista de atendimentos — com os pacotes e os agendados.
+ * - **Fichas**: anamneses, avaliações e relatórios. O relatório é aberto pela linha do atendimento,
+ *   então o filtro "Relatórios" é a lista de atendimentos — com os pacotes e os agendados.
  * - **Financeiro**: orçamentos e recibos.
  */
 type Aba = 'resumo' | 'fichas' | 'fotos' | 'financeiro';
-type FiltroDeFichas = 'todas' | 'anamneses' | 'acompanhamentos';
+type FiltroDeFichas = 'todas' | 'anamneses' | 'avaliacoes' | 'acompanhamentos';
 type FiltroDoFinanceiro = 'orcamentos' | 'recibos';
 
 /** O que o menu "Novo" cria — na ordem da jornada da paciente. */
@@ -259,8 +259,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
       irParaFinanceiro('recibos');
       recibosCtx?.abrirNovo(patient);
     } else if (tipo === 'avaliacao') {
-      // A avaliação aparece na linha do tempo do Resumo, que é onde ela mora nesta página.
-      setAba('resumo');
+      irParaFichas('avaliacoes');
       setProcedimentoDaAvaliacao(null);
       setEmitindoAvaliacao(true);
     } else {
@@ -282,6 +281,14 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
 
   /** Agendamento futuro não é atendimento feito — o contador da aba conta só o que aconteceu. */
   const totalAtendimentos = contarAtendimentosRealizados(atendimentos);
+  /** As avaliações, da mais recente para a mais antiga. */
+  const avaliacoesEmOrdem = React.useMemo(
+    () =>
+      [...avaliacoes].sort((a, b) =>
+        (b.dataAtendimento || b.createdAt || '').localeCompare(a.dataAtendimento || a.createdAt || '')
+      ),
+    [avaliacoes]
+  );
 
   const whatsAppUrl = buildWhatsAppUrl(patient.contato);
   const iniciais = iniciaisDe(patient.nome);
@@ -435,7 +442,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                 id: 'fichas' as const,
                 icone: ClipboardList,
                 rotulo: 'Fichas',
-                total: records.length + totalAtendimentos,
+                total: records.length + avaliacoes.length + totalAtendimentos,
               },
               { id: 'fotos' as const, icone: Images, rotulo: 'Fotos', total: fotos.length },
               {
@@ -552,8 +559,8 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         </div>
       )}
 
-      {/* Fichas: anamneses e acompanhamentos, com o filtro em cima. "Todas" mostra as duas listas,
-          uma abaixo da outra. */}
+      {/* Fichas: anamneses, avaliações e relatórios, com o filtro em cima. "Todas" mostra as três
+          listas, uma abaixo da outra, na ordem da jornada. */}
       {aba === 'fichas' && (
         <div className="space-y-5">
           <FiltrosDaAba
@@ -561,13 +568,18 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
             ativo={filtroFichas}
             onSelecionar={setFiltroFichas}
             opcoes={[
-              { id: 'todas', rotulo: 'Todas', total: records.length + totalAtendimentos },
+              {
+                id: 'todas',
+                rotulo: 'Todas',
+                total: records.length + avaliacoes.length + totalAtendimentos,
+              },
               { id: 'anamneses', rotulo: 'Anamneses', total: records.length },
-              { id: 'acompanhamentos', rotulo: 'Acompanhamentos', total: totalAtendimentos },
+              { id: 'avaliacoes', rotulo: 'Avaliações', total: avaliacoes.length },
+              { id: 'acompanhamentos', rotulo: 'Relatórios', total: totalAtendimentos },
             ]}
           />
 
-          {filtroFichas !== 'acompanhamentos' && (
+          {(filtroFichas === 'todas' || filtroFichas === 'anamneses') && (
             <section className="space-y-2">
               {filtroFichas === 'todas' && (
                 <h3 className="font-serif-luxury text-title text-ink">Anamneses</h3>
@@ -693,10 +705,58 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
             </section>
           )}
 
-          {filtroFichas !== 'anamneses' && (
+          {/* As avaliações — abrem o formulário, com o orçamento que tiver sido montado nelas. */}
+          {(filtroFichas === 'todas' || filtroFichas === 'avaliacoes') && (
             <section className="space-y-2">
               {filtroFichas === 'todas' && (
-                <h3 className="font-serif-luxury text-title text-ink">Acompanhamentos</h3>
+                <h3 className="font-serif-luxury text-title text-ink">Avaliações</h3>
+              )}
+              {avaliacoesEmOrdem.length === 0 ? (
+                <div className="glass-card rounded-sm py-14 text-center">
+                  <ClipboardCheck className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500">
+                    Nenhuma avaliação para {patient.nome.split(' ')[0]} ainda.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => criarNovo('avaliacao')}
+                    className="mt-3 inline-flex items-center gap-1.5 text-body font-semibold text-brand hover:underline"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Nova avaliação
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {avaliacoesEmOrdem.map((avaliacao) => (
+                    <button
+                      key={avaliacao.id}
+                      type="button"
+                      onClick={() => setAvaliacaoAberta(avaliacao)}
+                      aria-label={`Abrir a avaliação de ${avaliacao.procedimentoNome}`}
+                      className="w-full text-left glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
+                    >
+                      <span className="flex-1 min-w-[160px]">
+                        <span className="block text-sm text-ink truncate">{avaliacao.procedimentoNome}</span>
+                        <span className="flex items-center gap-1.5 text-body text-gray-400 truncate">
+                          <Calendar className="w-3 h-3 shrink-0" />
+                          {formatarDataAtendimento(avaliacao.dataAtendimento)}
+                          {avaliacao.profissionalNome && ` · ${avaliacao.profissionalNome}`}
+                          {avaliacao.orcamentoId && ' · com orçamento'}
+                        </span>
+                      </span>
+                      <Eye className="w-4 h-4 text-gray-400 ml-auto shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {(filtroFichas === 'todas' || filtroFichas === 'acompanhamentos') && (
+            <section className="space-y-2">
+              {filtroFichas === 'todas' && (
+                <h3 className="font-serif-luxury text-title text-ink">Relatórios</h3>
               )}
               <AttendancesTab
                 atendimentos={atendimentos}

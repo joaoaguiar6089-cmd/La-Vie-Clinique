@@ -315,7 +315,7 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
           <p className="text-body text-muted mt-1">
             {dias < MAIOR_PERIODO_DA_LINHA
               ? 'Aumente o período para ver mais.'
-              : 'Orçamentos, anamneses, avaliações, atendimentos e acompanhamentos aparecem aqui conforme acontecem.'}
+              : 'Orçamentos, anamneses, avaliações, atendimentos e relatórios aparecem aqui conforme acontecem.'}
           </p>
         </div>
       ) : (

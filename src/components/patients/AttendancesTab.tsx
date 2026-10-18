@@ -198,10 +198,10 @@ const LinhaDeAtendimento: React.FC<{
           onClick={() => onAcompanhamento(atendimento)}
           title={
             acompanhamentoComRegistro(atendimento)
-              ? 'Ver acompanhamento'
-              : 'Preencher acompanhamento'
+              ? 'Ver relatório'
+              : 'Preencher relatório'
           }
-          aria-label={`Acompanhamento do atendimento de ${atendimento.procedimentoNome}`}
+          aria-label={`Relatório do atendimento de ${atendimento.procedimentoNome}`}
           className={
             acompanhamentoComRegistro(atendimento)
               ? 'p-[7px] rounded-lg bg-ok-bg text-ok border border-ok-line hover:border-ok transition-colors'

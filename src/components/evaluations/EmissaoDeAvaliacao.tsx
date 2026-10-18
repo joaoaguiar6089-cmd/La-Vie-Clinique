@@ -10,7 +10,11 @@ import {
 } from '../../types';
 import { hojeISO } from '../../utils/attendances';
 import { fichaDeAvaliacaoPara } from '../../utils/evaluations';
-import { AlvoDaFicha, novoIdDeAvaliacao } from '../../utils/fichasClinicas';
+import {
+  AlvoDaFicha,
+  NOME_DA_AVALIACAO_PERSONALIZADA,
+  novoIdDeAvaliacao,
+} from '../../utils/fichasClinicas';
 import {
   savePatient,
   subscribeToFichasModelo,
@@ -70,6 +74,8 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
   const [procedimento, setProcedimento] = useState<{ procedureId?: string; procedimentoNome: string }>({
     procedimentoNome: '',
   });
+  /** Sem ficha-modelo: as perguntas são criadas na hora, e o procedimento vira "Avaliação personalizada". */
+  const [personalizada, setPersonalizada] = useState(false);
   const [data, setData] = useState(hojeISO());
   const [professionalId, setProfessionalId] = useState('');
   const [erros, setErros] = useState<{ paciente?: string; procedimento?: string }>({});
@@ -95,6 +101,7 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
         ? { procedureId: procedimentoInicial.procedureId, procedimentoNome: procedimentoInicial.procedimentoNome }
         : { procedimentoNome: '' }
     );
+    setPersonalizada(false);
     setData(hojeISO());
     setProfessionalId(professionalIdPadrao || '');
     setErros({});
@@ -125,7 +132,9 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
         ? 'Paciente sem cadastro — cadastre para emitir a avaliação.'
         : 'Escolha a paciente.';
     }
-    if (!procedimento.procedimentoNome.trim()) novosErros.procedimento = 'Informe o procedimento.';
+    if (!personalizada && !procedimento.procedimentoNome.trim()) {
+      novosErros.procedimento = 'Informe o procedimento.';
+    }
     setErros(novosErros);
     if (!paciente || novosErros.procedimento) return null;
 
@@ -135,11 +144,14 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
       novo: true,
       pacienteId: paciente.id,
       pacienteNome: paciente.nome,
-      procedureId: procedimento.procedureId,
-      procedimentoNome: procedimento.procedimentoNome.trim(),
+      procedureId: personalizada ? undefined : procedimento.procedureId,
+      procedimentoNome: personalizada
+        ? NOME_DA_AVALIACAO_PERSONALIZADA
+        : procedimento.procedimentoNome.trim(),
       data: data || hojeISO(),
       professionalId: profissional?.id,
       profissionalNome: profissional?.name,
+      personalizada: personalizada || undefined,
     };
   };
 
@@ -217,16 +229,44 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
             )}
           </div>
 
-          <ProcedureSearchSelect
-            procedures={catalogo}
-            procedureId={procedimento.procedureId}
-            nome={procedimento.procedimentoNome}
-            onSelect={(escolha) => {
-              setProcedimento(escolha);
-              setErros((e) => ({ ...e, procedimento: undefined }));
-            }}
-            erro={erros.procedimento}
-          />
+          <div className="space-y-2.5">
+            {personalizada ? (
+              <div className="rounded-2xl bg-surface border border-line px-4 py-3">
+                <span className="block text-[13px] font-medium text-ink-soft">Procedimento</span>
+                <span className="block text-[17px] font-semibold text-ink">
+                  {NOME_DA_AVALIACAO_PERSONALIZADA}
+                </span>
+              </div>
+            ) : (
+              <ProcedureSearchSelect
+                procedures={catalogo}
+                procedureId={procedimento.procedureId}
+                nome={procedimento.procedimentoNome}
+                onSelect={(escolha) => {
+                  setProcedimento(escolha);
+                  setErros((e) => ({ ...e, procedimento: undefined }));
+                }}
+                erro={erros.procedimento}
+              />
+            )}
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={personalizada}
+                onChange={(e) => {
+                  setPersonalizada(e.target.checked);
+                  setErros((atual) => ({ ...atual, procedimento: undefined }));
+                }}
+                className="w-4 h-4 accent-brand mt-0.5"
+              />
+              <span className="text-body text-ink">
+                <span className="font-semibold">Avaliação personalizada</span>
+                <span className="block text-muted">
+                  Sem ficha-modelo: você cria as perguntas e os campos na hora do preenchimento.
+                </span>
+              </span>
+            </label>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -301,8 +341,9 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
       {imprimindo && (
         <PrintableFichaSheet
           tipo="avaliacao"
-          ficha={fichaDeAvaliacaoPara(imprimindo, fichas, catalogo)}
-          gerais={gerais}
+          // A personalizada não tem modelo: a folha sai com o cabeçalho e o espaço para escrever.
+          ficha={imprimindo.personalizada ? undefined : fichaDeAvaliacaoPara(imprimindo, fichas, catalogo)}
+          gerais={imprimindo.personalizada ? [] : gerais}
           cabecalho={{
             pacienteNome: imprimindo.pacienteNome,
             procedimentoNome: imprimindo.procedimentoNome,

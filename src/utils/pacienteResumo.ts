@@ -227,7 +227,7 @@ export interface FotoDaPaciente {
 export const ROTULO_DA_ORIGEM: Record<FotoDaPaciente['tipo'], string> = {
   anamnese: 'Anamnese',
   avaliacao: 'Avaliação',
-  acompanhamento: 'Acompanhamento',
+  acompanhamento: 'Relatório',
 };
 
 /**

@@ -1338,8 +1338,9 @@ export interface FotoDaSessao {
 /**
  * Perguntas que entraram **neste** registro sem virem da ficha-modelo do procedimento.
  *
- * Nasce do procedimento que não tem ficha de acompanhamento: a profissional puxa as perguntas de
- * outra ficha-modelo (um grupo por ficha) ou cria um "Novo dado" à mão. Mora no registro, e não
+ * Nasce do que a ficha-modelo não pergunta: no relatório, a profissional puxa as perguntas de
+ * outra ficha-modelo (um grupo por ficha); em toda ficha, cria perguntas na hora — com o tipo de
+ * resposta que escolher. Na avaliação personalizada, são as únicas perguntas. Mora no registro, e não
  * vira ficha-modelo, porque é a solução daquele atendimento — cadastrar a ficha do procedimento
  * continua sendo o caminho para os próximos.
  *
@@ -1348,12 +1349,12 @@ export interface FotoDaSessao {
  */
 export interface GrupoDePerguntasExtra {
   id: string;
-  /** Nome da ficha-modelo de onde veio, ou "Outros dados" no grupo dos campos livres. */
+  /** Nome da ficha-modelo de onde veio, ou "Perguntas adicionais" no grupo dos campos livres. */
   titulo: string;
   /** Ficha-modelo de origem. Ausente no grupo dos campos livres. */
   origemFichaId?: string;
   origemTipo?: 'avaliacao' | 'acompanhamento';
-  /** `true` = o grupo do "Novo dado": rótulo editável e campo de texto. */
+  /** `true` = o grupo das perguntas criadas na hora: texto, tipo e opções editáveis. */
   livre?: boolean;
   /**
    * Cópia das perguntas, com ids próprios do grupo — duas fichas-modelo podem ter nascido uma da
@@ -1438,6 +1439,11 @@ export interface EvaluationRecord {
    * avaliação.
    */
   orcamentoId?: string;
+  /**
+   * Só na avaliação: personalizada — sem ficha-modelo nem perguntas gerais; as perguntas foram
+   * criadas na hora e moram em `gruposExtras`. `procedimentoNome` é "Avaliação personalizada".
+   */
+  personalizada?: boolean;
   /**
    * Nota clínica da avaliação. **Não** é o `Attendance.observacoes`, que é a nota da recepção
    * escrita ao lançar a visita ("chegou atrasada, trocou de procedimento") — e que é baixada com

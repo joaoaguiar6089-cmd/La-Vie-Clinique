@@ -23,7 +23,7 @@ export const perguntaDoAcompanhamento = (
   if (!deveOferecerAcompanhamento(anterior, salvo)) return null;
   const atendimento: Attendance = { ...(anterior as Attendance), ...salvo };
   return {
-    titulo: 'Preencher acompanhamento?',
+    titulo: 'Preencher relatório?',
     mensagem:
       `${salvo.pacienteNome} · ${salvo.procedimentoNome}.\n` +
       'Fotos, respostas e materiais desta sessão — dá para completar depois pelo atendimento.',

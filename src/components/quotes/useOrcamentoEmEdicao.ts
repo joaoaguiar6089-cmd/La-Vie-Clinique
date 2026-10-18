@@ -72,6 +72,8 @@ export interface AvaliacaoDoOrcamento {
   /** YYYY-MM-DD (ou ISO) do dia da avaliação. */
   data: string;
   professionalId?: string;
+  /** A avaliação personalizada não é de um procedimento do catálogo: a lista começa vazia. */
+  semItem?: boolean;
 }
 
 interface OpcoesDoOrcamento {
@@ -509,8 +511,8 @@ export const useOrcamentoEmEdicao = ({
     setOpcoesPagamento((prev) => (prev.length > 1 ? prev.filter((o) => o.id !== id) : prev));
 
   /**
-   * O orçamento da avaliação: a paciente, "já teve avaliação" com a data dela, e um item do
-   * procedimento avaliado, calculado pelo consumo — o estimado (`linhas`) ou, sem ele, o consumo
+   * O orçamento da avaliação: a paciente, "já teve avaliação" com a data dela, e (salvo `semItem`)
+   * um item do procedimento avaliado, calculado pelo consumo — o estimado (`linhas`) ou, sem ele, o consumo
    * padrão do procedimento × sessões. Chamar só com o estoque carregado (`estoquePronto`).
    *
    * As três trocas de estado vão juntas: o efeito que acompanha o consumo padrão roda na mesma
@@ -523,6 +525,13 @@ export const useOrcamentoEmEdicao = ({
     const dia = (avaliacao.data || '').slice(0, 10);
     setJaTeveAvaliacao(true);
     setDataAvaliacao(fromDateInput(dia));
+
+    if (avaliacao.semItem) {
+      setItens([]);
+      setCustos({});
+      setCustoFixo(new Set());
+      return;
+    }
 
     const procedimento = procedimentoDoAtendimento(avaliacao, procedures);
     const doCatalogo = procedimento

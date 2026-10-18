@@ -45,7 +45,7 @@ export const TIPOS_DA_LINHA: { tipo: FiltroDeTipo; rotulo: string }[] = [
   { tipo: 'anamnese', rotulo: 'Anamneses' },
   { tipo: 'avaliacao', rotulo: 'Avaliações' },
   { tipo: 'atendimento', rotulo: 'Atendimentos' },
-  { tipo: 'acompanhamento', rotulo: 'Acompanhamentos' },
+  { tipo: 'acompanhamento', rotulo: 'Relatórios' },
 ];
 
 /** O item passa nos filtros de tipo? Vazio = todos; mais de um = qualquer um deles. */

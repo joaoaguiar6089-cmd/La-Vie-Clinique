@@ -201,8 +201,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
     {
       id: 'acompanhamento',
-      rotulo: 'Acompan.',
-      titulo: 'Acompanhamento',
+      rotulo: 'Relatórios',
+      titulo: 'Relatórios',
       icone: NotebookPen,
       ativo: currentView === 'acompanhamento',
       onClick: ir('acompanhamento'),
