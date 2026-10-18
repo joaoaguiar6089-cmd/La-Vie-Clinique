@@ -12,7 +12,9 @@ import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntr
 import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { RecibosProvider } from './components/recibos/RecibosContext';
 import { EvaluationsModule } from './components/evaluations/EvaluationsModule';
+import { EmissaoDeAvaliacao } from './components/evaluations/EmissaoDeAvaliacao';
 import { AcompanhamentoModule } from './components/acompanhamento/AcompanhamentoModule';
+import { NovoRelatorio } from './components/acompanhamento/NovoRelatorio';
 import { EstoqueModule } from './components/estoque/EstoqueModule';
 import { AgendaModule } from './components/agenda/AgendaModule';
 import { agendamentosAtrasados } from './utils/agenda';
@@ -42,6 +44,7 @@ import {
 } from './types';
 import { mapearTemplatesPorProcedimento, isLaserCategory } from './utils/templateMatching';
 import { sementeDaVisita, sementeDoAgendamento } from './utils/passosDaJornada';
+import { hojeISO } from './utils/attendances';
 import type { AlvoDoPasso } from './components/linhaDoTempo/PainelDoEvento';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { ClinicLogo } from './components/ClinicLogo';
@@ -237,6 +240,9 @@ function MainCatalogApp() {
    * e o formulário não reabriria.
    */
   const [anamnesisRequest, setAnamnesisRequest] = useState<AnamnesisOpenRequest | null>(null);
+  /** "Criar → Nova avaliação" e "Criar → Novo relatório": abrem por cima da tela em que se está. */
+  const [emitindoAvaliacao, setEmitindoAvaliacao] = useState(false);
+  const [criandoRelatorio, setCriandoRelatorio] = useState(false);
 
   /**
    * A tela anterior a Configurações e ao Financeiro. São as duas em que se entra "de passagem",
@@ -272,6 +278,8 @@ function MainCatalogApp() {
     if (acao === 'agendamento') navegar({ view: 'agenda', criarNovo: true });
     else if (acao === 'paciente') navegar({ view: 'patients', criarNovo: true });
     else if (acao === 'orcamento') navegar({ view: 'quotes', criarNovo: true });
+    else if (acao === 'avaliacao') setEmitindoAvaliacao(true);
+    else if (acao === 'relatorio') setCriandoRelatorio(true);
     else {
       // A ficha de anamnese nasce sem procedimento escolhido: quem escolhe é o formulário.
       setAnamnesisRequest({ tipo: 'nova-ficha', nonce: Date.now() });
@@ -304,6 +312,21 @@ function MainCatalogApp() {
       paraAcompanhar: true,
     });
 
+  /**
+   * O relatório de uma visita que não está na agenda: a Agenda abre o formulário só para o que já
+   * aconteceu (hoje, a hora por preencher) e, salvo, abre o relatório.
+   */
+  const registrarVisitaDoRelatorio = (paciente: { pacienteId?: string; pacienteNome: string }) =>
+    navegar({
+      view: 'agenda',
+      criarNovo: true,
+      sementeDoAtendimento: {
+        ...sementeDoAgendamento({ ...paciente, professionalId: currentProfessional?.id }),
+        data: hojeISO(),
+      },
+      paraAcompanhar: true,
+    });
+
   const abrirNaAgenda = (a: Attendance) =>
     navegar({ view: 'agenda', data: a.data, atendimentoId: a.id });
 
@@ -322,6 +345,8 @@ function MainCatalogApp() {
   const acaoRapida = (acao: AcaoRapida) => {
     if (acao === 'novo-agendamento') criar('agendamento');
     else if (acao === 'nova-paciente') criar('paciente');
+    else if (acao === 'nova-avaliacao') criar('avaliacao');
+    else if (acao === 'novo-relatorio') criar('relatorio');
     else criar('orcamento');
   };
 
@@ -1035,7 +1060,7 @@ function MainCatalogApp() {
               currentView === 'evaluations' ||
               currentView === 'acompanhamento' ? (
               /* As três fichas da paciente numa tela só, "Fichas clínicas", com as abas no topo:
-                 anamnese (o histórico de saúde), avaliação (antes do procedimento) e acompanhamento
+                 anamnese (o histórico de saúde), avaliação (antes do procedimento) e relatório
                  (depois do atendimento). Cada aba continua sendo a seção que era — o menu leva
                  direto a cada uma. */
               <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4">
@@ -1044,7 +1069,7 @@ function MainCatalogApp() {
                   abas={[
                     { id: 'anamnesis' as const, rotulo: 'Anamneses' },
                     { id: 'evaluations' as const, rotulo: 'Avaliações' },
-                    { id: 'acompanhamento' as const, rotulo: 'Acompanhamento' },
+                    { id: 'acompanhamento' as const, rotulo: 'Relatórios' },
                   ]}
                   ativa={currentView}
                   onSelecionar={(view) => {
@@ -1258,6 +1283,28 @@ function MainCatalogApp() {
           }}
           onAbrirOrcamento={(quoteId) => navegar({ view: 'quotes', quoteId })}
           onAcaoRapida={acaoRapida}
+        />
+
+        {/* 7. "Criar → Nova avaliação" e "Criar → Novo relatório". Sempre montados: são eles que
+            guardam a ficha em preenchimento depois de o painel de escolha fechar. */}
+        <EmissaoDeAvaliacao
+          aberto={emitindoAvaliacao}
+          onFechar={() => setEmitindoAvaliacao(false)}
+          pacientes={allPatients}
+          catalogo={procedures}
+          professionals={clinic.professionals || []}
+          clinic={clinic}
+          professionalIdPadrao={currentProfessional?.id}
+        />
+        <NovoRelatorio
+          aberto={criandoRelatorio}
+          onFechar={() => setCriandoRelatorio(false)}
+          pacientes={allPatients}
+          atendimentos={attendances}
+          catalogo={procedures}
+          professionals={clinic.professionals || []}
+          clinic={clinic}
+          onRegistrarVisita={registrarVisitaDoRelatorio}
         />
       </div>
     </RecibosProvider>

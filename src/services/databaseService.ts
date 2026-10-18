@@ -2870,7 +2870,7 @@ export async function saveRegistroDeFicha(
   registro: EvaluationRecord
 ): Promise<void> {
   if (tipo === 'acompanhamento' && !registro.atendimentoId) {
-    throw new Error('Acompanhamento sem atendimento não pode ser gravado.');
+    throw new Error('Relatório sem atendimento não pode ser gravado.');
   }
 
   const pasta = `${ROTULOS_DA_FICHA[tipo].pastaDoStorage}/registros/${registro.id}`;

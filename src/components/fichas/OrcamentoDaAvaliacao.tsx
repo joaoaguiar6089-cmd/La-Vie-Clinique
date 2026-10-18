@@ -91,6 +91,8 @@ export const useOrcamentoDaAvaliacao = ({
   });
 
   const carregado = registro !== undefined;
+  /** Sem procedimento do catálogo — o orçamento começa sem item. */
+  const personalizada = !!(alvo.personalizada || registro?.personalizada);
 
   // Cada abertura recomeça do registro — sobras da ficha anterior não podem virar a desta. Só na
   // chegada da leitura: o `setRegistro` de depois de salvar não pode recarregar o orçamento.
@@ -162,6 +164,7 @@ export const useOrcamentoDaAvaliacao = ({
         procedimentoNome: alvo.procedimentoNome,
         data: alvo.data,
         professionalId: alvo.professionalId,
+        semItem: personalizada,
       },
       consumoGravado.length > 0 ? consumoGravado : undefined
     );
@@ -241,7 +244,9 @@ export const useOrcamentoDaAvaliacao = ({
       setGerar(valor);
       setMexido(true);
     },
-    nomeDoProcedimento: procedimentoDoAtendimento(alvo, catalogo)?.title || alvo.procedimentoNome,
+    nomeDoProcedimento: personalizada
+      ? 'o tratamento'
+      : procedimentoDoAtendimento(alvo, catalogo)?.title || alvo.procedimentoNome,
     /** Marcar, desmarcar ou mexer em botões — o painel só percebe digitação, não clique. */
     mexido: mexido || (estimou && !ligado && !travado && orc.itens.length > 0),
     validar,

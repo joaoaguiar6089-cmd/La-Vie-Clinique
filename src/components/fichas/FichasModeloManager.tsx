@@ -651,7 +651,7 @@ export const FichasModeloManager: React.FC<FichasModeloManagerProps> = ({
                     </label>
                   ) : (
                     <p className="text-label text-gray-400 pt-1">
-                      A {rotulos.rotuloDaFoto.toLowerCase()} aparece sempre no acompanhamento.
+                      A {rotulos.rotuloDaFoto.toLowerCase()} aparece sempre no relatório.
                     </p>
                   )}
                 </div>

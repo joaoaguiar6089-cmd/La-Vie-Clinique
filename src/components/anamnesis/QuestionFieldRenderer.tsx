@@ -9,6 +9,8 @@ interface QuestionFieldRendererProps {
   readOnly?: boolean;
   error?: string;
   hideMandatoryAsterisk?: boolean;
+  /** Sem o rótulo em cima: quem chama já mostra a pergunta (o campo criado na hora, editável). */
+  ocultarRotulo?: boolean;
 }
 
 export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
@@ -18,6 +20,7 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
   readOnly = false,
   error,
   hideMandatoryAsterisk = false,
+  ocultarRotulo = false,
 }) => {
   const { id, texto, tipo_campo, opcoes = [], escalaMax = 10, obrigatoria, ajuda } = question;
 
@@ -52,7 +55,7 @@ export const QuestionFieldRenderer: React.FC<QuestionFieldRendererProps> = ({
   // INTERACTIVE INPUTS
   return (
     <div className="space-y-2 py-1">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className={`flex items-baseline justify-between gap-2 ${ocultarRotulo ? 'sr-only' : ''}`}>
         <label htmlFor={`input-${id}`} className="block text-[15px] font-semibold text-ink">
           {texto}
           {!hideMandatoryAsterisk && obrigatoria && <span className="text-danger ml-1 font-bold">*</span>}

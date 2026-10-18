@@ -16,15 +16,15 @@ import { ehRealizado, hojeISO } from './attendances';
 export type TipoDeFicha = 'avaliacao' | 'acompanhamento';
 
 export interface RotulosDaFicha {
-  /** "Ficha de avaliação" / "Acompanhamento" — o título do formulário. */
+  /** "Ficha de avaliação" / "Relatório" — o título do formulário. */
   nome: string;
-  /** "Avaliação" / "Acompanhamento" — rótulo curto, de botão e de selo. */
+  /** "Avaliação" / "Relatório" — rótulo curto, de botão e de selo. */
   curto: string;
-  /** "avaliação" / "acompanhamento", no meio da frase. */
+  /** "avaliação" / "relatório", no meio da frase. */
   minusculo: string;
-  /** "avaliações" / "acompanhamentos". */
+  /** "avaliações" / "relatórios". */
   plural: string;
-  /** Artigo definido, para as frases de confirmação: "a avaliação", "o acompanhamento". */
+  /** Artigo definido, para as frases de confirmação: "a avaliação", "o relatório". */
   artigo: 'a' | 'o';
   /** "Fichas-modelo de Avaliação" — o título do gerenciador. */
   tituloDosModelos: string;
@@ -73,12 +73,12 @@ export const ROTULOS_DA_FICHA: Record<TipoDeFicha, RotulosDaFicha> = {
     prefixoDePergunta: 'avq',
   },
   acompanhamento: {
-    nome: 'Acompanhamento',
-    curto: 'Acompanhamento',
-    minusculo: 'acompanhamento',
-    plural: 'acompanhamentos',
+    nome: 'Relatório',
+    curto: 'Relatório',
+    minusculo: 'relatório',
+    plural: 'relatórios',
     artigo: 'o',
-    tituloDosModelos: 'Fichas-modelo de Acompanhamento',
+    tituloDosModelos: 'Fichas-modelo de Relatório',
     descricaoDosModelos:
       'O que a profissional registra depois de cada atendimento — o debriefing da sessão, ' +
       'com foto. Cada ficha vale para um ou mais procedimentos — ou para uma categoria inteira — ' +
@@ -184,7 +184,15 @@ export interface AlvoDaFicha {
    * acompanhamento; ausente = não se sabe (a ficha veio da lista de registros) e a leitura é feita.
    */
   materiaisRegistrados?: boolean;
+  /** Avaliação personalizada: sem ficha-modelo — as perguntas são criadas na hora. */
+  personalizada?: boolean;
 }
+
+/**
+ * O "procedimento" da avaliação personalizada: ela não é de um procedimento do catálogo, e é este
+ * o nome que aparece no lugar dele — na lista, na linha do tempo e no documento impresso.
+ */
+export const NOME_DA_AVALIACAO_PERSONALIZADA = 'Avaliação personalizada';
 
 export const alvoDoAtendimento = (a: Attendance): AlvoDaFicha => ({
   registroId: a.id,
@@ -209,6 +217,7 @@ export const alvoDoRegistro = (r: EvaluationRecord): AlvoDaFicha => ({
   data: (r.dataAtendimento || '').slice(0, 10),
   professionalId: r.professionalId,
   profissionalNome: r.profissionalNome,
+  personalizada: r.personalizada,
 });
 
 /**
@@ -230,7 +239,7 @@ export const novoIdDeAvaliacao = (): string =>
  */
 export const dependentesDoAtendimento = (a: Attendance): string => {
   const partes = [
-    a.acompanhamentoPreenchidoEm ? 'o acompanhamento' : '',
+    a.acompanhamentoPreenchidoEm ? 'o relatório' : '',
     a.materiaisRegistradosEm ? 'os materiais registrados' : '',
   ].filter(Boolean);
   return partes.length > 0 ? `, junto com ${partes.join(' e ')}` : '';

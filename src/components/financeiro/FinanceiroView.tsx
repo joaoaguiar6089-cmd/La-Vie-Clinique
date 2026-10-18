@@ -522,7 +522,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
           como custo zero</strong>, por isso o cartão mostra quantos foram lançados.
         </p>
         <p className="text-body text-ink-soft leading-relaxed">
-          Os valores dos materiais aparecem só aqui. O acompanhamento, preenchido ao lado da
+          Os valores dos materiais aparecem só aqui. O relatório, preenchido ao lado da
           paciente, registra material e quantidade sem preço — o custo é calculado com o preço de
           cada produto no Estoque, e o material digitado à mão fica com{' '}
           <strong className="text-ink">falta valor</strong> até ser completado na lista acima.

@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarPlus,
+  ClipboardCheck,
   FileText,
+  NotebookPen,
   Receipt,
   Search,
   Syringe,
@@ -34,7 +36,12 @@ const chave = (texto: string): string =>
 /** Só os dígitos, para casar "11988887777" com "(11) 98888-7777". */
 const digitos = (texto: string): string => (texto || '').replace(/\D/g, '');
 
-export type AcaoRapida = 'novo-agendamento' | 'nova-paciente' | 'novo-orcamento';
+export type AcaoRapida =
+  | 'novo-agendamento'
+  | 'nova-paciente'
+  | 'novo-orcamento'
+  | 'nova-avaliacao'
+  | 'novo-relatorio';
 
 /** Um resultado da busca. O `tipo` decide o ícone, o rótulo da seção e o que o Enter faz. */
 type Resultado =
@@ -47,6 +54,8 @@ const ACOES: { id: AcaoRapida; titulo: string; detalhe: string }[] = [
   { id: 'novo-agendamento', titulo: 'Novo agendamento', detalhe: 'Marcar um horário na agenda' },
   { id: 'nova-paciente', titulo: 'Nova paciente', detalhe: 'Cadastrar uma paciente' },
   { id: 'novo-orcamento', titulo: 'Novo orçamento', detalhe: 'Montar um orçamento' },
+  { id: 'nova-avaliacao', titulo: 'Nova avaliação', detalhe: 'Avaliar antes do procedimento' },
+  { id: 'novo-relatorio', titulo: 'Novo relatório', detalhe: 'Registrar um atendimento' },
 ];
 
 const ICONE: Record<Resultado['tipo'] | AcaoRapida, React.ElementType> = {
@@ -57,6 +66,8 @@ const ICONE: Record<Resultado['tipo'] | AcaoRapida, React.ElementType> = {
   'novo-agendamento': CalendarPlus,
   'nova-paciente': UserPlus,
   'novo-orcamento': FileText,
+  'nova-avaliacao': ClipboardCheck,
+  'novo-relatorio': NotebookPen,
 };
 
 const SECAO: Record<Resultado['tipo'], string> = {

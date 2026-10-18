@@ -67,7 +67,7 @@ export const AcompanhamentoModule: React.FC<AcompanhamentoModuleProps> = ({
     // é melhor dizer isso do que mostrar uma seção vazia que parece funcionar.
     const avisar = (e: Error) =>
       setErro(
-        `Não foi possível carregar o acompanhamento: ${e.message}. Se for erro de permissão, ` +
+        `Não foi possível carregar os relatórios: ${e.message}. Se for erro de permissão, ` +
           'publique as regras novas do Firebase.'
       );
     const pararFichas = subscribeToFichasModelo('acompanhamento', setFichas, avisar);
@@ -104,7 +104,7 @@ export const AcompanhamentoModule: React.FC<AcompanhamentoModuleProps> = ({
       {aba === 'registros' ? (
         <ListaDeFichas
           tipo="acompanhamento"
-          descricao="O registro de cada atendimento: foto, respostas e o que importar daquela sessão — e, embaixo, os materiais usados. É preenchido pelo ícone de acompanhamento na linha do atendimento — na ficha da paciente, na agenda ou na tela Hoje."
+          descricao="O registro de cada atendimento: foto, respostas e o que importar daquela sessão — e, embaixo, os materiais usados. É preenchido pelo ícone de relatório na linha do atendimento — na ficha da paciente, na agenda ou na tela Hoje — ou em Criar → Novo relatório."
           onAbrir={setAberto}
         />
       ) : (
@@ -114,9 +114,9 @@ export const AcompanhamentoModule: React.FC<AcompanhamentoModuleProps> = ({
             onSaveQuestion={(q) => savePerguntaGeralDaFicha('acompanhamento', q)}
             onSaveAllQuestions={(qs) => saveTodasPerguntasGeraisDaFicha('acompanhamento', qs)}
             onDeleteQuestion={(id) => deletePerguntaGeralDaFicha('acompanhamento', id)}
-            titulo="Perguntas Gerais de Acompanhamento"
-            selo="Todo Acompanhamento"
-            subtitulo="Entram em todo acompanhamento, venha de onde vier o procedimento — inclusive nos procedimentos que ainda não têm ficha-modelo própria."
+            titulo="Perguntas Gerais de Relatório"
+            selo="Todo Relatório"
+            subtitulo="Entram em todo relatório, venha de onde vier o procedimento — inclusive nos procedimentos que ainda não têm ficha-modelo própria."
             // Lista vazia, e não `undefined`: ausente, o componente cai no padrão da anamnese.
             defaults={[]}
             idPrefixo="acg"

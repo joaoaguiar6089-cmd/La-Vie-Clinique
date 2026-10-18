@@ -425,11 +425,11 @@ const PassosDaAvaliacao: React.FC<PassosProps & { av: EvaluationRecord }> = ({ a
         </LinhaDoPasso>
       </Secao>
 
-      <Secao titulo="Próximo passo · Acompanhamento">
+      <Secao titulo="Próximo passo · Relatório">
         {atendimentos.length === 0 ? (
           <>
             <p className="text-body text-muted pb-2">
-              O acompanhamento é de uma visita, e ainda não há atendimento registrado depois desta
+              O relatório é de uma visita, e ainda não há atendimento registrado depois desta
               avaliação.
             </p>
             <button type="button" onClick={fazer(() => acoes.onRegistrarVisita(av))} className={`${botaoPrincipal} w-full`}>
@@ -478,16 +478,16 @@ const PassosDoAtendimento: React.FC<Omit<PassosProps, 'contexto'> & { a: Attenda
       </LinhaDoPasso>
     </Secao>
 
-    <Secao titulo="Próximo passo · Acompanhamento">
+    <Secao titulo="Próximo passo · Relatório">
       {acompanhamentoVisivel(a) ? (
         <LinhaDoPasso
-          titulo={acompanhamentoComRegistro(a) ? 'Acompanhamento registrado' : 'Acompanhamento por preencher'}
+          titulo={acompanhamentoComRegistro(a) ? 'Relatório registrado' : 'Relatório por preencher'}
           detalhe="Fotos, respostas e materiais usados na sessão"
         >
           <BotaoDoAcompanhamento a={a} onClick={fazer(() => acoes.onAcompanhamento(a))} />
         </LinhaDoPasso>
       ) : (
-        <p className="text-body text-muted py-1.5">O acompanhamento abre depois da visita.</p>
+        <p className="text-body text-muted py-1.5">O relatório abre depois da visita.</p>
       )}
     </Secao>
   </>

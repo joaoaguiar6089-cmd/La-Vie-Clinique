@@ -272,7 +272,7 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
               }`}
             >
               <NotebookPen className="w-4 h-4" />
-              Acompanhamento
+              Relatório
             </button>
           )}
 

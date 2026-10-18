@@ -45,7 +45,9 @@ export type AcaoDeCriacao =
   | 'agendamento'
   | 'paciente'
   | 'orcamento'
-  | 'anamnese';
+  | 'anamnese'
+  | 'avaliacao'
+  | 'relatorio';
 
 interface BottomNavProps {
   currentView: AppView;
@@ -259,7 +261,7 @@ const PainelMais: React.FC<{
             />
             <LinhaDoMais
               icone={NotebookPen}
-              titulo="Acompanhamento"
+              titulo="Relatórios"
               sub="Depois do atendimento"
               ativo={currentView === 'acompanhamento'}
               onClick={() => ir('acompanhamento')}
@@ -434,6 +436,18 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           rotulo="Nova ficha de anamnese"
           descricao="Preencher uma anamnese"
           onClick={() => criar('anamnese')}
+        />
+        <ItemDaFolha
+          icone={ClipboardCheck}
+          rotulo="Nova avaliação"
+          descricao="Antes do procedimento"
+          onClick={() => criar('avaliacao')}
+        />
+        <ItemDaFolha
+          icone={NotebookPen}
+          rotulo="Novo relatório"
+          descricao="Depois do atendimento"
+          onClick={() => criar('relatorio')}
         />
       </BottomSheet>
 
