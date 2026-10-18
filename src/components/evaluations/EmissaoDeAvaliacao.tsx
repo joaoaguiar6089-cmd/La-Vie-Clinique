@@ -3,7 +3,6 @@ import { ClipboardPen, Printer, UserPlus } from 'lucide-react';
 import {
   AnamnesisQuestion,
   ClinicProfile,
-  EvaluationRecord,
   EvaluationTemplate,
   Patient,
   Procedure,
@@ -39,8 +38,6 @@ interface EmissaoDeAvaliacaoProps {
   procedimentoInicial?: { procedureId?: string; procedimentoNome: string } | null;
   /** "Cadastrar ficha para este procedimento", de dentro do preenchimento. */
   onCadastrarFicha?: (alvo: { procedureId?: string; procedimentoNome: string }) => void;
-  /** "Pré-preencher orçamento com este consumo", de dentro do preenchimento. */
-  onMontarOrcamento?: (avaliacao: EvaluationRecord) => void;
 }
 
 const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
@@ -67,7 +64,6 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
   pacienteInicial,
   procedimentoInicial,
   onCadastrarFicha,
-  onMontarOrcamento,
 }) => {
   const [pacienteId, setPacienteId] = useState<string | undefined>();
   const [pacienteNome, setPacienteNome] = useState('');
@@ -291,7 +287,6 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
           catalogo={catalogo}
           professionals={professionals}
           clinicProfile={clinic}
-          onMontarOrcamento={onMontarOrcamento}
           onCadastrarFicha={
             onCadastrarFicha
               ? (alvo) => {

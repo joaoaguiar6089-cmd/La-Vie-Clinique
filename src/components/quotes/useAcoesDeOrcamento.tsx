@@ -1,9 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { ClinicProfile, EvaluationRecord, Patient, Procedure, Quote, QuoteDraft } from '../../types';
+import { ClinicProfile, Patient, Procedure, Quote, QuoteDraft } from '../../types';
 import { montarEspelhoPublico } from '../../utils/laserAreas';
-import { marcarComoEnviadoSeRascunho, salvarOrcamento } from '../../services/quoteWorkflow';
-import { saveCustoDoOrcamento } from '../../services/databaseService';
-import { CustoEmEdicao, montarCustoDoOrcamento } from '../../utils/estoque';
+import { marcarComoEnviadoSeRascunho, salvarOrcamentoComCusto } from '../../services/quoteWorkflow';
+import { CustoEmEdicao } from '../../utils/estoque';
 import { QuoteFormModal } from './QuoteFormModal';
 import { QuotePreviewModal } from './QuotePreviewModal';
 import { QuoteShareModal } from './QuoteShareModal';
@@ -22,17 +21,10 @@ interface FormularioAberto {
   seedFrom: Quote | null;
   substituindo: Quote | null;
   initialPatient?: Patient | null;
-  /** A ficha de avaliação cujo consumo estimado pré-preenche o orçamento novo. */
-  avaliacao?: EvaluationRecord | null;
 }
 
 export interface AcoesDeOrcamento {
   abrirNovo: (paciente?: Patient | null) => void;
-  /**
-   * Orçamento novo a partir de uma ficha de avaliação: a paciente, o procedimento e o consumo
-   * estimado dela, com o item já "calculado por consumo de produto".
-   */
-  abrirDaAvaliacao: (avaliacao: EvaluationRecord, paciente?: Patient | null) => void;
   abrirEdicao: (quote: Quote) => void;
   abrirDuplicacao: (quote: Quote) => void;
   abrirSubstituicao: (quote: Quote) => void;
@@ -64,23 +56,14 @@ export const useAcoesDeOrcamento = ({
   /** Mapa corporal do catálogo, para a página das áreas contratadas no PDF. */
   const mapaDoLaser = useMemo(() => montarEspelhoPublico(procedures, clinic), [procedures, clinic]);
 
-  /**
-   * O orçamento primeiro, o custo depois — o custo precisa do id que o orçamento ganha, e das
-   * posições dos itens gravados. Se só o custo falhar, o orçamento continua salvo e a tela diz o
-   * que ficou para trás, em vez de fazer a profissional salvar o orçamento de novo (o que, num
-   * orçamento novo, criaria outro número).
-   */
+  /** Se só o custo falhar, o orçamento continua salvo e a tela diz o que ficou para trás. */
   const salvar = async (draft: QuoteDraft, existente?: Quote, custo?: CustoEmEdicao) => {
-    const salvo = await salvarOrcamento(draft, { existente, substituindo: formulario?.substituindo });
-    if (!custo) return;
-    try {
-      await saveCustoDoOrcamento(montarCustoDoOrcamento(salvo, custo));
-    } catch (e) {
-      onErro?.(
-        `O orçamento ${salvo.numero} foi salvo, mas o custo de material não: ${(e as Error).message}. ` +
-          'Se for erro de permissão, publique as regras novas do Firebase.'
-      );
-    }
+    const { erroDoCusto } = await salvarOrcamentoComCusto(
+      draft,
+      { existente, substituindo: formulario?.substituindo },
+      custo
+    );
+    if (erroDoCusto) onErro?.(erroDoCusto);
   };
 
   const aoCompartilhar = async (quote: Quote) => {
@@ -100,7 +83,6 @@ export const useAcoesDeOrcamento = ({
         quoteToEdit={formulario?.quoteToEdit || null}
         seedFrom={formulario?.seedFrom || null}
         initialPatient={formulario?.initialPatient}
-        avaliacaoDeOrigem={formulario?.avaliacao || null}
         procedures={procedures}
         patients={patients}
         clinic={clinic}
@@ -123,14 +105,6 @@ export const useAcoesDeOrcamento = ({
   return {
     abrirNovo: (paciente) =>
       setFormulario({ quoteToEdit: null, seedFrom: null, substituindo: null, initialPatient: paciente }),
-    abrirDaAvaliacao: (avaliacao, paciente) =>
-      setFormulario({
-        quoteToEdit: null,
-        seedFrom: null,
-        substituindo: null,
-        initialPatient: paciente,
-        avaliacao,
-      }),
     abrirEdicao: (quote) => setFormulario({ quoteToEdit: quote, seedFrom: null, substituindo: null }),
     abrirDuplicacao: (quote) => setFormulario({ quoteToEdit: null, seedFrom: quote, substituindo: null }),
     abrirSubstituicao: (quote) =>

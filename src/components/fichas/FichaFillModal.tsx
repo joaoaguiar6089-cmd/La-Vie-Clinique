@@ -60,7 +60,7 @@ import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PrintableFichaSheet } from './PrintableFichaSheet';
 import { SidePanel } from '../common/SidePanel';
 import { SecaoUsoDeMaterial, useUsoDeMaterial } from '../estoque/UsoDeMaterial';
-import { SecaoConsumoEstimado, useConsumoEstimado } from '../estoque/ConsumoEstimado';
+import { OrcamentoGravado, SecaoOrcamentoDaAvaliacao, useOrcamentoDaAvaliacao } from './OrcamentoDaAvaliacao';
 
 interface FichaFillModalProps {
   tipo: TipoDeFicha;
@@ -78,12 +78,6 @@ interface FichaFillModalProps {
   onSalvou?: () => void;
   /** "Cadastrar ficha para este procedimento" — leva ao gerenciador. */
   onCadastrarFicha?: (alvo: { procedureId?: string; procedimentoNome: string }) => void;
-  /**
-   * Só na avaliação: "Pré-preencher orçamento com este consumo". Recebe a ficha **já salva** — o
-   * formulário grava e fecha antes, porque o orçamento abre em outro painel e um painel dentro do
-   * outro ficaria preso nele. Ausente = o link não aparece.
-   */
-  onMontarOrcamento?: (registro: EvaluationRecord) => void;
 }
 
 const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
@@ -122,7 +116,6 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   clinicProfile,
   onSalvou,
   onCadastrarFicha,
-  onMontarOrcamento,
 }) => {
   const rotulos = ROTULOS_DA_FICHA[tipo];
 
@@ -131,6 +124,11 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /**
+   * Conta os erros de salvar: o aviso mora no topo e o botão, no rodapé — cada erro novo leva a
+   * rolagem de volta ao topo (é a `etapa` do painel), senão o Salvar parece não fazer nada.
+   */
+  const [errosAoSalvar, setErrosAoSalvar] = useState(0);
   /**
    * A ficha pode existir mas não pôde ser lida. O formulário não abre em branco nesse caso:
    * salvar gravaria respostas vazias por cima das que estavam lá.
@@ -292,12 +290,14 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
 
   const uso = useUsoDeMaterial(alvo, catalogo, isOpen && tipo === 'acompanhamento');
   // O registro só vale depois de lido: antes disso, `null` quer dizer "ainda não sei", não "não há".
-  const consumo = useConsumoEstimado(
+  const orcamento = useOrcamentoDaAvaliacao({
     alvo,
+    paciente,
     catalogo,
-    isOpen && tipo === 'avaliacao',
-    carregando ? undefined : registro
-  );
+    clinic: clinicProfile,
+    ativo: isOpen && tipo === 'avaliacao',
+    registro: carregando ? undefined : registro,
+  });
 
   if (!isOpen) return null;
 
@@ -442,8 +442,14 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     setAnotando(null);
   };
 
-  /** `depois` recebe a ficha gravada, com o formulário já fechado — é o caminho do orçamento. */
-  const handleSalvar = async (depois?: (salvo: EvaluationRecord) => void) => {
+  const handleSalvar = async () => {
+    // O orçamento da avaliação é conferido antes de gravar qualquer coisa.
+    const problemaNoOrcamento = orcamento.validar();
+    if (problemaNoOrcamento) {
+      setErro(problemaNoOrcamento);
+      setErrosAoSalvar((n) => n + 1);
+      return;
+    }
     setSalvando(true);
     setErro(null);
     const agora = new Date().toISOString();
@@ -473,9 +479,16 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       return;
     }
 
-    let etapa: 'ficha' | 'materiais' = 'ficha';
-    let salvo: EvaluationRecord | null = null;
+    let etapa: 'orcamento' | 'ficha' | 'materiais' = 'ficha';
+    let doOrcamento: OrcamentoGravado = { consumoEstimado: [] };
     try {
+      // Só a avaliação tem orçamento. Vai primeiro: a ficha guarda o id que ele ganhar.
+      if (tipo === 'avaliacao') {
+        etapa = 'orcamento';
+        doOrcamento = await orcamento.gravar();
+        etapa = 'ficha';
+      }
+
       if (gravarFicha) {
         const novo: EvaluationRecord = {
           id: alvo.registroId,
@@ -500,8 +513,9 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
           fotoModeloAnotacoesJson,
           // Os campos legados (`fotoSessaoUrl`…) são espelhados da primeira por `saveRegistroDeFicha`.
           fotosSessao: fotos,
-          // Só a avaliação estima consumo; vazio apaga o que estava gravado.
-          consumoEstimado: tipo === 'avaliacao' ? consumo.paraGravar() : undefined,
+          // Só a avaliação estima consumo e tem orçamento; vazio apaga o que estava gravado.
+          consumoEstimado: tipo === 'avaliacao' ? doOrcamento.consumoEstimado : undefined,
+          orcamentoId: tipo === 'avaliacao' ? doOrcamento.orcamentoId : undefined,
           observacoes: observacoes.trim() || undefined,
           preenchidoEm: registro?.preenchidoEm || agora,
           createdAt: registro?.createdAt || agora,
@@ -509,7 +523,6 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
         await saveRegistroDeFicha(tipo, novo);
         // Se os materiais falharem, a segunda tentativa regrava a ficha com as mesmas datas.
         setRegistro(novo);
-        salvo = novo;
       }
 
       etapa = 'materiais';
@@ -527,18 +540,28 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       }
 
       onSalvou?.();
+      // O custo de material do orçamento falhou: a avaliação e o orçamento estão salvos, e o painel
+      // fica aberto para dizer isso — salvar de novo atualiza o mesmo orçamento.
+      if (doOrcamento.aviso) {
+        setErro(`A avaliação foi salva. ${doOrcamento.aviso}`);
+        setErrosAoSalvar((n) => n + 1);
+        setSalvando(false);
+        return;
+      }
       onClose();
-      if (depois && salvo) depois(salvo);
     } catch (e) {
       console.error(e);
       const motivo = (e as Error).message;
       setErro(
-        etapa === 'ficha'
+        etapa === 'orcamento'
+          ? `Não foi possível salvar o orçamento — a avaliação não foi salva: ${motivo}`
+          : etapa === 'ficha'
           ? `Não foi possível salvar ${rotulos.artigo} ${rotulos.minusculo}: ${motivo}`
           : gravarFicha
           ? `O acompanhamento foi salvo, mas os materiais não: ${motivo} Toque em Salvar de novo.`
           : `Não foi possível salvar os materiais: ${motivo}`
       );
+      setErrosAoSalvar((n) => n + 1);
       setSalvando(false);
     }
   };
@@ -559,7 +582,10 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
         : 'Os materiais registrados são apagados.';
     setConfirmacao({
       titulo: `Excluir ${rotulos.artigo === 'a' ? 'esta' : 'este'} ${rotulos.minusculo}?`,
-      mensagem: oQueSai + (tipo === 'acompanhamento' ? ' O atendimento em si não é afetado.' : ''),
+      mensagem:
+        oQueSai +
+        (tipo === 'acompanhamento' ? ' O atendimento em si não é afetado.' : '') +
+        (registro?.orcamentoId ? ' O orçamento montado nela continua em Orçamentos.' : ''),
       textoConfirmar: 'Excluir',
       tom: 'perigo',
       onConfirmar: async () => {
@@ -652,11 +678,12 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       titulo={rotulos.nome}
       sobretitulo={`${alvo.pacienteNome} · ${alvo.procedimentoNome} · ${formatDateOnly(alvo.data)}`}
       largura="larga"
+      etapa={errosAoSalvar}
       bloqueado={salvando}
       /* Anotar uma foto, anexar a foto da sessão ou tirar um material da lista não gera
          `input`/`change` no painel. */
       alterado={
-        mexeuNasFotos || mexeuNosGrupos || !!fotoModeloAnotadaUrl || uso.mexido || consumo.mexido
+        mexeuNasFotos || mexeuNosGrupos || !!fotoModeloAnotadaUrl || uso.mexido || orcamento.mexido
       }
       rodape={rodape}
     >
@@ -1015,14 +1042,8 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
               {/* Só no acompanhamento: material e quantidade, sem valor — o custo fica no Financeiro. */}
               <SecaoUsoDeMaterial uso={uso} />
 
-              {/* Só na avaliação: o consumo estimado, e dele o orçamento já calculado. */}
-              <SecaoConsumoEstimado
-                consumo={consumo}
-                onMontarOrcamento={
-                  onMontarOrcamento ? () => handleSalvar(onMontarOrcamento) : undefined
-                }
-                desabilitado={salvando || enviandoFotos}
-              />
+              {/* Só na avaliação: o consumo estimado e, com ele, o orçamento inteiro. */}
+              <SecaoOrcamentoDaAvaliacao oa={orcamento} catalogo={catalogo} clinic={clinicProfile} />
 
               {registro?.preenchidoEm && (
                 <p className="text-[12px] text-gray-400">

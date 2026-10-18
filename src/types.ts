@@ -1423,12 +1423,21 @@ export interface EvaluationRecord {
   fotoSessaoAnotacoesJson?: string;
   /**
    * Só na avaliação: os produtos do estoque que o procedimento deve consumir, com a quantidade
-   * estimada e o preço do dia congelado — é o que pré-preenche o orçamento "por consumo".
+   * estimada e o preço do dia congelado — as linhas de consumo do item do procedimento avaliado,
+   * no orçamento montado dentro da avaliação (ver `orcamentoId`).
    *
    * Pode morar aqui porque `evaluation_records` exige login. Nunca vai para a anamnese nem para o
    * orçamento: os dois são lidos sem login pelo link da paciente.
    */
   consumoEstimado?: MaterialUsado[];
+  /**
+   * Só na avaliação: o orçamento montado dentro dela, a partir do consumo estimado. Reabrir a
+   * avaliação traz e edita este mesmo orçamento — sem ele, salvar de novo criaria outro número.
+   *
+   * O elo mora só aqui: o orçamento é lido sem login pelo link da paciente, e não leva nada da
+   * avaliação.
+   */
+  orcamentoId?: string;
   /**
    * Nota clínica da avaliação. **Não** é o `Attendance.observacoes`, que é a nota da recepção
    * escrita ao lançar a visita ("chegou atrasada, trocou de procedimento") — e que é baixada com
