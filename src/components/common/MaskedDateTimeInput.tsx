@@ -1,35 +1,22 @@
 import React from 'react';
 
 /**
- * Campos de data e hora digitados, com máscara própria em vez de `input type="date"`.
+ * Data e hora no formato da casa ("dd/mm/aaaa", "hh:mm"), em vez de `input type="date"`.
  *
  * O nativo mostra o formato do idioma do **aparelho**: a mesma tela vira "09/17/2026" no celular
  * de quem tem o sistema em inglês e "17/09/2026" no de quem tem em português — e a equipe digita
- * a data errada sem perceber. Aqui o formato é o mesmo em todo lugar, o teclado que sobe é o
- * numérico, e a pessoa só digita os números.
+ * a data errada sem perceber. Aqui o formato é o mesmo em todo lugar.
  *
- * O preço é perder o calendário do sistema. Para uma recepção que digita a data do dia dezenas
- * de vezes, previsibilidade vale mais que o seletor.
+ * A hora é digitada, com o teclado numérico. A data se escolhe num calendário próprio, também em
+ * português em todo aparelho — ver `CampoDeDataComCalendario`, que guarda o mesmo "dd/mm/aaaa".
  *
- * Duas escolhas deliberadas sobre o comportamento da máscara:
- *
- * - **Só formata, nunca corrige.** Ela põe as barras e os dois-pontos e para por aí. Máscara que
- *   conserta enquanto se digita é a que mais irrita: a pessoa apaga um número para arrumar e o
- *   campo reescreve sozinho por cima. "31/02" entra sem reclamar; quem recusa é o salvar.
- * - **Sem atalho de ano curto.** São os 8 dígitos, sempre. Aceitar 6 deixaria "26" ambíguo entre
- *   1926 e 2026 num campo que também serve para data de nascimento algum dia.
+ * A máscara da hora **só formata, nunca corrige**: põe os dois-pontos e para por aí. Máscara que
+ * conserta enquanto se digita é a que mais irrita — a pessoa apaga um número para arrumar e o
+ * campo reescreve sozinho por cima. "25:00" entra sem reclamar; quem recusa é o salvar.
  */
 
 const inputBase =
   'w-full min-w-0 bg-transparent border-0 p-0 text-[16px] font-semibold text-ink tabular-nums placeholder:text-muted placeholder:font-medium focus:outline-none';
-
-/** "17092026" -> "17/09/2026". Só insere separador, não valida nada. */
-export const mascararData = (bruto: string): string => {
-  const d = bruto.replace(/\D/g, '').slice(0, 8);
-  if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
-  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
-};
 
 /** "1430" -> "14:30". */
 export const mascararHora = (bruto: string): string => {
@@ -129,10 +116,6 @@ const Campo: React.FC<CampoProps & { placeholder: string; mascara: (v: string) =
       <p className="mt-1 px-1 text-[13px] text-ink-soft">{ajuda}</p>
     ) : null}
   </div>
-);
-
-export const MaskedDateInput: React.FC<CampoProps> = (props) => (
-  <Campo {...props} placeholder="dd/mm/aaaa" mascara={mascararData} />
 );
 
 export const MaskedTimeInput: React.FC<CampoProps> = (props) => (

@@ -20,13 +20,13 @@ import {
   SessionPlan,
 } from '../../types';
 import {
-  MaskedDateInput,
   MaskedTimeInput,
   dataParaISO,
   horaValida,
   isoParaData,
 } from '../common/MaskedDateTimeInput';
 import { ProcedureSearchSelect } from '../common/ProcedureSearchSelect';
+import { CampoDeDataComCalendario } from '../common/CampoDeDataComCalendario';
 import { PatientSearchSelect } from '../quotes/PatientSearchSelect';
 import {
   agoraHHMM,
@@ -939,13 +939,15 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         <div>
           {mostrarSeletor && <RotuloTinta>Ou digite a data e a hora</RotuloTinta>}
           <div className="grid grid-cols-3 gap-2">
-            <MaskedDateInput
+            <CampoDeDataComCalendario
               id="atendimento-data"
               label="Data"
               value={data}
               onChange={setData}
               erro={erros.data}
               autoFocus={!selecaoDePaciente && !mostrarSeletor}
+              // A visita que leva ao relatório já aconteceu: o calendário não oferece o futuro.
+              maximo={soVisitaFeita ? hojeISO() : undefined}
             />
             <MaskedTimeInput
               id="atendimento-hora"
