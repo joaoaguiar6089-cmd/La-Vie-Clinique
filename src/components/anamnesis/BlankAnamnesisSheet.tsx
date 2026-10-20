@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { AnamnesisQuestion, AnamnesisTemplate, ClinicProfile, LaserBodyMap, LaserVista } from '../../types';
+import { AnamnesisQuestion, AnamnesisTemplate, ClinicProfile, MapaDeAreasPublico, PatientGender } from '../../types';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
@@ -9,7 +9,7 @@ import {
 } from '../../utils/anamnesisQuestions';
 import { ConsentTermView } from './ConsentTermView';
 import { LaserBodyMapView, AreaExibida } from '../laser/LaserBodyMapView';
-import { ehTemplateDeLaser } from '../../utils/templateMatching';
+import { fotoDaVista, mapaDoTemplate, sexoComDesenho } from '../../utils/laserAreas';
 import { Printer, Download, X, Loader2 } from 'lucide-react';
 import {
   IdentField,
@@ -25,11 +25,11 @@ interface BlankAnamnesisSheetProps {
   generalQuestions: AnamnesisQuestion[];
   clinicProfile: ClinicProfile;
   /**
-   * Mapa corporal do laser, para a folha sair com os manequins de frente e costas a serem
-   * assinalados à caneta. Vem por prop, como a imagem orientativa: o mapa mora no catálogo, e
-   * quem monta a tela é quem o busca.
+   * Os mapas de áreas da clínica, para a folha sair com as fotos do procedimento a serem
+   * assinaladas à caneta. Vêm por prop, como a imagem orientativa: os mapas moram no catálogo, e
+   * quem monta a tela é quem os busca.
    */
-  mapaCorporal?: LaserBodyMap | null;
+  mapasDeAreas?: MapaDeAreasPublico[];
   onClose: () => void;
 }
 
@@ -50,7 +50,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
   template,
   generalQuestions,
   clinicProfile,
-  mapaCorporal,
+  mapasDeAreas,
   onClose,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -60,37 +60,41 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
   const orientationImage = resolveOrientationImage(template);
   const consentSections = resolveConsentTerm(template);
 
+  const mapaDeAreas = useMemo(() => mapaDoTemplate(template, mapasDeAreas), [template, mapasDeAreas]);
+  /** Foto de mulher ou de homem — escolhida na barra de opções, como a imagem para anotação. */
+  const [sexoEscolhido, setSexoEscolhido] = useState<PatientGender>('feminino');
+  const sexoDoMapa = sexoComDesenho(mapaDeAreas, sexoEscolhido);
+
   /**
-   * As duas vistas do mapa, prontas para desenhar — só as que têm manequim **e** área.
+   * As vistas do mapa, prontas para desenhar — só as que têm foto **e** área.
    *
    * A numeração é contínua entre elas (`numeroInicial`) para a legenda ser uma lista só: com duas
    * sequências começando em 1, um "3" no papel seria ambíguo entre frente e costas.
    */
   const vistasDoMapa = useMemo(() => {
-    const manequins: Record<LaserVista, string | undefined> = {
-      frente: mapaCorporal?.manequimFrenteUrl,
-      costas: mapaCorporal?.manequimCostasUrl,
-    };
-    const rotulos: Record<LaserVista, string> = { frente: 'Frente', costas: 'Costas' };
-
     let proximoNumero = 1;
-    return (['frente', 'costas'] as LaserVista[])
+    return (mapaDeAreas?.vistas || [])
       .map((vista) => {
-        const areas: AreaExibida[] = (mapaCorporal?.areas || [])
-          .filter((a) => a.vista === vista)
-          .map((a) => ({
-            chave: a.procedureId,
-            nomeCurto: a.nomeCurto,
-            area: { id: a.procedureId, vista: a.vista, formas: a.formas },
-          }));
+        const areas: AreaExibida[] = (mapaDeAreas?.areas || [])
+          .filter((a) => a.vistaId === vista.id && (a.desenhos[sexoDoMapa]?.formas.length || 0) > 0)
+          .map((a) => ({ chave: a.id, nomeCurto: a.nome, area: a.desenhos[sexoDoMapa]! }));
         const numeroInicial = proximoNumero;
         proximoNumero += areas.length;
-        return { vista, rotulo: rotulos[vista], imagem: manequins[vista], areas, numeroInicial };
+        return {
+          vista: vista.id,
+          rotulo: vista.nome,
+          imagem: fotoDaVista(vista, sexoDoMapa),
+          areas,
+          numeroInicial,
+        };
       })
       .filter((v) => v.imagem && v.areas.length > 0);
-  }, [mapaCorporal]);
+  }, [mapaDeAreas, sexoDoMapa]);
 
-  const mostrarMapaLaser = ehTemplateDeLaser(template) && vistasDoMapa.length > 0;
+  const mostrarMapaLaser = vistasDoMapa.length > 0;
+  /** As duas versões só valem a escolha quando a clínica preparou as duas. */
+  const temOsDoisSexos =
+    !!mapaDeAreas && sexoComDesenho(mapaDeAreas, 'masculino') !== sexoComDesenho(mapaDeAreas, 'feminino');
 
   const [incluirMapaCorporal, setIncluirMapaCorporal] = useState(true);
   const [incluirImagemOrientativa, setIncluirImagemOrientativa] = useState(true);
@@ -190,15 +194,36 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Incluir na folha</span>
 
           {mostrarMapaLaser && (
-            <label className="flex items-center gap-2 cursor-pointer text-xs text-ink">
-              <input
-                type="checkbox"
-                checked={incluirMapaCorporal}
-                onChange={(e) => setIncluirMapaCorporal(e.target.checked)}
-                className="accent-brand w-4 h-4 rounded-xs"
-              />
-              Mapa corporal (áreas do laser)
-            </label>
+            <div className="flex items-center gap-2.5">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-ink">
+                <input
+                  type="checkbox"
+                  checked={incluirMapaCorporal}
+                  onChange={(e) => setIncluirMapaCorporal(e.target.checked)}
+                  className="accent-brand w-4 h-4 rounded-xs"
+                />
+                Mapa de áreas
+              </label>
+
+              {incluirMapaCorporal && temOsDoisSexos && (
+                <div className="flex items-center gap-1">
+                  {(['feminino', 'masculino'] as PatientGender[]).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSexoEscolhido(s)}
+                      className={`px-2 py-0.5 rounded-xs text-[11px] font-semibold border transition-colors ${
+                        sexoDoMapa === s
+                          ? 'bg-brand text-white border-brand'
+                          : 'bg-white text-gray-600 border-gray-300 hover:border-brand'
+                      }`}
+                    >
+                      {s === 'feminino' ? 'Mulher' : 'Homem'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {orientationImage && (
@@ -359,7 +384,7 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
           )}
 
           {/*
-            Mapa corporal do laser — frente e costas, com todas as áreas e **nenhuma marcada**.
+            Mapa de áreas — todas as vistas, com todas as áreas e **nenhuma marcada**.
             É o ponto da folha: quem imprime assinala à caneta.
 
             Vai numerado e com legenda ao lado porque no papel não há botão nem toque: sem o

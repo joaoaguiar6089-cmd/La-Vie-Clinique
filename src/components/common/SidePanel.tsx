@@ -45,8 +45,12 @@ interface SidePanelProps {
   rodape?: React.ReactNode;
   /** `escuro` é a barra preta com o total — a do orçamento. */
   rodapeTom?: 'claro' | 'escuro';
-  /** Largura do painel no desktop. O padrão de 560px é o da maioria dos formulários. */
-  largura?: 'padrao' | 'larga';
+  /**
+   * Largura do painel no desktop. O padrão de 560px é o da maioria dos formulários. `mapa` é a do
+   * cadastro de procedimento com mapa de áreas: a foto, o anel de botões em volta dela (que só
+   * engaja a partir de 760px) e o painel de campos ao lado.
+   */
+  largura?: 'padrao' | 'larga' | 'mapa';
   /**
    * Alteração que o painel não consegue enxergar sozinho — um item adicionado por botão, uma
    * foto anexada. O painel já detecta digitação e troca de campo; isto é para o resto.
@@ -150,7 +154,11 @@ export const SidePanel: React.FC<SidePanelProps> = ({
           ref={painelRef}
           tabIndex={-1}
           className={`bg-surface w-full h-full flex flex-col shadow-2xl focus:outline-none sm:animate-slideInRight ${
-            largura === 'larga' ? 'sm:max-w-[760px]' : 'sm:max-w-[560px]'
+            largura === 'mapa'
+              ? 'sm:max-w-[1180px]'
+              : largura === 'larga'
+                ? 'sm:max-w-[760px]'
+                : 'sm:max-w-[560px]'
           }`}
         >
           {/* A barra do X: presa no topo, preta como o cabeçalho que rola por baixo dela. */}

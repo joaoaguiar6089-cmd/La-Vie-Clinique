@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { buildPublicLink } from '../../utils/publicLinks';
-import { AnamnesisTemplate, AnamnesisRecord, Patient, ClinicProfile, AnamnesisQuestion, LaserBodyMap } from '../../types';
+import { AnamnesisTemplate, AnamnesisRecord, Patient, ClinicProfile, AnamnesisQuestion, MapaDeAreasPublico } from '../../types';
 import {
   getAnamnesisTemplateById,
   getPatientById,
@@ -10,10 +10,11 @@ import {
   getClinicProfileOnce,
   savePatient,
   saveAnamnesisRecord,
-  getMapaCorporalDoLaserPublico,
+  getMapasDeAreasPublicos,
 } from '../../services/databaseService';
 import { OnlinePatientAnamnesisForm } from './OnlinePatientAnamnesisForm';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
+import { mapaDoTemplate } from '../../utils/laserAreas';
 import { anamneseFechada } from '../../utils/evaluations';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
@@ -162,8 +163,8 @@ export const PublicAnamnesisEntry: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [identityConfirmed, setIdentityConfirmed] = useState(false);
-  /** Espelho público do mapa corporal do laser. `null` até chegar, ou se a clínica não publicou. */
-  const [mapaCorporal, setMapaCorporal] = useState<LaserBodyMap | null>(null);
+  /** Espelho público dos mapas de áreas. Vazio até chegar, ou se a clínica não publicou nenhum. */
+  const [mapasDeAreas, setMapasDeAreas] = useState<MapaDeAreasPublico[]>([]);
   // Incrementado por "Tentar novamente" — reexecuta o carregamento sem recarregar a página inteira.
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -192,14 +193,15 @@ export const PublicAnamnesisEntry: React.FC = () => {
           })
           .catch((err) => console.warn('Perfil da clínica indisponível na página pública:', err));
 
-        // O mapa corporal segue a mesma regra do perfil: buscado em paralelo e incapaz de derrubar
-        // o carregamento. Ele só faz falta nas fichas de laser, e mesmo lá a ficha continua
-        // preenchível sem ele — as áreas ficam para combinar no atendimento.
-        void getMapaCorporalDoLaserPublico()
-          .then((mapa) => {
-            if (!cancelled) setMapaCorporal(mapa);
+        // Os mapas de áreas seguem a mesma regra do perfil: buscados em paralelo e incapazes de
+        // derrubar o carregamento. Só fazem falta nas fichas de procedimento vendido por área, e
+        // mesmo lá a ficha continua preenchível sem eles — as áreas ficam para combinar no
+        // atendimento.
+        void getMapasDeAreasPublicos()
+          .then((mapas) => {
+            if (!cancelled) setMapasDeAreas(mapas);
           })
-          .catch((err) => console.warn('Mapa corporal indisponível na página pública:', err));
+          .catch((err) => console.warn('Mapas de áreas indisponíveis na página pública:', err));
 
         // MODE A — returning to an already-created ficha via its personal link
         if (fichaParam) {
@@ -498,7 +500,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
 
         {showPdfModal && (
           <PrintableAnamnesisSheet
-            mapaCorporal={mapaCorporal}
+            mapasDeAreas={mapasDeAreas}
             record={savedRecord}
             clinicProfile={clinicProfile}
             onClose={() => setShowPdfModal(false)}
@@ -546,7 +548,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
           </p>
         </div>
         <PrintableAnamnesisSheet
-          mapaCorporal={mapaCorporal}
+          mapasDeAreas={mapasDeAreas}
           record={existingRecord}
           clinicProfile={clinicProfile}
           onClose={() => {}}
@@ -568,7 +570,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
         existingRecord={existingRecord}
         prefillRespostasGerais={prefillGerais}
         professionalId={profissionalParam || undefined}
-        mapaCorporal={mapaCorporal}
+        mapaDeAreas={mapaDoTemplate(template, mapasDeAreas)}
         onSavePatient={savePatient}
         onSaveRecord={saveAnamnesisRecord}
         onSaved={handleSaved}

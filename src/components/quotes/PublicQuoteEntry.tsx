@@ -10,8 +10,8 @@ import {
   CheckCircle2,
   Paperclip,
 } from 'lucide-react';
-import { LaserBodyMap, Quote } from '../../types';
-import { getQuoteById, getMapaCorporalDoLaserPublico } from '../../services/databaseService';
+import { MapaDeAreasPublico, Quote } from '../../types';
+import { getQuoteById, getMapasDeAreasPublicos } from '../../services/databaseService';
 import { formatBRL } from '../../utils/formatters';
 import {
   calcularOrcamento,
@@ -56,12 +56,12 @@ const linkWhatsApp = (telefone: string | undefined, texto: string): string => {
 export const PublicQuoteEntry: React.FC = () => {
   const [quote, setQuote] = useState<Quote | null>(null);
   /**
-   * Mapa corporal do espelho público — esta página não tem login e não pode ler `procedures`.
-   * Best-effort: sem ele o PDF simplesmente sai sem a página das áreas.
+   * Mapas de áreas do espelho público — esta página não tem login e não pode ler `procedures`.
+   * Best-effort: sem eles o PDF simplesmente sai sem a página das áreas.
    */
-  const [mapaCorporal, setMapaCorporal] = useState<LaserBodyMap | null>(null);
+  const [mapasDeAreas, setMapasDeAreas] = useState<MapaDeAreasPublico[]>([]);
   useEffect(() => {
-    void getMapaCorporalDoLaserPublico().then(setMapaCorporal).catch(() => {});
+    void getMapasDeAreasPublicos().then(setMapasDeAreas).catch(() => {});
   }, []);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -382,7 +382,7 @@ export const PublicQuoteEntry: React.FC = () => {
 
       {mostrarPdf && (
         <QuotePreviewModal
-          mapaCorporal={mapaCorporal}
+          mapasDeAreas={mapasDeAreas}
           quote={quote}
           clinic={null}
           onClose={() => setMostrarPdf(false)}

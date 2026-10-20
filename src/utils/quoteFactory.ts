@@ -1,4 +1,5 @@
 import {
+  AreaDoProcedimento,
   ClinicProfile,
   PaymentMethod,
   Procedure,
@@ -79,6 +80,36 @@ export const montarItemDoProcedimento = (
     maisDeUmaSessao: sessoes > 1,
     sessoes,
     detalhes: montarDetalhesDoProcedimento(procedure),
+  };
+};
+
+/**
+ * Item de uma área de um procedimento que exige seleção de área — "Depilação a Laser — Axilas".
+ *
+ * Preço, sessões e duração vêm da área; profissional e detalhes, do procedimento. "Áreas tratadas"
+ * fica de fora: a área já está no título, e repeti-la num detalhe seria dizer a mesma coisa duas
+ * vezes no PDF.
+ */
+export const montarItemDaArea = (
+  procedure: Procedure,
+  area: AreaDoProcedimento,
+  professionals: Professional[] = []
+): QuoteItem => {
+  const base = montarItemDoProcedimento(procedure, professionals);
+  const sessoes = sessoesDoProcedimento(area);
+  return {
+    ...base,
+    areaId: area.id,
+    titulo: `${procedure.title} — ${area.nome}`,
+    valorTabela:
+      area.promotionalPrice && area.promotionalPrice > 0 ? area.promotionalPrice : area.price,
+    maisDeUmaSessao: sessoes > 1,
+    sessoes,
+    detalhes: montarDetalhesDoProcedimento({
+      ...procedure,
+      areasTreated: undefined,
+      duration: area.duration || procedure.duration,
+    }),
   };
 };
 

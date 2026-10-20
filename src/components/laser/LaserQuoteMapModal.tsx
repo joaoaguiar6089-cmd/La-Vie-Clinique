@@ -1,59 +1,56 @@
 import React, { useMemo } from 'react';
 import { X, Check } from 'lucide-react';
-import { ClinicProfile, Procedure } from '../../types';
+import { PatientGender, Procedure } from '../../types';
 import { formatBRL } from '../../utils/formatters';
-import { montarEspelhoPublico, nomeCurtoDaArea } from '../../utils/laserAreas';
-import { isLaserCategory } from '../../utils/templateMatching';
+import { mapaDoProcedimento, precoDaArea } from '../../utils/laserAreas';
 import { LaserAreaPicker } from './LaserAreaPicker';
 
 /**
- * Escolha das áreas de laser durante a montagem de um orçamento.
+ * Escolha das áreas de um procedimento durante a montagem de um orçamento.
  *
  * Fica **aberto** enquanto a profissional seleciona, com o total correndo no rodapé: a conta subir
  * a cada área é a razão de o mapa existir aqui, e fechar o modal a cada clique mataria isso. É um
- * controle vivo dos dois lados — marcar acrescenta o item à lista atrás, desmarcar o remove, e um
- * procedimento adicionado pela busca já chega aqui aceso.
+ * controle vivo dos dois lados — marcar acrescenta o item à lista atrás, desmarcar o remove, e uma
+ * área adicionada pela busca já chega aqui acesa.
  */
 
 interface LaserQuoteMapModalProps {
-  isOpen: boolean;
+  /** O procedimento cujo mapa está aberto. Ausente = fechado. */
+  procedure: Procedure | null;
   onClose: () => void;
-  procedures: Procedure[];
-  clinic: ClinicProfile;
-  /** `procedureId` das áreas já no orçamento. */
+  /** `id` das áreas deste procedimento já no orçamento. */
   selecionadas: Set<string>;
-  onToggle: (procedureId: string) => void;
+  onToggle: (areaId: string) => void;
+  sexo: PatientGender;
+  onSexoChange: (sexo: PatientGender) => void;
 }
 
 export const LaserQuoteMapModal: React.FC<LaserQuoteMapModalProps> = ({
-  isOpen,
+  procedure,
   onClose,
-  procedures,
-  clinic,
   selecionadas,
   onToggle,
+  sexo,
+  onSexoChange,
 }) => {
-  const mapa = useMemo(() => montarEspelhoPublico(procedures, clinic), [procedures, clinic]);
+  const isOpen = !!procedure;
+  const mapa = useMemo(() => (procedure ? mapaDoProcedimento(procedure) : null), [procedure]);
 
   /**
    * Preço de venda por área. Aqui ele aparece — ao contrário da ficha da paciente, onde o mesmo
    * componente roda sem preço nenhum.
    */
-  const precos = useMemo(() => {
-    const mapaDePrecos = new Map<string, number>();
-    for (const p of procedures) {
-      if (!isLaserCategory(p.category)) continue;
-      mapaDePrecos.set(p.id, p.promotionalPrice && p.promotionalPrice > 0 ? p.promotionalPrice : p.price);
-    }
-    return mapaDePrecos;
-  }, [procedures]);
+  const precos = useMemo(
+    () => new Map((procedure?.areasDoMapa || []).map((a) => [a.id, precoDaArea(a)])),
+    [procedure]
+  );
 
   const escolhidas = useMemo(
     () =>
-      procedures
-        .filter((p) => selecionadas.has(p.id))
-        .map((p) => ({ id: p.id, nome: nomeCurtoDaArea(p.title), preco: precos.get(p.id) || 0 })),
-    [procedures, selecionadas, precos]
+      (procedure?.areasDoMapa || [])
+        .filter((a) => selecionadas.has(a.id))
+        .map((a) => ({ id: a.id, nome: a.nome, preco: precos.get(a.id) || 0 })),
+    [procedure, selecionadas, precos]
   );
 
   const soma = escolhidas.reduce((acc, a) => acc + a.preco, 0);
@@ -66,7 +63,7 @@ export const LaserQuoteMapModal: React.FC<LaserQuoteMapModalProps> = ({
         <div className="bg-ink text-line-soft px-5 py-3.5 flex items-center justify-between shrink-0">
           <div>
             <span className="text-label font-semibold uppercase tracking-widest text-brand-light">
-              Depilação a Laser
+              {procedure?.title}
             </span>
             <h3 className="font-serif-luxury text-lg font-medium text-white">
               Selecionar áreas no mapa
@@ -86,9 +83,11 @@ export const LaserQuoteMapModal: React.FC<LaserQuoteMapModalProps> = ({
             mapa={mapa}
             selecionadas={selecionadas}
             onToggle={onToggle}
+            sexo={sexo}
+            onSexoChange={onSexoChange}
             precos={precos}
             alturaManequim={500}
-            vazioMensagem="Nenhum procedimento de laser tem área desenhada no mapa. Desenhe as áreas no cadastro de procedimentos para usar esta tela."
+            vazioMensagem="Este procedimento ainda não tem áreas desenhadas. Desenhe as áreas no cadastro do procedimento para usar esta tela."
           />
         </div>
 
@@ -101,7 +100,7 @@ export const LaserQuoteMapModal: React.FC<LaserQuoteMapModalProps> = ({
                 : `${escolhidas.length} ${escolhidas.length === 1 ? 'área' : 'áreas'}`}
             </span>
             <span className="block text-[12px] text-ink truncate">
-              {escolhidas.map((a) => a.nome).join(', ') || 'Toque nas regiões do manequim'}
+              {escolhidas.map((a) => a.nome).join(', ') || 'Toque nas regiões da foto'}
             </span>
           </div>
 

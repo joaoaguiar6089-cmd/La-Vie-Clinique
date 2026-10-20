@@ -38,7 +38,9 @@ import {
   QuoteComprovante,
   Recibo,
   ReciboDraft,
-  LaserBodyMap,
+  EspelhoDosMapas,
+  MapaDeAreasPublico,
+  VistaDoMapa,
   ConsentTermSection,
   EvaluationTemplate,
   EvaluationRecord,
@@ -75,9 +77,12 @@ import {
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../utils/fichasClinicas';
 import { caixaLida, linhasSemValor } from '../utils/estoque';
 import {
-  montarEspelhoPublico,
-  serializarAreas,
+  montarMapasPublicos,
   desserializarAreas,
+  desserializarAreasDoMapa,
+  desserializarVistas,
+  serializarAreasDoMapa,
+  serializarDesenhos,
   LASER_MANEQUIM_MAX_LADO,
 } from '../utils/laserAreas';
 import {
@@ -465,14 +470,29 @@ export function normalizeLaserCategory(category?: string): string {
  */
 export function normalizeProcedureList(procedures: Procedure[]): Procedure[] {
   return procedures
-    .map((proc) => ({
+    // Arquivado = convertido em área de outro procedimento. Continua no banco, mas não aparece em
+    // lista nenhuma — é esta a lista que o app inteiro recebe.
+    .filter((proc) => !proc.arquivado)
+    .map((proc) => desserializarMapaDoProcedimento({
       ...proc,
       category: normalizeLaserCategory(proc.category),
-      // As áreas voltam do banco em formato de gravação (string por polígono) e precisam virar
-      // números antes de qualquer tela tentar desenhá-las. Ver `desserializarAreas`.
-      laserAreas: desserializarAreas((proc as unknown as Record<string, unknown>).laserAreas),
     }))
     .sort((a, b) => (a.order || 99) - (b.order || 99));
+}
+
+/**
+ * As áreas voltam do banco em formato de gravação (string por polígono) e precisam virar números
+ * antes de qualquer tela tentar desenhá-las — sem isso o manequim aparece vazio, com a lista de
+ * áreas cheia. Ver `desserializarAreasDoMapa`.
+ */
+function desserializarMapaDoProcedimento(proc: Procedure): Procedure {
+  const bruto = proc as unknown as Record<string, unknown>;
+  return {
+    ...proc,
+    laserAreas: desserializarAreas(bruto.laserAreas),
+    vistasDoMapa: desserializarVistas(bruto.vistasDoMapa),
+    areasDoMapa: desserializarAreasDoMapa(bruto.areasDoMapa),
+  };
 }
 
 /**
@@ -498,12 +518,8 @@ export function subscribeToProcedures(
         // procedimento grava a forma normalizada junto com o resto.
         proc.category = normalizeLaserCategory(proc.category);
         // Mesma ideia: converter só para exibir. Os polígonos são gravados como texto (o Firestore
-        // não aceita array dentro de array) e precisam voltar a ser números antes de qualquer tela
-        // tentar desenhá-los — sem isso o manequim aparece vazio, com a lista de áreas cheia.
-        proc.laserAreas = desserializarAreas(
-          (proc as unknown as Record<string, unknown>).laserAreas
-        );
-        items.push(proc);
+        // não aceita array dentro de array) e precisam voltar a ser números.
+        items.push(desserializarMapaDoProcedimento(proc));
       });
       onUpdate(items);
     },
@@ -575,28 +591,50 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure
     );
   }
 
+  // As fotos do mapa sobem por um caminho estrito: se o Storage recusar, esta linha lança e o
+  // procedimento não é gravado. Ver `subirFotosDoMapa`.
+  const vistasDoMapa =
+    procedure.exigeSelecaoDeArea && procedure.vistasDoMapa
+      ? await subirFotosDoMapa(procedure.vistasDoMapa, procedure.id)
+      : undefined;
+
   const procedureAtualizado: Procedure = {
     ...procedure,
     images: imagensFinais,
+    vistasDoMapa,
     updatedAt: new Date().toISOString(),
   };
 
   const docRef = doc(db, PROCEDURES_COLLECTION, procedureAtualizado.id);
-  const areasGravaveis = serializarAreas(procedureAtualizado.laserAreas);
+  const temMapa = !!procedureAtualizado.exigeSelecaoDeArea;
+  const areasGravaveis = temMapa ? serializarAreasDoMapa(procedureAtualizado.areasDoMapa) : undefined;
+  // Os campos do mapa ficam fora do `cleanForFirestore` e entram logo abaixo, cada um do seu jeito.
+  const {
+    laserAreas: _legado,
+    exigeSelecaoDeArea: _exige,
+    vistasDoMapa: _vistas,
+    areasDoMapa: _areas,
+    ...semMapa
+  } = procedureAtualizado;
   const dataToSave = {
-    ...cleanForFirestore(procedureAtualizado),
+    ...cleanForFirestore(semMapa),
     /**
      * Serializado **depois** do `cleanForFirestore`, e nunca antes: ele percorre a estrutura e
      * achataria cada polígono num objeto `{0: x, 1: y}`. A gravação passaria sem erro e o desenho
      * nunca mais apareceria.
      *
      * E `deleteField()` em vez de omitir quando não há área: a gravação usa `merge: true`, onde um
-     * campo ausente é um campo **preservado**. Omitir faria "remover a área" não remover nada — o
-     * desenho antigo continuaria no banco, voltando na próxima leitura.
+     * campo ausente é um campo **preservado**. Omitir faria "remover as áreas" não remover nada —
+     * o desenho antigo continuaria no banco, voltando na próxima leitura.
      */
-    laserAreas: areasGravaveis ?? deleteField(),
+    exigeSelecaoDeArea: temMapa ? true : deleteField(),
+    vistasDoMapa:
+      temMapa && vistasDoMapa && vistasDoMapa.length > 0 ? cleanForFirestore(vistasDoMapa) : deleteField(),
+    areasDoMapa: areasGravaveis ?? deleteField(),
+    // `laserAreas` (o formato antigo) não é regravado nem apagado: só a conversão o lê, e ele fica
+    // no banco como está.
     /**
-     * Mesma razão do `laserAreas`: desmarcar "Mais de 1 sessão" deixa o campo `undefined`, que o
+     * Mesma razão das áreas: desmarcar "Mais de 1 sessão" deixa o campo `undefined`, que o
      * `merge: true` trata como "não mexa" — o número antigo continuaria no banco e o orçamento
      * seguiria nascendo com ele.
      */
@@ -618,6 +656,73 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure
   );
 
   return procedureAtualizado;
+}
+
+/**
+ * Sobe para o Storage as fotos do mapa ainda em base64 — e, ao contrário do resto do
+ * `imageStorage`, **recusa o fallback para base64**.
+ *
+ * Em qualquer outra imagem do sistema, cair na base64 é um retrocesso tolerável: a tela continua
+ * funcionando e só volta a ficar caro. Aqui não. Uma foto de corpo inteiro nítida pesa de 400 a
+ * 900 KB, o que em base64 vira 530 KB a 1,2 MB — com duas fotos por vista, o documento do
+ * procedimento estouraria o teto de 1 MB, e cada regravação custaria mais de mil write units de
+ * uma cota diária de 20.000.
+ *
+ * Então, se o Storage recusar, esta função lança: melhor a equipe ver "não foi possível enviar" e
+ * tentar de novo do que gravar um procedimento que envenena a cota da clínica inteira.
+ */
+export async function subirFotosDoMapa(
+  vistas: VistaDoMapa[],
+  procedureId: string
+): Promise<VistaDoMapa[]> {
+  const pasta = `procedimentos/${procedureId}/mapa`;
+  const subir = async (foto?: string): Promise<string | undefined> => {
+    if (!foto || !foto.startsWith('data:')) return foto;
+    const reduzida = await downscaleDataUrl(foto, LASER_MANEQUIM_MAX_LADO, 0.92);
+    const { url, noStorage } = await subirImagem(reduzida, pasta);
+    if (!noStorage) {
+      throw new Error(
+        'Não foi possível enviar a foto do mapa de áreas para o Firebase Storage. Verifique a ' +
+          'conexão e tente novamente. O procedimento não foi salvo — fotos de mapa são grandes ' +
+          'demais para ficar dentro do documento.'
+      );
+    }
+    return url;
+  };
+
+  const saida: VistaDoMapa[] = [];
+  for (const vista of vistas) {
+    const fotoFemininaUrl = await subir(vista.fotoFemininaUrl);
+    const fotoMasculinaUrl = await subir(vista.fotoMasculinaUrl);
+    saida.push({
+      id: vista.id,
+      nome: vista.nome,
+      ...(fotoFemininaUrl ? { fotoFemininaUrl } : {}),
+      ...(fotoMasculinaUrl ? { fotoMasculinaUrl } : {}),
+    });
+  }
+  return saida;
+}
+
+/**
+ * Arquiva os procedimentos de área antigos que viraram áreas de `emFavorDe`.
+ *
+ * Arquivar, e não apagar: o procedimento some de toda lista (`normalizeProcedureList`), mas
+ * continua no banco para quem precisar conferir o que havia nele. Fichas e orçamentos antigos não
+ * dependem dele — a área convertida tem o mesmo ID, e é por ele que eles a acham.
+ */
+export async function arquivarProcedimentosNoDb(ids: string[], emFavorDe: string): Promise<void> {
+  if (ids.length === 0) return;
+  const batch = writeBatch(db);
+  const agora = new Date().toISOString();
+  ids.forEach((id) => {
+    batch.update(doc(db, PROCEDURES_COLLECTION, id), {
+      arquivado: true,
+      arquivadoEmFavorDe: emFavorDe,
+      updatedAt: agora,
+    });
+  });
+  await comConfirmacaoDoServidor(batch.commit(), 'do arquivamento dos procedimentos convertidos');
 }
 
 /**
@@ -724,10 +829,7 @@ async function subirImagensDaClinica(profile: ClinicProfile): Promise<ClinicProf
  * problema menor do que perder a edição do perfil.
  */
 export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<ClinicProfile> {
-  // Os manequins sobem primeiro e por um caminho estrito: se o Storage recusar, esta linha lança
-  // e o perfil não é gravado. É de propósito — ver `subirManequinsDoLaser`.
-  const comManequins = await subirManequinsDoLaser(profile);
-  const comImagensNoStorage = await subirImagensDaClinica(comManequins);
+  const comImagensNoStorage = await subirImagensDaClinica(profile);
 
   const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
   const dataToSave = cleanForFirestore({
@@ -840,58 +942,18 @@ export async function publicarEspelhoPublicoSeMudou(profile: ClinicProfile): Pro
 }
 
 // ==========================================
-// MAPA CORPORAL DA DEPILAÇÃO A LASER
+// MAPAS DE ÁREAS — ESPELHO PÚBLICO
 // ==========================================
 
 /**
- * Espelho público do mapa corporal. Existe pela mesma razão do `public_profile`: a paciente
+ * Espelho público dos mapas de áreas. Existe pela mesma razão do `public_profile`: a paciente
  * escolhe as áreas pretendidas dentro da ficha de anamnese, que ela abre por link e sem conta —
  * e `procedures`, onde as áreas moram de verdade, exige login para leitura.
  *
- * Leva os polígonos e os nomes curtos, nunca os preços.
+ * Leva os polígonos e os nomes, nunca os preços. O ID é o de quando só a depilação a laser tinha
+ * mapa: é este o documento que `firestore.rules` libera para leitura pública.
  */
-const CLINIC_LASER_MAP_DOC_ID = 'laser_body_map';
-
-const LASER_MANEQUIM_FOLDER = `${CLINIC_IMAGES_FOLDER}/laser-manequim`;
-
-/**
- * Sobe os dois manequins para o Storage — e, ao contrário de todo o resto do `imageStorage`,
- * **recusa o fallback para base64**.
- *
- * Em qualquer outra imagem do sistema, cair na base64 é um retrocesso tolerável: a tela continua
- * funcionando e só volta a ficar caro. Aqui não. Um manequim de corpo inteiro nítido pesa de 400 a
- * 900 KB, o que em base64 vira 530 KB a 1,2 MB — e a cota deste projeto conta write units de 1 KiB
- * gravado, de um teto diário de 20.000. Duas dessas dentro de `clinic_settings` seriam mais de mil
- * unidades por gravação, em um documento que é reescrito a cada ajuste do perfil, com risco de
- * estourar o teto de 1 MB por documento e travar as Configurações de vez.
- *
- * Então, se o Storage recusar, esta função lança: melhor a equipe ver "não foi possível enviar" e
- * tentar de novo do que salvar um perfil que envenena a cota da clínica inteira.
- */
-async function subirManequinsDoLaser(profile: ClinicProfile): Promise<ClinicProfile> {
-  const campos = ['laserManequimFrenteUrl', 'laserManequimCostasUrl'] as const;
-  if (!campos.some((campo) => ehImagemEmbutida(profile[campo]))) return profile;
-
-  const resultado: ClinicProfile = { ...profile };
-
-  for (const campo of campos) {
-    const valor = profile[campo];
-    if (!ehImagemEmbutida(valor)) continue;
-
-    const reduzida = await downscaleDataUrl(valor as string, LASER_MANEQUIM_MAX_LADO, 0.92);
-    const { url, noStorage } = await subirImagem(reduzida, LASER_MANEQUIM_FOLDER);
-    if (!noStorage) {
-      throw new Error(
-        'Não foi possível enviar a imagem do manequim para o Firebase Storage. Verifique a ' +
-          'conexão e se as regras de storage.rules foram publicadas, e tente novamente. A imagem ' +
-          'não foi salva — manequins são grandes demais para ficar dentro do documento.'
-      );
-    }
-    resultado[campo] = url;
-  }
-
-  return resultado;
-}
+const CLINIC_AREA_MAPS_DOC_ID = 'laser_body_map';
 
 /**
  * Assinatura do conteúdo do espelho, para não regravar um documento idêntico.
@@ -900,94 +962,95 @@ async function subirManequinsDoLaser(profile: ClinicProfile): Promise<ClinicProf
  * publicado em carregamento de página — só por ação explícita da equipe — então não há a enxurrada
  * de reescritas por F5 que aquela marca resolve.
  */
-let assinaturaDoMapaPublicado: string | null = null;
+let assinaturaDosMapasPublicados: string | null = null;
 
 /**
  * Publica `clinic_settings/laser_body_map` a partir do catálogo em memória.
  *
- * **Só pode ser chamada a partir de uma ação explícita da equipe** (aplicar uma área, salvar as
- * Configurações). Nunca de dentro de um `useEffect` de carregamento nem de um callback de
+ * **Só pode ser chamada a partir de uma ação explícita da equipe** (salvar, arquivar ou excluir um
+ * procedimento com mapa). Nunca de dentro de um `useEffect` de carregamento nem de um callback de
  * `onSnapshot`: são ~10 KB por gravação, e uma vez por abertura do app, vezes dezenas de aberturas
  * diárias, vira consumo de fundo real da cota — foi exatamente assim que o espelho do perfil virou
  * o maior consumidor do dia antes de ganhar a marca de "publica só se mudou".
  *
  * Não derruba quem chamou: perder a atualização do mapa público é menos grave do que perder o
- * salvamento da área que acabou de ser desenhada.
+ * salvamento do procedimento que acabou de ser editado.
  */
-export async function publicarMapaCorporalDoLaser(
-  procedures: Procedure[],
-  clinic: Pick<ClinicProfile, 'laserManequimFrenteUrl' | 'laserManequimCostasUrl'>
-): Promise<void> {
+export async function publicarMapasDeAreas(procedures: Procedure[]): Promise<void> {
   try {
-    const mapa = montarEspelhoPublico(procedures, clinic);
+    const { updatedAt, mapas } = montarMapasPublicos(procedures);
 
     // `updatedAt` fora da assinatura: ele muda sempre e faria todo mapa parecer diferente de si.
-    const { updatedAt: _ignorado, ...conteudo } = mapa;
-    const assinatura = JSON.stringify(conteudo);
-    if (assinatura === assinaturaDoMapaPublicado) return;
+    const assinatura = JSON.stringify(mapas);
+    if (assinatura === assinaturaDosMapasPublicados) return;
 
-    const ref = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_LASER_MAP_DOC_ID);
-    // Sem merge: uma área removida do catálogo precisa sumir daqui também.
-    // E com os polígonos serializados pelo mesmo motivo de `procedures` — o espelho é um documento
-    // do Firestore como qualquer outro, e array dentro de array não passa nele também.
+    const ref = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_AREA_MAPS_DOC_ID);
+    // Sem merge: um mapa removido do catálogo precisa sumir daqui também — e o formato antigo
+    // (um mapa só, com `manequimFrenteUrl` e `areas` na raiz) sai junto.
+    // Com os polígonos serializados pelo mesmo motivo de `procedures`: o espelho é um documento do
+    // Firestore como qualquer outro, e array dentro de array não passa nele também.
     await setDoc(
       ref,
-      cleanForFirestore({
-        ...mapa,
-        areas: mapa.areas.map((a) => ({
-          procedureId: a.procedureId,
-          nomeCurto: a.nomeCurto,
-          vista: a.vista,
-          formas: a.formas.map((f) => f.join(',')),
-          ...(a.botao ? { botao: a.botao } : {}),
+      {
+        updatedAt,
+        mapas: mapas.map((m) => ({
+          ...cleanForFirestore({
+            procedureId: m.procedureId,
+            titulo: m.titulo,
+            categoria: m.categoria,
+            vistas: m.vistas,
+          }),
+          areas: m.areas.map((a) => ({
+            id: a.id,
+            nome: a.nome,
+            vistaId: a.vistaId,
+            desenhos: serializarDesenhos(a.desenhos),
+          })),
         })),
-      }),
+      },
       { merge: false }
     );
-    assinaturaDoMapaPublicado = assinatura;
+    assinaturaDosMapasPublicados = assinatura;
   } catch (err) {
-    console.warn('O mapa corporal do laser não pôde ser publicado no espelho público:', err);
+    console.warn('Os mapas de áreas não puderam ser publicados no espelho público:', err);
   }
 }
 
 /**
- * Lê o mapa corporal na página pública (ficha de anamnese aberta pela paciente, sem login).
+ * Lê os mapas de áreas na página pública (ficha de anamnese ou orçamento aberto pela paciente,
+ * sem login).
  *
- * Devolve `null` quando o mapa ainda não foi publicado — a clínica pode não ter enviado os
- * manequins, e a ficha precisa continuar funcionando sem a etapa de áreas em vez de não abrir.
+ * Devolve lista vazia quando nada foi publicado — ou quando o documento ainda está no formato
+ * antigo, de antes do mapa morar no procedimento. A ficha precisa continuar funcionando sem a
+ * etapa de áreas em vez de não abrir.
  */
-export async function getMapaCorporalDoLaserPublico(): Promise<LaserBodyMap | null> {
+export async function getMapasDeAreasPublicos(): Promise<MapaDeAreasPublico[]> {
   try {
-    const snap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_LASER_MAP_DOC_ID));
-    if (!snap.exists()) return null;
-    const dados = snap.data() as Record<string, unknown>;
+    const snap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_AREA_MAPS_DOC_ID));
+    if (!snap.exists()) return [];
+    const dados = snap.data() as Partial<EspelhoDosMapas> & Record<string, unknown>;
 
-    // Cada entrada vira uma área de uma forma só para reaproveitar o leitor tolerante, que também
-    // recupera os espelhos gravados antes desta correção.
-    const areas = (Array.isArray(dados.areas) ? dados.areas : [])
-      .map((bruta) => {
-        const registro = bruta as Record<string, unknown>;
-        const area = desserializarAreas([registro])?.[0];
-        if (!area) return null;
+    return (Array.isArray(dados.mapas) ? dados.mapas : [])
+      .map((bruto): MapaDeAreasPublico | null => {
+        const r = bruto as unknown as Record<string, unknown>;
+        if (typeof r.procedureId !== 'string' || !r.procedureId) return null;
         return {
-          procedureId: String(registro.procedureId || ''),
-          nomeCurto: String(registro.nomeCurto || ''),
-          vista: area.vista,
-          formas: area.formas,
-          ...(area.botao ? { botao: area.botao } : {}),
+          procedureId: r.procedureId,
+          titulo: String(r.titulo || ''),
+          categoria: String(r.categoria || ''),
+          vistas: desserializarVistas(r.vistas) || [],
+          areas: (desserializarAreasDoMapa(r.areas) || []).map((a) => ({
+            id: a.id,
+            nome: a.nome,
+            vistaId: a.vistaId,
+            desenhos: a.desenhos,
+          })),
         };
       })
-      .filter((a): a is NonNullable<typeof a> => !!a && !!a.procedureId);
-
-    return {
-      manequimFrenteUrl: dados.manequimFrenteUrl as string | undefined,
-      manequimCostasUrl: dados.manequimCostasUrl as string | undefined,
-      areas,
-      updatedAt: dados.updatedAt as string | undefined,
-    };
+      .filter((m): m is MapaDeAreasPublico => !!m);
   } catch (err) {
-    console.warn('Não foi possível ler o mapa corporal do laser:', err);
-    return null;
+    console.warn('Não foi possível ler os mapas de áreas:', err);
+    return [];
   }
 }
 

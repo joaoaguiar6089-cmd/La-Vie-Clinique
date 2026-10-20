@@ -3,7 +3,6 @@ import { AlertCircle, Calculator, CreditCard, MessageSquare, Plus, Sparkles } fr
 import { ClinicProfile, Patient, Procedure } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { sugerirDescontoCombinado } from '../../utils/quoteCalc';
-import { nomeCurtoDaArea } from '../../utils/laserAreas';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { ProcedureSearchAdd } from './ProcedureSearchAdd';
 import { ProdutoSearchAdd } from './ProdutoSearchAdd';
@@ -188,8 +187,9 @@ export const SecaoItensDoOrcamento: React.FC<{
           <ProcedureSearchAdd
             procedures={procedures}
             onAdd={orc.addProcedure}
-            onAbrirMapa={() => orc.setMapaAberto(true)}
-            areasNoMapa={orc.areasNoOrcamento.size}
+            onAddArea={orc.addArea}
+            onAbrirMapa={(procedimento) => orc.setMapaAberto(procedimento.id)}
+            areasNoOrcamento={orc.areasNoOrcamento}
           />
           <ProdutoSearchAdd produtos={orc.produtos} onAdd={orc.addProduto} />
           {orc.areasNoOrcamento.size > 0 && (
@@ -200,7 +200,7 @@ export const SecaoItensDoOrcamento: React.FC<{
                 onChange={(e) => orc.setMostrarMapaCorporal(e.target.checked)}
                 className="w-4 h-4 accent-ink"
               />
-              Incluir o manequim com as áreas contratadas no PDF
+              Incluir o mapa com as áreas contratadas no PDF
             </label>
           )}
 
@@ -369,7 +369,7 @@ export const SecaoPagamentoDoOrcamento: React.FC<{ orc: OrcamentoEmEdicao }> = (
 );
 
 /**
- * O mapa do laser e a confirmação de tirar um item já ajustado. Fora de qualquer `<form>`: um
+ * O mapa de áreas e a confirmação de tirar um item já ajustado. Fora de qualquer `<form>`: um
  * clique no mapa não pode disparar o submit do orçamento.
  */
 export const ModaisDoOrcamento: React.FC<{
@@ -381,19 +381,19 @@ export const ModaisDoOrcamento: React.FC<{
   return (
     <>
       <LaserQuoteMapModal
-        isOpen={orc.mapaAberto}
-        onClose={() => orc.setMapaAberto(false)}
-        procedures={procedures}
-        clinic={clinic}
+        procedure={procedures.find((p) => p.id === orc.mapaAberto) || null}
+        onClose={() => orc.setMapaAberto(null)}
         selecionadas={orc.areasNoOrcamento}
         onToggle={orc.alternarAreaDoLaser}
+        sexo={orc.sexoDoMapa}
+        onSexoChange={orc.setSexoDoMapa}
       />
 
       <ConfirmDialog
         pedido={
           confirmar
             ? {
-                titulo: `Remover ${nomeCurtoDaArea(confirmar.titulo)} do orçamento?`,
+                titulo: `Remover "${confirmar.titulo}" do orçamento?`,
                 mensagem:
                   'Este item já foi ajustado — desconto, número de sessões ou cálculo por consumo. Removê-lo ' +
                   'descarta esses ajustes, e eles não voltam ao marcar a área de novo.',

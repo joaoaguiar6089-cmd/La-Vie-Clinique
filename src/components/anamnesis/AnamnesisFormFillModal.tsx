@@ -26,7 +26,7 @@ import { LaserAreaPicker } from '../laser/LaserAreaPicker';
 import { ehTemplateDeLaser } from '../../utils/templateMatching';
 import { SidePanel } from '../common/SidePanel';
 import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
-import { listarNomesDeAreas, montarEspelhoPublico } from '../../utils/laserAreas';
+import { listarNomesDeAreas, mapaDoTemplate, montarMapasPublicos, refDaArea } from '../../utils/laserAreas';
 import {
   ArrowRight,
   Camera,
@@ -225,24 +225,29 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
    * que gera o espelho público, para que a profissional veja exatamente o mesmo desenho que a
    * paciente viu no link.
    */
-  const ehFichaDeLaser = ehTemplateDeLaser(currentTemplate);
-  const mapaCorporal = useMemo(
-    () => montarEspelhoPublico(catalogProcedures, clinicProfile),
-    [catalogProcedures, clinicProfile]
+  const mapaDeAreas = useMemo(
+    () => mapaDoTemplate(currentTemplate, montarMapasPublicos(catalogProcedures).mapas),
+    [currentTemplate, catalogProcedures]
   );
+  /** A etapa aparece com mapa — e na ficha de laser sem mapa ainda, para avisar que falta. */
+  const temEtapaDeAreas = !!mapaDeAreas || ehTemplateDeLaser(currentTemplate);
   const [areasConfirmadas, setAreasConfirmadas] = useState<Set<string>>(new Set());
+  /** Foto do mapa quando o gênero da paciente não foi informado. */
+  const [sexoDoMapa, setSexoDoMapa] = useState<PatientGender>('feminino');
 
-  const alternarAreaConfirmada = (procedureId: string) =>
+  const alternarAreaConfirmada = (areaId: string) =>
     setAreasConfirmadas((atual) => {
       const proximo = new Set(atual);
-      if (proximo.has(procedureId)) proximo.delete(procedureId);
-      else proximo.add(procedureId);
+      if (proximo.has(areaId)) proximo.delete(areaId);
+      else proximo.add(areaId);
       return proximo;
     });
 
-  const refsConfirmadas: LaserAreaRef[] = mapaCorporal.areas
-    .filter((a) => areasConfirmadas.has(a.procedureId))
-    .map((a) => ({ procedureId: a.procedureId, nomeCurto: a.nomeCurto }));
+  const refsConfirmadas: LaserAreaRef[] = mapaDeAreas
+    ? mapaDeAreas.areas
+        .filter((a) => areasConfirmadas.has(a.id))
+        .map((a) => refDaArea(mapaDeAreas.procedureId, a))
+    : [];
 
   const nomesDasAreasConfirmadas = listarNomesDeAreas(refsConfirmadas);
 
@@ -447,7 +452,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           especificas: currentTemplate.perguntasEspecificas || [],
         },
         // Ficha presencial: a profissional é quem marca, então isto é conduta confirmada.
-        areasConfirmadas: ehFichaDeLaser && refsConfirmadas.length > 0 ? refsConfirmadas : undefined,
+        areasConfirmadas: refsConfirmadas.length > 0 ? refsConfirmadas : undefined,
         observacoesFinais: observacoesFinais.trim() || undefined,
         origemPreenchimento: 'presencial_clinica',
         createdAt: new Date().toISOString(),
@@ -847,7 +852,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
           {consentSections && <ConsentTermView sections={consentSections} />}
 
           {/* ÁREAS DO LASER — só nas fichas de depilação a laser */}
-          {ehFichaDeLaser && (
+          {temEtapaDeAreas && (
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[rgba(26,26,26,.07)] space-y-3">
               <div className="border-b border-[rgba(26,26,26,.07)] pb-3">
                 <h4 className="text-[15px] font-semibold text-ink flex items-center gap-2">
@@ -861,11 +866,13 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
               </div>
 
               <LaserAreaPicker
-                mapa={mapaCorporal}
+                mapa={mapaDeAreas}
                 selecionadas={areasConfirmadas}
                 onToggle={alternarAreaConfirmada}
+                sexo={currentGenero || sexoDoMapa}
+                onSexoChange={currentGenero ? undefined : setSexoDoMapa}
                 alturaManequim={460}
-                vazioMensagem="Nenhum procedimento de laser tem área desenhada ainda. Configure o mapa no cadastro de procedimentos."
+                vazioMensagem="Este procedimento ainda não tem áreas desenhadas. Marque “Exige seleção de área” no cadastro do procedimento e desenhe as áreas."
               />
 
               {areasConfirmadas.size > 0 && (

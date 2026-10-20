@@ -26,7 +26,7 @@ import { ItemDaLinha } from '../../utils/pacienteResumo';
 import { alvoDoAtendimento, alvoDoRegistro } from '../../utils/fichasClinicas';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
-import { montarEspelhoPublico } from '../../utils/laserAreas';
+import { montarMapasPublicos } from '../../utils/laserAreas';
 import {
   saveAnamnesisRecord,
   subscribeToAnamnesisRecordsDesde,
@@ -174,9 +174,9 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
   const visiveis = filtrados.slice(0, limite);
   const porDia = useMemo(() => agruparPorDia(visiveis, hoje), [visiveis, hoje]);
 
-  const mapaDoLaser = useMemo(
-    () => montarEspelhoPublico(catalogProcedures, clinic),
-    [catalogProcedures, clinic]
+  const mapasDeAreas = useMemo(
+    () => montarMapasPublicos(catalogProcedures).mapas,
+    [catalogProcedures]
   );
 
   const acoes: AcoesDaLinha = {
@@ -382,7 +382,7 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
           onSaveRecord={saveAnamnesisRecord}
           orientationImage={resolveOrientationImage(templateDaAnamnese)}
           consentSections={resolveConsentTerm(templateDaAnamnese)}
-          mapaCorporal={mapaDoLaser}
+          mapasDeAreas={mapasDeAreas}
         />
       )}
 

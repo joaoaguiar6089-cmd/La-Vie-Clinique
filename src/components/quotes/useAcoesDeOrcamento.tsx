@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ClinicProfile, Patient, Procedure, Quote, QuoteDraft } from '../../types';
-import { montarEspelhoPublico } from '../../utils/laserAreas';
+import { montarMapasPublicos } from '../../utils/laserAreas';
 import { marcarComoEnviadoSeRascunho, salvarOrcamentoComCusto } from '../../services/quoteWorkflow';
 import { CustoEmEdicao } from '../../utils/estoque';
 import { QuoteFormModal } from './QuoteFormModal';
@@ -53,8 +53,8 @@ export const useAcoesDeOrcamento = ({
   const [previa, setPrevia] = useState<Quote | null>(null);
   const [compartilhando, setCompartilhando] = useState<Quote | null>(null);
 
-  /** Mapa corporal do catálogo, para a página das áreas contratadas no PDF. */
-  const mapaDoLaser = useMemo(() => montarEspelhoPublico(procedures, clinic), [procedures, clinic]);
+  /** Mapas de áreas do catálogo, para a página das áreas contratadas no PDF. */
+  const mapasDeAreas = useMemo(() => montarMapasPublicos(procedures).mapas, [procedures]);
 
   /** Se só o custo falhar, o orçamento continua salvo e a tela diz o que ficou para trás. */
   const salvar = async (draft: QuoteDraft, existente?: Quote, custo?: CustoEmEdicao) => {
@@ -90,7 +90,7 @@ export const useAcoesDeOrcamento = ({
       <QuotePreviewModal
         quote={previa}
         clinic={clinic}
-        mapaCorporal={mapaDoLaser}
+        mapasDeAreas={mapasDeAreas}
         onClose={() => setPrevia(null)}
       />
       <QuoteShareModal

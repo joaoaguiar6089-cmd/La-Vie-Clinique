@@ -45,8 +45,7 @@ import { AnamnesisFormFillModal } from '../anamnesis/AnamnesisFormFillModal';
 import { EscolhaDaAnamnese } from '../anamnesis/EscolhaDaAnamnese';
 import { ShareAnamnesisLinkModal } from '../anamnesis/ShareAnamnesisLinkModal';
 import { AlvoDoPasso } from '../linhaDoTempo/PainelDoEvento';
-import { isLaserCategory } from '../../utils/templateMatching';
-import { montarEspelhoPublico } from '../../utils/laserAreas';
+import { mapaDaArea, montarMapasPublicos } from '../../utils/laserAreas';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
 import { useAcoesDeOrcamento } from '../quotes/useAcoesDeOrcamento';
 import { podeSubstituir } from '../../utils/quoteCalc';
@@ -190,12 +189,12 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   onAbrirNaAgenda,
 }) => {
   /**
-   * Mapa corporal do laser, montado do catálogo — a ficha impressa desta tela precisa desenhar as
-   * áreas, e o registro guarda só os IDs e nomes delas.
+   * Mapas de áreas, montados do catálogo — a ficha impressa desta tela precisa desenhar as áreas,
+   * e o registro guarda só os IDs e nomes delas.
    */
-  const mapaDoLaser = React.useMemo(
-    () => montarEspelhoPublico(catalogProcedures, clinic),
-    [catalogProcedures, clinic]
+  const mapasDeAreas = React.useMemo(
+    () => montarMapasPublicos(catalogProcedures).mapas,
+    [catalogProcedures]
   );
 
   const [aba, setAba] = useState<Aba>('resumo');
@@ -273,11 +272,14 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
     setEscolhendoAnamnese(true);
   };
 
-  /** Na ficha única do laser, a área do procedimento já vem marcada no manequim. */
-  const areaDoLaserDaSemente = (() => {
-    const proc = catalogProcedures.find((p) => p.id === sementeDaAnamnese.procedureId);
-    return proc && isLaserCategory(proc.category) ? proc.id : undefined;
-  })();
+  /**
+   * A área da semente já vem marcada no mapa — quando a semente é uma área: um atendimento lançado
+   * num procedimento de área antigo, que a conversão transformou em área com o mesmo ID.
+   */
+  const areaDoLaserDaSemente = sementeDaAnamnese.procedureId &&
+    mapaDaArea(mapasDeAreas, sementeDaAnamnese.procedureId)
+    ? sementeDaAnamnese.procedureId
+    : undefined;
 
   /** Agendamento futuro não é atendimento feito — o contador da aba conta só o que aconteceu. */
   const totalAtendimentos = contarAtendimentosRealizados(atendimentos);
@@ -940,7 +942,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           );
           return (
             <PrintableAnamnesisSheet
-              mapaCorporal={mapaDoLaser}
+              mapasDeAreas={mapasDeAreas}
               record={records.find((r) => r.id === fichaAberta.id) || fichaAberta}
               clinicProfile={clinic}
               onClose={() => setFichaAberta(null)}
