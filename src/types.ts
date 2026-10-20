@@ -13,27 +13,32 @@ export interface Professional {
 }
 
 // ==========================================
-// MAPA CORPORAL DA DEPILAÇÃO A LASER — TIPOS
+// MAPA DE ÁREAS DO PROCEDIMENTO — TIPOS
 // ==========================================
 
-/** Qual dos dois manequins. Uma área nunca atravessa as duas: ela é frente OU costas. */
-export type LaserVista = 'frente' | 'costas';
+/**
+ * Uma vista do mapa — "Frente", "Costas", "Rosto". O nome é livre: a depilação a laser usa duas, o
+ * botox usa uma só, e cada clínica decide as suas no cadastro do procedimento.
+ *
+ * Cada vista tem uma foto para mulher e outra para homem. As duas são independentes: as áreas
+ * guardam coordenadas relativas à imagem, e cada foto tem o seu próprio desenho (ver
+ * `AreaDoProcedimento.desenhos`). Trocar uma foto por outra de proporção diferente deslocaria o
+ * desenho dela — por isso a troca é travada na proporção atual, no envio.
+ */
+export interface VistaDoMapa {
+  id: string;
+  nome: string;
+  fotoFemininaUrl?: string;
+  fotoMasculinaUrl?: string;
+}
 
 /**
- * A região do corpo onde este procedimento de laser é aplicado, desenhada por cima do manequim.
+ * O contorno de uma área numa foto.
  *
- * Mora dentro do próprio `Procedure` (e não numa coleção à parte) por três motivos: um polígono
- * simplificado ocupa ~500 bytes, longe do teto de 1 MB do documento; apagar o procedimento apaga
- * a área junto, sem órfãos; e o catálogo já vive em memória, então o mapa monta sem leitura extra.
- *
- * As coordenadas são **relativas à imagem** (0–1), não em pixels — é isso que deixa o mesmo
- * desenho servir ao manequim gigante do cadastro e ao pequeno do celular. Por consequência,
- * trocar a imagem do manequim por uma de proporção diferente desloca todas as áreas; ver
- * `LASER_MANEQUIM_MAX_LADO` e a trava de proporção em `utils/laserAreas.ts`.
+ * As coordenadas são **relativas à imagem** (0–1), não em pixels — é isso que deixa o mesmo desenho
+ * servir ao manequim gigante do cadastro e ao pequeno do celular.
  */
-export interface LaserArea {
-  id: string;
-  vista: LaserVista;
+export interface DesenhoDaArea {
   /**
    * Uma ou mais formas fechadas, cada uma como `[x1,y1,x2,y2,...]` em 0–1 com 3 casas decimais.
    * Mais de uma porque várias regiões são simétricas e descontínuas: "Axilas" são duas manchas,
@@ -45,31 +50,68 @@ export interface LaserArea {
 }
 
 /**
+ * Uma área de um procedimento que exige seleção de área — "Axilas" dentro de "Depilação a Laser",
+ * "Glabela" dentro de "Botox". Tem nome e preço próprios: no orçamento, cada área escolhida vira
+ * uma linha.
+ *
+ * Mora dentro do próprio `Procedure` (e não numa coleção à parte): um polígono simplificado ocupa
+ * ~500 bytes, longe do teto de 1 MB do documento; apagar o procedimento apaga as áreas junto, sem
+ * órfãos; e o catálogo já vive em memória, então o mapa monta sem leitura extra.
+ *
+ * Uma área fica numa vista só e é desenhada **separadamente** na foto de mulher e na de homem — as
+ * silhuetas são diferentes, e o mesmo contorno cairia fora do lugar numa delas.
+ */
+export interface AreaDoProcedimento {
+  id: string;
+  nome: string;
+  vistaId: string;
+  price: number;
+  promotionalPrice?: number;
+  priceNote?: string;
+  duration?: string;
+  /** Sessões que o valor cobre, como em `Procedure.sessoesInclusas`. Ausente = 1. */
+  sessoesInclusas?: number;
+  desenhos: Partial<Record<PatientGender, DesenhoDaArea>>;
+}
+
+/**
  * Referência enxuta a uma área, para quem só precisa saber *qual* foi escolhida.
  *
  * Guarda o nome junto com o ID de propósito: a ficha de uma paciente atendida em março precisa
- * continuar dizendo "Virilha Completa" mesmo que o procedimento seja renomeado ou saia do
- * catálogo depois — mesma razão pela qual `QuoteItem` espelha `profissionalNome`.
+ * continuar dizendo "Virilha Completa" mesmo que a área seja renomeada ou saia do catálogo depois
+ * — mesma razão pela qual `QuoteItem` espelha `profissionalNome`.
+ *
+ * Referências gravadas antes do mapa morar no procedimento só têm `procedureId`: cada área era um
+ * procedimento. A conversão dá à área o mesmo ID do procedimento antigo, então `chaveDaRef()` acha
+ * a área nos dois formatos.
  */
 export interface LaserAreaRef {
   procedureId: string;
+  areaId?: string;
   nomeCurto: string;
 }
 
 /**
- * Campos que toda área de laser herda da categoria em vez de repetir. Contraindicação,
- * recuperação e candidato ideal não mudam de buço para axila, e mantê-los em 13 cópias
- * significa, na prática, que uma correção clínica nunca chega a todas.
- *
- * A herança é **viva**: o procedimento só guarda o campo quando ele é editado ali; vazio = usa o
- * padrão, resolvido na leitura por `resolverCamposDoLaser()`.
+ * **Legado.** Formato antigo das áreas, quando cada área de laser era um procedimento e o manequim
+ * (sem sexo) ficava nas Configurações. Só é lido pela conversão em `AreaDoProcedimento`.
+ */
+export type LaserVista = 'frente' | 'costas';
+
+/** **Legado.** Ver `LaserVista`. */
+export interface LaserArea {
+  id: string;
+  vista: LaserVista;
+  formas: number[][];
+  botao?: { x: number; y: number };
+}
+
+/**
+ * **Legado.** Textos que as áreas de laser herdavam das Configurações quando eram procedimentos
+ * separados. Com as áreas dentro do procedimento, esses textos são do próprio procedimento; a
+ * conversão os copia para lá. Continua sendo lido por `resolverCamposDoLaser()` para quem ainda
+ * não converteu.
  */
 export interface LaserCategoryDefaults {
-  /**
-   * Texto comercial do procedimento. Entra aqui, e não só nos campos clínicos, porque no laser ele
-   * também é o mesmo em todas as áreas — o que muda de buço para axila é o preço, não a explicação
-   * do que o laser de diodo faz.
-   */
   description?: string;
   recoveryTime?: string;
   contraindications?: string;
@@ -77,25 +119,34 @@ export interface LaserCategoryDefaults {
 }
 
 /**
- * Espelho público do mapa, em `clinic_settings/laser_body_map`.
+ * O mapa de um procedimento, como a página sem login o enxerga.
  *
- * Existe porque `procedures` exige login para leitura (`firestore.rules`) e a paciente preenche a
- * anamnese sem conta — sem este documento, a página pública não enxerga área nenhuma. Leva só o
- * necessário para desenhar e escolher: **nunca preço**, que é a mesma razão pela qual
+ * Leva só o necessário para desenhar e escolher: **nunca preço**, que é a mesma razão pela qual
  * `clinic_settings/public_profile` não leva os e-mails da equipe.
  */
-export interface LaserBodyMapEntry {
+export interface MapaDeAreasPublico {
   procedureId: string;
-  nomeCurto: string;
-  vista: LaserVista;
-  formas: number[][];
-  botao?: { x: number; y: number };
+  titulo: string;
+  categoria: string;
+  vistas: VistaDoMapa[];
+  areas: {
+    id: string;
+    nome: string;
+    vistaId: string;
+    desenhos: Partial<Record<PatientGender, DesenhoDaArea>>;
+  }[];
 }
 
-export interface LaserBodyMap {
-  manequimFrenteUrl?: string;
-  manequimCostasUrl?: string;
-  areas: LaserBodyMapEntry[];
+/**
+ * Espelho público dos mapas, em `clinic_settings/laser_body_map`.
+ *
+ * Existe porque `procedures` exige login para leitura (`firestore.rules`) e a paciente preenche a
+ * anamnese sem conta — sem este documento, a página pública não enxerga área nenhuma. O nome do
+ * documento ficou o de quando só a depilação a laser tinha mapa: é ele que as regras já liberam
+ * para leitura pública.
+ */
+export interface EspelhoDosMapas {
+  mapas: MapaDeAreasPublico[];
   updatedAt?: string;
 }
 
@@ -176,11 +227,26 @@ export interface Procedure {
   assignedDoctorIds?: string[]; // IDs of assigned doctors
   assignedDoctorNames?: string[]; // Names/credentials for display or custom entry
   /**
-   * Regiões deste procedimento no manequim. Só existe quando `isLaserCategory(category)` — trocar
-   * a categoria para fora do laser descarta o desenho (com aviso), porque uma área sem manequim
-   * onde aparecer é lixo que ninguém vê para apagar.
+   * "Exige seleção de área": o procedimento é vendido por área — depilação a laser, botox por
+   * região. Marcado, ele guarda as fotos (`vistasDoMapa`) e as áreas (`areasDoMapa`), e a ficha da
+   * paciente e o orçamento abrem o mapa para escolher.
+   */
+  exigeSelecaoDeArea?: boolean;
+  vistasDoMapa?: VistaDoMapa[];
+  areasDoMapa?: AreaDoProcedimento[];
+  /**
+   * **Legado.** A região deste procedimento no manequim antigo, de quando cada área de laser era
+   * um procedimento. Só a conversão em `areasDoMapa` lê.
    */
   laserAreas?: LaserArea[];
+  /**
+   * Some do catálogo e de toda lista, mas continua no banco. É o destino dos procedimentos de área
+   * antigos depois da conversão: apagar de verdade tiraria do alcance de quem precisar conferir o
+   * que havia neles.
+   */
+  arquivado?: boolean;
+  /** O procedimento que recebeu este como área, na conversão. */
+  arquivadoEmFavorDe?: string;
   order: number;
   createdAt: string;
   updatedAt?: string;
@@ -259,15 +325,13 @@ export interface ClinicProfile {
   /** Anexa `Procedure.orientacoesPreProcedimento` ao fim da mensagem de confirmação. */
   agendaConfirmacaoIncluirOrientacoes?: boolean;
   /**
-   * Mapa corporal da depilação a laser — os dois manequins sobre os quais as áreas são desenhadas.
-   * Sem sexo, aproveitados para ambos os gêneros: as áreas são desenhadas uma vez só.
-   *
-   * As duas precisam ter a **mesma proporção**, imposta no envio. As áreas guardam coordenadas
-   * relativas à imagem, então uma troca por proporção diferente jogaria a virilha na coxa.
+   * **Legado.** Os dois manequins do mapa antigo da depilação a laser, de quando o mapa morava nas
+   * Configurações. Hoje as fotos ficam no próprio procedimento (`Procedure.vistasDoMapa`); estes
+   * campos só são lidos pela conversão.
    */
   laserManequimFrenteUrl?: string;
   laserManequimCostasUrl?: string;
-  /** Campos herdados por toda área de laser. Ver `LaserCategoryDefaults`. */
+  /** **Legado.** Ver `LaserCategoryDefaults`. */
   laserPadroes?: LaserCategoryDefaults;
 }
 
@@ -559,6 +623,11 @@ export interface QuoteItemDetail {
 export interface QuoteItem {
   id: string;
   procedureId?: string; // Origem no catálogo; ausente quando o item foi digitado à mão
+  /**
+   * A área do procedimento que este item vende — "Axilas" de "Depilação a Laser". Cada área
+   * escolhida no mapa vira um item, com o preço dela.
+   */
+  areaId?: string;
   categoria: string;
   titulo: string;
   professionalId?: string; // Quem realiza ESTE procedimento — cada item pode ter a sua
@@ -706,6 +775,8 @@ export interface Quote {
    * não copiar ~10 KB de polígonos para dentro de cada orçamento emitido. Ausente = ligado.
    */
   mostrarMapaCorporal?: boolean;
+  /** Qual foto do mapa sai no PDF — a de mulher ou a de homem. Ausente = mulher. */
+  sexoDoMapa?: PatientGender;
   clinica?: QuoteClinicSnapshot; // Ausente só em orçamentos criados antes deste campo existir
   total: number; // Snapshot denormalizado apenas para a listagem — a verdade é calcularOrcamento()
   enviadoEm?: string; // ISO do 1º compartilhamento do link; presença trava a edição

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Procedure, ClinicProfile } from '../types';
 import { resolverCamposDoLaser } from '../utils/laserAreas';
+import { ListaDeAreasEValores } from './laser/ListaDeAreasEValores';
 import { formatBRL } from '../utils/formatters';
 import { getCatalogPrice, formatDiscountPercent } from '../utils/catalogPricing';
 import { getProcedureDoctors, getClinicDoctors } from '../utils/doctorHelpers';
@@ -100,12 +101,24 @@ const HorizontalProcedureCard: React.FC<ProcedureCardProps> = ({
         </div>
 
         {/* Description */}
-        <p className="text-xs text-ink-soft leading-relaxed mb-3 line-clamp-3">
+        <p
+          className={`text-xs text-ink-soft leading-relaxed mb-3 ${
+            proc.exigeSelecaoDeArea && (proc.areasDoMapa?.length || 0) > 0 ? 'line-clamp-2' : 'line-clamp-3'
+          }`}
+        >
           {proc.description}
         </p>
 
-        {/* Benefits Highlights */}
-        {proc.benefits && proc.benefits.length > 0 && (
+        {/* Vendido por área: no lugar dos benefícios, a tabela das áreas — é o que se procura num
+            catálogo. A descrição encolhe para uma linha a menos, para a tabela caber no card. */}
+        {proc.exigeSelecaoDeArea && (proc.areasDoMapa?.length || 0) > 0 ? (
+          <ListaDeAreasEValores
+            areas={proc.areasDoMapa!}
+            mostrarPrecos={showPrices}
+            limite={12}
+            compacto
+          />
+        ) : proc.benefits && proc.benefits.length > 0 && (
           <div className="space-y-1.5 mb-2">
             {proc.benefits.slice(0, 2).map((benefit, bIdx) => (
               <div key={bIdx} className="flex items-start gap-2 text-[11px] text-ink-soft leading-snug">

@@ -179,27 +179,31 @@ export const calcularOrcamento = (input: QuoteCalcInput): QuoteTotals => {
 
 /**
  * Quantos "procedimentos" um conjunto de itens representa para efeito do desconto de plano
- * combinado — **todas as áreas de laser contam como uma só**.
+ * combinado — **as áreas de um mesmo procedimento contam como um só**.
  *
  * Cinco itens num orçamento normal são mesmo um plano combinado: botox, preenchimento,
  * bioestimulador, fio e skinbooster. Cinco áreas de depilação a laser são uma venda só, e o mapa
- * corporal torna trivial marcar cinco. Sem esta contagem, todo orçamento de laser nasceria com a
- * sugestão no teto de 10% — um desconto que ninguém decidiu dar, aceito por quem estivesse com
- * pressa. Num orçamento misto, laser + botox continuam valendo 2.
+ * torna trivial marcar cinco. Sem esta contagem, todo orçamento de laser nasceria com a sugestão
+ * no teto de 10% — um desconto que ninguém decidiu dar, aceito por quem estivesse com pressa. Num
+ * orçamento misto, laser + botox continuam valendo 2.
+ *
+ * Itens de laser de antes do mapa morar no procedimento (cada área era um procedimento, sem
+ * `areaId`) seguem contando juntos como um.
  *
  * Produto do estoque não conta: o protetor solar vendido junto não faz do botox um plano combinado.
  */
 export const contarProcedimentosParaDesconto = (
-  itens: Pick<QuoteItem, "categoria" | "produtoId">[]
+  itens: Pick<QuoteItem, "categoria" | "produtoId" | "procedureId" | "areaId">[]
 ): number => {
-  let naoLaser = 0;
-  let temLaser = false;
+  let avulsos = 0;
+  const grupos = new Set<string>();
   for (const item of itens) {
     if (itemEhProduto(item)) continue;
-    if (isLaserCategory(item.categoria)) temLaser = true;
-    else naoLaser += 1;
+    if (item.areaId) grupos.add(`areas:${item.procedureId || ""}`);
+    else if (isLaserCategory(item.categoria)) grupos.add("laser-antigo");
+    else avulsos += 1;
   }
-  return naoLaser + (temLaser ? 1 : 0);
+  return avulsos + grupos.size;
 };
 
 /** Sugestão do desconto de plano combinado: % por procedimento, limitado ao teto. Editável depois. */

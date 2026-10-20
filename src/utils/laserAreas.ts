@@ -1,27 +1,40 @@
 import {
+  AreaDoProcedimento,
   ClinicProfile,
+  DesenhoDaArea,
+  EspelhoDosMapas,
   LaserArea,
   LaserAreaRef,
-  LaserBodyMap,
   LaserCategoryDefaults,
   LaserVista,
+  MapaDeAreasPublico,
+  PatientGender,
   Procedure,
+  VistaDoMapa,
+  AnamnesisTemplate,
 } from '../types';
-import { isLaserCategory } from './templateMatching';
+import { ehTemplateDeLaser, isLaserCategory } from './templateMatching';
 
 /**
- * Geometria e regras do mapa corporal da depilação a laser.
+ * Geometria e regras do mapa de áreas — o recurso "Exige seleção de área" do cadastro de
+ * procedimento (depilação a laser, botox por região, criolipólise...).
  *
  * Tudo aqui trabalha em **coordenadas relativas à imagem** (0–1), nunca em pixels. É o que faz o
  * mesmo desenho servir ao manequim gigante do cadastro, ao médio da ficha impressa e ao pequeno
- * do celular — e é também o que obriga os dois manequins a terem a mesma proporção, já que uma
- * troca por proporção diferente deslocaria todas as áreas de uma vez.
+ * do celular — e é também o que obriga cada foto a manter a proporção ao ser trocada, já que uma
+ * troca por proporção diferente deslocaria todas as áreas daquela foto de uma vez.
  *
  * Formato de uma forma: array **plano** `[x1,y1,x2,y2,...]`, e não `{x,y}[]`. São ~40 pontos por
  * forma vezes ~20 áreas indo e voltando do Firestore; o array plano gasta menos da metade do JSON
  * de uma lista de objetos, e a cota deste projeto é medida em KB gravados (ver a memória
  * `firestore-free-tier-database`).
  */
+
+/** O que a geometria precisa de uma área: as formas e, se houver, o botão arrastado à mão. */
+export interface ComFormas {
+  formas: number[][];
+  botao?: { x: number; y: number };
+}
 
 /** Lado maior da imagem do manequim, em pixels, depois da redução no envio. */
 export const LASER_MANEQUIM_MAX_LADO = 1400;
@@ -168,7 +181,7 @@ export const criarFormaAPartirDoTraco = (
 // ==========================================
 
 /**
- * `LaserArea.formas` é `number[][]` — um array de arrays, que o **Firestore recusa**: um array não
+ * As formas são `number[][]` — um array de arrays, que o **Firestore recusa**: um array não
  * pode conter outro array. Pior do que recusar, no caminho deste projeto ele nem chegava a
  * recusar: `cleanForFirestore` percorre a estrutura e, ao encontrar `[0.44, 0.105]`, trata como
  * objeto e grava `{0: 0.44, 1: 0.105}`. A gravação passava sem erro, a lista continuava contando
@@ -181,7 +194,7 @@ export const criarFormaAPartirDoTraco = (
  * A geometria acima continua inteiramente numérica: a conversão vive só na fronteira do banco.
  */
 
-/** Uma área no formato em que ela é gravada. */
+/** Uma área antiga (`LaserArea`) no formato em que ela é gravada. */
 export interface LaserAreaGravada {
   id: string;
   vista: LaserVista;
@@ -221,7 +234,7 @@ const formaDeQualquerCoisa = (bruta: unknown): number[] | null => {
   return null;
 };
 
-/** Converte as áreas para gravar. */
+/** Converte as áreas antigas (`laserAreas`) para gravar. */
 export const serializarAreas = (areas?: LaserArea[]): LaserAreaGravada[] | undefined => {
   if (!areas || areas.length === 0) return undefined;
   const saida = areas
@@ -235,7 +248,7 @@ export const serializarAreas = (areas?: LaserArea[]): LaserAreaGravada[] | undef
   return saida.length > 0 ? saida : undefined;
 };
 
-/** Converte as áreas lidas do banco, tolerando os formatos antigos. */
+/** Converte as áreas antigas lidas do banco, tolerando os formatos que já existiram. */
 export const desserializarAreas = (brutas: unknown): LaserArea[] | undefined => {
   if (!Array.isArray(brutas) || brutas.length === 0) return undefined;
 
@@ -255,6 +268,112 @@ export const desserializarAreas = (brutas: unknown): LaserArea[] | undefined => 
       formas,
       ...(registro.botao && typeof registro.botao === 'object'
         ? { botao: registro.botao as { x: number; y: number } }
+        : {}),
+    });
+  }
+  return saida.length > 0 ? saida : undefined;
+};
+
+const SEXOS: PatientGender[] = ['feminino', 'masculino'];
+
+const botaoValido = (bruto: unknown): { x: number; y: number } | undefined => {
+  if (!bruto || typeof bruto !== 'object') return undefined;
+  const { x, y } = bruto as Record<string, unknown>;
+  return typeof x === 'number' && typeof y === 'number' && isFinite(x) && isFinite(y)
+    ? { x, y }
+    : undefined;
+};
+
+/** Desenhos no formato de gravação: cada forma vira texto. Sexo sem forma nenhuma some. */
+export const serializarDesenhos = (
+  desenhos: Partial<Record<PatientGender, DesenhoDaArea>> | undefined
+): Partial<Record<PatientGender, { formas: string[]; botao?: { x: number; y: number } }>> => {
+  const saida: Partial<Record<PatientGender, { formas: string[]; botao?: { x: number; y: number } }>> = {};
+  for (const sexo of SEXOS) {
+    const desenho = desenhos?.[sexo];
+    const formas = (desenho?.formas || []).filter((f) => f.length >= 6).map(formaParaTexto);
+    if (formas.length === 0) continue;
+    saida[sexo] = { formas, ...(desenho?.botao ? { botao: desenho.botao } : {}) };
+  }
+  return saida;
+};
+
+const desserializarDesenhos = (bruto: unknown): Partial<Record<PatientGender, DesenhoDaArea>> => {
+  const saida: Partial<Record<PatientGender, DesenhoDaArea>> = {};
+  if (!bruto || typeof bruto !== 'object') return saida;
+  const registro = bruto as Record<string, unknown>;
+  for (const sexo of SEXOS) {
+    const desenho = registro[sexo] as Record<string, unknown> | undefined;
+    if (!desenho || typeof desenho !== 'object') continue;
+    const formas = (Array.isArray(desenho.formas) ? desenho.formas : [])
+      .map(formaDeQualquerCoisa)
+      .filter((f): f is number[] => !!f);
+    if (formas.length === 0) continue;
+    const botao = botaoValido(desenho.botao);
+    saida[sexo] = { formas, ...(botao ? { botao } : {}) };
+  }
+  return saida;
+};
+
+/** Um polígono por string, pelo mesmo motivo das áreas antigas: array dentro de array não grava. */
+export const serializarAreasDoMapa = (
+  areas?: AreaDoProcedimento[]
+): Record<string, unknown>[] | undefined => {
+  if (!areas || areas.length === 0) return undefined;
+  return areas.map((a) => ({
+    id: a.id,
+    nome: a.nome,
+    vistaId: a.vistaId,
+    price: a.price,
+    ...(a.promotionalPrice ? { promotionalPrice: a.promotionalPrice } : {}),
+    ...(a.priceNote ? { priceNote: a.priceNote } : {}),
+    ...(a.duration ? { duration: a.duration } : {}),
+    ...(a.sessoesInclusas && a.sessoesInclusas >= 2 ? { sessoesInclusas: a.sessoesInclusas } : {}),
+    desenhos: serializarDesenhos(a.desenhos),
+  }));
+};
+
+/** Áreas lidas do banco, de volta a números. Tolera o formato achatado pelo `cleanForFirestore`. */
+export const desserializarAreasDoMapa = (brutas: unknown): AreaDoProcedimento[] | undefined => {
+  if (!Array.isArray(brutas) || brutas.length === 0) return undefined;
+  const saida: AreaDoProcedimento[] = [];
+  for (const bruta of brutas) {
+    if (!bruta || typeof bruta !== 'object') continue;
+    const r = bruta as Record<string, unknown>;
+    if (typeof r.id !== 'string' || typeof r.vistaId !== 'string') continue;
+    const numero = (v: unknown): number | undefined =>
+      typeof v === 'number' && isFinite(v) ? v : undefined;
+    saida.push({
+      id: r.id,
+      nome: typeof r.nome === 'string' ? r.nome : '',
+      vistaId: r.vistaId,
+      price: numero(r.price) ?? 0,
+      ...(numero(r.promotionalPrice) ? { promotionalPrice: numero(r.promotionalPrice) } : {}),
+      ...(typeof r.priceNote === 'string' && r.priceNote ? { priceNote: r.priceNote } : {}),
+      ...(typeof r.duration === 'string' && r.duration ? { duration: r.duration } : {}),
+      ...(numero(r.sessoesInclusas) ? { sessoesInclusas: numero(r.sessoesInclusas) } : {}),
+      desenhos: desserializarDesenhos(r.desenhos),
+    });
+  }
+  return saida.length > 0 ? saida : undefined;
+};
+
+/** Vistas lidas do banco ou do espelho, descartando o que não tem identidade. */
+export const desserializarVistas = (brutas: unknown): VistaDoMapa[] | undefined => {
+  if (!Array.isArray(brutas) || brutas.length === 0) return undefined;
+  const saida: VistaDoMapa[] = [];
+  for (const bruta of brutas) {
+    if (!bruta || typeof bruta !== 'object') continue;
+    const r = bruta as Record<string, unknown>;
+    if (typeof r.id !== 'string') continue;
+    saida.push({
+      id: r.id,
+      nome: typeof r.nome === 'string' ? r.nome : '',
+      ...(typeof r.fotoFemininaUrl === 'string' && r.fotoFemininaUrl
+        ? { fotoFemininaUrl: r.fotoFemininaUrl }
+        : {}),
+      ...(typeof r.fotoMasculinaUrl === 'string' && r.fotoMasculinaUrl
+        ? { fotoMasculinaUrl: r.fotoMasculinaUrl }
         : {}),
     });
   }
@@ -286,7 +405,7 @@ export const formaParaPath = (forma: number[], largura = 1, altura = 1): string 
 };
 
 /** Todas as formas de uma área num `d` só — o SVG trata como um caminho composto. */
-export const areaParaPath = (area: LaserArea, largura = 1, altura = 1): string =>
+export const areaParaPath = (area: ComFormas, largura = 1, altura = 1): string =>
   area.formas.map((f) => formaParaPath(f, largura, altura)).filter(Boolean).join(' ');
 
 // ==========================================
@@ -305,7 +424,7 @@ export const areaDaForma = (forma: number[]): number => {
   return Math.abs(soma) / 2;
 };
 
-export const tamanhoDaArea = (area: LaserArea): number =>
+export const tamanhoDaArea = (area: ComFormas): number =>
   area.formas.reduce((acc, f) => acc + areaDaForma(f), 0);
 
 /**
@@ -337,7 +456,7 @@ export const centroDaForma = (forma: number[]): { x: number; y: number } => {
  * duas (acima do umbigo, para as axilas), que é onde a linha guia faz sentido. Se todas as formas
  * forem degeneradas, cai no centro da caixa envolvente em vez de dividir por zero.
  */
-export const centroDaArea = (area: LaserArea): { x: number; y: number } => {
+export const centroDaArea = (area: ComFormas): { x: number; y: number } => {
   let somaPeso = 0;
   let somaX = 0;
   let somaY = 0;
@@ -385,7 +504,7 @@ const pontoDentroDaForma = (x: number, y: number, forma: number[]): boolean => {
   return dentro;
 };
 
-export const pontoDentroDaArea = (x: number, y: number, area: LaserArea): boolean =>
+export const pontoDentroDaArea = (x: number, y: number, area: ComFormas): boolean =>
   area.formas.some((f) => pontoDentroDaForma(x, y, f));
 
 /**
@@ -397,10 +516,10 @@ export const pontoDentroDaArea = (x: number, y: number, area: LaserArea): boolea
  * inalcançável — o erro que não se descobre sem testar ponto a ponto.
  */
 export const areaNoPonto = (
-  areas: { area: LaserArea; procedureId: string }[],
+  areas: { area: ComFormas; procedureId: string }[],
   x: number,
   y: number
-): { area: LaserArea; procedureId: string } | undefined => {
+): { area: ComFormas; procedureId: string } | undefined => {
   const candidatas = areas.filter((c) => pontoDentroDaArea(x, y, c.area));
   if (candidatas.length === 0) return undefined;
   return candidatas.reduce((menor, atual) =>
@@ -414,7 +533,7 @@ export const areaNoPonto = (
 
 export interface EntradaDoAnel {
   chave: string;
-  area: LaserArea;
+  area: ComFormas;
 }
 
 export interface PosicaoDoBotao {
@@ -479,7 +598,7 @@ const afastarVizinhos = (valores: number[], minimo: number): number[] => {
  * Quando os dois lados ficam desequilibrados, as áreas mais centrais migram para o lado vazio —
  * seis botões de um lado e um do outro ficam apertados à toa.
  *
- * Uma posição gravada à mão (`LaserArea.botao`) sempre vence: o algoritmo acerta a maioria, e o
+ * Uma posição gravada à mão (`DesenhoDaArea.botao`) sempre vence: o algoritmo acerta a maioria, e o
  * resto é arrastado uma vez e fica.
  */
 export const posicionarBotoesDoAnel = (
@@ -542,62 +661,227 @@ export const posicionarBotoesDoAnel = (
 };
 
 // ==========================================
-// CATÁLOGO: LEITURA DAS ÁREAS
+// O MAPA DE UM PROCEDIMENTO
 // ==========================================
 
-export interface AreaDoCatalogo {
-  procedureId: string;
-  nomeCurto: string;
-  titulo: string;
-  preco: number;
-  area: LaserArea;
-}
-
 /** Preço de venda: o promocional quando existe, como no resto do catálogo. */
-const precoDeVenda = (p: Procedure): number =>
-  p.promotionalPrice && p.promotionalPrice > 0 ? p.promotionalPrice : p.price;
+export const precoDaArea = (area: Pick<AreaDoProcedimento, 'price' | 'promotionalPrice'>): number =>
+  area.promotionalPrice && area.promotionalPrice > 0 ? area.promotionalPrice : area.price;
 
-/** Procedimentos de laser que já ganharam área — os que aparecem no manequim. */
-export const areasDoCatalogo = (
-  procedures: Procedure[],
-  vista?: LaserVista
-): AreaDoCatalogo[] => {
-  const saida: AreaDoCatalogo[] = [];
-  for (const proc of procedures) {
-    if (!isLaserCategory(proc.category)) continue;
-    for (const area of proc.laserAreas || []) {
-      if (vista && area.vista !== vista) continue;
-      saida.push({
-        procedureId: proc.id,
-        nomeCurto: nomeCurtoDaArea(proc.title),
-        titulo: proc.title,
-        preco: precoDeVenda(proc),
-        area,
-      });
-    }
-  }
-  return saida;
+/** O procedimento é vendido por área e tem ao menos uma cadastrada. */
+export const procedimentoTemMapa = (p?: Procedure | null): p is Procedure =>
+  !!p && !!p.exigeSelecaoDeArea && (p.areasDoMapa?.length || 0) > 0;
+
+/** A foto de uma vista para o sexo pedido. */
+export const fotoDaVista = (vista: VistaDoMapa, sexo: PatientGender): string | undefined =>
+  sexo === 'masculino' ? vista.fotoMasculinaUrl : vista.fotoFemininaUrl;
+
+export const outroSexo = (sexo: PatientGender): PatientGender =>
+  sexo === 'masculino' ? 'feminino' : 'masculino';
+
+/** O mapa de um procedimento, sem preço — o que o espelho público leva e o que as telas desenham. */
+export const mapaDoProcedimento = (proc: Procedure): MapaDeAreasPublico => ({
+  procedureId: proc.id,
+  titulo: proc.title,
+  categoria: proc.category,
+  vistas: proc.vistasDoMapa || [],
+  areas: (proc.areasDoMapa || []).map((a) => ({
+    id: a.id,
+    nome: a.nome,
+    vistaId: a.vistaId,
+    desenhos: a.desenhos,
+  })),
+});
+
+/** Os mapas de todo o catálogo. */
+export const montarMapasPublicos = (procedures: Procedure[]): EspelhoDosMapas => ({
+  mapas: procedures.filter(procedimentoTemMapa).map(mapaDoProcedimento),
+  updatedAt: new Date().toISOString(),
+});
+
+/**
+ * O sexo em que o mapa de fato tem o que mostrar.
+ *
+ * Pedido vence; mas uma clínica que só enviou as fotos de mulher não pode deixar o paciente homem
+ * diante de um mapa vazio — aí cai no sexo que tem foto e desenho.
+ */
+export const sexoComDesenho = (
+  mapa: MapaDeAreasPublico | null | undefined,
+  pedido: PatientGender
+): PatientGender => {
+  if (!mapa) return pedido;
+  const temAlgo = (sexo: PatientGender) =>
+    mapa.vistas.some(
+      (v) =>
+        fotoDaVista(v, sexo) &&
+        mapa.areas.some((a) => a.vistaId === v.id && (a.desenhos[sexo]?.formas.length || 0) > 0)
+    );
+  if (temAlgo(pedido)) return pedido;
+  return temAlgo(outroSexo(pedido)) ? outroSexo(pedido) : pedido;
 };
 
 /**
- * Procedimentos de laser ainda sem área. É o que alimenta a faixa "Sem área no mapa" do cadastro.
+ * O mapa que uma ficha de anamnese mostra.
  *
- * Existe porque um procedimento sem área é invisível no manequim: sem a faixa, a equipe redesenha
- * "Axilas" achando que não tinha, e a clínica fica com dois procedimentos de axila no catálogo.
+ * Primeiro pelo procedimento vinculado à ficha. Depois, para a ficha única de depilação a laser —
+ * que nasceu no seed sem `procedimentoId`, servindo às treze áreas de uma vez —, o mapa do
+ * procedimento de laser.
  */
-export const procedimentosSemArea = (procedures: Procedure[]): Procedure[] =>
-  procedures.filter(
-    (p) => isLaserCategory(p.category) && !(p.laserAreas && p.laserAreas.length > 0)
-  );
+export const mapaDoTemplate = (
+  template: AnamnesisTemplate | null | undefined,
+  mapas: MapaDeAreasPublico[] | null | undefined
+): MapaDeAreasPublico | null => {
+  if (!template || !mapas || mapas.length === 0) return null;
+  if (template.procedimentoId) {
+    const vinculado = mapas.find((m) => m.procedureId === template.procedimentoId);
+    if (vinculado) return vinculado;
+  }
+  if (ehTemplateDeLaser(template)) {
+    return mapas.find((m) => isLaserCategory(m.categoria)) || null;
+  }
+  return null;
+};
 
-export const contarAreasPorVista = (procedures: Procedure[]): Record<LaserVista, number> => {
-  const contagem: Record<LaserVista, number> = { frente: 0, costas: 0 };
-  for (const { area } of areasDoCatalogo(procedures)) contagem[area.vista] += 1;
-  return contagem;
+/** O mapa que contém uma área — para achar o desenho de uma referência sem saber a ficha. */
+export const mapaDaArea = (
+  mapas: MapaDeAreasPublico[] | null | undefined,
+  areaId: string
+): MapaDeAreasPublico | undefined => (mapas || []).find((m) => m.areas.some((a) => a.id === areaId));
+
+// ==========================================
+// REFERÊNCIAS (ANAMNESE E ORÇAMENTO)
+// ==========================================
+
+/** A área que uma referência aponta — `areaId` nas novas, `procedureId` nas de antes da conversão. */
+export const chaveDaRef = (ref: Pick<LaserAreaRef, 'procedureId' | 'areaId'>): string =>
+  ref.areaId || ref.procedureId;
+
+export const refDaArea = (
+  procedureId: string,
+  area: Pick<AreaDoProcedimento, 'id' | 'nome'>
+): LaserAreaRef => ({ procedureId, areaId: area.id, nomeCurto: area.nome });
+
+/**
+ * Nomes das áreas para leitura corrida ("Axilas, Virilha Completa e ½ Perna").
+ *
+ * Lê o nome gravado na própria referência, e não o do catálogo: uma ficha de março precisa
+ * continuar dizendo o que foi tratado mesmo que a área tenha sido renomeada ou removida.
+ */
+export const listarNomesDeAreas = (refs?: LaserAreaRef[]): string => {
+  const nomes = (refs || []).map((r) => r.nomeCurto).filter(Boolean);
+  if (nomes.length === 0) return '';
+  if (nomes.length === 1) return nomes[0];
+  return `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
 };
 
 // ==========================================
-// PADRÕES DA CATEGORIA
+// CONVERSÃO DOS PROCEDIMENTOS DE ÁREA ANTIGOS
+// ==========================================
+
+/**
+ * Procedimentos de laser cadastrados um a um, à moda antiga — candidatos a virar áreas.
+ *
+ * Antes do mapa morar no procedimento, cada área de depilação a laser era um procedimento do
+ * catálogo ("Depilação a Laser - Axilas"), e os manequins ficavam nas Configurações.
+ */
+export const procedimentosParaConverter = (
+  procedures: Procedure[],
+  idAtual?: string
+): Procedure[] =>
+  procedures.filter(
+    (p) =>
+      p.id !== idAtual &&
+      !p.arquivado &&
+      !p.exigeSelecaoDeArea &&
+      isLaserCategory(p.category)
+  );
+
+export interface ResultadoDaConversao {
+  vistas: VistaDoMapa[];
+  areas: AreaDoProcedimento[];
+  /** Os textos que as áreas herdavam das Configurações, para o procedimento assumir. */
+  padroes?: LaserCategoryDefaults;
+}
+
+/**
+ * Transforma os procedimentos de área antigos em áreas de um procedimento só.
+ *
+ * Nada se perde:
+ * - A área recebe **o mesmo ID** do procedimento antigo. Fichas de anamnese e orçamentos gravados
+ *   antes guardam esse ID como `procedureId`, e é por ele que `chaveDaRef()` continua achando a
+ *   área — sem migrar documento nenhum.
+ * - O manequim antigo era sem sexo, então ele vira a foto de mulher **e** a de homem de cada vista,
+ *   e o desenho vai para os dois sexos. Trocar a foto de homem depois é opcional.
+ * - Preço, promocional, observação de preço, duração e sessões vêm do procedimento.
+ *
+ * As vistas que vão existir são as que têm manequim ou desenho — sem manequim nem área, a vista de
+ * costas seria só uma aba vazia.
+ */
+export const converterProcedimentosEmAreas = (
+  legados: Procedure[],
+  clinic: Pick<ClinicProfile, 'laserManequimFrenteUrl' | 'laserManequimCostasUrl' | 'laserPadroes'>,
+  vistasExistentes: VistaDoMapa[] = []
+): ResultadoDaConversao => {
+  const manequins: Record<LaserVista, string | undefined> = {
+    frente: clinic.laserManequimFrenteUrl,
+    costas: clinic.laserManequimCostasUrl,
+  };
+  const nomes: Record<LaserVista, string> = { frente: 'Frente', costas: 'Costas' };
+  const chave = (texto: string) => semAcento(texto).trim();
+
+  // Cópias: as vistas que chegam são estado do formulário, e as fotos que faltam são preenchidas aqui.
+  const vistas = vistasExistentes.map((v) => ({ ...v }));
+  const vistaPara = (lado: LaserVista): VistaDoMapa => {
+    const existente = vistas.find((v) => chave(v.nome) === chave(nomes[lado]));
+    if (existente) {
+      // Vista com o mesmo nome já criada à mão: só preenche as fotos que faltarem.
+      if (manequins[lado]) {
+        existente.fotoFemininaUrl = existente.fotoFemininaUrl || manequins[lado];
+        existente.fotoMasculinaUrl = existente.fotoMasculinaUrl || manequins[lado];
+      }
+      return existente;
+    }
+    const nova: VistaDoMapa = {
+      id: crypto.randomUUID(),
+      nome: nomes[lado],
+      ...(manequins[lado]
+        ? { fotoFemininaUrl: manequins[lado], fotoMasculinaUrl: manequins[lado] }
+        : {}),
+    };
+    vistas.push(nova);
+    return nova;
+  };
+
+  // A frente sempre existe, mesmo sem desenho: é onde nasce o que ainda precisa ser desenhado.
+  const frente = vistaPara('frente');
+  const temCostas =
+    !!manequins.costas || legados.some((p) => (p.laserAreas || []).some((a) => a.vista === 'costas'));
+  if (temCostas) vistaPara('costas');
+
+  const areas: AreaDoProcedimento[] = legados.map((p) => {
+    const antiga: LaserArea | undefined = (p.laserAreas || [])[0];
+    const vista = antiga ? vistaPara(antiga.vista) : frente;
+    const desenho: DesenhoDaArea | undefined = antiga
+      ? { formas: antiga.formas, ...(antiga.botao ? { botao: antiga.botao } : {}) }
+      : undefined;
+    return {
+      id: p.id,
+      nome: nomeCurtoDaArea(p.title),
+      vistaId: vista.id,
+      price: p.price || 0,
+      ...(p.promotionalPrice ? { promotionalPrice: p.promotionalPrice } : {}),
+      ...(p.priceNote ? { priceNote: p.priceNote } : {}),
+      ...(p.duration ? { duration: p.duration } : {}),
+      ...(p.sessoesInclusas && p.sessoesInclusas >= 2 ? { sessoesInclusas: p.sessoesInclusas } : {}),
+      desenhos: desenho ? { feminino: desenho, masculino: desenho } : {},
+    };
+  });
+
+  return { vistas, areas, padroes: clinic.laserPadroes };
+};
+
+// ==========================================
+// PADRÕES DA CATEGORIA (LEGADO)
 // ==========================================
 
 const vazio = (v: unknown): boolean =>
@@ -612,6 +896,10 @@ const vazio = (v: unknown): boolean =>
  * abrir treze procedimentos, que é o mesmo que dizer que ela não acontece.
  *
  * Não altera procedimentos de outras categorias, nem grava nada: é só para exibir e imprimir.
+ *
+ * **Legado:** vale para as áreas de laser que ainda são procedimentos separados. Depois da
+ * conversão em áreas, os textos moram no próprio procedimento e os padrões deixam de ter a quem
+ * servir — não há mais tela para editá-los.
  */
 export const resolverCamposDoLaser = (
   procedure: Procedure,
@@ -629,53 +917,4 @@ export const resolverCamposDoLaser = (
     }
   });
   return resolvido;
-};
-
-// ==========================================
-// ESPELHO PÚBLICO
-// ==========================================
-
-/**
- * Monta o documento `clinic_settings/laser_body_map` a partir do catálogo.
- *
- * Leva só o que a página sem login precisa para desenhar e escolher — **nunca preço**. É a mesma
- * tela servindo a dois públicos: a paciente que preenche a ficha não pode ver a tabela da clínica,
- * pelo mesmo motivo que `clinic_settings/public_profile` não leva os e-mails da equipe.
- */
-export const montarEspelhoPublico = (
-  procedures: Procedure[],
-  clinic: Pick<ClinicProfile, 'laserManequimFrenteUrl' | 'laserManequimCostasUrl'>
-): LaserBodyMap => ({
-  manequimFrenteUrl: clinic.laserManequimFrenteUrl,
-  manequimCostasUrl: clinic.laserManequimCostasUrl,
-  areas: areasDoCatalogo(procedures).map(({ procedureId, nomeCurto, area }) => ({
-    procedureId,
-    nomeCurto,
-    vista: area.vista,
-    formas: area.formas,
-    ...(area.botao ? { botao: area.botao } : {}),
-  })),
-  updatedAt: new Date().toISOString(),
-});
-
-// ==========================================
-// REFERÊNCIAS (ANAMNESE)
-// ==========================================
-
-export const refDaArea = (proc: Procedure): LaserAreaRef => ({
-  procedureId: proc.id,
-  nomeCurto: nomeCurtoDaArea(proc.title),
-});
-
-/**
- * Nomes das áreas para leitura corrida ("Axilas, Virilha Completa e ½ Perna").
- *
- * Lê o nome gravado na própria referência, e não o do catálogo: uma ficha de março precisa
- * continuar dizendo o que foi tratado mesmo que o procedimento tenha sido renomeado ou removido.
- */
-export const listarNomesDeAreas = (refs?: LaserAreaRef[]): string => {
-  const nomes = (refs || []).map((r) => r.nomeCurto).filter(Boolean);
-  if (nomes.length === 0) return '';
-  if (nomes.length === 1) return nomes[0];
-  return `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
 };

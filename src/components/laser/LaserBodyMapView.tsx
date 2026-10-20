@@ -1,6 +1,6 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { LaserArea } from '../../types';
 import {
+  ComFormas,
   areaParaPath,
   areaNoPonto,
   centroDaForma,
@@ -51,10 +51,10 @@ const VERDE_DA_AREA = {
 const CLASSE_BOTAO_ESCOLHIDO = 'bg-[#E4F5EA] border-[#2E9E5B] text-[#1D5E38] font-semibold';
 
 export interface AreaExibida {
-  /** Identidade estável da área na tela — na prática o `procedureId`. */
+  /** Identidade estável da área na tela — na prática o `id` da área. */
   chave: string;
   nomeCurto: string;
-  area: LaserArea;
+  area: ComFormas;
   /** Só preenchido no orçamento. Na anamnese o preço nunca aparece. */
   preco?: number;
 }
@@ -84,7 +84,7 @@ interface LaserBodyMapViewProps {
   ocultarBotoes?: boolean;
   /**
    * Quando presente, os botões do anel viram arrastáveis e esta função recebe a posição nova, em
-   * fração 0–1 do contêiner — o mesmo espaço em que `LaserArea.botao` é gravado.
+   * fração 0–1 do contêiner — o mesmo espaço em que `DesenhoDaArea.botao` é gravado.
    *
    * O anel acerta a maioria dos casos sozinho, mas não todos: duas áreas vizinhas na mesma altura
    * acabam com as linhas guia cruzadas, e nenhuma regra automática resolve isso melhor do que

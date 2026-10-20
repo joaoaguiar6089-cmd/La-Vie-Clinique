@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, ArrowLeft, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, Scan, CalendarDays } from 'lucide-react';
-import { AgendaExpedienteDia, ClinicProfile, LaserCategoryDefaults, Professional } from '../types';
+import { X, ArrowLeft, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, CalendarDays } from 'lucide-react';
+import { AgendaExpedienteDia, ClinicProfile, Professional } from '../types';
 import { AGENDA_DEFAULTS, INTERVALOS_DISPONIVEIS } from '../utils/agenda';
 import { mascararHora } from './common/MaskedDateTimeInput';
 import { GoogleAgendaConexoes } from './agenda/GoogleAgendaConexoes';
@@ -29,56 +29,6 @@ const CLINIC_LOGO_ASPECTS: AspectOption[] = [
   { id: 'quadrado', label: 'Quadrado', ratio: 1 },
 ];
 
-/**
- * Os dois manequins do mapa corporal da depilação a laser. São só dois campos, e sem variante por
- * gênero: a silhueta é neutra e as áreas são desenhadas uma vez para todo mundo.
- */
-type ManequimCampo = 'laserManequimFrenteUrl' | 'laserManequimCostasUrl';
-
-const MANEQUINS: { campo: ManequimCampo; rotulo: string }[] = [
-  { campo: 'laserManequimFrenteUrl', rotulo: 'Corpo — Frente' },
-  { campo: 'laserManequimCostasUrl', rotulo: 'Corpo — Costas' },
-];
-
-/**
- * Maior lado da imagem gerada. As áreas precisam ficar nítidas num manequim grande, mas o arquivo
- * ainda vai para o Storage e é baixado pela paciente no celular — 1400px é o meio-termo.
- */
-const LASER_MANEQUIM_MAX_DIM = 1400;
-
-/** Campos que toda área de laser herda desta tela quando os deixa em branco no cadastro. */
-const LASER_PADROES_CAMPOS: {
-  campo: keyof LaserCategoryDefaults;
-  rotulo: string;
-  dica: string;
-  linhas: number;
-}[] = [
-  {
-    campo: 'description',
-    rotulo: 'Descrição do procedimento',
-    dica: 'Remoção progressiva dos pelos com laser de diodo, com resfriamento contínuo da pele...',
-    linhas: 3,
-  },
-  {
-    campo: 'contraindications',
-    rotulo: 'Contraindicações',
-    dica: 'Gestantes, pele bronzeada ou queimada de sol, uso de isotretinoína nos últimos 6 meses...',
-    linhas: 3,
-  },
-  {
-    campo: 'recoveryTime',
-    rotulo: 'Recuperação',
-    dica: 'Sem downtime. Leve vermelhidão por algumas horas.',
-    linhas: 2,
-  },
-  {
-    campo: 'idealCandidate',
-    rotulo: 'Candidato ideal',
-    dica: 'Pessoas com pelos escuros e pele não bronzeada, buscando redução definitiva.',
-    linhas: 2,
-  },
-];
-
 /** O índice do topo da página. A ordem é a mesma em que as seções aparecem abaixo. */
 const SECOES = [
   { id: 'cfg-identidade', rotulo: 'Identidade', icone: Building2 },
@@ -86,7 +36,6 @@ const SECOES = [
   { id: 'cfg-contato', rotulo: 'Contato', icone: Phone },
   { id: 'cfg-catalogo', rotulo: 'Catálogo', icone: Sparkles },
   { id: 'cfg-agenda', rotulo: 'Agenda', icone: CalendarDays },
-  { id: 'cfg-laser', rotulo: 'Mapa do laser', icone: Scan },
 ] as const;
 
 interface ClinicSettingsModalProps {
@@ -98,11 +47,6 @@ interface ClinicSettingsModalProps {
   currentUserUid?: string;
   /** Se a profissional logada tem poderes de admin (excluir contas, conceder/revogar admin). */
   isAdminUser: boolean;
-  /**
-   * Abre a gestão das áreas do mapa corporal. Mora no App, e não aqui, porque precisa do catálogo
-   * e da gravação de procedimento — que são de outro módulo.
-   */
-  onAbrirMapaDeAreas?: () => void;
 }
 
 export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
@@ -112,7 +56,6 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   onSave,
   currentUserUid,
   isAdminUser,
-  onAbrirMapaDeAreas,
 }) => {
   const [formData, setFormData] = useState<ClinicProfile>(() => {
     const initialProfessionals: Professional[] = clinic.professionals && clinic.professionals.length > 0
@@ -171,13 +114,6 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   const [photoCropSource, setPhotoCropSource] = useState<File | string | null>(null);
   /** Mesma ideia do recorte da foto, para o logo da clínica. */
   const [logoCropSource, setLogoCropSource] = useState<File | string | null>(null);
-  const [manequimCrop, setManequimCrop] = useState<{
-    campo: ManequimCampo;
-    source: File | string;
-    opcoes: AspectOption[];
-    substituindo: boolean;
-  } | null>(null);
-  const [avisoManequim, setAvisoManequim] = useState<string | null>(null);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
   const [creatingLoginForId, setCreatingLoginForId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -200,49 +136,6 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     e.target.value = '';
     if (!file || !file.type.startsWith('image/')) return;
     setLogoCropSource(file);
-  };
-
-  /**
-   * Troca de manequim é travada na proporção da imagem que já está lá.
-   *
-   * As áreas do mapa guardam coordenadas relativas à imagem (0–1). Substituir a frente por um
-   * arquivo mais largo ou mais alto não moveria um número sequer no banco, mas jogaria a virilha
-   * na coxa em todas as áreas daquela vista de uma vez — um estrago silencioso, que só aparece
-   * quando alguém abre o mapa. Travar o recorte na proporção atual mantém as coordenadas válidas.
-   *
-   * Frente e costas **não** precisam combinar entre si: cada vista tem seu próprio sistema de
-   * coordenadas. Por isso a trava é por slot, e o primeiro envio de cada um é livre.
-   */
-  const proporcaoDaImagem = (url: string): Promise<number | null> =>
-    new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve(img.naturalHeight ? img.naturalWidth / img.naturalHeight : null);
-      img.onerror = () => resolve(null);
-      img.src = url;
-    });
-
-  const handleManequimUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    campo: ManequimCampo
-  ) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !file.type.startsWith('image/')) return;
-
-    const atual = formData[campo];
-    const proporcao = atual ? await proporcaoDaImagem(atual) : null;
-
-    setManequimCrop({
-      campo,
-      source: file,
-      opcoes: proporcao
-        ? [{ id: 'atual', label: 'Proporção atual', ratio: proporcao }]
-        : [
-            { id: 'corpo', label: 'Corpo inteiro', ratio: 1 / 2.2 },
-            { id: 'original', label: 'Original', ratio: null },
-          ],
-      substituindo: Boolean(atual),
-    });
   };
 
   const handleChange = (field: keyof ClinicProfile, value: any) => {
@@ -1035,128 +928,6 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
             <GoogleAgendaConexoes profissionais={clinic.professionals || []} />
           </div>
 
-          {/* Mapa corporal da depilação a laser */}
-          <div id="cfg-laser" className="space-y-4 scroll-mt-24">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
-              <Scan className="w-3.5 h-3.5" />
-              Depilação a Laser — Mapa Corporal
-            </h3>
-
-            <p className="text-body text-gray-500 leading-relaxed">
-              Os dois manequins sobre os quais as áreas de aplicação são desenhadas. Servem para
-              ambos os gêneros — as áreas são desenhadas uma vez só. Envie de preferência em PNG
-              com fundo transparente, e use a mesma silhueta nas duas vistas.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {MANEQUINS.map(({ campo, rotulo }) => {
-                const url = formData[campo];
-                return (
-                  <div
-                    key={campo}
-                    className="bg-white/70 border border-white/80 rounded-sm p-3 flex flex-col items-center gap-2"
-                  >
-                    <span className="text-label font-semibold text-ink uppercase tracking-wider">
-                      {rotulo}
-                    </span>
-
-                    <div className="h-40 flex items-center justify-center w-full bg-surface rounded-xs border border-dashed border-line overflow-hidden">
-                      {url ? (
-                        <img src={url} alt={rotulo} className="h-full w-auto object-contain" />
-                      ) : (
-                        <span className="text-label text-gray-400">Nenhuma imagem enviada</span>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand cursor-pointer transition-colors flex items-center gap-1">
-                        <ImageIcon className="w-3 h-3" />
-                        {url ? 'Trocar' : 'Enviar'}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleManequimUpload(e, campo)}
-                          className="hidden"
-                        />
-                      </label>
-                      {url && (
-                        <button
-                          type="button"
-                          onClick={() => handleChange(campo, '')}
-                          className="text-body text-red-500 hover:text-red-700 font-medium"
-                        >
-                          Remover
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {avisoManequim && (
-              <p className="text-body text-warn bg-warn-bg border border-[#F0DCB4] rounded-sm px-3 py-2 leading-relaxed">
-                {avisoManequim}
-              </p>
-            )}
-
-            {onAbrirMapaDeAreas && (
-              <div className="flex items-start justify-between gap-3 flex-wrap bg-white/70 border border-white/80 rounded-sm px-3 py-2.5">
-                <p className="text-body text-gray-500 leading-relaxed flex-1 min-w-[200px]">
-                  As áreas são desenhadas no cadastro de cada procedimento. Aqui você vê o mapa
-                  inteiro de uma vez — para conferir encavalamentos, reposicionar botões ou remover
-                  uma área.
-                </p>
-                <button
-                  type="button"
-                  onClick={onAbrirMapaDeAreas}
-                  className="px-3.5 py-2 rounded-xs bg-white border border-gray-200 text-[12px] font-medium text-ink hover:border-brand transition-colors flex items-center gap-1.5 shrink-0"
-                >
-                  <Scan className="w-3.5 h-3.5" />
-                  Configurar áreas
-                </button>
-              </div>
-            )}
-
-            {/*
-              Padrões da categoria.
-
-              Contraindicação, recuperação, candidato ideal e a descrição comercial são idênticos
-              nas treze áreas — o que muda de buço para axila é o preço. Mantê-los em treze cópias
-              significa, na prática, que uma correção clínica nunca chega a todas. Aqui a herança é
-              viva: a área só guarda o campo quando alguém o edita lá; vazio usa o que está abaixo.
-            */}
-            <div className="pt-1 space-y-3">
-              <div>
-                <h4 className="text-label font-semibold uppercase tracking-wider text-brand">
-                  Padrões da categoria
-                </h4>
-                <p className="text-body text-gray-500 leading-relaxed mt-0.5">
-                  Valem para toda área de laser que deixar o campo em branco no cadastro. Corrigir
-                  aqui corrige em todas de uma vez.
-                </p>
-              </div>
-
-              {LASER_PADROES_CAMPOS.map(({ campo, rotulo, dica, linhas }) => (
-                <div key={campo}>
-                  <label className="block text-xs font-medium text-ink mb-1">{rotulo}</label>
-                  <textarea
-                    rows={linhas}
-                    value={formData.laserPadroes?.[campo] || ''}
-                    onChange={(e) =>
-                      handleChange('laserPadroes', {
-                        ...(formData.laserPadroes || {}),
-                        [campo]: e.target.value,
-                      })
-                    }
-                    placeholder={dica}
-                    className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Ações. Coladas no fim da página, e não numa barra flutuante: numa página de
               configurações a pessoa rola até acabar e salva — não salva no meio. */}
           <div className="pt-5 border-t border-line flex items-center justify-end gap-3">
@@ -1230,35 +1001,6 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         }}
       />
 
-      {/* Manequim: PNG pelo mesmo motivo do logo (a silhueta costuma vir com fundo transparente) e
-          num lado maior generoso — as áreas desenhadas por cima precisam ficar nítidas. */}
-      <ImageCropperModal
-        isOpen={manequimCrop !== null}
-        source={manequimCrop?.source ?? null}
-        title="Enquadrar manequim"
-        description={
-          manequimCrop?.substituindo
-            ? 'A proporção está travada na da imagem atual: as áreas já desenhadas nesta vista usam coordenadas relativas a ela e sairiam do lugar com outra proporção.'
-            : 'A figura inteira precisa caber no quadro. Deixe uma folga em volta do corpo.'
-        }
-        aspectOptions={manequimCrop?.opcoes}
-        maxOutputDim={LASER_MANEQUIM_MAX_DIM}
-        quality={0.92}
-        outputMimeType="image/png"
-        confirmLabel="Usar este manequim"
-        onCancel={() => setManequimCrop(null)}
-        onConfirm={(dataUrl) => {
-          if (manequimCrop) {
-            handleChange(manequimCrop.campo, dataUrl);
-            setAvisoManequim(
-              manequimCrop.substituindo
-                ? 'Manequim substituído. Abra um procedimento de depilação a laser e confira se as áreas desta vista continuam no lugar certo.'
-                : null
-            );
-          }
-          setManequimCrop(null);
-        }}
-      />
     </div>
   );
 };

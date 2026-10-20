@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Download, Loader2, AlertCircle } from 'lucide-react';
-import { ClinicProfile, LaserBodyMap, Quote } from '../../types';
+import { ClinicProfile, MapaDeAreasPublico, Quote } from '../../types';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
 import { montarSnapshotClinica, SNAPSHOT_CLINICA_PADRAO } from '../../utils/quoteFactory';
 import { QuotePrintable } from './QuotePrintable';
@@ -14,10 +14,10 @@ interface QuotePreviewModalProps {
   /** Perfil atual da clínica; `null` na página pública, que não tem acesso a ele. */
   clinic: ClinicProfile | null;
   /**
-   * Mapa corporal do laser, para a página das áreas contratadas no PDF. O painel monta do
-   * catálogo; a página pública lê o espelho, que é o que ela consegue ler sem login.
+   * Mapas de áreas, para a página das áreas contratadas no PDF. O painel monta do catálogo; a
+   * página pública lê o espelho, que é o que ela consegue ler sem login.
    */
-  mapaCorporal?: LaserBodyMap | null;
+  mapasDeAreas?: MapaDeAreasPublico[];
   onClose: () => void;
 }
 
@@ -39,7 +39,7 @@ const nomeArquivo = (pacienteNome: string, numero: string): string => {
  */
 export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
   quote,
-  mapaCorporal,
+  mapasDeAreas,
   clinic,
   onClose,
 }) => {
@@ -212,7 +212,7 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
           <div ref={paginasRef} className="flex flex-col gap-6">
             <QuotePrintable
               quote={quote}
-              mapaCorporal={mapaCorporal}
+              mapasDeAreas={mapasDeAreas}
               paginasDoComprovante={comprovante.estado === 'pronto' ? comprovante.paginas : undefined}
               paginasAnexas={paginasDosRecibos}
               onPaginas={setPaginasDoOrcamento}

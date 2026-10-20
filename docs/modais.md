@@ -17,7 +17,7 @@ véu e botão voltar do Android — e, se o formulário foi mexido, **pergunta a
 
 | Componente | Largura | Por que é painel |
 | --- | --- | --- |
-| `ProcedureFormModal` | larga no laser, padrão fora dele | ~1.500 linhas; no modo laser ainda tem manequim ao lado dos campos |
+| `ProcedureFormModal` | `mapa` (1180px) com "Exige seleção de área", padrão fora dele | ~1.700 linhas; com mapa, tem a foto e o painel da área lado a lado |
 | `AnamnesisFormFillModal` | larga | ficha clínica inteira, com fotos e mapa corporal |
 | `AttendanceFormModal` | padrão | data, hora, procedimento, plano, profissional, observações |
 | `QuoteFormModal` | larga | cada procedimento é uma linha com valor, desconto e sessões |
@@ -32,7 +32,7 @@ véu e botão voltar do Android — e, se o formulário foi mexido, **pergunta a
 
 `ClinicSettingsModal` deixou de ser modal. Eram 700 linhas de formulário dentro de uma caixa de
 672px com rolagem própria, sobre um véu preto. Virou a tela `settings`, com índice de seções no
-topo (identidade, equipe, contato, catálogo, agenda, mapa do laser) e âncoras.
+topo (identidade, equipe, contato, catálogo, agenda) e âncoras.
 
 ## Folha — `components/common/BottomSheet.tsx` e variantes
 
@@ -50,7 +50,7 @@ acaba no meio da tela, onde a mão não chega sem trocar a pegada do aparelho.
 Sem mudança, porque não são formulário nem escolha: são **superfície de trabalho** ou
 **documento**, e os dois querem o máximo de área em qualquer tamanho de tela.
 
-`ImageCropperModal`, `AjusteDaFotoModal`, `PhotoAnnotationEditor`, `LaserAreasManagerModal`, `LaserQuoteMapModal`,
+`ImageCropperModal`, `AjusteDaFotoModal`, `PhotoAnnotationEditor`, `LaserQuoteMapModal`,
 `ProcedureDetailModal`, `ShareExportModal`, `QuotePreviewModal`, `ReciboPreviewModal`, `ProcedureMultiSelect`,
 `ProcedureTemplatesManager`, `GeneralQuestionsManager`, `FichasModeloManager`,
 `OrientationImageCard`, e os componentes de impressão (`Printable*`, `BlankAnamnesisSheet`),

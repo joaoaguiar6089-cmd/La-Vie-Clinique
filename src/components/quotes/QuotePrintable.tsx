@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LaserBodyMap, Quote, QuoteClinicSnapshot, QuoteItem } from '../../types';
+import { MapaDeAreasPublico, Quote, QuoteClinicSnapshot, QuoteItem } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import {
   calcularOrcamento,
@@ -13,7 +13,7 @@ import {
 } from '../../utils/quoteCalc';
 import { quantidadeDoProduto } from '../../utils/estoque';
 import { isLaserCategory } from '../../utils/templateMatching';
-import { nomeCurtoDaArea } from '../../utils/laserAreas';
+import { fotoDaVista, nomeCurtoDaArea, sexoComDesenho } from '../../utils/laserAreas';
 import { LaserBodyMapView } from '../laser/LaserBodyMapView';
 import { PaginaDoComprovante } from './usePaginasDoComprovante';
 import {
@@ -545,9 +545,9 @@ interface QuotePrintableProps {
   quote: Quote;
   clinic: QuoteClinicSnapshot;
   /**
-   * Mapa corporal do laser, para a página das áreas contratadas.
+   * Mapas de áreas, para as páginas das áreas contratadas.
    *
-   * Vem por prop em vez de ficar gravado no orçamento: o mapa tem ~10 KB, e a cota deste projeto
+   * Vêm por prop em vez de ficar gravados no orçamento: um mapa tem ~10 KB, e a cota deste projeto
    * conta KB gravados — copiá-lo para dentro de cada orçamento emitido custaria dez unidades por
    * documento, para guardar a mesma coisa N vezes. O painel monta do catálogo; a página pública,
    * que não tem login, lê o espelho `clinic_settings/laser_body_map`.
@@ -556,7 +556,7 @@ interface QuotePrintableProps {
    * anatomia isso é inofensivo — ao contrário do preço e do contato da clínica, que continuam
    * congelados em `quote.clinica` justamente por não serem.
    */
-  mapaCorporal?: LaserBodyMap | null;
+  mapasDeAreas?: MapaDeAreasPublico[];
   /**
    * Folhas do comprovante de pagamento, já baixadas (`usePaginasDoComprovante`). Entram no fim,
    * uma página do orçamento para cada folha. Vazio ou ausente: sem páginas de comprovante.
@@ -576,7 +576,7 @@ interface QuotePrintableProps {
 export const QuotePrintable: React.FC<QuotePrintableProps> = ({
   quote,
   clinic,
-  mapaCorporal,
+  mapasDeAreas,
   paginasDoComprovante = [],
   paginasAnexas = 0,
   onPaginas,
@@ -586,26 +586,51 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
   const medicaoRef = useRef<HTMLDivElement>(null);
 
   /**
-   * Itens de laser deste orçamento — o que a página do manequim pinta.
+   * As áreas vendidas neste orçamento — o que as páginas do mapa pintam. `areaId` nos itens de
+   * agora; nos de antes da conversão, o `procedureId` do procedimento de laser que era a área (a
+   * conversão manteve o ID).
    *
    * Sai do próprio `quote`, e não do catálogo: um orçamento já emitido precisa continuar
-   * imprimindo o que foi vendido mesmo que o procedimento tenha sido renomeado ou removido
-   * depois. É a mesma razão pela qual o documento carrega `clinica` como retrato.
+   * imprimindo o que foi vendido mesmo que a área tenha sido renomeada ou removida depois. É a
+   * mesma razão pela qual o documento carrega `clinica` como retrato.
    */
-  const areasContratadas = new Set(
-    quote.itens.filter((i) => i.procedureId && isLaserCategory(i.categoria)).map((i) => i.procedureId as string)
-  );
+  const itensDeArea = quote.itens
+    .map((item) => ({
+      item,
+      chave: item.areaId || (item.procedureId && isLaserCategory(item.categoria) ? item.procedureId : undefined),
+    }))
+    .filter((e): e is { item: QuoteItem; chave: string } => !!e.chave);
+  const areasContratadas = new Set(itensDeArea.map((e) => e.chave));
 
-  const nomesDasAreasContratadas = quote.itens
-    .filter((i) => i.procedureId && isLaserCategory(i.categoria))
-    .map((i) => nomeCurtoDaArea(i.titulo))
-    .join(' · ');
-
-  /** Só quando há áreas, o mapa foi guardado no orçamento e a profissional não desligou. */
-  const temPaginaDoMapa =
-    quote.mostrarMapaCorporal !== false &&
-    areasContratadas.size > 0 &&
-    (mapaCorporal?.areas || []).some((a) => areasContratadas.has(a.procedureId));
+  /**
+   * Uma página por procedimento com área contratada — só quando a profissional não desligou, e só
+   * com o que tem foto e desenho para mostrar.
+   */
+  const paginasDeMapa =
+    quote.mostrarMapaCorporal === false
+      ? []
+      : (mapasDeAreas || [])
+          .map((mapa) => {
+            const sexo = sexoComDesenho(mapa, quote.sexoDoMapa || 'feminino');
+            const vistas = mapa.vistas
+              .map((vista) => ({
+                vista,
+                imagem: fotoDaVista(vista, sexo),
+                areas: mapa.areas.filter(
+                  (a) => a.vistaId === vista.id && (a.desenhos[sexo]?.formas.length || 0) > 0
+                ),
+              }))
+              .filter((v) => v.imagem && v.areas.some((a) => areasContratadas.has(a.id)));
+            const nomes = itensDeArea
+              .filter((e) => mapa.areas.some((a) => a.id === e.chave))
+              .map(({ item }) =>
+                item.titulo.startsWith(`${mapa.titulo} — `)
+                  ? item.titulo.slice(mapa.titulo.length + 3)
+                  : nomeCurtoDaArea(item.titulo)
+              );
+            return { mapa, sexo, vistas, nomes: nomes.join(' · ') };
+          })
+          .filter((p) => p.vistas.length > 0);
 
   useEffect(() => {
     let cancelado = false;
@@ -658,7 +683,7 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
     if (layout && onReady) onReady();
   }, [layout, onReady]);
 
-  const paginasDoMapa = temPaginaDoMapa ? 1 : 0;
+  const paginasDoMapa = paginasDeMapa.length;
   const paginasProprias = layout ? layout.length + paginasDoMapa + paginasDoComprovante.length : 0;
   const totalDePaginas = paginasProprias + paginasAnexas;
 
@@ -764,84 +789,84 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
       ))}
 
       {/*
-        Manequim das áreas contratadas — uma página própria no fim.
+        Mapa das áreas contratadas — uma página própria no fim, por procedimento.
 
         Fica fora do `paginar()` de propósito. Aquele cálculo distribui blocos de altura medida
         entre as páginas e é o que segura o layout aprovado do orçamento; enfiar um bloco de altura
         variável no meio dele arriscaria a paginação de todo orçamento da clínica, inclusive os que
-        não têm laser nenhum. Como página anexa, o pior caso é uma folha a mais.
+        não têm área nenhuma. Como página anexa, o pior caso é uma folha a mais.
       */}
-      {layout && temPaginaDoMapa && (
-        <div data-pdf-page={layout.length + 1} style={estiloPagina}>
-          <CabecalhoCompacto quote={quote} />
+      {layout &&
+        paginasDeMapa.map(({ mapa, sexo, vistas, nomes }, indiceDoMapa) => (
+          <div key={mapa.procedureId} data-pdf-page={layout.length + indiceDoMapa + 1} style={estiloPagina}>
+            <CabecalhoCompacto quote={quote} />
 
-          {/* O manequim sozinho não diz de que tratamento ele fala: quem abre o PDF vê um corpo
-              pintado e um rótulo genérico. O título nomeia o procedimento antes da figura. */}
-          <div style={{ textAlign: 'center' }}>
-            <div
-              style={{
-                fontFamily: 'var(--font-serif)',
-                fontSize: 20,
-                color: PRETO,
-                lineHeight: 1.15,
-              }}
-            >
-              Depilação a Laser
+            {/* A foto sozinha não diz de que tratamento ela fala: quem abre o PDF vê um corpo
+                pintado e um rótulo genérico. O título nomeia o procedimento antes da figura. */}
+            <div style={{ textAlign: 'center' }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-serif)',
+                  fontSize: 20,
+                  color: PRETO,
+                  lineHeight: 1.15,
+                }}
+              >
+                {mapa.titulo}
+              </div>
+              <span
+                style={{
+                  display: 'inline-block',
+                  marginTop: 3,
+                  fontSize: 10,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.14em',
+                  color: BRONZE,
+                  fontWeight: 600,
+                }}
+              >
+                Áreas contratadas
+              </span>
             </div>
-            <span
-              style={{
-                display: 'inline-block',
-                marginTop: 3,
-                fontSize: 10,
-                textTransform: 'uppercase',
-                letterSpacing: '.14em',
-                color: BRONZE,
-                fontWeight: 600,
-              }}
-            >
-              Áreas contratadas
-            </span>
-          </div>
 
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 28, marginTop: 8 }}>
-            {(['frente', 'costas'] as const).map((vista) => {
-              const daVista = (mapaCorporal?.areas || []).filter((a) => a.vista === vista);
-              const imagem =
-                vista === 'frente'
-                  ? mapaCorporal?.manequimFrenteUrl
-                  : mapaCorporal?.manequimCostasUrl;
-              if (!imagem || !daVista.some((a) => areasContratadas.has(a.procedureId))) return null;
-              return (
-                <div key={vista} style={{ textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 28, marginTop: 8 }}>
+              {vistas.map(({ vista, imagem, areas }) => (
+                <div key={vista.id} style={{ textAlign: 'center' }}>
                   <LaserBodyMapView
                     imagemUrl={imagem}
-                    areas={daVista.map((a) => ({
-                      chave: a.procedureId,
-                      nomeCurto: a.nomeCurto,
-                      area: { id: a.procedureId, vista: a.vista, formas: a.formas },
+                    areas={areas.map((a) => ({
+                      chave: a.id,
+                      nomeCurto: a.nome,
+                      area: a.desenhos[sexo]!,
                     }))}
                     selecionadas={areasContratadas}
                     alturaManequim={420}
                     ocultarBotoes
                   />
-                  <span style={{ fontSize: 9, color: '#8A857C', letterSpacing: '.1em' }}>
-                    {vista === 'frente' ? 'FRENTE' : 'COSTAS'}
+                  <span
+                    style={{
+                      fontSize: 9,
+                      color: '#8A857C',
+                      letterSpacing: '.1em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {vista.nome}
                   </span>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+
+            <p style={{ fontSize: 11, color: PRETO, textAlign: 'center', marginTop: 10 }}>
+              {nomes}
+            </p>
+
+            <div style={{ flex: 1 }} />
+            <RodapeLegal clinic={clinic} />
+
+            {numeroDaPagina(layout.length + indiceDoMapa + 1)}
           </div>
-
-          <p style={{ fontSize: 11, color: PRETO, textAlign: 'center', marginTop: 10 }}>
-            {nomesDasAreasContratadas}
-          </p>
-
-          <div style={{ flex: 1 }} />
-          <RodapeLegal clinic={clinic} />
-
-          {numeroDaPagina(layout.length + 1)}
-        </div>
-      )}
+        ))}
 
       {/*
         Comprovante de pagamento — uma página por folha, depois de tudo. Mesma lógica do manequim:

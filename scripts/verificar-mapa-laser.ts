@@ -20,7 +20,18 @@ import {
   LASER_MAX_PONTOS_POR_FORMA,
   serializarAreas,
   desserializarAreas,
+  serializarAreasDoMapa,
+  desserializarAreasDoMapa,
+  montarMapasPublicos,
+  mapaDoTemplate,
+  converterProcedimentosEmAreas,
+  procedimentosParaConverter,
+  chaveDaRef,
+  sexoComDesenho,
+  mapaDaArea,
 } from '../src/utils/laserAreas';
+import { contarProcedimentosParaDesconto } from '../src/utils/quoteCalc';
+import { montarItemDaArea } from '../src/utils/quoteFactory';
 import {
   ehTemplateDeLaser,
   fichasParaEscolher,
@@ -32,7 +43,7 @@ import {
   LASER_PROFESSIONAL_QUESTIONS as PERGUNTAS_PROFISSIONAL,
   DEFAULT_EVALUATION_TEMPLATES,
 } from '../src/data/anamnesisInitialData';
-import { AnamnesisTemplate, LaserArea } from '../src/types';
+import { AnamnesisTemplate, AreaDoProcedimento, LaserArea, Procedure } from '../src/types';
 
 let falhas = 0;
 const ok = (nome: string, condicao: boolean, extra = '') => {
@@ -445,6 +456,167 @@ const comBotaoFixo = [
 ];
 const [pFixo] = posicionarBotoesDoAnel(comBotaoFixo);
 ok('usa a posição gravada', pFixo.x === 0.05 && pFixo.y === 0.9);
+
+// ==========================================
+// MAPA DE ÁREAS DENTRO DO PROCEDIMENTO
+// ==========================================
+
+const procedimento = (o: Partial<Procedure>): Procedure =>
+  ({
+    id: 'p',
+    title: 'Procedimento',
+    category: 'Harmonização & Injetáveis',
+    description: '',
+    price: 0,
+    images: [],
+    benefits: [],
+    order: 1,
+    createdAt: '2026-01-01',
+    ...o,
+  }) as Procedure;
+
+const areaAxilas: AreaDoProcedimento = {
+  id: 'area-axilas',
+  nome: 'Axilas',
+  vistaId: 'v-frente',
+  price: 120,
+  promotionalPrice: 90,
+  sessoesInclusas: 10,
+  desenhos: {
+    feminino: { formas: [retangulo(0.29, 0.225, 0.36, 0.27), retangulo(0.64, 0.225, 0.71, 0.27)], botao: { x: 0.1, y: 0.3 } },
+    masculino: { formas: [retangulo(0.3, 0.22, 0.37, 0.27)] },
+  },
+};
+const areaBuco: AreaDoProcedimento = {
+  id: 'area-buco',
+  nome: 'Buço',
+  vistaId: 'v-frente',
+  price: 60,
+  desenhos: { feminino: { formas: [retangulo(0.45, 0.08, 0.55, 0.1)] } },
+};
+const laserNovo = procedimento({
+  id: 'proc-laser',
+  title: 'Depilação a Laser',
+  category: 'Depilação a Laser',
+  exigeSelecaoDeArea: true,
+  vistasDoMapa: [
+    { id: 'v-frente', nome: 'Frente', fotoFemininaUrl: 'https://x/f.png', fotoMasculinaUrl: 'https://x/m.png' },
+  ],
+  areasDoMapa: [areaAxilas, areaBuco],
+});
+
+console.log('\n== áreas do procedimento: ida e volta do banco');
+const areasGravadas = serializarAreasDoMapa([areaAxilas, areaBuco])!;
+const semArrayDentroDeArray = JSON.stringify(areasGravadas).match(/\[\s*\[/) === null;
+ok('nenhum array dentro de array no que vai para o Firestore', semArrayDentroDeArray);
+const areasDeVolta = desserializarAreasDoMapa(JSON.parse(JSON.stringify(areasGravadas)))!;
+ok('volta com as duas áreas', areasDeVolta.length === 2);
+ok(
+  'formas de cada sexo voltam iguais',
+  JSON.stringify(areasDeVolta[0].desenhos) === JSON.stringify(areaAxilas.desenhos),
+  JSON.stringify(areasDeVolta[0].desenhos)
+);
+ok('preço, promocional e sessões voltam', areasDeVolta[0].price === 120 && areasDeVolta[0].promotionalPrice === 90 && areasDeVolta[0].sessoesInclusas === 10);
+ok('sexo sem desenho não vira desenho vazio', !('masculino' in areasDeVolta[1].desenhos));
+// O mesmo estrago do `cleanForFirestore` nas áreas antigas: a forma achatada em {0: x, 1: y}.
+const achatada = [
+  {
+    ...areasGravadas[1],
+    desenhos: { feminino: { formas: [{ 0: 0.45, 1: 0.08, 2: 0.55, 3: 0.08, 4: 0.55, 5: 0.1 }] } },
+  },
+];
+ok('recupera a forma achatada em {0: x, 1: y}', desserializarAreasDoMapa(achatada)?.[0].desenhos.feminino?.formas[0].length === 6);
+ok('lixo não derruba a leitura', desserializarAreasDoMapa([null, 3, { id: 'x' }, 'a']) === undefined);
+
+console.log('\n== espelho público: um mapa por procedimento, nunca preço');
+const espelho = montarMapasPublicos([
+  laserNovo,
+  procedimento({ id: 'botox', title: 'Botox', price: 900 }),
+  procedimento({ id: 'sem-area', exigeSelecaoDeArea: true, areasDoMapa: [] }),
+]);
+ok('só o procedimento com área entra', espelho.mapas.length === 1 && espelho.mapas[0].procedureId === 'proc-laser');
+ok('nenhum preço no espelho', !/price|preco|valor/i.test(JSON.stringify(espelho.mapas)), JSON.stringify(espelho.mapas).slice(0, 120));
+ok('leva vistas e nomes', espelho.mapas[0].vistas.length === 1 && espelho.mapas[0].areas.map((a) => a.nome).join(',') === 'Axilas,Buço');
+
+console.log('\n== qual mapa uma ficha de anamnese mostra');
+const tplVinculada = { id: 't1', procedimentoId: 'proc-laser', procedimentoNome: 'Qualquer', categoria: 'X' } as AnamnesisTemplate;
+const tplLaserGuardaChuva = { id: 'tpl-epilacao-laser', procedimentoNome: 'Depilação a Laser', categoria: 'Laser & Alta Tecnologia' } as AnamnesisTemplate;
+const tplBotox = { id: 't2', procedimentoNome: 'Botox', categoria: 'Harmonização' } as AnamnesisTemplate;
+ok('pelo procedimento vinculado', mapaDoTemplate(tplVinculada, espelho.mapas)?.procedureId === 'proc-laser');
+ok('a ficha única de laser acha o mapa de laser', mapaDoTemplate(tplLaserGuardaChuva, espelho.mapas)?.procedureId === 'proc-laser');
+ok('ficha de outro procedimento não ganha mapa', mapaDoTemplate(tplBotox, espelho.mapas) === null);
+ok('sem mapas, nada', mapaDoTemplate(tplVinculada, []) === null);
+
+console.log('\n== foto de mulher ou de homem');
+const soMulher = { ...espelho.mapas[0], areas: espelho.mapas[0].areas.map((a) => ({ ...a, desenhos: { feminino: a.desenhos.feminino } })) };
+ok('pedido vence quando tem desenho', sexoComDesenho(espelho.mapas[0], 'masculino') === 'masculino');
+ok('cai no sexo que tem desenho', sexoComDesenho(soMulher, 'masculino') === 'feminino');
+
+console.log('\n== conversão dos procedimentos de área antigos');
+const antigaAxilas = procedimento({
+  id: 'proc-antigo-axilas',
+  title: 'Depilação a Laser - Axilas',
+  category: 'Depilação a Laser',
+  price: 100,
+  promotionalPrice: 80,
+  priceNote: 'por sessão',
+  sessoesInclusas: 10,
+  laserAreas: [{ id: 'x', vista: 'frente', formas: [retangulo(0.3, 0.2, 0.4, 0.3)], botao: { x: 0.1, y: 0.2 } }],
+});
+const antigaCostas = procedimento({
+  id: 'proc-antigo-costas',
+  title: 'Depilação a Laser - Costas',
+  category: 'Depilação a Laser',
+  price: 300,
+  laserAreas: [{ id: 'y', vista: 'costas', formas: [retangulo(0.3, 0.3, 0.7, 0.6)] }],
+});
+const antigaSemDesenho = procedimento({ id: 'proc-antigo-buco', title: 'Depilação a Laser - Buço', category: 'Depilação a Laser', price: 50 });
+const candidatos = procedimentosParaConverter(
+  [antigaAxilas, antigaCostas, antigaSemDesenho, laserNovo, procedimento({ id: 'arq', category: 'Depilação a Laser', arquivado: true }), procedimento({ id: 'botox' })],
+  'proc-laser'
+);
+ok('candidatos: só os de laser antigos, sem o próprio e sem arquivados', candidatos.map((p) => p.id).join(',') === 'proc-antigo-axilas,proc-antigo-costas,proc-antigo-buco', candidatos.map((p) => p.id).join(','));
+
+const conversao = converterProcedimentosEmAreas(candidatos, {
+  laserManequimFrenteUrl: 'https://x/frente.png',
+  laserManequimCostasUrl: 'https://x/costas.png',
+  laserPadroes: { contraindications: 'Gestantes' },
+});
+const [cAxilas, cCostas, cBuco] = conversao.areas;
+ok('cria Frente e Costas', conversao.vistas.map((v) => v.nome).join(',') === 'Frente,Costas');
+ok('o manequim antigo vira a foto dos dois sexos', conversao.vistas.every((v) => v.fotoFemininaUrl && v.fotoFemininaUrl === v.fotoMasculinaUrl));
+ok('a área mantém o ID do procedimento antigo', cAxilas.id === 'proc-antigo-axilas');
+ok('nome sem o prefixo', cAxilas.nome === 'Axilas' && cBuco.nome === 'Buço');
+ok('preço, promocional, observação e sessões vêm junto', cAxilas.price === 100 && cAxilas.promotionalPrice === 80 && cAxilas.priceNote === 'por sessão' && cAxilas.sessoesInclusas === 10);
+ok('o desenho vai para os dois sexos, com o botão', cAxilas.desenhos.feminino?.formas.length === 1 && cAxilas.desenhos.masculino?.botao?.x === 0.1);
+ok('cada área cai na vista certa', cCostas.vistaId === conversao.vistas[1].id && cAxilas.vistaId === conversao.vistas[0].id);
+ok('a sem desenho nasce na frente, sem desenho', cBuco.vistaId === conversao.vistas[0].id && Object.keys(cBuco.desenhos).length === 0);
+ok('os padrões vêm para o procedimento', conversao.padroes?.contraindications === 'Gestantes');
+const comVistaPropria = converterProcedimentosEmAreas([antigaAxilas], { laserManequimFrenteUrl: 'https://x/frente.png' }, [{ id: 'minha', nome: 'frente' }]);
+ok('aproveita a vista de mesmo nome criada à mão', comVistaPropria.vistas.length === 1 && comVistaPropria.areas[0].vistaId === 'minha');
+
+console.log('\n== referências antigas continuam achando a área');
+const espelhoConvertido = montarMapasPublicos([procedimento({ id: 'pai', exigeSelecaoDeArea: true, vistasDoMapa: conversao.vistas, areasDoMapa: conversao.areas })]);
+const refAntiga = { procedureId: 'proc-antigo-axilas', nomeCurto: 'Axilas' };
+const refNova = { procedureId: 'pai', areaId: 'proc-antigo-axilas', nomeCurto: 'Axilas' };
+ok('ref antiga aponta para a área pelo procedureId', chaveDaRef(refAntiga) === 'proc-antigo-axilas');
+ok('ref nova aponta pelo areaId', chaveDaRef(refNova) === 'proc-antigo-axilas');
+ok('a ficha antiga acha o mapa novo', mapaDaArea(espelhoConvertido.mapas, chaveDaRef(refAntiga))?.procedureId === 'pai');
+
+console.log('\n== orçamento');
+const itemAxilas = montarItemDaArea(laserNovo, areaAxilas);
+ok('título "Procedimento — Área"', itemAxilas.titulo === 'Depilação a Laser — Axilas', itemAxilas.titulo);
+ok('preço promocional da área', itemAxilas.valorTabela === 90);
+ok('sessões da área', itemAxilas.maisDeUmaSessao && itemAxilas.sessoes === 10);
+ok('guarda o procedimento e a área', itemAxilas.procedureId === 'proc-laser' && itemAxilas.areaId === 'area-axilas');
+const itemBuco = montarItemDaArea(laserNovo, areaBuco);
+const itemBotox = { categoria: 'Harmonização', procedureId: 'botox' };
+const itemAntigo = { categoria: 'Depilação a Laser', procedureId: 'proc-antigo-costas' };
+ok('áreas do mesmo procedimento contam como um', contarProcedimentosParaDesconto([itemAxilas, itemBuco]) === 1);
+ok('áreas + botox são dois', contarProcedimentosParaDesconto([itemAxilas, itemBuco, itemBotox]) === 2);
+ok('itens de laser antigos seguem contando como um', contarProcedimentosParaDesconto([itemAntigo, { ...itemAntigo, procedureId: 'outro' }, itemBotox]) === 2);
+const outroComMapa = montarItemDaArea(procedimento({ id: 'botox-regioes', title: 'Botox' }), { ...areaBuco, id: 'glabela', nome: 'Glabela' });
+ok('áreas de procedimentos diferentes contam separado', contarProcedimentosParaDesconto([itemAxilas, outroComMapa]) === 2);
 
 console.log(`\n${falhas === 0 ? 'TUDO OK' : `${falhas} FALHA(S)`}\n`);
 process.exit(falhas === 0 ? 0 : 1);

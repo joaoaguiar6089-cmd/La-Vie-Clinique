@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Procedure, ClinicProfile } from '../types';
 import { resolverCamposDoLaser } from '../utils/laserAreas';
+import { ListaDeAreasEValores } from './laser/ListaDeAreasEValores';
 import { formatBRL } from '../utils/formatters';
 import { buildSingleProcedureWhatsAppUrl } from '../utils/exportHelpers';
 import { getProcedureDoctors } from '../utils/doctorHelpers';
@@ -191,6 +192,13 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
               </div>
             )}
 
+            {procedure.exigeSelecaoDeArea && (procedure.areasDoMapa?.length || 0) > 0 && (
+              <div className="mt-6">
+                <h4 className="text-[15px] font-semibold text-ink mb-2.5">Áreas e valores</h4>
+                <ListaDeAreasEValores areas={procedure.areasDoMapa!} />
+              </div>
+            )}
+
             {procedure.areasTreated && procedure.areasTreated.length > 0 && (
               <div className="mt-6">
                 <h4 className="text-[15px] font-semibold text-ink mb-2.5">Regiões de aplicação</h4>
@@ -339,6 +347,13 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {procedure.exigeSelecaoDeArea && (procedure.areasDoMapa?.length || 0) > 0 && (
+                <div className="mt-4 pt-3 border-t border-[rgba(26,26,26,.07)]">
+                  <p className="text-[12px] font-semibold text-muted mb-2">Áreas e valores</p>
+                  <ListaDeAreasEValores areas={procedure.areasDoMapa!} compacto />
+                </div>
+              )}
 
               {procedure.areasTreated && procedure.areasTreated.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[rgba(26,26,26,.07)]">

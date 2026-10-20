@@ -4,12 +4,13 @@ import {
   AnamnesisQuestion,
   ClinicProfile,
   ConsentTermSection,
+  MapaDeAreasPublico,
   OrientationImage,
 } from '../../types';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
 import { ConsentTermView } from './ConsentTermView';
 import { LaserBodyMapView } from '../laser/LaserBodyMapView';
-import { listarNomesDeAreas } from '../../utils/laserAreas';
+import { chaveDaRef, fotoDaVista, listarNomesDeAreas, mapaDaArea, sexoComDesenho } from '../../utils/laserAreas';
 import { exportElementAsPDF } from '../../utils/exportHelpers';
 import { subirImagemOuManter } from '../../services/imageStorage';
 import {
@@ -44,6 +45,11 @@ interface PrintableAnamnesisSheetProps {
   orientationImage?: OrientationImage | null;
   /** Blocos do Termo de Consentimento configurados na ficha-modelo (ver `resolveConsentTerm`). */
   consentSections?: ConsentTermSection[] | null;
+  /**
+   * Os mapas de áreas da clínica — do catálogo no painel, do espelho público na página da
+   * paciente. A ficha acha sozinha o mapa das áreas que ela registra.
+   */
+  mapasDeAreas?: MapaDeAreasPublico[];
 }
 
 
@@ -63,7 +69,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   onSaveRecord,
   orientationImage,
   consentSections,
-  mapaCorporal,
+  mapasDeAreas,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
@@ -171,14 +177,23 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
    * divergem.
    */
   const areasParaDesenhar = new Set(
-    (areasConfirmadas.length > 0 ? areasConfirmadas : areasSolicitadas).map((a) => a.procedureId)
+    (areasConfirmadas.length > 0 ? areasConfirmadas : areasSolicitadas).map(chaveDaRef)
   );
 
   const areasDivergem =
     areasConfirmadas.length > 0 &&
     areasSolicitadas.length > 0 &&
     (areasConfirmadas.length !== areasSolicitadas.length ||
-      areasConfirmadas.some((c) => !areasSolicitadas.some((s) => s.procedureId === c.procedureId)));
+      areasConfirmadas.some((c) => !areasSolicitadas.some((s) => chaveDaRef(s) === chaveDaRef(c))));
+
+  /**
+   * O mapa de onde as áreas vieram, achado pela primeira delas, e a foto do gênero da paciente.
+   * Ficha antiga, de quando cada área era um procedimento, acha o mapa do mesmo jeito: a área
+   * convertida tem o ID do procedimento antigo.
+   */
+  const primeiraArea = Array.from(areasParaDesenhar)[0] as string | undefined;
+  const mapaDasAreas = primeiraArea ? mapaDaArea(mapasDeAreas, primeiraArea) : undefined;
+  const sexoDoMapa = sexoComDesenho(mapaDasAreas, record.pacienteGenero || 'feminino');
   const patientImageSrc =
     (isStaff && record.fotoPacienteAnotadaUrl) || record.fotoPacienteUrl || record.fotoUrl;
 
@@ -342,7 +357,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
           {temAreasDeLaser && (
             <div className="mb-6">
               <h3 className="text-[11px] font-semibold uppercase tracking-widest text-brand border-b border-[rgba(26,26,26,.12)] pb-1 mb-3">
-                Áreas de depilação a laser
+                {mapaDasAreas?.titulo ? `Áreas — ${mapaDasAreas.titulo}` : 'Áreas'}
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-5 items-start">
@@ -377,33 +392,32 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                   )}
                 </div>
 
-                {mapaCorporal && (
+                {mapaDasAreas && (
                   <div className="flex gap-3 shrink-0 page-break-inside-avoid">
-                    {(['frente', 'costas'] as const).map((vista) => {
-                      const daVista = mapaCorporal.areas.filter((a) => a.vista === vista);
-                      const imagem =
-                        vista === 'frente'
-                          ? mapaCorporal.manequimFrenteUrl
-                          : mapaCorporal.manequimCostasUrl;
+                    {mapaDasAreas.vistas.map((vista) => {
+                      const daVista = mapaDasAreas.areas.filter(
+                        (a) => a.vistaId === vista.id && (a.desenhos[sexoDoMapa]?.formas.length || 0) > 0
+                      );
+                      const imagem = fotoDaVista(vista, sexoDoMapa);
                       // Uma vista sem área marcada é só um boneco em branco ocupando papel.
-                      if (!imagem || !daVista.some((a) => areasParaDesenhar.has(a.procedureId))) {
+                      if (!imagem || !daVista.some((a) => areasParaDesenhar.has(a.id))) {
                         return null;
                       }
                       return (
-                        <div key={vista} className="text-center">
+                        <div key={vista.id} className="text-center">
                           <LaserBodyMapView
                             imagemUrl={imagem}
                             areas={daVista.map((a) => ({
-                              chave: a.procedureId,
-                              nomeCurto: a.nomeCurto,
-                              area: { id: a.procedureId, vista: a.vista, formas: a.formas },
+                              chave: a.id,
+                              nomeCurto: a.nome,
+                              area: a.desenhos[sexoDoMapa]!,
                             }))}
                             selecionadas={areasParaDesenhar}
                             alturaManequim={210}
                             ocultarBotoes
                           />
                           <span className="block text-[9px] uppercase tracking-wider text-muted mt-1">
-                            {vista === 'frente' ? 'Frente' : 'Costas'}
+                            {vista.nome}
                           </span>
                         </div>
                       );

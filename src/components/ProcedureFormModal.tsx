@@ -1,6 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope, FileText, Move, Loader2 } from 'lucide-react';
-import { ClinicProfile, EnquadramentosDaFoto, LaserArea, Procedure, Professional, QuoteItemDetail } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope, FileText, Move, Loader2, Layers } from 'lucide-react';
+import {
+  AreaDoProcedimento,
+  ClinicProfile,
+  EnquadramentosDaFoto,
+  Procedure,
+  Professional,
+  QuoteItemDetail,
+  VistaDoMapa,
+} from '../types';
 import { PRESET_IMAGE_LIBRARY, INITIAL_CATEGORIES } from '../data/initialData';
 import { formatBRL } from '../utils/formatters';
 import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
@@ -10,7 +18,14 @@ import { AjusteDaFotoModal } from './AjusteDaFotoModal';
 import { compactarEnquadramentos, listaDeEnquadramentosParaGravar } from '../utils/enquadramentoDaFoto';
 import { isLaserCategory } from '../utils/templateMatching';
 import { sessoesDoProcedimento } from '../utils/quoteFactory';
-import { LaserAreaEditor } from './laser/LaserAreaEditor';
+import {
+  converterProcedimentosEmAreas,
+  precoDaArea,
+  procedimentosParaConverter,
+} from '../utils/laserAreas';
+import { subirFotosDoMapa } from '../services/databaseService';
+import { MapaDeAreasEditor } from './laser/MapaDeAreasEditor';
+import { CampoMaisDeUmaSessao } from './common/CampoMaisDeUmaSessao';
 import { SidePanel } from './common/SidePanel';
 import { ConfirmDialog, ConfirmRequest } from './ConfirmDialog';
 
@@ -34,59 +49,16 @@ interface ProcedureFormModalProps {
   procedureToEdit?: Procedure | null;
   existingCategories: string[];
   availableDoctors?: Professional[];
-  /** Catálogo inteiro — o mapa de laser precisa mostrar as áreas dos outros procedimentos. */
+  /** Catálogo inteiro — é dele que saem os procedimentos de área antigos para a conversão. */
   allProcedures?: Procedure[];
-  /** Manequins e padrões da categoria de laser. */
+  /** Os manequins e padrões antigos do laser, que a conversão aproveita. */
   clinic?: ClinicProfile;
-  onAbrirConfiguracoes?: () => void;
+  /**
+   * Arquiva os procedimentos de área antigos que viraram áreas deste. Chamado depois que ele foi
+   * salvo — antes disso, arquivar tiraria as áreas do catálogo sem ninguém para recebê-las.
+   */
+  onArquivarProcedimentos?: (ids: string[], emFavorDe: string) => Promise<void>;
 }
-
-/**
- * "Mais de 1 sessão" + quantidade — o número que o orçamento usa para já nascer com as sessões do
- * pacote preenchidas. Aparece no painel do laser e no formulário completo, com o mesmo
- * comportamento; só o estilo do campo muda.
- */
-const CampoMaisDeUmaSessao: React.FC<{
-  marcado: boolean;
-  quantidade: string;
-  onMarcar: (marcado: boolean) => void;
-  onQuantidade: (quantidade: string) => void;
-  inputClassName: string;
-}> = ({ marcado, quantidade, onMarcar, onQuantidade, inputClassName }) => (
-  <div className="space-y-1.5">
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={marcado}
-          onChange={(e) => onMarcar(e.target.checked)}
-          className="w-3.5 h-3.5 accent-brand"
-        />
-        <span className="text-xs font-medium text-ink">Mais de 1 sessão</span>
-      </label>
-      {marcado && (
-        <input
-          type="number"
-          min="2"
-          step="1"
-          value={quantidade}
-          onChange={(e) => onQuantidade(e.target.value)}
-          // Sair do campo vazio ou com 1 devolve o mínimo, para o número nunca ficar inválido.
-          onBlur={() => {
-            if (!(Math.floor(Number(quantidade)) >= 2)) onQuantidade('2');
-          }}
-          aria-label="Quantidade de sessões"
-          className={`w-20 tabular-nums ${inputClassName}`}
-        />
-      )}
-    </div>
-    <p className="text-label text-muted leading-snug">
-      {marcado
-        ? 'O orçamento já nasce com esse número de sessões — dá para ajustar lá.'
-        : 'Marque para pacotes: o orçamento já nasce com o número de sessões preenchido.'}
-    </p>
-  </div>
-);
 
 export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   isOpen,
@@ -97,7 +69,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   availableDoctors = [],
   allProcedures = [],
   clinic,
-  onAbrirConfiguracoes,
+  onArquivarProcedimentos,
 }) => {
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
@@ -160,22 +132,24 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [customDoctorNames, setCustomDoctorNames] = useState<string[]>([]);
   const [newCustomDoctorInput, setNewCustomDoctorInput] = useState('');
 
-  // ---- Modo laser ----
-  /** Áreas da região em edição. Vazio = nada desenhado ainda, painel de campos fechado. */
-  const [laserAreas, setLaserAreas] = useState<LaserArea[]>([]);
+  // ---- Mapa de áreas ("Exige seleção de área") ----
+  const [exigeSelecaoDeArea, setExigeSelecaoDeArea] = useState(false);
+  const [vistasDoMapa, setVistasDoMapa] = useState<VistaDoMapa[]>([]);
+  const [areasDoMapa, setAreasDoMapa] = useState<AreaDoProcedimento[]>([]);
+  /** Há uma área aberta no editor e não concluída — salvar agora a perderia. */
+  const [areaEmEdicao, setAreaEmEdicao] = useState(false);
+  /** Procedimentos de área antigos trazidos para cá, a arquivar depois que este for salvo. */
+  const [idsParaArquivar, setIdsParaArquivar] = useState<string[]>([]);
   /**
-   * Procedimento escolhido na faixa "Sem área no mapa". Diferente de `procedureToEdit`: aquele é
-   * quem abriu o modal, este é quem vai receber o desenho da vez. É o que permite mapear os treze
-   * já cadastrados em sequência, sem fechar o modal e sem redigitar preço.
+   * ID do procedimento novo, fixo enquanto o painel estiver aberto. Salvar de novo depois de uma
+   * falha no meio do caminho (o arquivamento dos antigos, por exemplo) regrava o mesmo documento
+   * em vez de criar um segundo procedimento igual.
    */
-  const [procedimentoLaserAlvo, setProcedimentoLaserAlvo] = useState<Procedure | null>(null);
-  const [mostrarTodosCampos, setMostrarTodosCampos] = useState(false);
-  const [areaAplicada, setAreaAplicada] = useState<string | null>(null);
-  const [confirmandoSaida, setConfirmandoSaida] = useState(false);
+  const idDoNovoRef = useRef('');
 
-  const categoriaEfetiva =
-    (isAddingCustomCategory && customCategory.trim()) || customCategory.trim() || category;
-  const ehLaser = isLaserCategory(categoriaEfetiva);
+  const paraConverter = procedimentosParaConverter(allProcedures, procedureToEdit?.id).filter(
+    (p) => !idsParaArquivar.includes(p.id)
+  );
 
   const [showPresetLibrary, setShowPresetLibrary] = useState(false);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
@@ -234,7 +208,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setIdealCandidate(procedureToEdit.idealCandidate || '');
       setIsFeatured(Boolean(procedureToEdit.isFeatured));
       setQuoteDetails(procedureToEdit.quoteDetails || []);
-      setLaserAreas(procedureToEdit.laserAreas || []);
+      setExigeSelecaoDeArea(Boolean(procedureToEdit.exigeSelecaoDeArea));
+      setVistasDoMapa(procedureToEdit.vistasDoMapa || []);
+      setAreasDoMapa(procedureToEdit.areasDoMapa || []);
       setAssignedDoctorIds(procedureToEdit.assignedDoctorIds || []);
       setCustomDoctorNames(
         procedureToEdit.assignedDoctorNames
@@ -265,15 +241,16 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setIdealCandidate('Pessoas que buscam harmonia e prevenção do envelhecimento');
       setIsFeatured(false);
       setQuoteDetails([]);
-      setLaserAreas([]);
+      setExigeSelecaoDeArea(false);
+      setVistasDoMapa([]);
+      setAreasDoMapa([]);
       // Default to first doctor if available
       setAssignedDoctorIds(availableDoctors.length > 0 ? [availableDoctors[0].id] : []);
       setCustomDoctorNames([]);
     }
-    setProcedimentoLaserAlvo(null);
-    setMostrarTodosCampos(false);
-    setAreaAplicada(null);
-    setConfirmandoSaida(false);
+    setAreaEmEdicao(false);
+    setIdsParaArquivar([]);
+    idDoNovoRef.current = `proc-${Date.now()}`;
     setErrors({});
     setUploadError('');
     // Um recorte pendente pertence ao procedimento anterior — abrir outro cadastro o descarta.
@@ -420,24 +397,30 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setQuoteDetails((prev) => prev.filter((d) => d.id !== id));
   };
 
-  /**
-   * Grava o procedimento. Serve aos dois caminhos do formulário: o "Salvar" de sempre, que fecha o
-   * modal, e o "Aplicar" do modo laser, que mantém o modal aberto para a próxima área.
-   *
-   * Devolve `true` quando gravou, para que quem chamou saiba se pode seguir adiante.
-   */
-  const salvarProcedimento = async ({ fecharAoFim }: { fecharAoFim: boolean }): Promise<boolean> => {
+  /** Grava o procedimento e fecha o painel. Devolve `true` quando gravou. */
+  const salvarProcedimento = async (): Promise<boolean> => {
     const newErrors: Record<string, string> = {};
 
     if (!title.trim()) newErrors.title = 'O título do procedimento é obrigatório';
-    // No modo laser a descrição sai do caminho crítico: ela é a mesma nas treze áreas e vem dos
-    // padrões da categoria. Exigi-la aqui obrigaria a escrever o mesmo parágrafo treze vezes.
-    if (!ehLaser && !description.trim()) newErrors.description = 'A descrição é obrigatória';
-    if (!price || isNaN(Number(price)) || Number(price) < 0) {
+    // Depilação a laser pode deixar a descrição em branco: as áreas de laser ainda cadastradas uma a
+    // uma herdam a dos padrões antigos da categoria (`resolverCamposDoLaser`).
+    if (!description.trim() && !isLaserCategory(customCategory.trim() || category)) {
+      newErrors.description = 'A descrição é obrigatória';
+    }
+    // Com mapa, o valor é o de cada área — o do procedimento sai delas.
+    if (!exigeSelecaoDeArea && (!price || isNaN(Number(price)) || Number(price) < 0)) {
       newErrors.price = 'Informe um valor numérico válido';
     }
-    if (ehLaser && laserAreas.length === 0) {
-      newErrors.laser = 'Destaque ao menos uma área no manequim antes de aplicar.';
+    if (exigeSelecaoDeArea) {
+      if (areaEmEdicao) {
+        newErrors.mapa = 'Há uma área aberta no mapa. Conclua ou cancele a área antes de salvar.';
+      } else if (!vistasDoMapa.some((v) => v.fotoFemininaUrl || v.fotoMasculinaUrl)) {
+        newErrors.mapa = 'Envie ao menos uma foto para marcar as áreas.';
+      } else if (vistasDoMapa.some((v) => !v.nome.trim())) {
+        newErrors.mapa = 'Dê um nome a cada vista do mapa (ex.: Frente, Costas).';
+      } else if (areasDoMapa.length === 0) {
+        newErrors.mapa = 'Cadastre ao menos uma área no mapa, com nome e valor.';
+      }
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -460,10 +443,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       ? images
       : ['https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80'];
 
-    // No modo laser, o "dono" da área pode ser um procedimento escolhido na faixa de pendentes, e
-    // não o que abriu o modal — é assim que os treze já cadastrados ganham área sem virar cópia.
-    const baseDoProcedimento = procedimentoLaserAlvo || procedureToEdit;
-    const procedureId = baseDoProcedimento ? baseDoProcedimento.id : `proc-${Date.now()}`;
+    const baseDoProcedimento = procedureToEdit;
+    const procedureId = baseDoProcedimento ? baseDoProcedimento.id : idDoNovoRef.current;
 
     setIsSaving(true);
     setSavingStatus('Preparando fotos...');
@@ -485,6 +466,35 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       uploadedImages = finalImages;
     }
 
+    // As fotos do mapa sobem antes da conta de tamanho do documento: em base64 elas sozinhas
+    // passariam do limite. E sem plano B — se o Storage recusar, nada é gravado.
+    let vistasGravadas: VistaDoMapa[] | undefined;
+    if (exigeSelecaoDeArea) {
+      try {
+        setSavingStatus('Enviando as fotos do mapa para a nuvem...');
+        vistasGravadas = await subirFotosDoMapa(
+          vistasDoMapa.map((v) => ({ ...v, nome: v.nome.trim() })),
+          procedureId
+        );
+        setVistasDoMapa(vistasGravadas);
+      } catch (erroDasFotos) {
+        setErrors({
+          mapa:
+            erroDasFotos instanceof Error
+              ? erroDasFotos.message
+              : 'Não foi possível enviar as fotos do mapa. Tente novamente.',
+        });
+        setIsSaving(false);
+        setSavingStatus('');
+        return false;
+      }
+    }
+
+    // Com mapa, o catálogo, a busca e a ordenação seguem lendo `price`: ele vira o da área mais
+    // barata, com "a partir de" quando há mais de uma.
+    const precosDasAreas = areasDoMapa.map(precoDaArea);
+    const precoDoMapa = precosDasAreas.length > 0 ? Math.min(...precosDasAreas) : 0;
+
     // Linhas em branco (ou só com título) não viram detalhe: iriam para o PDF como rótulo sem resposta
     const cleanedQuoteDetails: QuoteItemDetail[] = quoteDetails
       .map((d) => ({ ...d, titulo: d.titulo.trim(), valor: d.valor.trim() }))
@@ -494,31 +504,22 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       ? Math.max(2, Math.floor(Number(sessoesInclusas)) || 2)
       : undefined;
 
-    // O painel do laser não tem mais o campo de texto "Sessões" — vale o número. Uma área nova leva
-    // o texto do catálogo a partir dele; sem isso gravaria o "1 a 3 sessões" padrão do formulário,
-    // que ninguém vê nem escolheu. Área que já existe mantém o texto que tem, e com "Mostrar todos
-    // os campos" aberto o texto é o que estiver digitado em "Plano Recomendado".
-    const textoDeSessoes =
-      ehLaser && !mostrarTodosCampos && !baseDoProcedimento
-        ? sessoesDoPacote
-          ? `${sessoesDoPacote} sessões`
-          : undefined
-        : sessionsRecommended.trim() || undefined;
-
     const procedureData: Procedure = {
       id: procedureId,
       title: title.trim(),
       subtitle: subtitle.trim() || undefined,
       category: finalCategory,
       description: description.trim(),
-      price: Number(price),
-      promotionalPrice: promotionalPrice ? Number(promotionalPrice) : undefined,
+      price: exigeSelecaoDeArea ? precoDoMapa : Number(price),
+      promotionalPrice:
+        !exigeSelecaoDeArea && promotionalPrice ? Number(promotionalPrice) : undefined,
       priceNote: priceNote.trim() || 'por sessão',
-      isStartingPrice: isStartingPrice,
+      isStartingPrice: exigeSelecaoDeArea ? areasDoMapa.length > 1 : isStartingPrice,
       duration: duration.trim() || undefined,
-      sessionsRecommended: textoDeSessoes,
+      sessionsRecommended: sessionsRecommended.trim() || undefined,
       // Desmarcado = `undefined`, e é o `saveProcedureToDb` que transforma isso em apagar o campo.
-      sessoesInclusas: sessoesDoPacote,
+      // Com mapa, as sessões são de cada área.
+      sessoesInclusas: exigeSelecaoDeArea ? undefined : sessoesDoPacote,
       recoveryTime: recoveryTime.trim() || undefined,
       orientacoesPreProcedimento: orientacoesPreProcedimento.trim() || undefined,
       intervaloEntreSessoesDias: Number(intervaloEntreSessoesDias) > 0
@@ -536,10 +537,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       quoteDetails: cleanedQuoteDetails,
       assignedDoctorIds: assignedDoctorIds.length > 0 ? assignedDoctorIds : undefined,
       assignedDoctorNames: finalDoctorNames.length > 0 ? finalDoctorNames : undefined,
-      // Fora do laser o campo some do documento em vez de ir vazio: `saveProcedureToDb` grava com
-      // merge, então um array vazio apagaria as áreas, mas `undefined` é descartado — e é isso que
-      // faz a troca de categoria (que já limpou o estado) remover o desenho de fato.
-      laserAreas: ehLaser && laserAreas.length > 0 ? laserAreas : undefined,
+      // Desmarcado, o mapa vai como `undefined`, e é o `saveProcedureToDb` que apaga os campos do
+      // banco. As vistas e áreas continuam no formulário até ele fechar: marcar de novo as traz de
+      // volta.
+      exigeSelecaoDeArea: exigeSelecaoDeArea || undefined,
+      vistasDoMapa: exigeSelecaoDeArea ? vistasGravadas : undefined,
+      areasDoMapa: exigeSelecaoDeArea ? areasDoMapa : undefined,
+      // As áreas do formato antigo seguem em memória como estão: só a conversão as lê.
+      laserAreas: baseDoProcedimento?.laserAreas,
       order: baseDoProcedimento?.order || 99,
       createdAt: baseDoProcedimento?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -560,8 +565,6 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setSavingStatus('Sincronizando com o servidor...');
     try {
       await onSave(procedureData);
-      if (fecharAoFim) onClose();
-      return true;
     } catch (saveErr) {
       console.error('Falha ao salvar procedimento:', saveErr);
       const motivo = saveErr instanceof Error ? saveErr.message : 'Erro ao persistir na nuvem.';
@@ -569,141 +572,113 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
         ...prev,
         images: `Não foi possível salvar na nuvem: ${motivo}`,
       }));
-      return false;
-    } finally {
       setIsSaving(false);
       setSavingStatus('');
+      return false;
     }
+
+    // Só agora, com as áreas gravadas aqui, os procedimentos antigos saem do catálogo. Falhar
+    // aqui não desfaz o que foi salvo: o painel fica aberto, e salvar de novo tenta outra vez.
+    if (idsParaArquivar.length > 0 && onArquivarProcedimentos) {
+      try {
+        setSavingStatus('Tirando do catálogo os procedimentos convertidos...');
+        await onArquivarProcedimentos(idsParaArquivar, procedureId);
+        setIdsParaArquivar([]);
+      } catch (erroAoArquivar) {
+        console.error('Falha ao arquivar os procedimentos convertidos:', erroAoArquivar);
+        setErrors({
+          mapa: `O procedimento foi salvo, mas ${idsParaArquivar.length === 1 ? 'o procedimento antigo não pôde sair' : `os ${idsParaArquivar.length} procedimentos antigos não puderam sair`} do catálogo. Salve de novo para tentar outra vez.`,
+        });
+        setIsSaving(false);
+        setSavingStatus('');
+        return false;
+      }
+    }
+
+    setIsSaving(false);
+    setSavingStatus('');
+    onClose();
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await salvarProcedimento({ fecharAoFim: true });
+    await salvarProcedimento();
   };
 
-  /**
-   * "Aplicar" do modo laser: grava esta área e devolve o formulário limpo para a próxima.
-   *
-   * Grava na hora, uma área por vez, em vez de acumular tudo para um "Salvar" no fim. São treze
-   * regiões numa sentada — perder o trabalho inteiro por uma aba fechada ou uma queda de rede não
-   * compensa as doze gravações economizadas, que na cota do Firestore são alguns KB.
-   */
-  const handleAplicarArea = async () => {
-    const gravou = await salvarProcedimento({ fecharAoFim: false });
-    if (!gravou) return;
-
-    setAreaAplicada(title.trim());
-    window.setTimeout(() => setAreaAplicada(null), 2600);
-
-    // Volta ao estado "nenhuma área em edição": o mapa fica pronto para o próximo laço, e a área
-    // recém-aplicada já aparece como botão, vinda do catálogo.
-    setLaserAreas([]);
-    setProcedimentoLaserAlvo(null);
-    setTitle('');
-    setPrice('');
-    setPromotionalPrice('');
-    setMostrarTodosCampos(false);
-    setErrors({});
-  };
-
-  /** Há desenho na tela que ainda não virou procedimento. */
-  const temRascunhoNaoAplicado =
-    ehLaser && laserAreas.length > 0 && !procedureToEdit && !procedimentoLaserAlvo;
-
-  /**
-   * Trocar a categoria para fora do laser descarta o desenho.
-   *
-   * Sem manequim onde aparecer, uma área vira dado invisível: ninguém a vê para apagar e ela
-   * ressuscita no dia em que a categoria voltar, provavelmente já sem relação com o que o
-   * procedimento virou. Descartar é a única saída que não deixa lixo escondido — e o aviso
-   * aparece antes, não depois.
-   */
-  const handleCategoriaChange = (nova: string) => {
-    const saindoDoLaser = ehLaser && !isLaserCategory(nova) && laserAreas.length > 0;
-    if (!saindoDoLaser) {
-      setCategory(nova);
-      return;
+  /** Marcar "Exige seleção de área" num procedimento sem vista já abre a primeira, "Frente". */
+  const marcarExigeSelecaoDeArea = (marcado: boolean) => {
+    setExigeSelecaoDeArea(marcado);
+    if (marcado && vistasDoMapa.length === 0) {
+      setVistasDoMapa([{ id: crypto.randomUUID(), nome: 'Frente' }]);
     }
-    const nome = (procedimentoLaserAlvo || procedureToEdit)?.title || 'esta área';
-    setConfirmacao({
-      titulo: 'Descartar a área desenhada?',
-      mensagem: `Ao sair da categoria "Depilação a Laser", a área desenhada para ${nome} é apagada.`,
-      textoConfirmar: 'Descartar e trocar',
-      onConfirmar: () => {
-        setLaserAreas([]);
-        setProcedimentoLaserAlvo(null);
-        setCategory(nova);
-      },
+    setErrors((prev) => {
+      if (!prev.mapa) return prev;
+      const { mapa: _descartado, ...resto } = prev;
+      return resto;
     });
   };
 
-  /** Carrega no painel um procedimento que já existe, para ele receber o próximo desenho. */
-  const handleSelecionarProcedimentoDoMapa = (proc: Procedure) => {
-    setProcedimentoLaserAlvo(proc);
-    setTitle(proc.title);
-    setSubtitle(proc.subtitle || '');
-    setDescription(proc.description || '');
-    setPrice(proc.price ? String(proc.price) : '');
-    setPromotionalPrice(proc.promotionalPrice ? String(proc.promotionalPrice) : '');
-    setPriceNote(proc.priceNote || 'por sessão');
-    setIsStartingPrice(Boolean(proc.isStartingPrice));
-    setDuration(proc.duration || '');
-    setSessionsRecommended(proc.sessionsRecommended || '');
-    carregarSessoesInclusas(proc);
-    setRecoveryTime(proc.recoveryTime || '');
-    setOrientacoesPreProcedimento(proc.orientacoesPreProcedimento || '');
-    setIntervaloEntreSessoesDias(
-      proc.intervaloEntreSessoesDias ? String(proc.intervaloEntreSessoesDias) : ''
-    );
-    setImages(proc.images || []);
-    setEnquadramentos(proc.enquadramentosDasFotos || []);
-    setBenefits(proc.benefits || []);
-    setAreasTreated(proc.areasTreated || []);
-    setContraindications(proc.contraindications || '');
-    setIdealCandidate(proc.idealCandidate || '');
-    setIsFeatured(Boolean(proc.isFeatured));
-    setQuoteDetails(proc.quoteDetails || []);
-    setAssignedDoctorIds(proc.assignedDoctorIds || []);
-    setLaserAreas(proc.laserAreas || []);
-    setErrors({});
-  };
+  /**
+   * Traz os procedimentos de área antigos para dentro deste, como áreas.
+   *
+   * Só preenche o formulário: nada é gravado até o "Salvar", e os antigos só são arquivados depois
+   * que este for salvo. Os textos que eles herdavam das Configurações (descrição, contraindicações,
+   * recuperação, candidato ideal) passam a ser deste procedimento — num cadastro novo substituem os
+   * exemplos do formulário; num existente, só preenchem o que estiver vazio.
+   */
+  const handleConverter = () => {
+    const legados = paraConverter;
+    if (legados.length === 0) return;
+    const resultado = converterProcedimentosEmAreas(legados, clinic || ({} as ClinicProfile), vistasDoMapa);
 
-  /** Fechar com um laço desenhado e não aplicado pede confirmação — o desenho se perde. */
-  const handleFechar = () => {
-    if (temRascunhoNaoAplicado && !confirmandoSaida) {
-      setConfirmandoSaida(true);
-      return;
+    setVistasDoMapa(resultado.vistas);
+    setAreasDoMapa((prev) => [...prev.filter((a) => !legados.some((l) => l.id === a.id)), ...resultado.areas]);
+    setIdsParaArquivar((prev) => Array.from(new Set([...prev, ...legados.map((p) => p.id)])));
+
+    const novo = !procedureToEdit;
+    const preencher = (atual: string, valor: string | undefined, definir: (v: string) => void) => {
+      if (valor && (novo || !atual.trim())) definir(valor);
+    };
+    const padroes = resultado.padroes || {};
+    preencher(description, padroes.description, setDescription);
+    preencher(contraindications, padroes.contraindications, setContraindications);
+    preencher(recoveryTime, padroes.recoveryTime, setRecoveryTime);
+    preencher(idealCandidate, padroes.idealCandidate, setIdealCandidate);
+
+    // Sem a categoria de laser, a ficha única de anamnese e as perguntas de segurança não acham
+    // este procedimento.
+    if (!isLaserCategory(category)) {
+      setCategory(legados[0].category);
+      setIsAddingCustomCategory(false);
+      setCustomCategory('');
     }
-    onClose();
+    if (!title.trim()) setTitle('Depilação a Laser');
+    if (novo && legados[0].images?.length) {
+      setImages(legados[0].images);
+      setEnquadramentos(legados[0].enquadramentosDasFotos || []);
+    }
+    setErrors({});
   };
 
   if (!isOpen) return null;
 
-  /* Rodapé fixo abaixo da área que rola. Em modo laser quem grava é o "Aplicar" de cada área,
-     então ali não há o que submeter — daí o `hidden`. */
+  /* Rodapé fixo abaixo da área que rola. */
   const rodape = (
     <div className="flex items-center justify-end gap-3">
-      {confirmandoSaida && (
-        <p className="text-body text-warn mr-auto leading-snug max-w-sm">
-          Há uma área desenhada que ainda não foi aplicada — ela se perde ao fechar. Toque em
-          Fechar de novo para confirmar.
-        </p>
+      {errors.mapa && (
+        <p className="text-body text-red-600 mr-auto leading-snug max-w-md">{errors.mapa}</p>
       )}
       <button
         type="button"
-        onClick={handleFechar}
-        className={`min-h-[44px] px-4 rounded-xl border text-body font-semibold uppercase tracking-wider transition-colors ${
-          confirmandoSaida
-            ? 'border-danger-line bg-danger-bg text-danger'
-            : 'border-line text-muted hover:text-ink'
-        }`}
+        onClick={onClose}
+        className="min-h-[44px] px-4 rounded-xl border border-line text-body font-semibold uppercase tracking-wider text-muted hover:text-ink transition-colors"
       >
-        {ehLaser ? 'Fechar' : 'Cancelar'}
+        Cancelar
       </button>
       <button
         type="submit"
         form="form-procedimento"
-        hidden={ehLaser}
         disabled={cropSource !== null || isSaving}
         className="min-h-[44px] px-6 rounded-xl bg-brand text-white text-body font-semibold uppercase tracking-widest shadow-xs active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
       >
@@ -729,205 +704,21 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   );
 
   return (
-    /* O modo laser precisa de largura: manequim de um lado, painel de campos do outro, e ainda
-       o anel de botões em volta. Nos 560px do painel padrão não sobra espaço para nada disso. */
+    /* O mapa de áreas precisa de largura: a foto de um lado, o painel da área do outro, e ainda o
+       anel de botões em volta. Nos 560px do painel padrão não sobra espaço para nada disso. */
     <SidePanel
       aberto={isOpen}
-      onFechar={handleFechar}
+      onFechar={onClose}
       titulo={procedureToEdit ? 'Editar procedimento' : 'Novo procedimento'}
       sobretitulo="Cadastro & gestão"
-      largura={ehLaser ? 'larga' : 'padrao'}
+      largura={exigeSelecaoDeArea ? 'mapa' : 'padrao'}
       bloqueado={isSaving}
-      /* Foto adicionada e área desenhada não passam por `input`/`change`. */
-      alterado={images.length > 0 || temRascunhoNaoAplicado}
+      /* Foto adicionada, vista e área desenhada não passam por `input`/`change`. */
+      alterado={images.length > 0 || (exigeSelecaoDeArea && (areasDoMapa.length > 0 || areaEmEdicao))}
       rodape={rodape}
     >
       <div id="procedure-form-modal">
         <form id="form-procedimento" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
-          {/* ==========================================
-              MODO LASER — o mapa corporal substitui a entrada normal do formulário.
-              A ordem é a do fluxo pedido: categoria → destacar a área → nome → demais dados.
-              ========================================== */}
-          {ehLaser && (
-            <div className="space-y-4">
-              {!mostrarTodosCampos && (
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-ink mb-1">Categoria</label>
-                    <select
-                      value={category}
-                      onChange={(e) => handleCategoriaChange(e.target.value)}
-                      className="w-full px-3 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                    >
-                      {allCategories.map((cat, idx) => (
-                        <option key={idx} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <p className="text-body text-muted pb-2 flex-1">
-                    Esta categoria abre o mapa corporal. Destaque a região no manequim para liberar
-                    os campos do procedimento.
-                  </p>
-                </div>
-              )}
-
-              {areaAplicada && (
-                <p className="text-[12px] text-ok bg-ok-bg border border-[#C8E6C9] rounded-sm px-3 py-2 flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5" />
-                  <strong>{areaAplicada}</strong> aplicada ao mapa. Destaque a próxima área.
-                </p>
-              )}
-
-              {errors.laser && (
-                <p className="text-[12px] text-red-600 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {errors.laser}
-                </p>
-              )}
-
-              <LaserAreaEditor
-                procedures={allProcedures}
-                clinic={clinic || ({} as ClinicProfile)}
-                procedimentoEmEdicao={procedimentoLaserAlvo || procedureToEdit}
-                laserAreas={laserAreas}
-                onLaserAreasChange={setLaserAreas}
-                onSelecionarProcedimento={handleSelecionarProcedimentoDoMapa}
-                onAbrirConfiguracoes={onAbrirConfiguracoes}
-              >
-                <div className="bg-white/70 border border-white/80 rounded-sm p-4 space-y-3">
-                  {procedimentoLaserAlvo && (
-                    <p className="text-body text-warn bg-warn-bg border border-[#F0DCB4] rounded-xs px-2.5 py-1.5 leading-snug">
-                      Desenhando a área de um procedimento que já existe. O preço cadastrado foi
-                      mantido.
-                    </p>
-                  )}
-
-                  <div>
-                    <label className="block text-body font-medium text-ink mb-1">
-                      Nome do procedimento *
-                    </label>
-                    <input
-                      type="text"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Ex: Virilha Completa"
-                      className={`w-full px-3 py-2 rounded-sm bg-white border text-xs text-ink focus:outline-hidden focus:border-brand ${
-                        errors.title ? 'border-red-400' : 'border-gray-200'
-                      }`}
-                    />
-                    {errors.title && (
-                      <p className="text-label text-red-600 mt-1">{errors.title}</p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-body font-medium text-ink mb-1">
-                        Valor (R$) *
-                      </label>
-                      <input
-                        type="number"
-                        value={price}
-                        onChange={(e) => setPrice(e.target.value)}
-                        min="0"
-                        step="0.01"
-                        className={`w-full px-3 py-2 rounded-sm bg-white border text-xs text-ink focus:outline-hidden focus:border-brand ${
-                          errors.price ? 'border-red-400' : 'border-gray-200'
-                        }`}
-                      />
-                      {errors.price && (
-                        <p className="text-label text-red-600 mt-1">{errors.price}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-body font-medium text-ink mb-1">
-                        Promocional
-                      </label>
-                      <input
-                        type="number"
-                        value={promotionalPrice}
-                        onChange={(e) => setPromotionalPrice(e.target.value)}
-                        min="0"
-                        step="0.01"
-                        className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-body font-medium text-ink mb-1">
-                      Observação de preço
-                    </label>
-                    <input
-                      type="text"
-                      value={priceNote}
-                      onChange={(e) => setPriceNote(e.target.value)}
-                      placeholder="por sessão"
-                      className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-body font-medium text-ink mb-1">
-                      Duração
-                    </label>
-                    <input
-                      type="text"
-                      value={duration}
-                      onChange={(e) => setDuration(e.target.value)}
-                      placeholder="20 min"
-                      className="w-full px-3 py-2 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
-                    />
-                  </div>
-
-                  <CampoMaisDeUmaSessao
-                    marcado={maisDeUmaSessao}
-                    quantidade={sessoesInclusas}
-                    onMarcar={marcarMaisDeUmaSessao}
-                    onQuantidade={setSessoesInclusas}
-                    inputClassName="px-2.5 py-1.5 rounded-sm bg-white border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={handleAplicarArea}
-                    disabled={isSaving}
-                    className="w-full px-4 py-2.5 rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-widest hover:bg-brand-hover active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:active:scale-100"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {savingStatus || 'Aplicando...'}
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4" />
-                        Aplicar
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setMostrarTodosCampos((v) => !v)}
-                    className="w-full text-body text-brand hover:text-brand-hover font-medium underline underline-offset-2"
-                  >
-                    {mostrarTodosCampos
-                      ? 'Ocultar os demais campos'
-                      : 'Mostrar todos os campos do cadastro'}
-                  </button>
-
-                  <p className="text-label text-muted leading-snug">
-                    Descrição, contraindicações, recuperação e fotos vêm dos padrões da categoria
-                    quando ficam em branco — preencha só o que for diferente nesta área.
-                  </p>
-                </div>
-              </LaserAreaEditor>
-            </div>
-          )}
-
-          {(!ehLaser || mostrarTodosCampos) && (
-            <>
           {/* Section 1: Basic Information */}
           <div className="space-y-4">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
@@ -951,6 +742,51 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 {errors.title && <p className="text-xs text-red-600 mt-1">{errors.title}</p>}
               </div>
 
+              {/* Logo abaixo do nome: é a primeira decisão sobre o procedimento — vendido inteiro
+                  ou por área — e muda o que o resto do formulário pede. */}
+              <div className="sm:col-span-2 space-y-4">
+                <label className="flex items-start gap-2.5 cursor-pointer bg-card px-3.5 py-2.5 rounded-sm border border-white/80 hover:border-brand/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={exigeSelecaoDeArea}
+                    onChange={(e) => marcarExigeSelecaoDeArea(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 accent-brand"
+                  />
+                  <span>
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+                      <Layers className="w-3.5 h-3.5 text-brand" />
+                      Exige seleção de área
+                    </span>
+                    <span className="block text-body text-muted mt-0.5 leading-snug">
+                      Para procedimentos vendidos por área — depilação a laser, botox por região.
+                      Você envia as fotos, marca as áreas com nome e valor, e a paciente e o
+                      orçamento escolhem no mapa.
+                    </span>
+                    {!exigeSelecaoDeArea && areasDoMapa.length > 0 && (
+                      <span className="block text-body text-warn mt-1 leading-snug">
+                        {areasDoMapa.length === 1
+                          ? 'A área cadastrada sai do procedimento ao salvar.'
+                          : `As ${areasDoMapa.length} áreas cadastradas saem do procedimento ao salvar.`}{' '}
+                        Marque de novo para mantê-las.
+                      </span>
+                    )}
+                  </span>
+                </label>
+
+                {exigeSelecaoDeArea && (
+                  <MapaDeAreasEditor
+                    vistas={vistasDoMapa}
+                    onVistasChange={setVistasDoMapa}
+                    areas={areasDoMapa}
+                    onAreasChange={setAreasDoMapa}
+                    onEmEdicaoChange={setAreaEmEdicao}
+                    paraConverter={paraConverter}
+                    onConverter={handleConverter}
+                    erro={errors.mapa}
+                  />
+                )}
+              </div>
+
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Subtítulo / Tagline de Destaque
@@ -972,7 +808,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   <div className="flex gap-2">
                     <select
                       value={category}
-                      onChange={(e) => handleCategoriaChange(e.target.value)}
+                      onChange={(e) => setCategory(e.target.value)}
                       className="flex-1 px-3 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                     >
                       {allCategories.map((cat, idx) => (
@@ -1165,7 +1001,25 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               Valores e Investimento
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {exigeSelecaoDeArea && (
+              <p className="text-body text-muted bg-card border border-white/80 rounded-sm px-3.5 py-2.5 leading-relaxed">
+                O valor de cada área é definido no mapa, acima.{' '}
+                {areasDoMapa.length > 0 && (
+                  <>
+                    No catálogo aparece{' '}
+                    <strong className="text-ink">
+                      {areasDoMapa.length > 1 ? 'a partir de ' : ''}
+                      {formatBRL(Math.min(...areasDoMapa.map(precoDaArea)))}
+                    </strong>
+                    {areasDoMapa.length > 1 ? ' — a área mais em conta.' : '.'}
+                  </>
+                )}
+              </p>
+            )}
+
+            <div className={`grid grid-cols-1 gap-4 ${exigeSelecaoDeArea ? '' : 'sm:grid-cols-3'}`}>
+              {!exigeSelecaoDeArea && (
+              <>
               <div>
                 <label className="block text-xs font-medium text-ink mb-1">
                   Valor Normal (R$) *
@@ -1195,6 +1049,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
+              </>
+              )}
 
               <div>
                 <label className="block text-xs font-medium text-ink mb-1">
@@ -1210,7 +1066,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               </div>
             </div>
 
-            {/* Checkbox "A partir de" */}
+            {/* Checkbox "A partir de" — com mapa, ele é decidido pelas áreas. */}
+            {!exigeSelecaoDeArea && (
             <div className="bg-card border border-white/80 rounded-sm p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <label 
                 htmlFor="procedure-is-starting-price" 
@@ -1244,6 +1101,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 </div>
               )}
             </div>
+            )}
           </div>
 
           {/* Section 3: Clinical Specs */}
@@ -1308,6 +1166,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 />
               </div>
 
+              {/* Com mapa, as sessões do pacote são de cada área. */}
+              {!exigeSelecaoDeArea && (
               <div className="sm:col-span-2">
                 <span className="block text-xs font-medium text-ink mb-2">Sessões do pacote</span>
                 <CampoMaisDeUmaSessao
@@ -1318,6 +1178,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   inputClassName="px-3 py-1.5 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>
+              )}
             </div>
 
             {/* Preparo da paciente. Diferente de "Contraindicações": aquilo é motivo para não
@@ -1349,7 +1210,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Descreva detalhadamente a técnica, substâncias utilizadas, objetivos e resultados esperados..."
                 className="w-full px-3.5 py-2.5 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                required
+                required={!isLaserCategory(customCategory.trim() || category)}
               />
               {errors.description && <p className="text-xs text-red-600 mt-1">{errors.description}</p>}
             </div>
@@ -1645,10 +1506,6 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               </p>
             )}
           </div>
-
-            </>
-          )}
-
         </form>
       </div>
 

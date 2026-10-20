@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Procedure, ClinicProfile } from '../types';
 import { resolverCamposDoLaser } from '../utils/laserAreas';
+import { ListaDeAreasEValores } from './laser/ListaDeAreasEValores';
 import { formatBRL } from '../utils/formatters';
 import { getCatalogPrice, formatDiscountPercent } from '../utils/catalogPricing';
 import { getProcedureDoctors } from '../utils/doctorHelpers';
@@ -175,6 +176,15 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {procedure.exigeSelecaoDeArea && (procedure.areasDoMapa?.length || 0) > 0 && (
+              <div className="mt-4 pt-3 border-t border-[rgba(26,26,26,.07)]">
+                <p className="text-[11px] font-semibold text-muted mb-2 uppercase tracking-wider">
+                  Áreas e valores
+                </p>
+                <ListaDeAreasEValores areas={procedure.areasDoMapa!} limite={16} compacto />
               </div>
             )}
 

@@ -31,7 +31,7 @@ import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
-import { montarEspelhoPublico } from '../../utils/laserAreas';
+import { montarMapasPublicos } from '../../utils/laserAreas';
 import { fichasParaEscolher, isLaserCategory } from '../../utils/templateMatching';
 import { ClipboardList, Layers } from 'lucide-react';
 
@@ -91,13 +91,13 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
   const templatesVisiveis = useMemo(() => fichasParaEscolher(templates), [templates]);
 
   /**
-   * Mapa corporal montado do catálogo em memória — esta tela é autenticada e lê `procedures`
+   * Mapas de áreas montados do catálogo em memória — esta tela é autenticada e lê `procedures`
    * direto, sem passar pelo espelho público. É a mesma função que gera o espelho, de propósito:
    * a ficha impressa aqui precisa sair idêntica à que a paciente vê pelo link.
    */
-  const mapaDoLaser = useMemo(
-    () => montarEspelhoPublico(catalogProcedures, clinicProfile),
-    [catalogProcedures, clinicProfile]
+  const mapasDeAreas = useMemo(
+    () => montarMapasPublicos(catalogProcedures).mapas,
+    [catalogProcedures]
   );
 
   const [activeTab, setActiveTab] = useState<AnamnesisTab>('records');
@@ -309,7 +309,7 @@ export const AnamnesisModule: React.FC<AnamnesisModuleProps> = ({
           onSaveRecord={saveAnamnesisRecord}
           orientationImage={resolveOrientationImage(templateDoRegistroAberto)}
           consentSections={resolveConsentTerm(templateDoRegistroAberto)}
-          mapaCorporal={mapaDoLaser}
+          mapasDeAreas={mapasDeAreas}
         />
         );
       })()}

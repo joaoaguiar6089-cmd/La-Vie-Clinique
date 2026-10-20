@@ -5,7 +5,6 @@ import { ProcedureDetailModal } from './components/ProcedureDetailModal';
 import { ProcedureFormModal } from './components/ProcedureFormModal';
 import { ShareExportModal } from './components/ShareExportModal';
 import { ClinicSettingsModal } from './components/ClinicSettingsModal';
-import { LaserAreasManagerModal } from './components/laser/LaserAreasManagerModal';
 import { AnamnesisModule, AnamnesisOpenRequest } from './components/anamnesis/AnamnesisModule';
 import { PatientsModule } from './components/patients/PatientsModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
@@ -42,7 +41,7 @@ import {
   PedidoDeNavegacao,
   Quote,
 } from './types';
-import { mapearTemplatesPorProcedimento, isLaserCategory } from './utils/templateMatching';
+import { mapearTemplatesPorProcedimento } from './utils/templateMatching';
 import { sementeDaVisita, sementeDoAgendamento } from './utils/passosDaJornada';
 import { hojeISO } from './utils/attendances';
 import type { AlvoDoPasso } from './components/linhaDoTempo/PainelDoEvento';
@@ -57,7 +56,8 @@ import {
   saveProcedureToDb,
   deleteProcedureFromDb,
   saveClinicProfileToDb,
-  publicarMapaCorporalDoLaser,
+  publicarMapasDeAreas,
+  arquivarProcedimentosNoDb,
   publicarEspelhoPublicoSeMudou,
   salvarEnderecoPublicoDaClinica,
   replaceAllProceduresWithOfficialPdfCatalog,
@@ -189,7 +189,6 @@ function MainCatalogApp() {
   const [selectedProcedureForEdit, setSelectedProcedureForEdit] = useState<Procedure | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [isLaserAreasOpen, setIsLaserAreasOpen] = useState(false);
   const [singleProcedureToExport, setSingleProcedureToExport] = useState<Procedure | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastTone, setToastTone] = useState<'ok' | 'erro'>('ok');
@@ -696,14 +695,14 @@ function MainCatalogApp() {
         }
       });
 
-      // Uma área aplicada (ou removida) muda o mapa que a paciente vê na ficha de anamnese, então
-      // o espelho público acompanha o salvamento. Só quando o procedimento é de laser: um botox
-      // salvo não tem por que reescrever um documento de 10 KB.
-      if (isLaserCategory(salvo.category) || isLaserCategory(anterior?.category)) {
+      // Uma área nova (ou removida) muda o mapa que a paciente vê na ficha de anamnese, então o
+      // espelho público acompanha o salvamento. Só quando o procedimento tem ou tinha mapa: um
+      // botox vendido inteiro não tem por que reescrever um documento de 10 KB.
+      if (salvo.exigeSelecaoDeArea || anterior?.exigeSelecaoDeArea) {
         const catalogoAtualizado = procedures.some((p) => p.id === salvo.id)
           ? procedures.map((p) => (p.id === salvo.id ? salvo : p))
           : [...procedures, salvo];
-        await publicarMapaCorporalDoLaser(catalogoAtualizado, clinic);
+        await publicarMapasDeAreas(catalogoAtualizado);
       }
 
       setSyncStatus('synced');
@@ -719,6 +718,29 @@ function MainCatalogApp() {
 
       const motivo = err instanceof Error ? err.message : 'Erro desconhecido ao gravar na nuvem.';
       showToast(`Não foi possível salvar "${procedure.title}". ${motivo}`, 'erro');
+      throw err;
+    }
+  };
+
+  /**
+   * Tira do catálogo os procedimentos de área antigos que viraram áreas de `emFavorDe`.
+   *
+   * Arquiva, não apaga — ver `arquivarProcedimentosNoDb`. Lança quando o servidor não confirma,
+   * para o formulário avisar e deixar tentar de novo.
+   */
+  const handleArquivarProcedimentos = async (ids: string[], emFavorDe: string) => {
+    setSyncStatus('syncing');
+    try {
+      await arquivarProcedimentosNoDb(ids, emFavorDe);
+      setProcedures((prev) => prev.filter((p) => !ids.includes(p.id)));
+      setSyncStatus('synced');
+      showToast(
+        ids.length === 1
+          ? 'O procedimento antigo virou área e saiu do catálogo.'
+          : `Os ${ids.length} procedimentos antigos viraram áreas e saíram do catálogo.`
+      );
+    } catch (err) {
+      setSyncStatus('error');
       throw err;
     }
   };
@@ -742,6 +764,10 @@ function MainCatalogApp() {
 
           // Delete from Firebase Firestore
           await deleteProcedureFromDb(id);
+          // Um procedimento com mapa que sai do catálogo precisa sair da ficha da paciente também.
+          if (proc.exigeSelecaoDeArea) {
+            await publicarMapasDeAreas(procedures.filter((p) => p.id !== id));
+          }
           setSyncStatus('synced');
           showToast(`Procedimento "${proc.title}" removido com sucesso.`);
         } catch (err) {
@@ -768,6 +794,9 @@ function MainCatalogApp() {
       ...procedure,
       id: `proc-${Date.now()}`,
       title: `${procedure.title} (Cópia)`,
+      // Áreas com ID próprio: fichas e orçamentos acham a área pelo ID, e duas iguais em
+      // procedimentos diferentes deixariam a referência ambígua.
+      areasDoMapa: procedure.areasDoMapa?.map((a) => ({ ...a, id: crypto.randomUUID() })),
       createdAt: new Date().toISOString(),
       order: (procedure.order || 0) + 1,
     };
@@ -815,19 +844,13 @@ function MainCatalogApp() {
       const clinicaSalva = await saveClinicProfileToDb(updatedClinic);
       setClinic(clinicaSalva);
 
-      // O espelho público carrega as URLs dos manequins, então ele acompanha o salvamento do
-      // perfil. Chamada explícita, a partir da ação da equipe — nunca em carregamento de tela.
-      await publicarMapaCorporalDoLaser(procedures, clinicaSalva);
-
       setSyncStatus('synced');
       showToast('Dados da clínica e equipe médica sincronizados no Firebase!');
     } catch (err) {
       console.error('Error saving clinic to Firestore:', err);
       setSyncStatus('error');
-      // Desfaz o estado otimista: ao contrário do resto do sistema, aqui a falha pode ser a recusa
-      // deliberada de gravar um manequim que não subiu para o Storage. Manter a versão otimista
-      // deixaria a base64 de 500 KB viva na tela e no localStorage — exatamente o que a recusa
-      // existe para impedir — sob um aviso de "salvo localmente" que seria mentira.
+      // Desfaz o estado otimista: manter a versão otimista deixaria na tela e no localStorage, sob
+      // um aviso de "salvo localmente" que seria mentira, um perfil que o servidor recusou.
       setClinic(anterior);
       showToast(
         err instanceof Error && err.message
@@ -1004,7 +1027,6 @@ function MainCatalogApp() {
                 onSave={handleSaveClinic}
                 currentUserUid={authUser?.uid}
                 isAdminUser={isAdminUser}
-                onAbrirMapaDeAreas={() => setIsLaserAreasOpen(true)}
               />
             ) : currentView === 'agenda' ? (
               <AgendaModule
@@ -1232,11 +1254,7 @@ function MainCatalogApp() {
           availableDoctors={clinic.professionals || []}
           allProcedures={procedures}
           clinic={clinic}
-          onAbrirConfiguracoes={() => {
-            setIsFormModalOpen(false);
-            setSelectedProcedureForEdit(null);
-            navegar({ view: 'settings' });
-          }}
+          onArquivarProcedimentos={handleArquivarProcedimentos}
         />
 
         {/* 3. Export / Share Modal (PDF, Image, WhatsApp, QR) */}
@@ -1250,17 +1268,6 @@ function MainCatalogApp() {
           clinic={clinic}
           categories={categories}
           singleProcedureToExport={singleProcedureToExport}
-        />
-
-        {/* Gestão das áreas do laser — conferir o mapa inteiro, reposicionar botões, remover áreas.
-            Mora aqui, e não dentro das Configurações, porque precisa do catálogo e da gravação de
-            procedimento, que são de outro módulo. */}
-        <LaserAreasManagerModal
-          isOpen={isLaserAreasOpen}
-          onClose={() => setIsLaserAreasOpen(false)}
-          procedures={procedures}
-          clinic={clinic}
-          onSalvarProcedimento={handleSaveProcedure}
         />
 
         {/* 5. Confirmação de ações destrutivas */}

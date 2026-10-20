@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  AreaDoProcedimento,
   ClinicProfile,
   ConsumoPadrao,
   MaterialUsado,
   Patient,
+  PatientGender,
   Procedure,
   ProdutoDeEstoque,
   Quote,
@@ -24,6 +26,7 @@ import {
 import {
   criarOpcaoPagamento,
   montarItemAvulso,
+  montarItemDaArea,
   montarItemDoProcedimento,
   montarItemDoProduto,
   montarSnapshotClinica,
@@ -43,6 +46,7 @@ import {
   tirarConsumoDoItem,
 } from '../../utils/estoque';
 import { isLaserCategory } from '../../utils/templateMatching';
+import { chaveDaRef, procedimentoTemMapa } from '../../utils/laserAreas';
 import { procedimentoDoAtendimento } from '../../utils/evaluations';
 
 /** `input type="date"` fala YYYY-MM-DD; o documento guarda ISO. */
@@ -125,8 +129,11 @@ export const useOrcamentoEmEdicao = ({
   const [opcoesPagamento, setOpcoesPagamento] = useState<QuotePaymentOption[]>([]);
   const [negociacao, setNegociacao] = useState('');
   const [observacoes, setObservacoes] = useState('');
-  const [mapaAberto, setMapaAberto] = useState(false);
-  /** Item de laser que a profissional tentou desmarcar mas que já foi editado — pede confirmação. */
+  /** `id` do procedimento cujo mapa de áreas está aberto. */
+  const [mapaAberto, setMapaAberto] = useState<string | null>(null);
+  /** Foto do mapa — de mulher ou de homem. Vai gravada no orçamento, para o PDF sair igual. */
+  const [sexoDoMapa, setSexoDoMapa] = useState<PatientGender>('feminino');
+  /** Item de área que a profissional tentou desmarcar mas que já foi editado — pede confirmação. */
   const [confirmarRemocao, setConfirmarRemocao] = useState<QuoteItem | null>(null);
   /** Aviso de que a lista nasceu da ficha de anamnese da paciente. */
   const [avisoDaAnamnese, setAvisoDaAnamnese] = useState<{ quantidade: number; data: string } | null>(null);
@@ -172,6 +179,7 @@ export const useOrcamentoEmEdicao = ({
       setNegociacao(base.pagamento.negociacao || '');
       setObservacoes(base.observacoes || '');
       setMostrarMapaCorporal(base.mostrarMapaCorporal !== false);
+      setSexoDoMapa(base.sexoDoMapa || 'feminino');
     } else {
       const emissao = new Date().toISOString();
       setDataEmissao(emissao);
@@ -190,7 +198,9 @@ export const useOrcamentoEmEdicao = ({
       setNegociacao('');
       setObservacoes('');
       setMostrarMapaCorporal(true);
+      setSexoDoMapa(initialPatient?.genero || 'feminino');
     }
+    setMapaAberto(null);
     setErrors({});
     setAvisoDaAnamnese(null);
     setCustos({});
@@ -239,16 +249,21 @@ export const useOrcamentoEmEdicao = ({
           ? maisRecente.areasConfirmadas
           : maisRecente.areasSolicitadas || [];
 
+        // A área é achada pelo ID em qualquer procedimento com mapa — inclusive a de uma ficha
+        // antiga, de quando cada área era um procedimento: a conversão manteve o ID.
         const doCatalogo = refs
-          .map((r) => procedures.find((p) => p.id === r.procedureId))
-          .filter((p): p is Procedure => !!p);
+          .map((r) => acharArea(chaveDaRef(r)))
+          .filter((a): a is { procedimento: Procedure; area: AreaDoProcedimento } => !!a);
 
         if (doCatalogo.length === 0) return;
 
         setItens((prev) => {
           if (prev.length > 0) return prev; // Alguém já mexeu enquanto a leitura voltava.
-          return doCatalogo.map((p) => montarItemDoProcedimento(p, professionals));
+          return doCatalogo.map(({ procedimento, area }) =>
+            montarItemDaArea(procedimento, area, professionals)
+          );
         });
+        if (maisRecente.pacienteGenero) setSexoDoMapa(maisRecente.pacienteGenero);
         setAvisoDaAnamnese({
           quantidade: doCatalogo.length,
           data: maisRecente.dataAtendimento || maisRecente.createdAt,
@@ -348,17 +363,30 @@ export const useOrcamentoEmEdicao = ({
     [itens, temDescontoCombinado, descontoCombinadoPercentual, pagamento]
   );
 
-  /** Todas as áreas de laser contam como um só procedimento aqui. Ver `quoteCalc`. */
+  /** As áreas de um mesmo procedimento contam como um só aqui. Ver `quoteCalc`. */
   const procedimentosParaDesconto = useMemo(() => contarProcedimentosParaDesconto(itens), [itens]);
 
-  /** `procedureId` dos itens de laser já na lista — o que o mapa desenha como selecionado. */
+  /**
+   * A área que um item vende — `areaId` nos de agora; nos de antes da conversão, o `procedureId`
+   * do procedimento de laser que era a área (a conversão manteve o ID).
+   */
+  const chaveDaAreaDoItem = (item: QuoteItem): string | undefined =>
+    item.areaId || (item.procedureId && isLaserCategory(item.categoria) ? item.procedureId : undefined);
+
+  /** A área e o procedimento dono dela, pelo ID da área. */
+  const acharArea = (areaId: string) => {
+    for (const procedimento of procedures) {
+      if (!procedimentoTemMapa(procedimento)) continue;
+      const area = procedimento.areasDoMapa!.find((a) => a.id === areaId);
+      if (area) return { procedimento, area };
+    }
+    return undefined;
+  };
+
+  /** `id` das áreas já na lista — o que o mapa desenha como selecionado. */
   const areasNoOrcamento = useMemo(
     () =>
-      new Set(
-        itens
-          .filter((i) => i.procedureId && isLaserCategory(i.categoria))
-          .map((i) => i.procedureId as string)
-      ),
+      new Set(itens.map(chaveDaAreaDoItem).filter((chave): chave is string => !!chave)),
     [itens]
   );
 
@@ -366,19 +394,25 @@ export const useOrcamentoEmEdicao = ({
    * Acrescenta um procedimento à lista.
    *
    * Duplicar é permitido de propósito no catálogo geral — o mesmo procedimento pode entrar duas
-   * vezes, em regiões diferentes. **Em depilação a laser essa justificativa não existe: a região
-   * já É o procedimento**, e "Axilas" duas vezes é cobrar axilas duas vezes. Por isso o laser é
-   * idempotente: já está na lista, não entra de novo, só acende no mapa.
-   *
-   * O efeito colateral bom é que a lista e o mapa viram o mesmo estado, e o controle vivo passa a
-   * funcionar nos dois sentidos — digitar "Axilas" na busca acende a área no manequim.
+   * vezes, em regiões diferentes. Um procedimento vendido por área não entra assim: a busca abre
+   * o mapa dele (ver `addArea`).
    */
   const addProcedure = (procedure: Procedure) =>
+    setItens((prev) => [...prev, montarItemDoProcedimento(procedure, professionals)]);
+
+  /**
+   * Acrescenta uma área de um procedimento vendido por área — e é **idempotente**.
+   *
+   * Aqui a justificativa de duplicar não existe: a região já É o item, e "Axilas" duas vezes é
+   * cobrar axilas duas vezes. Já está na lista, não entra de novo, só acende no mapa.
+   *
+   * O efeito colateral bom é que a lista e o mapa viram o mesmo estado, e o controle vivo passa a
+   * funcionar nos dois sentidos — digitar "Axilas" na busca acende a área no mapa.
+   */
+  const addArea = (procedure: Procedure, area: AreaDoProcedimento) =>
     setItens((prev) => {
-      if (isLaserCategory(procedure.category) && prev.some((i) => i.procedureId === procedure.id)) {
-        return prev;
-      }
-      return [...prev, montarItemDoProcedimento(procedure, professionals)];
+      if (prev.some((i) => chaveDaAreaDoItem(i) === area.id)) return prev;
+      return [...prev, montarItemDaArea(procedure, area, professionals)];
     });
 
   /**
@@ -393,22 +427,25 @@ export const useOrcamentoEmEdicao = ({
    * edita, então o item nunca os altera.
    */
   const itemFoiEditado = (item: QuoteItem): boolean => {
+    const chave = chaveDaAreaDoItem(item);
+    const daArea = chave ? acharArea(chave)?.area : undefined;
     const doCatalogo = procedures.find((p) => p.id === item.procedureId);
-    return (
-      item.temDesconto ||
-      !!item.calculadoPorConsumo ||
-      itemSessoes(item) !== (doCatalogo ? sessoesDoProcedimento(doCatalogo) : 1)
-    );
+    const sessoesDoCadastro = daArea
+      ? sessoesDoProcedimento(daArea)
+      : doCatalogo
+        ? sessoesDoProcedimento(doCatalogo)
+        : 1;
+    return item.temDesconto || !!item.calculadoPorConsumo || itemSessoes(item) !== sessoesDoCadastro;
   };
 
   const removeItem = (id: string) => setItens((prev) => prev.filter((i) => i.id !== id));
 
-  const alternarAreaDoLaser = (procedureId: string) => {
-    const existente = itens.find((i) => i.procedureId === procedureId);
+  const alternarAreaDoLaser = (areaId: string) => {
+    const existente = itens.find((i) => chaveDaAreaDoItem(i) === areaId);
 
     if (!existente) {
-      const procedimento = procedures.find((p) => p.id === procedureId);
-      if (procedimento) addProcedure(procedimento);
+      const achada = acharArea(areaId);
+      if (achada) addArea(achada.procedimento, achada.area);
       return;
     }
 
@@ -583,6 +620,8 @@ export const useOrcamentoEmEdicao = ({
       // Só grava quando é `false`: o padrão é mostrar, e um campo a menos no documento é um campo
       // a menos de peso na cota por gravação.
       mostrarMapaCorporal: mostrarMapaCorporal ? undefined : false,
+      // Só quando há área no orçamento, e só quando não é o padrão — mesmo motivo do interruptor.
+      sexoDoMapa: areasNoOrcamento.size > 0 && sexoDoMapa === 'masculino' ? 'masculino' : undefined,
       clinica: montarSnapshotClinica(clinic),
       total: totais.total,
     };
@@ -624,6 +663,8 @@ export const useOrcamentoEmEdicao = ({
     setObservacoes,
     mapaAberto,
     setMapaAberto,
+    sexoDoMapa,
+    setSexoDoMapa,
     confirmarRemocao,
     setConfirmarRemocao,
     avisoDaAnamnese,
@@ -641,6 +682,7 @@ export const useOrcamentoEmEdicao = ({
     procedimentosParaDesconto,
     areasNoOrcamento,
     addProcedure,
+    addArea,
     addProduto,
     addItemAvulso,
     removeItem,
