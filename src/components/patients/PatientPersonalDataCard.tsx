@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useState } from 'react';
-import { AlertCircle, Check, ChevronDown, IdCard, Pencil, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, IdCard, Merge, Pencil, X } from 'lucide-react';
 import { Patient } from '../../types';
 import { formatCpf, formatDateOnly } from '../../utils/formatters';
 import { PatientFields, PatientFormValues, formToPatient, patientToForm } from './PatientFields';
@@ -7,6 +7,8 @@ import { PatientFields, PatientFormValues, formToPatient, patientToForm } from '
 interface PatientPersonalDataCardProps {
   patient: Patient;
   onSalvar: (patient: Patient) => Promise<void>;
+  /** "Juntar com outro cadastro": ela tem dois, e os dados se completam um no outro. */
+  onJuntar?: () => void;
 }
 
 /** Rótulo + valor no modo leitura. Campo vazio vira "Não informado", nunca um buraco na grade. */
@@ -39,6 +41,7 @@ const Campo: React.FC<{ rotulo: string; valor?: string; className?: string }> = 
 export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = ({
   patient,
   onSalvar,
+  onJuntar,
 }) => {
   const conteudoId = useId();
   const [aberto, setAberto] = useState(false);
@@ -159,14 +162,26 @@ export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = (
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={() => setEditando(true)}
-              className="flex items-center gap-1.5 min-h-[40px] px-3 rounded-sm bg-white/70 border border-gray-200 text-xs font-medium text-gray-600 hover:text-brand hover:border-brand/40 transition-colors"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              Editar
-            </button>
+            <>
+              {onJuntar && (
+                <button
+                  type="button"
+                  onClick={onJuntar}
+                  className="flex items-center gap-1.5 min-h-[40px] px-3 rounded-sm text-xs font-medium text-gray-500 hover:text-brand transition-colors"
+                >
+                  <Merge className="w-3.5 h-3.5" />
+                  Juntar com outro cadastro
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setEditando(true)}
+                className="flex items-center gap-1.5 min-h-[40px] px-3 rounded-sm bg-white/70 border border-gray-200 text-xs font-medium text-gray-600 hover:text-brand hover:border-brand/40 transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Editar
+              </button>
+            </>
           )}
         </div>
       </div>

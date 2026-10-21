@@ -47,13 +47,36 @@ export interface LinhaDePaciente {
   totalAtendimentos: number;
 }
 
-/** Normaliza para comparar nomes digitados à mão com nomes do cadastro (acento e caixa não contam). */
+/**
+ * Normaliza para comparar nomes digitados à mão com nomes do cadastro (acento, caixa e espaço
+ * repetido não contam).
+ */
 export const chaveDoNome = (nome: string): string =>
   (nome || '')
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ');
+
+/**
+ * "Este documento é desta pessoa?" — a regra da página da paciente, e por isso também a da junção
+ * de cadastros, que precisa mover exatamente o que a página mostra.
+ *
+ * O vínculo por id resolve o caso normal; o nome cobre os documentos que não têm a quem apontar —
+ * o orçamento avulso, emitido antes de o cadastro existir, e a ficha cujo cadastro foi excluído
+ * depois. Documento que aponta para **outro** cadastro não entra, mesmo com o nome igual: é de
+ * uma homônima.
+ */
+export const pertenceA = (
+  paciente: Pick<Patient, 'id' | 'nome'>,
+  idsCadastrados: Set<string>
+): ((doc: { pacienteId?: string; pacienteNome?: string }) => boolean) => {
+  const chave = chaveDoNome(paciente.nome);
+  return (doc) =>
+    doc.pacienteId === paciente.id ||
+    (!idsCadastrados.has(doc.pacienteId || '') && chaveDoNome(doc.pacienteNome || '') === chave);
+};
 
 /**
  * Id de quem ainda não tem cadastro — "bruna carvalho" vira "pat-bruna-carvalho".

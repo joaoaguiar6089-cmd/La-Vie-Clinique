@@ -18,6 +18,8 @@ import { isDuplicateIdentQuestion } from '../../utils/anamnesisQuestions';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
 import { PerguntaAPergunta, PerguntaDoFluxo } from './PerguntaAPergunta';
 import { BotaoPrincipal } from '../common/Tinta';
+import { AvisoDeCadastroParecido } from '../patients/AvisoDeCadastroParecido';
+import { cadastrosParecidos } from '../../utils/pacientesRepetidos';
 import { OrientationImageCard } from './OrientationImageCard';
 import { ConsentTermView } from './ConsentTermView';
 import { PhotoAnnotationEditor } from './PhotoAnnotationEditor';
@@ -215,6 +217,18 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
       }
     }
   }, [selectedPatientId, patientMode, patients, generalQuestions]);
+
+  /** "+ Novo paciente" com o nome, o telefone ou o CPF de quem já tem cadastro. */
+  const cadastrosDoNovo = useMemo(
+    () =>
+      patientMode === 'new'
+        ? cadastrosParecidos(
+            { nome: newPatientName, contato: newPatientPhone, cpf: newPatientCpf },
+            patients
+          )
+        : [],
+    [patientMode, newPatientName, newPatientPhone, newPatientCpf, patients]
+  );
 
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
   const currentGenero = patientMode === 'new' ? newPatientGender : selectedPatientGender;
@@ -731,6 +745,18 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                     if (errors['patient_gender']) setErrors((prev) => ({ ...prev, patient_gender: '' }));
                   }}
                   error={errors['patient_gender']}
+                />
+
+                {/* Usar o cadastro é trocar para "Paciente cadastrado" com ela escolhida — o que
+                    foi digitado aqui não é gravado. */}
+                <AvisoDeCadastroParecido
+                  className="sm:col-span-3"
+                  parecidos={cadastrosDoNovo}
+                  rotuloDaAcao="Usar este cadastro"
+                  onUsar={(p) => {
+                    setPatientMode('select');
+                    setSelectedPatientId(p.id);
+                  }}
                 />
               </div>
             )}

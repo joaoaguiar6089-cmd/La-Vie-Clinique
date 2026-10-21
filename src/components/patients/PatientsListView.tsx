@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowDownAZ, Clock, MessageCircle, Trash2, UserPlus, Users } from 'lucide-react';
+import { ArrowDownAZ, Clock, Merge, MessageCircle, Trash2, UserPlus, Users } from 'lucide-react';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
 import { formatDateShortYear } from '../../utils/formatters';
 import {
@@ -8,6 +8,7 @@ import {
   ordenarLinhas,
   ROTULO_DA_INTERACAO,
 } from '../../utils/patientsPanel';
+import { nomeCombina } from '../../utils/pacientesRepetidos';
 import { SkeletonLista } from '../common/Skeleton';
 import { AcaoDoMenu, Avatar, BotaoPilula, CampoDeBusca, MenuDeAcoes, TituloDaTela } from '../common/Tinta';
 
@@ -22,6 +23,11 @@ interface PatientsListViewProps {
   /** `nomeInicial` pré-preenche o nome no cadastro — usado quando a busca não achou ninguém. */
   onNovoPaciente: (nomeInicial?: string) => void;
   onExcluirPaciente: (linha: LinhaDePaciente) => void;
+  /** Quantos pares parecem ser a mesma pessoa — o quadro "possíveis cadastros repetidos". */
+  totalRepetidos: number;
+  onVerRepetidos: () => void;
+  /** "Juntar com outro cadastro", do "…" da linha. */
+  onJuntarPaciente: (linha: LinhaDePaciente) => void;
 }
 
 /**
@@ -41,6 +47,9 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
   onAbrirPaciente,
   onNovoPaciente,
   onExcluirPaciente,
+  totalRepetidos,
+  onVerRepetidos,
+  onJuntarPaciente,
 }) => {
   const [busca, setBusca] = useState('');
   const [ordem, setOrdem] = useState<OrdemDaLista>('alfabetica');
@@ -55,7 +64,8 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
       ? base
       : base.filter(
           (l) =>
-            l.nome.toLowerCase().includes(termo) ||
+            // Acento não conta: quem procura "heloise" acha a Heloíse, e não cadastra outra.
+            nomeCombina(termo, l.nome) ||
             (l.patient?.email || '').toLowerCase().includes(termo) ||
             (!!digitos && (l.contato || '').replace(/\D/g, '').includes(digitos))
         );
@@ -117,6 +127,26 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Some quando não há nada: os pares que a equipe disse que são pessoas diferentes não
+          contam, então zerar é possível e é o normal. */}
+      {totalRepetidos > 0 && (
+        <button
+          type="button"
+          onClick={onVerRepetidos}
+          className="flex items-center gap-3 rounded-[18px] bg-warn-bg border border-warn-line text-warn px-4 py-3 text-left"
+        >
+          <Merge className="w-5 h-5 shrink-0" />
+          <span className="flex-1 min-w-0 text-[14px] font-semibold">
+            {totalRepetidos === 1
+              ? '1 possível cadastro repetido'
+              : `${totalRepetidos} possíveis cadastros repetidos`}
+          </span>
+          <span aria-hidden className="text-[14px] font-semibold">
+            →
+          </span>
+        </button>
+      )}
 
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-sans text-[16px] font-bold text-ink">
@@ -189,6 +219,12 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
                 onClick: () => window.open(whatsAppUrl, '_blank', 'noopener,noreferrer'),
               });
             }
+            acoes.push({
+              rotulo: 'Juntar com outro cadastro',
+              icone: Merge,
+              descricao: 'Quando ela tem dois cadastros',
+              onClick: () => onJuntarPaciente(linha),
+            });
             // Só quem tem cadastro pode ser excluído: sem documento em `patients`, não há o que
             // apagar — o que existe é o orçamento, e ele se exclui no painel dele.
             if (!semCadastro) {

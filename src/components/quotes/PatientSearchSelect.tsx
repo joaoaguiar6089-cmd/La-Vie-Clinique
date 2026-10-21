@@ -1,6 +1,8 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { Search, X, UserCheck } from 'lucide-react';
 import { Patient } from '../../types';
+import { cadastrosParecidos, nomeCombina } from '../../utils/pacientesRepetidos';
+import { AvisoDeCadastroParecido } from '../patients/AvisoDeCadastroParecido';
 
 interface PatientSearchSelectProps {
   patients: Patient[];
@@ -13,6 +15,10 @@ interface PatientSearchSelectProps {
  * Busca por digitação sobre o cadastro de pacientes. Escolher da lista vincula o
  * `pacienteId`; digitar um nome que não está na lista vale como paciente avulso,
  * sem vínculo — que é o caso de quem ainda não fez cadastro.
+ *
+ * Nome digitado sem escolher da lista que bate com um cadastro ganha o aviso de cadastro
+ * parecido, com o vínculo a um toque. É o que evita a segunda Heloíse: na agenda, o nome solto
+ * vira um cadastro novo ao salvar.
  */
 export const PatientSearchSelect: React.FC<PatientSearchSelectProps> = ({
   patients,
@@ -35,18 +41,27 @@ export const PatientSearchSelect: React.FC<PatientSearchSelectProps> = ({
   }, [isOpen]);
 
   const matches = useMemo(() => {
-    const term = pacienteNome.trim().toLowerCase();
-    const base = term
+    const digitos = pacienteNome.replace(/\D/g, '');
+    // Acento não conta: "heloise" acha a Heloíse — antes não achava, e ela ganhava outro cadastro.
+    const base = pacienteNome.trim()
       ? patients.filter(
           (p) =>
-            p.nome.toLowerCase().includes(term) ||
-            (p.contato || '').replace(/\D/g, '').includes(term.replace(/\D/g, '') || ' ')
+            nomeCombina(pacienteNome, p.nome) ||
+            (!!digitos && (p.contato || '').replace(/\D/g, '').includes(digitos))
         )
       : patients;
     return base.slice(0, 30);
   }, [patients, pacienteNome]);
 
   const selecionado = pacienteId ? patients.find((p) => p.id === pacienteId) : undefined;
+
+  const parecidos = useMemo(
+    () =>
+      !pacienteId && pacienteNome.trim()
+        ? cadastrosParecidos({ nome: pacienteNome }, patients)
+        : [],
+    [patients, pacienteId, pacienteNome]
+  );
 
   return (
     <div ref={containerRef} className="relative">
@@ -93,6 +108,13 @@ export const PatientSearchSelect: React.FC<PatientSearchSelectProps> = ({
           <UserCheck className="w-3.5 h-3.5 text-ok" />
           Vinculado ao cadastro de {selecionado.nome}
         </p>
+      ) : parecidos.length > 0 && !isOpen ? (
+        <AvisoDeCadastroParecido
+          className="mt-1.5"
+          parecidos={parecidos}
+          rotuloDaAcao="Usar este cadastro"
+          onUsar={(p) => onSelect({ id: p.id, nome: p.nome, contato: p.contato })}
+        />
       ) : pacienteNome.trim() ? (
         <p className="mt-1 px-1 text-[13px] text-ink-soft">
           Paciente avulso — não ficará vinculado a um cadastro

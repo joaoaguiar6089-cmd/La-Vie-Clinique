@@ -265,7 +265,9 @@ export const PublicAnamnesisEntry: React.FC = () => {
             if (cancelled) return;
             setInitialPatient(patient);
 
-            const priorRecords = await getRecordsForPatient(pacienteParam);
+            // `patient.id`, e não o do link: o link pode ser de um cadastro que depois foi juntado
+            // a outro, e as fichas dela agora apontam para o que ficou.
+            const priorRecords = await getRecordsForPatient(patient?.id || pacienteParam);
             if (cancelled) return;
 
             const sameTemplateRecord = priorRecords.find((r) => r.templateId === anamneseParam);
