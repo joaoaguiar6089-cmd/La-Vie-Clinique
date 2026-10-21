@@ -16,6 +16,7 @@ import {
   where,
   writeBatch,
   runTransaction,
+  arrayUnion,
   QuerySnapshot,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -75,6 +76,7 @@ import {
   situacaoDoLink,
 } from '../utils/agendamentoLink';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../utils/fichasClinicas';
+import { AtualizacaoDaJuncao, ColecaoDaPaciente, DocumentoInterno } from '../utils/juncaoDePacientes';
 import { caixaLida, linhasSemValor } from '../utils/estoque';
 import {
   montarMapasPublicos,
@@ -1524,7 +1526,9 @@ function subscribeToPatientsDireto(
     (snapshot) => {
       const items: Patient[] = [];
       snapshot.forEach((docSnap) => {
-        items.push({ ...(docSnap.data() as Patient), id: docSnap.id });
+        const patient = { ...(docSnap.data() as Patient), id: docSnap.id };
+        // O cadastro juntado a outro é só um redirecionamento — ver `Patient.juntadoA`.
+        if (!patient.juntadoA) items.push(patient);
       });
       items.sort((a, b) => a.nome.localeCompare(b.nome));
       onUpdate(items);
@@ -1569,6 +1573,152 @@ export async function savePatient(patient: Patient): Promise<void> {
 export async function deletePatient(patientId: string): Promise<void> {
   const docRef = doc(db, PATIENTS_COLLECTION, patientId);
   await deleteDoc(docRef);
+}
+
+// ==========================================
+// JUNÇÃO DE CADASTROS REPETIDOS
+// ==========================================
+
+/** Onde mora cada tipo de documento de uma paciente. Ver `utils/juncaoDePacientes.ts`. */
+const COLECOES_DA_PACIENTE: Record<ColecaoDaPaciente, string> = {
+  fichas: ANAMNESIS_RECORDS_COLLECTION,
+  orcamentos: QUOTES_COLLECTION,
+  recibos: RECEIPTS_COLLECTION,
+  atendimentos: ATTENDANCES_COLLECTION,
+  planos: SESSION_PLANS_COLLECTION,
+  avaliacoes: EVALUATION_RECORDS_COLLECTION,
+  acompanhamentos: FOLLOWUP_RECORDS_COLLECTION,
+  materiais: ATTENDANCE_MATERIALS_COLLECTION,
+};
+
+/**
+ * Pares que a equipe disse que **não** são a mesma pessoa — as duas Larissas que são mesmo duas.
+ * Um documento só, com a lista de `chavePar`: vale para qualquer linha da lista, inclusive as
+ * "sem cadastro", que não têm documento próprio onde guardar a marca.
+ */
+const PACIENTES_DISTINTAS_DOC_ID = 'pacientes_distintas';
+
+/** Folga sob o teto de 500 gravações por lote do Firestore. */
+const GRAVACOES_POR_LOTE = 400;
+
+/**
+ * Avaliações, acompanhamentos e materiais destas pacientes, lidos do servidor.
+ *
+ * Os outros documentos da junção já estão em memória — fichas, orçamentos, recibos, atendimentos e
+ * planos são assinados inteiros —, mas estes três só são lidos por paciente, e a junção precisa
+ * de todos.
+ */
+export async function getDocumentosInternosDaPaciente(
+  pacienteIds: string[]
+): Promise<DocumentoInterno[]> {
+  const colecoes: DocumentoInterno['colecao'][] = ['avaliacoes', 'acompanhamentos', 'materiais'];
+  const leituras = colecoes.flatMap((colecao) =>
+    pacienteIds.map(async (pacienteId) => {
+      const snap = await getDocs(
+        query(collection(db, COLECOES_DA_PACIENTE[colecao]), where('pacienteId', '==', pacienteId))
+      );
+      return snap.docs.map((d): DocumentoInterno => {
+        const dados = d.data() as { pacienteId?: string; pacienteNome?: string };
+        return { colecao, id: d.id, pacienteId: dados.pacienteId, pacienteNome: dados.pacienteNome };
+      });
+    })
+  );
+  return (await Promise.all(leituras)).flat();
+}
+
+/**
+ * Grava a junção de dois cadastros: os documentos reapontados, o cadastro que fica e o
+ * redirecionamento no lugar do que sai.
+ *
+ * A ordem é o que permite tentar de novo. Os documentos vão primeiro, em lotes; o cadastro e o
+ * redirecionamento vão juntos, no último. Se a gravação cair no meio, o que já foi movido não
+ * aparece de novo na próxima tentativa, e juntar outra vez termina o serviço — nenhum documento
+ * fica apontando para um cadastro que sumiu.
+ */
+export async function gravarJuncaoDePacientes({
+  atualizacoes,
+  final,
+  saiu,
+}: {
+  atualizacoes: AtualizacaoDaJuncao[];
+  /** O cadastro que fica, já com os dados juntados. */
+  final: Patient;
+  /** O cadastro que sai, quando ele existe em `patients` — quem só tinha o nome não deixa rastro. */
+  saiu?: Patient;
+}): Promise<void> {
+  const agora = new Date().toISOString();
+  const lotes: AtualizacaoDaJuncao[][] = [];
+  for (let i = 0; i < atualizacoes.length; i += GRAVACOES_POR_LOTE) {
+    lotes.push(atualizacoes.slice(i, i + GRAVACOES_POR_LOTE));
+  }
+  // O último lote leva o cadastro e o redirecionamento: duas vagas a mais.
+  if (lotes.length === 0 || lotes[lotes.length - 1].length > GRAVACOES_POR_LOTE - 2) lotes.push([]);
+
+  for (let i = 0; i < lotes.length; i++) {
+    const batch = writeBatch(db);
+    lotes[i].forEach((a) => batch.update(doc(db, COLECOES_DA_PACIENTE[a.colecao], a.id), a.dados));
+    if (i === lotes.length - 1) {
+      batch.set(
+        doc(db, PATIENTS_COLLECTION, final.id),
+        cleanForFirestore({ ...final, updatedAt: agora }),
+        { merge: true }
+      );
+      if (saiu) {
+        // Sem `merge`: os dados pessoais do que saiu não ficam para trás num documento público.
+        batch.set(doc(db, PATIENTS_COLLECTION, saiu.id), {
+          id: saiu.id,
+          nome: saiu.nome,
+          createdAt: saiu.createdAt,
+          juntadoA: final.id,
+          juntadoEm: agora,
+        });
+      }
+    }
+    await comConfirmacaoDoServidor(batch.commit(), 'da junção dos cadastros');
+  }
+}
+
+function subscribeToParesDistintosDireto(
+  onUpdate: (pares: string[]) => void,
+  onError?: (err: Error) => void
+) {
+  return onSnapshot(
+    doc(db, CLINIC_SETTINGS_COLLECTION, PACIENTES_DISTINTAS_DOC_ID),
+    (snap) => onUpdate(paraArray<string>(snap.data()?.pares)),
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Pacientes distintas: offline/cota diária atingida.');
+      } else {
+        console.error('Pacientes distintas subscription error:', error);
+      }
+      onError?.(error);
+    }
+  );
+}
+
+/** Os pares marcados como pessoas diferentes, por `chavePar`. */
+export function subscribeToParesDistintos(
+  onUpdate: (pares: string[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<string[]>(
+    'pacientes_distintas',
+    subscribeToParesDistintosDireto,
+    onUpdate,
+    onError
+  );
+}
+
+/** "Não são a mesma pessoa": o par sai do quadro de repetidos e não volta. */
+export async function marcarComoDistintos(chave: string): Promise<void> {
+  await comConfirmacaoDoServidor(
+    setDoc(
+      doc(db, CLINIC_SETTINGS_COLLECTION, PACIENTES_DISTINTAS_DOC_ID),
+      { pares: arrayUnion(chave) },
+      { merge: true }
+    ),
+    'da marcação'
+  );
 }
 
 /**
@@ -1700,14 +1850,26 @@ export async function getAnamnesisTemplateById(templateId: string): Promise<Anam
   return normalizarTemplateLido({ ...(snap.data() as AnamnesisTemplate), id: snap.id });
 }
 
+/** Saltos de redirecionamento seguidos por `getPatientById` — folga para juntar e juntar de novo. */
+const MAX_SALTOS_DE_JUNCAO = 5;
+
 /**
  * Fetch a single Patient by ID (one-time).
+ *
+ * O cadastro juntado a outro devolve o que ficou: é o que faz um link de anamnese enviado antes da
+ * junção abrir a pessoa certa. Segue a cadeia, porque o que ficou pode ter sido juntado de novo
+ * depois — A em B, e mais tarde B em C.
  */
 export async function getPatientById(patientId: string): Promise<Patient | null> {
-  const docRef = doc(db, PATIENTS_COLLECTION, patientId);
-  const snap = await getDoc(docRef);
-  if (!snap.exists()) return null;
-  return { ...(snap.data() as Patient), id: snap.id };
+  let id = patientId;
+  for (let salto = 0; salto <= MAX_SALTOS_DE_JUNCAO; salto++) {
+    const snap = await getDoc(doc(db, PATIENTS_COLLECTION, id));
+    if (!snap.exists()) return null;
+    const patient = { ...(snap.data() as Patient), id: snap.id };
+    if (!patient.juntadoA) return patient;
+    id = patient.juntadoA;
+  }
+  return null;
 }
 
 /**

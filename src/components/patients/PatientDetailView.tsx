@@ -96,6 +96,8 @@ interface PatientDetailViewProps {
   currentProfessionalId?: string;
   onVoltar: () => void;
   onSalvarPaciente: (patient: Patient) => Promise<void>;
+  /** "Juntar com outro cadastro", no quadro de dados pessoais. */
+  onJuntarComOutro?: () => void;
   onSalvarFicha: (record: AnamnesisRecord) => Promise<void>;
   onExcluirFicha: (recordId: string) => Promise<void>;
   /** Tudo o que a aba de atendimentos faz mora no módulo — aqui só a tela. */
@@ -171,6 +173,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   currentProfessionalId,
   onVoltar,
   onSalvarPaciente,
+  onJuntarComOutro,
   onSalvarFicha,
   onExcluirFicha,
   onNovoAtendimento,
@@ -353,7 +356,11 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           mão em qualquer uma delas, e trocar de aba no meio de uma edição não perde o que foi
           digitado. */}
       <div className="mb-4">
-        <PatientPersonalDataCard patient={patient} onSalvar={onSalvarPaciente} />
+        <PatientPersonalDataCard
+          patient={patient}
+          onSalvar={onSalvarPaciente}
+          onJuntar={onJuntarComOutro}
+        />
       </div>
 
       {/* As duas ações que valem um toque a partir daqui. Larguras iguais no celular: com a

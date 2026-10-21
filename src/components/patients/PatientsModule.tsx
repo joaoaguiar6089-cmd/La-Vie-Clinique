@@ -28,13 +28,18 @@ import {
   deleteAttendance,
   saveSessionPlan,
   deleteSessionPlan,
+  subscribeToParesDistintos,
+  marcarComoDistintos,
 } from '../../services/databaseService';
 import {
-  chaveDoNome,
   LinhaDePaciente,
   montarLinhasDePacientes,
   pacienteProvisorio,
+  pertenceA,
 } from '../../utils/patientsPanel';
+import { paresRepetidos } from '../../utils/pacientesRepetidos';
+import { EscolhasDaJuncao } from '../../utils/juncaoDePacientes';
+import { juntarPacientes } from '../../services/juncaoDePacientes';
 import { ehRealizado, instanteDoAtendimento } from '../../utils/attendances';
 import { sementeDaVisita, sementeDoAgendamento } from '../../utils/passosDaJornada';
 import { salasDaClinica } from '../../utils/agenda';
@@ -42,6 +47,8 @@ import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PatientsListView } from './PatientsListView';
 import { PatientDetailView } from './PatientDetailView';
 import { NewPatientModal } from './NewPatientModal';
+import { JuntarPacientesPanel } from './JuntarPacientesPanel';
+import { CadastrosRepetidosPanel } from './CadastrosRepetidosPanel';
 import { AttendanceFormModal, ModoDoFormulario } from './AttendanceFormModal';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { perguntaDoAcompanhamento } from '../fichas/perguntaDoAcompanhamento';
@@ -114,6 +121,11 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   const [erro, setErro] = useState<string | null>(null);
   /** Só os cadastros por completar — o quadro âmbar da lista, ou a pendência vinda da Hoje. */
   const [soPendentes, setSoPendentes] = useState(false);
+  /** Pares que a equipe disse que não são a mesma pessoa, por `chavePar`. */
+  const [paresDistintos, setParesDistintos] = useState<string[]>([]);
+  const [repetidosAbertos, setRepetidosAbertos] = useState(false);
+  /** A junção em andamento. Sem `b`, o painel pede a outra. */
+  const [juncao, setJuncao] = useState<{ a: LinhaDePaciente; b?: LinhaDePaciente } | null>(null);
   const recibosCtx = useRecibos();
 
   useEffect(() => {
@@ -134,6 +146,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
       setErro(`Não foi possível carregar os atendimentos: ${e.message}`)
     );
     const unsubPlanos = subscribeToSessionPlans(setSessionPlans);
+    const unsubDistintos = subscribeToParesDistintos(setParesDistintos);
 
     return () => {
       unsubPacientes();
@@ -142,6 +155,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
       unsubPerguntas();
       unsubAtendimentos();
       unsubPlanos();
+      unsubDistintos();
     };
   }, []);
 
@@ -152,6 +166,12 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   const linhas = useMemo(
     () => montarLinhasDePacientes({ patients, records, quotes, atendimentos: attendances }),
     [patients, records, quotes, attendances]
+  );
+
+  /** Os pares que parecem ser a mesma pessoa — as duas Heloíses. Ver `utils/pacientesRepetidos.ts`. */
+  const repetidos = useMemo(
+    () => paresRepetidos(linhas, new Set(paresDistintos)),
+    [linhas, paresDistintos]
   );
 
   /**
@@ -213,11 +233,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
     if (!pacienteAberto) {
       return { fichas: [], orcamentos: [], atendimentos: [], planos: [], recibos: [] };
     }
-    const chave = chaveDoNome(pacienteAberto.nome);
-    const dele = (doc: { pacienteId?: string; pacienteNome?: string }) =>
-      doc.pacienteId === pacienteAberto.id ||
-      (!idsCadastrados.has(doc.pacienteId || '') &&
-        chaveDoNome(doc.pacienteNome || '') === chave);
+    const dele = pertenceA(pacienteAberto, idsCadastrados);
 
     const orcamentos = quotes.filter(dele);
     const idsDosOrcamentos = new Set(orcamentos.map((q) => q.id));
@@ -415,6 +431,58 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
     });
   };
 
+  /**
+   * Junta os dois e, se a página aberta era a do cadastro que saiu, passa para o que ficou — a
+   * pessoa é a mesma, e a página dela continua na tela.
+   */
+  const handleJuntar = async (
+    principal: LinhaDePaciente,
+    outro: LinhaDePaciente,
+    escolhas: EscolhasDaJuncao
+  ) => {
+    const final = await juntarPacientes({
+      principal: principal.patient || pacienteProvisorio(principal),
+      outro: outro.patient || pacienteProvisorio(outro),
+      outroTemCadastro: !!outro.patient,
+      escolhas,
+      idsCadastrados,
+      emMemoria: {
+        fichas: records,
+        orcamentos: quotes,
+        recibos: recibosCtx?.recibos ?? [],
+        atendimentos: attendances,
+        planos: sessionPlans,
+      },
+    });
+    setErro(null);
+    if (pacienteAbertoId === outro.id || pacienteAbertoId === principal.id) {
+      setPacienteAbertoId(final.id);
+    }
+  };
+
+  const descartarRepetido = (par: { chave: string }) => marcarComoDistintos(par.chave);
+
+  /** Os dois painéis da junção — montados nas duas telas, a lista e a página da paciente. */
+  const paineisDaJuncao = (
+    <>
+      <CadastrosRepetidosPanel
+        aberto={repetidosAbertos}
+        pares={repetidos}
+        onFechar={() => setRepetidosAbertos(false)}
+        onJuntar={(par) => setJuncao({ a: par.a, b: par.b })}
+        onDescartar={descartarRepetido}
+      />
+      {/* Depois dos repetidos, e não dentro: abre por cima deles, e ao fechar a equipe volta à
+          lista de pares de onde veio. */}
+      <JuntarPacientesPanel
+        par={juncao}
+        linhas={linhas}
+        onFechar={() => setJuncao(null)}
+        onJuntar={handleJuntar}
+      />
+    </>
+  );
+
   const bannerDeErro = erro && (
     <div className="max-w-3xl mx-auto px-5 sm:px-8 pt-6">
       <p className="px-4 py-3 rounded-[14px] bg-danger-bg text-[14px] text-danger">{erro}</p>
@@ -443,6 +511,10 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           currentProfessionalId={currentProfessionalId}
           onVoltar={() => setPacienteAbertoId(null)}
           onSalvarPaciente={savePatient}
+          onJuntarComOutro={() => {
+            const linha = linhas.find((l) => l.id === pacienteAberto.id);
+            if (linha) setJuncao({ a: linha });
+          }}
           onSalvarFicha={saveAnamnesisRecord}
           onExcluirFicha={deleteAnamnesisRecord}
           onNovoAtendimento={() => abrirFormulario({ modo: 'novo' })}
@@ -516,6 +588,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           />
         )}
 
+        {paineisDaJuncao}
+
         <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
       </>
     );
@@ -533,12 +607,17 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
         onAbrirPaciente={setPacienteAbertoId}
         onNovoPaciente={abrirCadastro}
         onExcluirPaciente={pedirExclusao}
+        totalRepetidos={repetidos.length}
+        onVerRepetidos={() => setRepetidosAbertos(true)}
+        onJuntarPaciente={(linha) => setJuncao({ a: linha })}
       />
 
       <NewPatientModal
         isOpen={cadastroAberto}
         onClose={() => setCadastroAberto(false)}
         patients={patients}
+        // Ela já existe: em vez de cadastrar de novo, a página dela abre.
+        onUsarExistente={(existente) => setPacienteAbertoId(existente.id)}
         nomeInicial={nomeDoCadastro}
         onSalvar={savePatient}
         // Recém-cadastrado, o passo seguinte é quase sempre a primeira ficha ou o orçamento —
@@ -546,6 +625,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
         // mesmo de confirmar com o servidor, então o paciente já está na lista aqui.
         onSalvo={(novo) => setPacienteAbertoId(novo.id)}
       />
+
+      {paineisDaJuncao}
 
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </>

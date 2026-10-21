@@ -1,29 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { Patient } from '../../types';
+import { cadastrosParecidos } from '../../utils/pacientesRepetidos';
 import { PatientFields, PatientFormValues, VALORES_VAZIOS, formToPatient } from './PatientFields';
+import { AvisoDeCadastroParecido } from './AvisoDeCadastroParecido';
 import { SidePanel } from '../common/SidePanel';
 import { AvisoTinta, BotaoPrincipal } from '../common/Tinta';
 
 interface NewPatientModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Cadastro já existente, usado só para avisar sobre nome repetido — nada é bloqueado. */
+  /** Cadastro já existente, usado só para avisar de cadastro parecido — nada é bloqueado. */
   patients: Patient[];
+  /** O botão do aviso de cadastro parecido: ela já existe, então é para usar aquele cadastro. */
+  onUsarExistente?: (patient: Patient) => void;
+  /** O texto desse botão. O padrão é "Abrir o cadastro dela". */
+  rotuloDoExistente?: string;
   /** Nome já digitado em outro lugar (a busca da lista, por exemplo) — entra preenchido. */
   nomeInicial?: string;
   onSalvar: (patient: Patient) => Promise<void>;
   /** Chamado com o paciente gravado, para quem abriu decidir o que fazer em seguida. */
   onSalvo?: (patient: Patient) => void;
 }
-
-/** Normaliza para comparar nomes digitados com os do cadastro (acento e caixa não contam). */
-const chaveDoNome = (nome: string): string =>
-  nome
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
 
 /**
  * Cadastro de um paciente novo direto na seção, sem passar por uma anamnese.
@@ -38,6 +36,8 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
   isOpen,
   onClose,
   patients,
+  onUsarExistente,
+  rotuloDoExistente = 'Abrir o cadastro dela',
   nomeInicial,
   onSalvar,
   onSalvo,
@@ -62,9 +62,12 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
     if (patch.nome !== undefined) setErroNome(undefined);
   };
 
-  const homonimo = form.nome.trim()
-    ? patients.find((p) => chaveDoNome(p.nome) === chaveDoNome(form.nome))
-    : undefined;
+  // Nome igual ou parecido, o mesmo telefone ou o mesmo CPF: as três formas de a segunda Heloíse
+  // nascer aqui.
+  const parecidos = useMemo(
+    () => cadastrosParecidos({ nome: form.nome, contato: form.contato, cpf: form.cpf }, patients),
+    [form.nome, form.contato, form.cpf, patients]
+  );
 
   const salvar = async () => {
     if (!form.nome.trim()) {
@@ -114,13 +117,18 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
         )}
 
         {/* Aviso, não impedimento: homônimos existem, e quem está na recepção sabe distinguir. */}
-        {homonimo && (
-          <AvisoTinta tom="alerta" icone={AlertCircle}>
-            Já existe um cadastro com esse nome
-            {homonimo.contato ? ` (${homonimo.contato})` : ''}. Confira se não é a mesma pessoa antes
-            de continuar.
-          </AvisoTinta>
-        )}
+        <AvisoDeCadastroParecido
+          parecidos={parecidos}
+          rotuloDaAcao={rotuloDoExistente}
+          onUsar={
+            onUsarExistente
+              ? (p) => {
+                  onUsarExistente(p);
+                  onClose();
+                }
+              : undefined
+          }
+        />
 
         <PatientFields
           values={form}

@@ -186,6 +186,11 @@ export const NovoRelatorio: React.FC<NovoRelatorioProps> = ({
         isOpen={cadastroAberto}
         onClose={() => setCadastroAberto(false)}
         patients={todasAsPacientes}
+        rotuloDoExistente="Usar este cadastro"
+        onUsarExistente={(existente) => {
+          setPacienteId(existente.id);
+          setPacienteNome(existente.nome);
+        }}
         nomeInicial={pacienteNome}
         onSalvar={savePatient}
         onSalvo={(novo) => {

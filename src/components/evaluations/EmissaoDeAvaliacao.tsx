@@ -307,6 +307,12 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
         isOpen={cadastroAberto}
         onClose={() => setCadastroAberto(false)}
         patients={todasAsPacientes}
+        rotuloDoExistente="Usar este cadastro"
+        onUsarExistente={(existente) => {
+          setPacienteId(existente.id);
+          setPacienteNome(existente.nome);
+          setErros((e) => ({ ...e, paciente: undefined }));
+        }}
         nomeInicial={pacienteNome}
         onSalvar={savePatient}
         onSalvo={(novo) => {
