@@ -381,7 +381,8 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         paraAcompanhar: pedido.paraAcompanhar,
       });
     } else if (pedido.criarNovo) {
-      abrirNovo(pedido.data ? { data: pedido.data as DataISO, hora: pedido.hora } : undefined);
+      // Sem dia no pedido (o "+" da barra de baixo, a busca), vale o dia que a agenda está mostrando.
+      abrirNovo({ data: (pedido.data as DataISO) || dataFoco, hora: pedido.hora });
     }
     if (pedido.atendimentoId) {
       const alvo = atendimentos.find((a) => a.id === pedido.atendimentoId);
@@ -634,7 +635,8 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         onAnterior={() => andar(-1)}
         onProximo={() => andar(1)}
         onHoje={() => setDataFoco(hoje)}
-        onNovo={() => abrirNovo()}
+        // O dia em foco, e não hoje: quem tocou num dia e depois em "Agendar" quer aquele dia.
+        onNovo={() => abrirNovo({ data: dataFoco })}
         semana={
           /* Faixa da semana — só no celular, e só na visão de dia: na semana e no mês o próprio
              calendário já é a navegação. */
