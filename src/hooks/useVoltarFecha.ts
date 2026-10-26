@@ -13,7 +13,9 @@ import { useEffect } from 'react';
  * senão o próximo "voltar" gastaria um toque sem fechar nada, e a pessoa apertaria de novo,
  * saindo do app.
  *
- * Empilhar um por painel também resolve o painel dentro do painel: cada um consome o seu.
+ * Empilhar um por painel também resolve o painel dentro do painel: cada um consome o seu. O
+ * `popstate` chega a todos os painéis abertos, então cada um confere se foi a **sua** entrada que
+ * saiu — se a do topo ainda é a dele, quem fechou foi o painel de cima.
  */
 /**
  * A entrada do histórico que um painel acabou de largar e que ainda não foi desempilhada.
@@ -58,6 +60,10 @@ export function useVoltarFecha(aberto: boolean, fechar: () => void): void {
 
     let fechadoPeloVoltar = false;
     const aoVoltar = () => {
+      // Quem saiu do histórico foi um painel aberto por cima deste — o calendário do formulário,
+      // fechado ao escolher o dia —, e a nossa entrada voltou a ser o topo. O voltar não era
+      // conosco: sem isto, escolher a data fechava o formulário inteiro.
+      if (window.history.state?.laviePainel === marca) return;
       fechadoPeloVoltar = true;
       fechar();
     };
