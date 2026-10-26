@@ -3,6 +3,7 @@ import {
   CalendarClock,
   Check,
   CheckCheck,
+  ChevronRight,
   MessageCircle,
   NotebookPen,
   Pencil,
@@ -10,6 +11,7 @@ import {
   Stethoscope,
   Trash2,
   User,
+  UserRound,
   UserX,
   X,
 } from 'lucide-react';
@@ -60,6 +62,8 @@ interface AgendaDetalheModalProps {
   /** Aprova o horário que a cliente pediu pelo link — é uma remarcação, com confirmação em diálogo. */
   onAprovarPedido: (a: Attendance) => void;
   onRecusarPedido: (a: Attendance) => void;
+  /** Leva à página da paciente — o histórico, os planos e os dados dela, a um toque da agenda. */
+  onAbrirPaciente?: (pacienteId: string) => void;
 }
 
 const acaoBase =
@@ -82,6 +86,7 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
   onCompartilhar,
   onAprovarPedido,
   onRecusarPedido,
+  onAbrirPaciente,
 }) => {
   const inicioMin = minutosDoHHMM(atendimento.hora);
   const duracao = duracaoDoAtendimento(atendimento, catalogo);
@@ -122,6 +127,17 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
             <h2 id="agenda-detalhe-titulo" className="text-lg text-white font-serif-luxury truncate">
               {atendimento.pacienteNome}
             </h2>
+            {onAbrirPaciente && atendimento.pacienteId && (
+              <button
+                type="button"
+                onClick={() => onAbrirPaciente(atendimento.pacienteId)}
+                className="mt-1 inline-flex items-center gap-1.5 text-body font-semibold text-brand-light underline-offset-2 hover:underline"
+              >
+                <UserRound className="w-4 h-4" />
+                Ver página da cliente
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
           <button
             type="button"
