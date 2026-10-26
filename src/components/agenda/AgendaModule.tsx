@@ -88,6 +88,8 @@ interface AgendaModuleProps {
   /** Pedido vindo da busca global ou da tela Hoje: abrir um dia, começar um agendamento. */
   pedido?: PedidoDeNavegacao | null;
   onPedidoAtendido?: () => void;
+  /** Sai da agenda para a página da paciente — o link no detalhe do agendamento. */
+  onAbrirPaciente?: (pacienteId: string) => void;
 }
 
 /** O que o formulário está fazendo agora. */
@@ -120,6 +122,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   carregando,
   pedido,
   onPedidoAtendido,
+  onAbrirPaciente,
 }) => {
   const hoje = hojeISO();
 
@@ -770,6 +773,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
           onCompartilhar={setCompartilhando}
           onAprovarPedido={pedirAprovacao}
           onRecusarPedido={pedirRecusa}
+          onAbrirPaciente={onAbrirPaciente}
         />
       )}
 

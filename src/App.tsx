@@ -1039,6 +1039,7 @@ function MainCatalogApp() {
                 carregando={atendimentosCarregando}
                 pedido={currentView === 'agenda' ? pedido : null}
                 onPedidoAtendido={() => setPedido(null)}
+                onAbrirPaciente={(pacienteId) => navegar({ view: 'patients', pacienteId })}
               />
             ) : currentView === 'procedures' ? (
               <ProcedureManager
