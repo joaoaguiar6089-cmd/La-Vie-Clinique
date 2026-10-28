@@ -14,7 +14,7 @@ import { ItemDaLinha } from '../../utils/pacienteResumo';
 import { formatDateOnly } from '../../utils/formatters';
 import { isQuoteEditavel, podeSubstituir } from '../../utils/quoteCalc';
 import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fichasClinicas';
-import { ROTULO_DO_STATUS } from '../../utils/attendances';
+import { ROTULO_DO_STATUS, nomeDosProcedimentos } from '../../utils/attendances';
 import {
   ContextoDaJornada,
   Tratamento,
@@ -208,7 +208,7 @@ export const PainelDoEvento: React.FC<PainelDoEventoProps> = ({ item, contexto, 
                 <div className="min-w-0 flex-1">
                   <p className="text-body font-semibold text-ink tabular-nums">{quandoDoAtendimento(a)}</p>
                   <p className="text-body text-muted truncate">
-                    {a.procedimentoNome}
+                    {nomeDosProcedimentos(a)}
                     {a.profissionalNome ? ` · ${a.profissionalNome}` : ''}
                   </p>
                 </div>
@@ -443,7 +443,7 @@ const PassosDaAvaliacao: React.FC<PassosProps & { av: EvaluationRecord }> = ({ a
               {atendimentos.map((a) => (
                 <li key={a.id}>
                   <LinhaDoPasso
-                    titulo={a.procedimentoNome}
+                    titulo={nomeDosProcedimentos(a)}
                     detalhe={`${quandoDoAtendimento(a)}${a.profissionalNome ? ` · ${a.profissionalNome}` : ''}`}
                   >
                     <BotaoDoAcompanhamento a={a} onClick={fazer(() => acoes.onAcompanhamento(a))} />

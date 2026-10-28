@@ -68,6 +68,7 @@ import {
   planejarMigracao,
 } from '../utils/evaluations';
 import { paraArray } from '../utils/firestoreShapes';
+import { nomeDosProcedimentos } from '../utils/attendances';
 import {
   efeitoDaResposta,
   montarSnapshotDoLink,
@@ -2360,6 +2361,13 @@ export async function saveAttendance(
   // `remarcado` é estado final: o link passa para o agendamento que nasce ao lado. Se este
   // registro continuasse com o token, qualquer gravação futura dele puxaria o link de volta.
   if (attendance.status === 'remarcado') dataToSave.linkToken = deleteField();
+  // Tirar o último procedimento a mais precisa apagar a lista: pelo mesmo `merge: true` acima, uma
+  // lista ausente deixaria a antiga intacta e o procedimento removido voltaria na agenda.
+  if (!attendance.procedimentosAdicionais?.length) {
+    dataToSave.procedimentosAdicionais = deleteField();
+  }
+  // Pelo mesmo motivo, o "Desvincular" do plano no formulário só vale se o campo for apagado.
+  if (!attendance.planoId) dataToSave.planoId = deleteField();
   // Com confirmação do servidor por causa da agenda: uma gravação barrada pela cota fica na fila
   // local e a promise nunca resolve, então a tela mostraria o horário reservado sem que nada
   // tivesse chegado ao banco — e a recepção marcaria outra paciente em cima.
@@ -2562,7 +2570,8 @@ function camposDoLinkDoAtendimento(a: Attendance): Record<string, unknown> {
     updatedAt: new Date().toISOString(),
   };
   // Caminho com ponto: troca só o título e preserva foto e orientações copiadas do catálogo.
-  if (a.procedimentoNome) campos['procedimento.titulo'] = a.procedimentoNome;
+  const titulo = nomeDosProcedimentos(a);
+  if (titulo) campos['procedimento.titulo'] = titulo;
   if (a.duracaoMin) campos.duracaoMin = a.duracaoMin;
   return campos;
 }
@@ -2829,10 +2838,15 @@ export async function deleteSessionPlan(
 ): Promise<void> {
   const batch = writeBatch(db);
   atendimentosDoPlano.forEach((a) => {
-    batch.update(doc(db, ATTENDANCES_COLLECTION, a.id), {
-      planoId: deleteField(),
-      updatedAt: new Date().toISOString(),
-    });
+    const campos: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+    if (a.planoId === planId) campos.planoId = deleteField();
+    // O vínculo de um procedimento a mais mora dentro da lista: ela é regravada sem ele.
+    if (a.procedimentosAdicionais?.some((p) => p.planoId === planId)) {
+      campos.procedimentosAdicionais = a.procedimentosAdicionais.map((p) =>
+        cleanForFirestore(p.planoId === planId ? { ...p, planoId: undefined } : p)
+      );
+    }
+    batch.update(doc(db, ATTENDANCES_COLLECTION, a.id), campos);
   });
   batch.delete(doc(db, SESSION_PLANS_COLLECTION, planId));
   await batch.commit();

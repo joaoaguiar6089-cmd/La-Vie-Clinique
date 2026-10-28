@@ -3,6 +3,7 @@ import { CalendarClock, Check, ChevronDown, Inbox, Trash2, UserX, X } from 'luci
 import { Attendance } from '../../types';
 import { dataCurta } from '../../utils/agenda';
 import { instanteCurto } from '../../utils/agendamentoLink';
+import { nomeDosProcedimentos } from '../../utils/attendances';
 
 /**
  * O que as clientes responderam pelo link e ainda espera uma decisão da equipe.
@@ -74,7 +75,7 @@ export const AgendaRespostasClientes: React.FC<AgendaRespostasClientesProps> = (
                     {a.pacienteNome}
                   </span>
                   <span className="block text-body text-ink-soft truncate">
-                    {a.procedimentoNome} · marcado para {dataCurta(a.data)}
+                    {nomeDosProcedimentos(a)} · marcado para {dataCurta(a.data)}
                     {a.hora ? ` às ${a.hora}` : ''}
                   </span>
                 </button>

@@ -40,7 +40,12 @@ import {
 import { paresRepetidos } from '../../utils/pacientesRepetidos';
 import { EscolhasDaJuncao } from '../../utils/juncaoDePacientes';
 import { juntarPacientes } from '../../services/juncaoDePacientes';
-import { ehRealizado, instanteDoAtendimento } from '../../utils/attendances';
+import {
+  ehRealizado,
+  instanteDoAtendimento,
+  nomeDosProcedimentos,
+  pertenceAoPlano,
+} from '../../utils/attendances';
 import { sementeDaVisita, sementeDoAgendamento } from '../../utils/passosDaJornada';
 import { salasDaClinica } from '../../utils/agenda';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
@@ -350,7 +355,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   const pedirExclusaoDeAtendimento = (a: Attendance) => {
     setConfirmacao({
       titulo: 'Excluir este atendimento?',
-      mensagem: `${a.procedimentoNome} — ${a.data.split('-').reverse().join('/')}.\n\nO registro e as observações${
+      mensagem: `${nomeDosProcedimentos(a)} — ${a.data.split('-').reverse().join('/')}.\n\nO registro e as observações${
         dependentesDoAtendimento(a) ? `${dependentesDoAtendimento(a)},` : ''
       } somem para sempre. Se ele fazia parte de um plano, as sessões seguintes são renumeradas sozinhas.`,
       textoConfirmar: 'Excluir atendimento',
@@ -380,7 +385,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   };
 
   const pedirExclusaoDoPlano = (plano: SessionPlan) => {
-    const doPlano = attendances.filter((a) => a.planoId === plano.id);
+    const doPlano = attendances.filter((a) => pertenceAoPlano(a, plano.id));
     setConfirmacao({
       titulo: `Excluir o plano de ${plano.procedimentoNome}?`,
       mensagem:

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Attendance, ClinicProfile } from '../../types';
-import { DataISO } from '../../utils/attendances';
+import { DataISO, nomeDosProcedimentos } from '../../utils/attendances';
 import {
   corDaProfissional,
   ehDoMesDe,
@@ -123,7 +123,7 @@ export const AgendaMesView: React.FC<AgendaMesViewProps> = ({
                       e.stopPropagation();
                       onAbrirAtendimento(a);
                     }}
-                    title={`${a.hora || 's/ hora'} · ${a.pacienteNome} · ${a.procedimentoNome}`}
+                    title={`${a.hora || 's/ hora'} · ${a.pacienteNome} · ${nomeDosProcedimentos(a)}`}
                     className="flex items-center gap-1 min-w-0 rounded-xs px-0.5 hover:bg-white/80"
                   >
                     <span

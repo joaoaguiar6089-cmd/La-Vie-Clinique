@@ -8,8 +8,14 @@ import {
   PedidoDeRemarcacao,
   Procedure,
 } from '../types';
-import { dataExtensa, duracaoDoAtendimento } from './agenda';
-import { DataISO, hojeISO } from './attendances';
+import { dataExtensa, duracaoDoAtendimento, textoDasOrientacoes } from './agenda';
+import {
+  DataISO,
+  hojeISO,
+  nomeDosProcedimentos,
+  nomeDosProcedimentosPorExtenso,
+  procedimentosDoAtendimento,
+} from './attendances';
 
 /**
  * As regras do link que a clínica manda à paciente para ela confirmar, avisar que não vai ou pedir
@@ -86,18 +92,21 @@ export const montarSnapshotDoLink = (
   const procedimento = atendimento.procedureId
     ? catalogo.find((p) => p.id === atendimento.procedureId)
     : undefined;
+  // Com mais de um procedimento, o subtítulo, a descrição e a duração do catálogo seriam só do
+  // primeiro — e a duração mentiria. Fica a foto dele, o título com todos e a duração somada.
+  const umSo = procedimentosDoAtendimento(atendimento).length === 1;
 
   return {
     attendanceId: atendimento.id,
     clientePrimeiroNome: primeiroNomeDe(atendimento.pacienteNome),
     procedimento: {
       // O nome do atendimento vence: é o que a recepção escolheu, e o catálogo pode ter mudado.
-      titulo: atendimento.procedimentoNome || procedimento?.title || 'Seu horário',
-      subtitulo: vazioParaUndefined(procedimento?.subtitle),
-      descricao: vazioParaUndefined(procedimento?.description),
+      titulo: nomeDosProcedimentos(atendimento) || procedimento?.title || 'Seu horário',
+      subtitulo: umSo ? vazioParaUndefined(procedimento?.subtitle) : undefined,
+      descricao: umSo ? vazioParaUndefined(procedimento?.description) : undefined,
       foto: fotoPublicaDoProcedimento(procedimento),
-      duracaoTexto: vazioParaUndefined(procedimento?.duration),
-      orientacoes: vazioParaUndefined(procedimento?.orientacoesPreProcedimento),
+      duracaoTexto: umSo ? vazioParaUndefined(procedimento?.duration) : undefined,
+      orientacoes: vazioParaUndefined(textoDasOrientacoes(atendimento, catalogo)),
     },
     data: atendimento.data,
     hora: atendimento.hora,
@@ -126,7 +135,7 @@ export const mensagemDoLink = (
   const quando = `${dataExtensa(atendimento.data)}${atendimento.hora ? ` às ${atendimento.hora}` : ''}`;
   return (
     `Oi${nome ? `, ${nome}` : ''}! Separamos os detalhes do seu horário na ${clinic.name}: ` +
-    `${quando} — ${atendimento.procedimentoNome}.\n\n` +
+    `${quando} — ${nomeDosProcedimentosPorExtenso(atendimento)}.\n\n` +
     `Por aqui você confirma a presença, avisa se não puder vir ou pede outro horário:\n${link}`
   );
 };

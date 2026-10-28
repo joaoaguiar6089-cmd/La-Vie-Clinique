@@ -13,6 +13,7 @@ import { SidePanel } from '../common/SidePanel';
 import { PatientSearchSelect } from '../quotes/PatientSearchSelect';
 import { NewPatientModal } from '../patients/NewPatientModal';
 import { FichaFillModal } from '../fichas/FichaFillModal';
+import { nomeDosProcedimentos } from '../../utils/attendances';
 
 interface NovoRelatorioProps {
   aberto: boolean;
@@ -147,7 +148,7 @@ export const NovoRelatorio: React.FC<NovoRelatorioProps> = ({
                         <NotebookPen className="w-4 h-4 text-brand shrink-0" />
                         <span className="flex-1 min-w-0">
                           <span className="block text-body-lg font-semibold text-ink truncate">
-                            {a.procedimentoNome || 'Atendimento'}
+                            {nomeDosProcedimentos(a) || 'Atendimento'}
                           </span>
                           <span className="block text-body text-muted truncate">
                             {formatDateOnly(a.data)}

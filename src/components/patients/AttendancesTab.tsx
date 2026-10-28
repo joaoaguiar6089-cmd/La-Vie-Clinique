@@ -29,6 +29,7 @@ import {
   numeroDaSessao,
   ProgressoDoPlano,
   ROTULO_DO_STATUS,
+  nomeDosProcedimentos,
 } from '../../utils/attendances';
 
 interface AttendancesTabProps {
@@ -160,7 +161,7 @@ const LinhaDeAtendimento: React.FC<{
         {rotuloDaSessao && (
           <span className="text-brand font-semibold tabular-nums">{rotuloDaSessao} · </span>
         )}
-        {atendimento.procedimentoNome}
+        {nomeDosProcedimentos(atendimento)}
       </p>
       <p className="text-body text-gray-400 truncate">
         {quando(atendimento)}
@@ -201,7 +202,7 @@ const LinhaDeAtendimento: React.FC<{
               ? 'Ver relatório'
               : 'Preencher relatório'
           }
-          aria-label={`Relatório do atendimento de ${atendimento.procedimentoNome}`}
+          aria-label={`Relatório do atendimento de ${nomeDosProcedimentos(atendimento)}`}
           className={
             acompanhamentoComRegistro(atendimento)
               ? 'p-[7px] rounded-lg bg-ok-bg text-ok border border-ok-line hover:border-ok transition-colors'
@@ -216,7 +217,7 @@ const LinhaDeAtendimento: React.FC<{
         type="button"
         onClick={() => onEditar(atendimento)}
         title="Editar"
-        aria-label={`Editar o atendimento de ${atendimento.procedimentoNome}`}
+        aria-label={`Editar o atendimento de ${nomeDosProcedimentos(atendimento)}`}
         className={acaoClass}
       >
         <Pencil className="w-4 h-4" />
@@ -225,7 +226,7 @@ const LinhaDeAtendimento: React.FC<{
         type="button"
         onClick={() => onExcluir(atendimento)}
         title="Excluir"
-        aria-label={`Excluir o atendimento de ${atendimento.procedimentoNome}`}
+        aria-label={`Excluir o atendimento de ${nomeDosProcedimentos(atendimento)}`}
         className="p-2 text-gray-400 hover:text-red-600 transition-colors"
       >
         <Trash2 className="w-4 h-4" />

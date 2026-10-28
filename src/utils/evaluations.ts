@@ -16,7 +16,7 @@ import {
   isLaserCategory,
 } from './templateMatching';
 import { paraArray } from './firestoreShapes';
-import { ehRealizado, hojeISO } from './attendances';
+import { ehRealizado, hojeISO, procedimentosDoAtendimento } from './attendances';
 
 /**
  * As regras das fichas clínicas: qual ficha-modelo vale para cada procedimento, e o que uma
@@ -182,15 +182,17 @@ const diaDoISO = (iso?: string): string => (iso || '').slice(0, 10);
 
 /**
  * O mesmo tratamento? Igual ao `mesmoProcedimento` dos atendimentos, adaptado ao nome do campo na
- * anamnese (`procedimentoId`, não `procedureId`).
+ * anamnese (`procedimentoId`, não `procedureId`). Vale qualquer um dos procedimentos da visita:
+ * quem fez botox e preenchimento no mesmo horário fecha a anamnese dos dois.
  */
 const mesmoTratamento = (
   ficha: Pick<AnamnesisRecord, 'procedimentoId' | 'procedimentoNome'>,
   a: Attendance
-): boolean => {
-  if (ficha.procedimentoId && a.procedureId) return ficha.procedimentoId === a.procedureId;
-  return chaveDeNome(ficha.procedimentoNome) === chaveDeNome(a.procedimentoNome);
-};
+): boolean =>
+  procedimentosDoAtendimento(a).some((p) => {
+    if (ficha.procedimentoId && p.procedureId) return ficha.procedimentoId === p.procedureId;
+    return chaveDeNome(ficha.procedimentoNome) === chaveDeNome(p.procedimentoNome);
+  });
 
 /**
  * A anamnese fechou para a paciente? — o que substituiu `profissionalPreenchidoEm`.

@@ -9,7 +9,7 @@ import {
   minutosDoHHMM,
   nomeCurtoDaProfissional,
 } from '../../utils/agenda';
-import { ehPendenteAtrasado } from '../../utils/attendances';
+import { ehPendenteAtrasado, nomeDosProcedimentos } from '../../utils/attendances';
 import { ausenciaAvisada, temPedidoDeRemarcacao } from '../../utils/agendamentoLink';
 
 /**
@@ -148,7 +148,7 @@ export const AgendaCard: React.FC<AgendaCardProps> = ({
         onAbrir(atendimento);
       }}
       style={style}
-      title={`${faixa} · ${atendimento.pacienteNome} · ${atendimento.procedimentoNome}`}
+      title={`${faixa} · ${atendimento.pacienteNome} · ${nomeDosProcedimentos(atendimento)}`}
       className={`group relative overflow-hidden rounded-sm border text-left transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-brand/50 ${
         ESTILO_DA_SITUACAO[situacao]
       } ${arrastavel ? 'active:cursor-grabbing' : ''} ${apertado ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
@@ -179,7 +179,7 @@ export const AgendaCard: React.FC<AgendaCardProps> = ({
 
         {!apertado && (
           <span className="text-body opacity-70 truncate block">
-            {atendimento.procedimentoNome}
+            {nomeDosProcedimentos(atendimento)}
             {rotuloDoPlano ? ` · ${rotuloDoPlano}` : ''}
           </span>
         )}

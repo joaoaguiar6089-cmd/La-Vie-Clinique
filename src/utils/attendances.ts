@@ -1,4 +1,4 @@
-import { Attendance, AttendanceStatus, Procedure, SessionPlan } from '../types';
+import { Attendance, AttendanceStatus, Procedure, ProcedimentoDaVisita, SessionPlan } from '../types';
 
 /**
  * As regras do diário de atendimentos: o que é agendamento, o que conta como sessão feita, e
@@ -114,6 +114,56 @@ export const mesmoProcedimento = (
 };
 
 // ==========================================
+// PROCEDIMENTOS DA VISITA
+// ==========================================
+
+type ComProcedimentos = Pick<
+  Attendance,
+  'procedureId' | 'procedimentoNome' | 'planoId' | 'procedimentosAdicionais'
+>;
+
+/**
+ * Todos os procedimentos da visita, o principal primeiro. Registro de antes da lista devolve um
+ * só. Adicional sem nome é descartado — um documento torto não pode virar "Botox + " na agenda.
+ */
+export const procedimentosDoAtendimento = (a: ComProcedimentos): ProcedimentoDaVisita[] => [
+  { procedureId: a.procedureId, procedimentoNome: a.procedimentoNome || '', planoId: a.planoId },
+  ...(Array.isArray(a.procedimentosAdicionais) ? a.procedimentosAdicionais : []).filter(
+    (p): p is ProcedimentoDaVisita =>
+      !!p && typeof p.procedimentoNome === 'string' && !!p.procedimentoNome.trim()
+  ),
+];
+
+const nomesDaVisita = (a: ComProcedimentos): string[] =>
+  procedimentosDoAtendimento(a)
+    .map((p) => p.procedimentoNome.trim())
+    .filter(Boolean);
+
+/** "Botox + Preenchimento labial" — o nome da visita no cartão da agenda, na lista e no Google. */
+export const nomeDosProcedimentos = (a: ComProcedimentos): string =>
+  nomesDaVisita(a).join(' + ');
+
+/** "Botox, Peeling e Preenchimento labial" — o mesmo, para caber numa frase de mensagem. */
+export const nomeDosProcedimentosPorExtenso = (a: ComProcedimentos): string => {
+  const nomes = nomesDaVisita(a);
+  if (nomes.length <= 1) return nomes[0] || '';
+  return `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
+};
+
+/** Os planos que esta visita consome — um por procedimento vinculado, sem repetir. */
+export const planosDoAtendimento = (a: ComProcedimentos): string[] => [
+  ...new Set(
+    procedimentosDoAtendimento(a)
+      .map((p) => p.planoId)
+      .filter((id): id is string => !!id)
+  ),
+];
+
+/** A visita conta como sessão deste plano — por qualquer um dos procedimentos dela. */
+export const pertenceAoPlano = (a: ComProcedimentos, planoId: string): boolean =>
+  planosDoAtendimento(a).includes(planoId);
+
+// ==========================================
 // PLANOS
 // ==========================================
 
@@ -164,13 +214,17 @@ export const numeroDaSessao = (
 /**
  * O plano aberto deste paciente para este procedimento, se houver — é ele que o formulário
  * oferece como vínculo automático. Encerrado não conta: encerrar existe justamente para parar
- * de receber sessões novas.
+ * de receber sessões novas. `jaUsados` são os planos que outro procedimento da mesma visita já
+ * pegou: o mesmo procedimento duas vezes na visita não conta duas sessões do mesmo plano.
  */
 export const planoAbertoPara = (
   planos: SessionPlan[],
-  procedimento: { procedureId?: string; procedimentoNome: string }
+  procedimento: { procedureId?: string; procedimentoNome: string },
+  jaUsados?: Set<string>
 ): SessionPlan | undefined =>
-  planos.find((p) => !p.encerradoEm && mesmoProcedimento(p, procedimento));
+  planos.find(
+    (p) => !p.encerradoEm && !jaUsados?.has(p.id) && mesmoProcedimento(p, procedimento)
+  );
 
 // ==========================================
 // A LISTA
@@ -207,14 +261,18 @@ export const montarHistorico = (
 
   atendimentos.forEach((a) => {
     // Vínculo apontando para plano que não existe mais vale como avulso — é o que a exclusão de
-    // plano produz se um lote falhar no meio, e some da tela em vez de sumir da vida.
-    if (a.planoId && planosPorId.has(a.planoId)) {
-      const lista = porPlano.get(a.planoId) || [];
-      lista.push(a);
-      porPlano.set(a.planoId, lista);
-    } else {
+    // plano produz se um lote falhar no meio, e some da tela em vez de sumir da vida. A visita de
+    // dois planos (um por procedimento) aparece dentro de cada um deles.
+    const planosDela = planosDoAtendimento(a).filter((id) => planosPorId.has(id));
+    if (planosDela.length === 0) {
       avulsos.push(a);
+      return;
     }
+    planosDela.forEach((id) => {
+      const lista = porPlano.get(id) || [];
+      lista.push(a);
+      porPlano.set(id, lista);
+    });
   });
 
   const linhas: LinhaDoHistorico[] = avulsos.map((a) => ({
