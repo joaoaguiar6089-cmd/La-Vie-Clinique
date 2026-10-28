@@ -6,7 +6,7 @@ import {
   Procedure,
 } from '../types';
 import { intervaloDoAtendimento } from './agenda';
-import { DataISO } from './attendances';
+import { DataISO, nomeDosProcedimentos } from './attendances';
 
 /**
  * Regras puras da sincronização com o Google Agenda: que agendamento vai para o Google, com que
@@ -121,7 +121,7 @@ export const eventoDoAtendimento = (
   const local = [clinica.address, clinica.cityState].map((p) => (p || '').trim()).filter(Boolean);
 
   return {
-    titulo: `${prefixo}${a.pacienteNome} · ${a.procedimentoNome}`.trim(),
+    titulo: `${prefixo}${a.pacienteNome} · ${nomeDosProcedimentos(a)}`.trim(),
     descricao: [
       situacao,
       '',

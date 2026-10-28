@@ -7,7 +7,13 @@ import {
   Procedure,
   Professional,
 } from '../types';
-import { DataISO, ehRealizado, hojeISO } from './attendances';
+import {
+  DataISO,
+  ehRealizado,
+  hojeISO,
+  nomeDosProcedimentosPorExtenso,
+  procedimentosDoAtendimento,
+} from './attendances';
 
 /**
  * As regras da grade da agenda: quanto tempo cada visita ocupa, que horas a clínica abre, e como
@@ -231,15 +237,37 @@ export const duracaoDoProcedimento = (duration?: string): number | undefined => 
   return minutos;
 };
 
+/**
+ * Quanto o catálogo diz que os procedimentos da visita levam, somados — botox de 30 min e
+ * preenchimento de 45 ocupam 75 no mesmo horário. Procedimento digitado à mão ou sem duração no
+ * catálogo não entra na conta; `undefined` quando nenhum tem.
+ */
+export const duracaoDosProcedimentos = (
+  procedimentos: { procedureId?: string }[],
+  catalogo: Procedure[]
+): number | undefined => {
+  let soma = 0;
+  let algum = false;
+  procedimentos.forEach((p) => {
+    if (!p.procedureId) return;
+    const minutos = duracaoDoProcedimento(catalogo.find((c) => c.id === p.procedureId)?.duration);
+    if (minutos === undefined) return;
+    soma += minutos;
+    algum = true;
+  });
+  return algum ? soma : undefined;
+};
+
 /** O que o registro diz; na falta, o que o catálogo diz; na falta, o padrão. */
 export const duracaoDoAtendimento = (
-  a: Pick<Attendance, 'duracaoMin' | 'procedureId'>,
+  a: Pick<Attendance, 'duracaoMin' | 'procedureId' | 'procedimentosAdicionais'>,
   catalogo: Procedure[]
 ): number => {
   if (a.duracaoMin && a.duracaoMin >= DURACAO_MIN_ACEITAVEL) return a.duracaoMin;
-  const doCatalogo = a.procedureId
-    ? duracaoDoProcedimento(catalogo.find((p) => p.id === a.procedureId)?.duration)
-    : undefined;
+  const doCatalogo = duracaoDosProcedimentos(
+    [{ procedureId: a.procedureId }, ...(a.procedimentosAdicionais || [])],
+    catalogo
+  );
   return doCatalogo ?? AGENDA_DEFAULTS.duracaoMin;
 };
 
@@ -250,7 +278,7 @@ export interface IntervaloNoDia {
 
 /** Onde a visita começa e termina no dia. `null` para quem não tem hora — não vai para a grade. */
 export const intervaloDoAtendimento = (
-  a: Pick<Attendance, 'hora' | 'duracaoMin' | 'procedureId'>,
+  a: Pick<Attendance, 'hora' | 'duracaoMin' | 'procedureId' | 'procedimentosAdicionais'>,
   catalogo: Procedure[]
 ): IntervaloNoDia | null => {
   const inicioMin = minutosDoHHMM(a.hora);
@@ -570,6 +598,7 @@ export interface CandidatoDeHorario {
   hora?: string;
   duracaoMin?: number;
   procedureId?: string;
+  procedimentosAdicionais?: Attendance['procedimentosAdicionais'];
   professionalId?: string;
 }
 
@@ -680,7 +709,7 @@ export const mensagemDeConfirmacao = (
     primeiroNome: primeiroNomeDe(atendimento.pacienteNome),
     data: dataExtensa(atendimento.data),
     hora: atendimento.hora || '',
-    procedimento: atendimento.procedimentoNome || '',
+    procedimento: nomeDosProcedimentosPorExtenso(atendimento),
     profissional: atendimento.profissionalNome || '',
     clinica: clinic.name || '',
   };
@@ -693,15 +722,38 @@ export const mensagemDeConfirmacao = (
   return orientacoes ? `${corpo}\n\n${orientacoes}` : corpo;
 };
 
-/** O preparo do procedimento agendado, pronto para colar na mensagem. */
-export const orientacoesDoAtendimento = (
-  atendimento: Pick<Attendance, 'procedureId'>,
+/**
+ * O preparo dos procedimentos agendados (`Procedure.orientacoesPreProcedimento`). Com mais de um
+ * procedimento na visita, o de cada um vem com o nome dele em cima — "não depilar com cera" sem
+ * dizer de qual procedimento é deixaria a paciente na dúvida. `undefined` quando nenhum tem.
+ */
+export const textoDasOrientacoes = (
+  atendimento: Pick<
+    Attendance,
+    'procedureId' | 'procedimentoNome' | 'planoId' | 'procedimentosAdicionais'
+  >,
   catalogo: Procedure[]
 ): string | undefined => {
-  if (!atendimento.procedureId) return undefined;
-  const texto = catalogo
-    .find((p) => p.id === atendimento.procedureId)
-    ?.orientacoesPreProcedimento?.trim();
+  const blocos: { nome: string; texto: string }[] = [];
+  const vistos = new Set<string>();
+  procedimentosDoAtendimento(atendimento).forEach((p) => {
+    if (!p.procedureId || vistos.has(p.procedureId)) return;
+    vistos.add(p.procedureId);
+    const procedimento = catalogo.find((c) => c.id === p.procedureId);
+    const texto = procedimento?.orientacoesPreProcedimento?.trim();
+    if (texto) blocos.push({ nome: p.procedimentoNome.trim() || procedimento!.title, texto });
+  });
+  if (blocos.length === 0) return undefined;
+  if (blocos.length === 1) return blocos[0].texto;
+  return blocos.map((b) => `${b.nome}:\n${b.texto}`).join('\n\n');
+};
+
+/** O preparo, pronto para colar na mensagem. */
+export const orientacoesDoAtendimento = (
+  atendimento: Parameters<typeof textoDasOrientacoes>[0],
+  catalogo: Procedure[]
+): string | undefined => {
+  const texto = textoDasOrientacoes(atendimento, catalogo);
   return texto ? `Antes de vir:\n${texto}` : undefined;
 };
 

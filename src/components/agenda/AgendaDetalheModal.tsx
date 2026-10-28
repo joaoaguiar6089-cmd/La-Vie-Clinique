@@ -25,7 +25,7 @@ import {
   mensagemDeConfirmacao,
   minutosDoHHMM,
 } from '../../utils/agenda';
-import { ROTULO_DO_STATUS, ehPendente } from '../../utils/attendances';
+import { ROTULO_DO_STATUS, ehPendente, procedimentosDoAtendimento } from '../../utils/attendances';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
 import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fichasClinicas';
 import { ausenciaAvisada, instanteCurto } from '../../utils/agendamentoLink';
@@ -154,7 +154,11 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
             <p className="flex items-start gap-2 text-sm text-ink">
               <Stethoscope className="w-4 h-4 text-brand shrink-0 mt-0.5" />
               <span className="min-w-0">
-                {atendimento.procedimentoNome}
+                {procedimentosDoAtendimento(atendimento).map((p, i) => (
+                  <span key={i} className="block">
+                    {p.procedimentoNome}
+                  </span>
+                ))}
                 {rotuloDoPlano && (
                   <span className="block text-body text-brand">{rotuloDoPlano}</span>
                 )}

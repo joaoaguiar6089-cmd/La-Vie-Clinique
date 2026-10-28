@@ -2,6 +2,7 @@ import { ClipboardCheck } from 'lucide-react';
 import { Attendance } from '../../types';
 import { ConfirmRequest } from '../ConfirmDialog';
 import { deveOferecerAcompanhamento } from '../../utils/fichasClinicas';
+import { nomeDosProcedimentos } from '../../utils/attendances';
 
 /**
  * A pergunta que sobe depois de confirmar o comparecimento: "Preencher acompanhamento?".
@@ -25,7 +26,7 @@ export const perguntaDoAcompanhamento = (
   return {
     titulo: 'Preencher relatório?',
     mensagem:
-      `${salvo.pacienteNome} · ${salvo.procedimentoNome}.\n` +
+      `${salvo.pacienteNome} · ${nomeDosProcedimentos(salvo)}.\n` +
       'Fotos, respostas e materiais desta sessão — dá para completar depois pelo atendimento.',
     textoConfirmar: 'Sim',
     textoCancelar: 'Não',

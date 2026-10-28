@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, CalendarClock, Check, ChevronDown, X } from 'lucide-react';
 import { Attendance } from '../../types';
-import { DataISO } from '../../utils/attendances';
+import { DataISO, nomeDosProcedimentos } from '../../utils/attendances';
 import { dataCurta } from '../../utils/agenda';
 import { ausenciaAvisada } from '../../utils/agendamentoLink';
 
@@ -70,7 +70,7 @@ export const AgendaPendencias: React.FC<AgendaPendenciasProps> = ({
                 </span>
                 <span className="block text-body text-gray-500 truncate">
                   {dataCurta(a.data)}
-                  {a.hora ? ` às ${a.hora}` : ''} · {a.procedimentoNome}
+                  {a.hora ? ` às ${a.hora}` : ''} · {nomeDosProcedimentos(a)}
                   {a.profissionalNome ? ` · ${a.profissionalNome}` : ''}
                 </span>
               </button>

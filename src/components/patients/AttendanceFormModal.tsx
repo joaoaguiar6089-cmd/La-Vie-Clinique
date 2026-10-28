@@ -6,6 +6,7 @@ import {
   DoorClosed,
   Link2Off,
   Loader2,
+  Plus,
   UserPlus,
   Users,
 } from 'lucide-react';
@@ -14,6 +15,7 @@ import {
   Attendance,
   ClinicProfile,
   Patient,
+  ProcedimentoDaVisita,
   Procedure,
   Professional,
   Quote,
@@ -36,8 +38,10 @@ import {
   hojeISO,
   mesmoProcedimento,
   numeroDaSessao,
+  pertenceAoPlano,
   planoAbertoPara,
   procedimentoSugerido,
+  procedimentosDoAtendimento,
   progressoDoPlano,
 } from '../../utils/attendances';
 import {
@@ -47,7 +51,7 @@ import {
   conflitosDeSala,
   corDaProfissional,
   deslocarDias,
-  duracaoDoProcedimento,
+  duracaoDosProcedimentos,
   expedienteDoDia,
   hhmmDeMinutos,
   intervaloDaGrade,
@@ -190,6 +194,31 @@ type LinhaDoDia =
 const LINHAS_VISIVEIS = 6;
 
 /**
+ * Um procedimento da visita, enquanto se preenche. O primeiro vira o principal do registro
+ * (`procedureId`/`procedimentoNome`/`planoId`) e os demais, `procedimentosAdicionais`.
+ */
+interface LinhaDeProcedimento {
+  /** Só para o React — a linha não tem identidade no banco. */
+  chave: string;
+  procedureId?: string;
+  procedimentoNome: string;
+  /** O plano que veio de fora: o do registro editado ou remarcado, ou o do "+ adicionar sessão". */
+  planoDeOrigemId?: string;
+  /** "Desvincular" tocado: fica avulso mesmo havendo plano aberto do mesmo procedimento. */
+  desvinculado?: boolean;
+}
+
+let ultimaChave = 0;
+const linhaDeProcedimento = (
+  p: Partial<Pick<LinhaDeProcedimento, 'procedureId' | 'procedimentoNome' | 'planoDeOrigemId'>> = {}
+): LinhaDeProcedimento => ({
+  chave: `proc-${++ultimaChave}`,
+  procedureId: p.procedureId,
+  procedimentoNome: p.procedimentoNome || '',
+  planoDeOrigemId: p.planoDeOrigemId,
+});
+
+/**
  * Formulário de uma visita.
  *
  * A natureza do registro sai da data e é mostrada em tempo real: data depois de hoje =
@@ -227,19 +256,26 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
 }) => {
   const [data, setData] = useState('');
   const [hora, setHora] = useState('');
-  const [procedimento, setProcedimento] = useState<{
-    procedureId?: string;
-    procedimentoNome: string;
-  }>({ procedimentoNome: '' });
+  const [procedimentos, setProcedimentos] = useState<LinhaDeProcedimento[]>(() => [
+    linhaDeProcedimento(),
+  ]);
+  /** A linha recém-adicionada, que abre já com o cursor e a lista do catálogo. */
+  const [linhaEmFoco, setLinhaEmFoco] = useState<string | null>(null);
   const [professionalId, setProfessionalId] = useState('');
   const [salaId, setSalaId] = useState('');
-  const [duracao, setDuracao] = useState('');
-  /** Uma vez digitada à mão, a duração para de ser reescrita pela troca de procedimento. */
-  const [duracaoTocada, setDuracaoTocada] = useState(false);
+  /**
+   * A duração escolhida por alguém — digitada aqui ou já gravada no registro. `null` = segue a do
+   * catálogo (`duracaoSugerida`), que acompanha a troca, a soma e a retirada de procedimentos.
+   *
+   * Derivada, e não copiada para o campo por um efeito: o efeito rodava na abertura com o valor da
+   * abertura anterior e apagava a duração gravada do registro editado.
+   */
+  const [duracaoDigitada, setDuracaoDigitada] = useState<string | null>(null);
   const [observacoes, setObservacoes] = useState('');
   const [criarPlano, setCriarPlano] = useState(false);
   const [totalSessoes, setTotalSessoes] = useState('');
-  const [desvinculado, setDesvinculado] = useState(false);
+  /** Para qual procedimento o plano novo é, quando há mais de um sem plano. Ausente = o primeiro. */
+  const [chaveDoPlanoNovo, setChaveDoPlanoNovo] = useState('');
   const [erros, setErros] = useState<Record<string, string>>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -255,8 +291,8 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     setSalvando(false);
     setCriarPlano(false);
     setTotalSessoes('');
-    setDesvinculado(false);
-    setDuracaoTocada(false);
+    setChaveDoPlanoNovo('');
+    setLinhaEmFoco(null);
     setDiaInteiro(false);
     setEnviarConfirmacao(lerPreferenciaDeConfirmacao());
 
@@ -264,25 +300,35 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
       // A semente da grade vence a data do registro-modelo: é ela que carrega o horário clicado.
       setData(isoParaData(sementeDataHora?.data || atendimento.data));
       setHora(sementeDataHora?.hora ?? atendimento.hora ?? '');
-      setProcedimento({
-        procedureId: atendimento.procedureId,
-        procedimentoNome: atendimento.procedimentoNome,
-      });
+      // Cada procedimento volta com o plano que já consumia. O "+ adicionar sessão" (raro com
+      // registro-semente) continua mandando no principal, como sempre mandou.
+      setProcedimentos(
+        procedimentosDoAtendimento(atendimento).map((p, i) =>
+          linhaDeProcedimento({
+            procedureId: p.procedureId,
+            procedimentoNome: p.procedimentoNome,
+            planoDeOrigemId: (i === 0 && planoFixoId) || p.planoId,
+          })
+        )
+      );
       setProfessionalId(atendimento.professionalId || professionalIdPadrao || '');
       setSalaId(atendimento.salaId || '');
-      setDuracao(atendimento.duracaoMin ? String(atendimento.duracaoMin) : '');
       // Duração já gravada foi escolha de alguém: trocar o procedimento não a reescreve.
-      setDuracaoTocada(!!atendimento.duracaoMin);
+      setDuracaoDigitada(atendimento.duracaoMin ? String(atendimento.duracaoMin) : null);
       setObservacoes(atendimento.observacoes || '');
       return;
     }
 
-    const sugestao = procedimentoSugerido(atendimentos, ultimaAnamnese, procedures);
+    // O "+ adicionar sessão" de um plano já sabe o procedimento: é o do plano.
+    const planoFixo = planoFixoId ? planos.find((p) => p.id === planoFixoId) : undefined;
+    const sugestao = planoFixo
+      ? { procedureId: planoFixo.procedureId, procedimentoNome: planoFixo.procedimentoNome }
+      : procedimentoSugerido(atendimentos, ultimaAnamnese, procedures);
     setData(isoParaData(sementeDataHora?.data || hojeISO()));
     setHora(sementeDataHora?.hora ?? agoraHHMM());
-    setProcedimento(sugestao || { procedimentoNome: '' });
+    setProcedimentos([linhaDeProcedimento({ ...sugestao, planoDeOrigemId: planoFixoId })]);
     setProfessionalId(professionalIdPadrao || '');
-    setDuracao('');
+    setDuracaoDigitada(null);
     setObservacoes('');
   }, [isOpen, atendimento, professionalIdPadrao, sementeDataHora]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -310,33 +356,49 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  /** Quanto o catálogo diz que este procedimento leva. `undefined` para procedimento digitado. */
-  const duracaoSugerida = useMemo(
+  /**
+   * Os procedimentos no formato do registro, para as contas de horário — só o `procedureId`
+   * importa nelas (a duração do catálogo, quando ninguém digitou a sua).
+   */
+  const principal = procedimentos[0];
+  const adicionaisParaHorario = useMemo(
     () =>
-      procedimento.procedureId
-        ? duracaoDoProcedimento(
-            procedures.find((p) => p.id === procedimento.procedureId)?.duration
-          )
-        : undefined,
-    [procedimento.procedureId, procedures]
+      procedimentos
+        .slice(1)
+        .map((p) => ({ procedureId: p.procedureId, procedimentoNome: p.procedimentoNome })),
+    [procedimentos]
+  );
+  /** Chave estável das escolhas do catálogo, para as contas não refazerem a cada letra digitada. */
+  const idsDosProcedimentos = procedimentos.map((p) => p.procedureId || '').join('|');
+
+  /**
+   * Quanto o catálogo diz que os procedimentos levam, somados. `undefined` quando nenhum tem
+   * duração no catálogo (todos digitados à mão, por exemplo).
+   */
+  const duracaoSugerida = useMemo(
+    () => duracaoDosProcedimentos(procedimentos, procedures),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [idsDosProcedimentos, procedures]
   );
 
-  // Trocar o procedimento retrás a duração do catálogo — até alguém digitar a sua, e aí ela manda.
-  useEffect(() => {
-    if (!isOpen || duracaoTocada) return;
-    setDuracao(duracaoSugerida ? String(duracaoSugerida) : '');
-  }, [isOpen, duracaoTocada, duracaoSugerida]);
-
+  // Trocar, somar ou tirar procedimento retrás a duração do catálogo — até alguém digitar a sua, e
+  // aí ela manda.
+  const duracao = duracaoDigitada ?? (duracaoSugerida ? String(duracaoSugerida) : '');
   const duracaoMin = Number(duracao) > 0 ? Number(duracao) : undefined;
 
   /** "termina às 15:00" — confere o encaixe antes de salvar, sem precisar fazer a conta. */
   const terminaAs = useMemo(() => {
     const intervalo = intervaloDoAtendimento(
-      { hora, duracaoMin, procedureId: procedimento.procedureId },
+      {
+        hora,
+        duracaoMin,
+        procedureId: principal?.procedureId,
+        procedimentosAdicionais: adicionaisParaHorario,
+      },
       procedures
     );
     return intervalo ? hhmmDeMinutos(intervalo.fimMin) : null;
-  }, [hora, duracaoMin, procedimento.procedureId, procedures]);
+  }, [hora, duracaoMin, principal?.procedureId, adicionaisParaHorario, procedures]);
 
   /**
    * Choque de horário da mesma profissional. É **aviso, não trava**: encaixe é decisão da clínica,
@@ -350,7 +412,8 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         data: dataISO,
         hora,
         duracaoMin,
-        procedureId: procedimento.procedureId,
+        procedureId: principal?.procedureId,
+        procedimentosAdicionais: adicionaisParaHorario,
         professionalId,
       },
       atendimentosDaClinica,
@@ -362,7 +425,8 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     hora,
     professionalId,
     duracaoMin,
-    procedimento.procedureId,
+    principal?.procedureId,
+    adicionaisParaHorario,
     procedures,
     modo,
     atendimento,
@@ -381,7 +445,8 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         data: dataISO,
         hora,
         duracaoMin,
-        procedureId: procedimento.procedureId,
+        procedureId: principal?.procedureId,
+        procedimentosAdicionais: adicionaisParaHorario,
         salaId,
       },
       atendimentosDaClinica,
@@ -393,55 +458,73 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     hora,
     salaId,
     duracaoMin,
-    procedimento.procedureId,
+    principal?.procedureId,
+    adicionaisParaHorario,
     procedures,
     modo,
     atendimento,
   ]);
 
   /**
-   * O plano que vai receber esta sessão. O "+ adicionar sessão" fixa um; fora dele, o plano
-   * aberto do mesmo procedimento é detectado e oferecido — nunca aplicado calado.
+   * O plano que cada procedimento consome, na ordem das linhas. O que veio de fora (registro
+   * editado, remarcação, "+ adicionar sessão") manda; fora isso, o plano aberto do mesmo
+   * procedimento é detectado e oferecido — nunca aplicado calado. Um plano serve a uma linha só:
+   * o mesmo procedimento digitado duas vezes não conta duas sessões do mesmo plano.
    */
-  const planoVinculado = useMemo(() => {
-    if (desvinculado) return undefined;
-    if (planoFixoId) return planos.find((p) => p.id === planoFixoId);
-    if (atendimento?.planoId) return planos.find((p) => p.id === atendimento.planoId);
-    if (!procedimento.procedimentoNome.trim()) return undefined;
-    return planoAbertoPara(planos, procedimento);
-  }, [desvinculado, planoFixoId, planos, atendimento, procedimento]);
+  const planosVinculados = useMemo((): (SessionPlan | undefined)[] => {
+    const usados = new Set<string>();
+    return procedimentos.map((linha) => {
+      if (linha.desvinculado) return undefined;
+      const plano = linha.planoDeOrigemId
+        ? planos.find((p) => p.id === linha.planoDeOrigemId)
+        : linha.procedimentoNome.trim()
+        ? planoAbertoPara(planos, linha, usados)
+        : undefined;
+      if (!plano || usados.has(plano.id)) return undefined;
+      usados.add(plano.id);
+      return plano;
+    });
+  }, [procedimentos, planos]);
 
-  /** Em que posição esta sessão entra — o número que o aviso mostra antes de salvar. */
-  const posicaoNoPlano = useMemo(() => {
-    if (!planoVinculado) return null;
-    const doPlano = atendimentos.filter((a) => a.planoId === planoVinculado.id);
-    const progresso = progressoDoPlano(planoVinculado, doPlano);
+  /** Em que posição esta sessão entra em cada plano — o número que o aviso mostra antes de salvar. */
+  const posicaoNoPlano = (plano: SessionPlan) => {
+    const doPlano = atendimentos.filter((a) => pertenceAoPlano(a, plano.id));
+    const progresso = progressoDoPlano(plano, doPlano);
     // Editar mantém a posição que ele já ocupa; criar entra depois da última realizada.
-    const jaExiste = atendimento && doPlano.some((a) => a.id === atendimento.id);
+    const jaExiste = modo !== 'novo' && atendimento && doPlano.some((a) => a.id === atendimento.id);
     const numero = jaExiste
       ? numeroDaSessao(atendimento!, doPlano) ?? progresso.realizadas
       : progresso.realizadas + 1;
     return { numero, total: progresso.total };
-  }, [planoVinculado, atendimentos, atendimento]);
+  };
+
+  /**
+   * O procedimento que ganha o plano novo, se a pessoa ligar a chave: um dos que ainda não têm
+   * plano. Com um só, é ele; com mais de um, o escolhido nas pílulas (o primeiro, de partida).
+   */
+  const semPlano = procedimentos.filter(
+    (linha, i) => !!linha.procedimentoNome.trim() && !planosVinculados[i]
+  );
+  const alvoDoPlanoNovo = semPlano.find((l) => l.chave === chaveDoPlanoNovo) || semPlano[0];
 
   /**
    * Quantas sessões o orçamento já vendeu deste procedimento — só como valor inicial do campo
    * quando a pessoa liga o plano. Sugestão, nunca vínculo: plano não depende de orçamento.
    */
   const sugestaoDeSessoes = useMemo(() => {
-    if (!procedimento.procedimentoNome.trim()) return undefined;
+    if (!alvoDoPlanoNovo) return undefined;
     for (const q of quotes) {
       if (resolveQuoteStatus(q) !== 'pago') continue;
       const item = q.itens.find((i) =>
         mesmoProcedimento(
           { procedureId: i.procedureId, procedimentoNome: i.titulo },
-          procedimento
+          alvoDoPlanoNovo
         )
       );
       if (item?.maisDeUmaSessao && item.sessoes > 1) return item.sessoes;
     }
     return undefined;
-  }, [quotes, procedimento]);
+  }, [quotes, alvoDoPlanoNovo]);
 
   /**
    * O "Quando" de tocar: só para marcar horário — o agendamento novo e a edição de um que ainda
@@ -548,6 +631,32 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
 
   if (!isOpen) return null;
 
+  const mudarProcedimento = (
+    chave: string,
+    escolha: { procedureId?: string; procedimentoNome: string }
+  ) =>
+    setProcedimentos((atuais) =>
+      atuais.map((l) =>
+        l.chave === chave
+          ? { ...l, procedureId: escolha.procedureId, procedimentoNome: escolha.procedimentoNome }
+          : l
+      )
+    );
+
+  const adicionarProcedimento = () => {
+    const nova = linhaDeProcedimento();
+    setProcedimentos((atuais) => [...atuais, nova]);
+    setLinhaEmFoco(nova.chave);
+  };
+
+  const removerProcedimento = (chave: string) =>
+    setProcedimentos((atuais) => atuais.filter((l) => l.chave !== chave));
+
+  const desvincular = (chave: string) =>
+    setProcedimentos((atuais) =>
+      atuais.map((l) => (l.chave === chave ? { ...l, desvinculado: true } : l))
+    );
+
   const ligarPlano = (ligado: boolean) => {
     setCriarPlano(ligado);
     if (ligado && !totalSessoes && sugestaoDeSessoes) setTotalSessoes(String(sugestaoDeSessoes));
@@ -570,7 +679,9 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
       novos.data = 'A visita precisa já ter acontecido: hoje, num horário que passou, ou antes.';
     }
 
-    if (!procedimento.procedimentoNome.trim()) novos.procedimento = 'Informe o procedimento.';
+    if (!procedimentos.some((p) => p.procedimentoNome.trim())) {
+      novos.procedimento = 'Informe o procedimento.';
+    }
 
     if (duracao.trim() && !(Number(duracao) >= 5 && Number(duracao) <= 480)) {
       novos.duracao = 'Entre 5 e 480 minutos.';
@@ -578,7 +689,9 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
 
     if (!patient) novos.paciente = 'Escolha a paciente.';
 
-    if (criarPlano) {
+    // A chave pode ter ficado ligada enquanto o procedimento ganhou um plano aberto — aí o campo
+    // sumiu da tela e não há plano novo a validar.
+    if (criarPlano && alvoDoPlanoNovo) {
       const total = Number(totalSessoes);
       if (!Number.isInteger(total) || total < 2) {
         novos.plano = 'O plano precisa de um total de 2 sessões ou mais.';
@@ -605,16 +718,29 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
       const profissional = professionals.find((p) => p.id === professionalId);
 
       let planoNovo: SessionPlan | undefined;
-      if (criarPlano) {
+      if (criarPlano && alvoDoPlanoNovo) {
         planoNovo = {
           id: `plan-${Date.now()}`,
           pacienteId: patient.id,
-          procedureId: procedimento.procedureId,
-          procedimentoNome: procedimento.procedimentoNome.trim(),
+          procedureId: alvoDoPlanoNovo.procedureId,
+          procedimentoNome: alvoDoPlanoNovo.procedimentoNome.trim(),
           totalSessoes: Number(totalSessoes),
           createdAt: agora,
         };
       }
+
+      // Linha deixada em branco não vira procedimento: o primeiro preenchido é o principal.
+      const daVisita: ProcedimentoDaVisita[] = procedimentos
+        .map((linha, i) => ({
+          procedureId: linha.procedureId,
+          procedimentoNome: linha.procedimentoNome.trim(),
+          planoId:
+            planoNovo && linha.chave === alvoDoPlanoNovo?.chave
+              ? planoNovo.id
+              : planosVinculados[i]?.id,
+        }))
+        .filter((p) => p.procedimentoNome);
+      const [principalDaVisita, ...adicionais] = daVisita;
 
       const registro: Attendance = {
         // Em `novo`, `atendimento` é semente e não identidade — reaproveitar o id dele
@@ -625,9 +751,10 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         data: dataISO!,
         hora: hora.trim() || undefined,
         duracaoMin,
-        procedureId: procedimento.procedureId,
-        procedimentoNome: procedimento.procedimentoNome.trim(),
-        planoId: planoNovo?.id || planoVinculado?.id,
+        procedureId: principalDaVisita.procedureId,
+        procedimentoNome: principalDaVisita.procedimentoNome,
+        planoId: principalDaVisita.planoId,
+        procedimentosAdicionais: adicionais.length > 0 ? adicionais : undefined,
         professionalId: professionalId || undefined,
         salaId: salaId || undefined,
         profissionalNome: profissional?.name,
@@ -798,13 +925,32 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
           </div>
         )}
 
-        <ProcedureSearchSelect
-          procedures={procedures}
-          procedureId={procedimento.procedureId}
-          nome={procedimento.procedimentoNome}
-          onSelect={setProcedimento}
-          erro={erros.procedimento}
-        />
+        {/* Os procedimentos da visita. Mais de um no mesmo horário (botox + preenchimento) é
+            um agendamento só: a duração soma, e cada um entra no plano dele. */}
+        <div className="flex flex-col gap-2">
+          {procedimentos.map((linha, i) => (
+            <ProcedureSearchSelect
+              key={linha.chave}
+              id={i === 0 ? 'atendimento-procedimento' : `atendimento-${linha.chave}`}
+              rotulo={procedimentos.length > 1 ? `${i + 1}º procedimento` : 'Procedimento'}
+              procedures={procedures}
+              procedureId={linha.procedureId}
+              nome={linha.procedimentoNome}
+              onSelect={(escolha) => mudarProcedimento(linha.chave, escolha)}
+              onRemover={i > 0 ? () => removerProcedimento(linha.chave) : undefined}
+              autoFocus={linha.chave === linhaEmFoco}
+              erro={i === 0 ? erros.procedimento : undefined}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={adicionarProcedimento}
+            className="self-start inline-flex items-center gap-1.5 min-h-[40px] px-1 text-[14px] font-semibold text-ink hover:underline underline-offset-2"
+          >
+            <Plus className="w-4 h-4" />
+            Adicionar outro procedimento
+          </button>
+        </div>
 
         <div>
           <RotuloTinta>Profissional</RotuloTinta>
@@ -972,8 +1118,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                 inputMode="numeric"
                 value={duracao}
                 onChange={(e) => {
-                  setDuracaoTocada(true);
-                  setDuracao(e.target.value.replace(/\D/g, '').slice(0, 3));
+                  setDuracaoDigitada(e.target.value.replace(/\D/g, '').slice(0, 3));
                 }}
                 placeholder={String(AGENDA_DEFAULTS.duracaoMin)}
                 className={`${INPUT_TINTA} tabular-nums`}
@@ -1025,30 +1170,42 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
           </AvisoTinta>
         )}
 
-        {/* Plano: ou o vínculo detectado, ou a oferta de criar um. Nunca os dois — digitar um
-            total novo enquanto existe plano aberto não teria significado claro (criaria um
-            segundo plano paralelo ou mexeria nas outras sessões sem avisar). */}
-        {planoVinculado ? (
-          <div className="rounded-2xl bg-card border border-ink/10 px-4 py-3 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[12px] font-semibold text-ink-soft">Plano em andamento</p>
-              <p className="text-[15px] font-bold text-ink truncate">
-                {planoVinculado.procedimentoNome} ·{' '}
-                <span className="tabular-nums">
-                  {posicaoNoPlano?.numero}ª de {posicaoNoPlano?.total}
-                </span>
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setDesvinculado(true)}
-              className="shrink-0 inline-flex items-center gap-1.5 h-10 px-3 rounded-full text-[13px] font-semibold text-ink-soft hover:text-danger hover:bg-danger-bg transition-colors"
+        {/* Plano, por procedimento: ou o vínculo detectado, ou a oferta de criar um. Nunca os dois
+            para o mesmo procedimento — digitar um total novo enquanto existe plano aberto não teria
+            significado claro (criaria um segundo plano paralelo ou mexeria nas outras sessões sem
+            avisar). */}
+        {procedimentos.map((linha, i) => {
+          const plano = planosVinculados[i];
+          if (!plano) return null;
+          const posicao = posicaoNoPlano(plano);
+          return (
+            <div
+              key={`plano-${linha.chave}`}
+              className="rounded-2xl bg-card border border-ink/10 px-4 py-3 flex items-center justify-between gap-3"
             >
-              <Link2Off className="w-4 h-4" />
-              Desvincular
-            </button>
-          </div>
-        ) : (
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold text-ink-soft">Plano em andamento</p>
+                {/* O nome longo encurta; o número da sessão, que é o que se confere, nunca. */}
+                <p className="flex gap-1 text-[15px] font-bold text-ink">
+                  <span className="truncate">{plano.procedimentoNome}</span>
+                  <span className="shrink-0 tabular-nums">
+                    · {posicao.numero}ª de {posicao.total}
+                  </span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => desvincular(linha.chave)}
+                aria-label={`Desvincular do plano de ${plano.procedimentoNome}`}
+                className="shrink-0 inline-flex items-center gap-1.5 h-10 px-3 rounded-full text-[13px] font-semibold text-ink-soft hover:text-danger hover:bg-danger-bg transition-colors"
+              >
+                <Link2Off className="w-4 h-4" />
+                Desvincular
+              </button>
+            </div>
+          );
+        })}
+        {(semPlano.length > 0 || !procedimentos.some((p) => p.procedimentoNome.trim())) && (
           <div className="rounded-2xl bg-card border border-ink/10 px-4 py-3.5 flex flex-col gap-3">
             <Interruptor
               ligado={criarPlano}
@@ -1056,6 +1213,15 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               rotulo="Plano de sessões"
               descricao="Para pacotes contínuos — as sessões seguintes entram neste plano sozinhas."
             />
+            {criarPlano && semPlano.length > 1 && (
+              <PilulasDeEscolha
+                rotulo="Plano de qual procedimento"
+                compacta
+                opcoes={semPlano.map((l) => ({ id: l.chave, rotulo: l.procedimentoNome.trim() }))}
+                valor={alvoDoPlanoNovo?.chave || ''}
+                onMudar={(chave) => chave && setChaveDoPlanoNovo(chave)}
+              />
+            )}
             {criarPlano && (
               <CampoTinta
                 rotulo="Total de sessões"

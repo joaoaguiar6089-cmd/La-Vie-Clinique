@@ -11,7 +11,7 @@ import { formatDateOnly } from '../../utils/formatters';
 import {
   LinhaDeMaterial,
   linhasParaGravar,
-  materiaisSugeridos,
+  materiaisSugeridosDaVisita,
   montarMateriaisDoAtendimento,
   totaisDosMateriais,
 } from '../../utils/estoque';
@@ -27,6 +27,7 @@ import {
 import { SidePanel } from '../common/SidePanel';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { EditorDeMateriais } from './EditorDeMateriais';
+import { nomeDosProcedimentos } from '../../utils/attendances';
 
 interface MateriaisDoAtendimentoPanelProps {
   /** A visita. `null` = painel fechado. */
@@ -134,7 +135,7 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
       return;
     }
     if (!produtos || !consumos) return; // o consumo padrão ainda não chegou
-    const sugeridos = materiaisSugeridos(atendimento, consumos, produtos, catalogo);
+    const sugeridos = materiaisSugeridosDaVisita(atendimento, consumos, produtos, catalogo);
     setLinhas(sugeridos);
     setVeioDoPadrao(sugeridos.length > 0);
     setMontadas(true);
@@ -145,6 +146,9 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
   const carregando = !montadas && !erro;
   const totais = totaisDosMateriais(linhas);
   const procedimento = procedimentoDoAtendimento(atendimento, catalogo);
+  const nomeDoConsumo = atendimento.procedimentosAdicionais?.length
+    ? nomeDosProcedimentos(atendimento)
+    : procedimento?.title || atendimento.procedimentoNome;
 
   const salvar = async () => {
     setSalvando(true);
@@ -246,7 +250,7 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
       aberto={aberto}
       onFechar={onFechar}
       titulo="Materiais usados"
-      sobretitulo={`${atendimento.pacienteNome} · ${atendimento.procedimentoNome} · ${formatDateOnly(atendimento.data)}`}
+      sobretitulo={`${atendimento.pacienteNome} · ${nomeDosProcedimentos(atendimento)} · ${formatDateOnly(atendimento.data)}`}
       bloqueado={salvando}
       alterado={mexida}
       rodape={rodape}
@@ -270,8 +274,8 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
                 <Info className="w-4 h-4 shrink-0 mt-px text-brand" />
                 <span>
                   {veioDoPadrao
-                    ? `Preenchido com o consumo padrão de ${procedimento?.title || atendimento.procedimentoNome}. Ajuste o que foi diferente nesta sessão.`
-                    : `Nenhum consumo padrão configurado para ${procedimento?.title || atendimento.procedimentoNome}. Adicione os materiais abaixo — ou configure o padrão em Estoque › Consumo por procedimento.`}
+                    ? `Preenchido com o consumo padrão de ${nomeDoConsumo}. Ajuste o que foi diferente nesta sessão.`
+                    : `Nenhum consumo padrão configurado para ${nomeDoConsumo}. Adicione os materiais abaixo — ou configure o padrão em Estoque › Consumo por procedimento.`}
                 </span>
               </p>
             )}

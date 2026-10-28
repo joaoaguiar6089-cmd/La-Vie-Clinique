@@ -39,7 +39,14 @@ import {
   diasVisiveisDaSemana,
 } from '../../utils/agenda';
 import { respostasParaResolver } from '../../utils/agendamentoLink';
-import { DataISO, ehRealizado, hojeISO, progressoDoPlano, numeroDaSessao } from '../../utils/attendances';
+import {
+  DataISO,
+  ehRealizado,
+  hojeISO,
+  progressoDoPlano,
+  numeroDaSessao,
+  planosDoAtendimento,
+} from '../../utils/attendances';
 import { aviso, ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { AttendanceFormModal, ModoDoFormulario } from '../patients/AttendanceFormModal';
 import { AgendaToolbar } from './AgendaToolbar';
@@ -217,10 +224,11 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
     const rotulos = new Map<string, string>();
     const porPlano = new Map<string, Attendance[]>();
     atendimentos.forEach((a) => {
-      if (!a.planoId) return;
-      const lista = porPlano.get(a.planoId) || [];
-      lista.push(a);
-      porPlano.set(a.planoId, lista);
+      planosDoAtendimento(a).forEach((planoId) => {
+        const lista = porPlano.get(planoId) || [];
+        lista.push(a);
+        porPlano.set(planoId, lista);
+      });
     });
 
     planos.forEach((plano) => {
@@ -228,7 +236,11 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
       const progresso = progressoDoPlano(plano, doPlano);
       doPlano.forEach((a) => {
         const numero = numeroDaSessao(a, doPlano) ?? (a.status === 'agendado' ? progresso.realizadas + 1 : undefined);
-        if (numero) rotulos.set(a.id, `${numero}ª de ${plano.totalSessoes}`);
+        if (!numero) return;
+        // Visita de dois planos (um por procedimento) leva os dois números: "4ª de 10 · 2ª de 6".
+        const anterior = rotulos.get(a.id);
+        const rotulo = `${numero}ª de ${plano.totalSessoes}`;
+        rotulos.set(a.id, anterior ? `${anterior} · ${rotulo}` : rotulo);
       });
     });
     return rotulos;
@@ -516,6 +528,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
       hora: pedido.hora,
       duracaoMin: a.duracaoMin,
       procedureId: a.procedureId,
+      procedimentosAdicionais: a.procedimentosAdicionais,
       professionalId: a.professionalId,
       salaId: a.salaId,
     };

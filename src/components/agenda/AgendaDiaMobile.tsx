@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { CheckCheck, MessageCircle, Plus } from 'lucide-react';
 import { Attendance, ClinicProfile, Patient, Procedure, Professional } from '../../types';
-import { DataISO } from '../../utils/attendances';
+import { DataISO, nomeDosProcedimentos } from '../../utils/attendances';
 import {
   almocoDoDia,
   atendimentosDoDia,
@@ -331,7 +331,7 @@ const CartaoDeAtendimento: React.FC<{
           </span>
         </span>
         <span className={`text-[13px] truncate ${escuro ? 'text-cream/75' : 'text-ink-soft'}`}>
-          {atendimento.procedimentoNome} · {faixa}
+          {nomeDosProcedimentos(atendimento)} · {faixa}
           {rotuloDoPlano ? ` · ${rotuloDoPlano}` : ''}
         </span>
         {(profissional || sala) && (

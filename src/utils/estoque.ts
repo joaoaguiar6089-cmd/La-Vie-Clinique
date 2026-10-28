@@ -140,6 +140,32 @@ export const materiaisSugeridos = (
     .filter((m): m is MaterialUsado => !!m);
 };
 
+/**
+ * O consumo padrão de todos os procedimentos da visita, somado: botox e preenchimento no mesmo
+ * horário gastam os materiais dos dois. Produto que aparece em mais de um procedimento vira uma
+ * linha só, com as quantidades somadas — duas linhas da mesma seringa confundiriam a conferência.
+ */
+export const materiaisSugeridosDaVisita = (
+  alvo: {
+    procedureId?: string;
+    procedimentoNome: string;
+    procedimentosAdicionais?: { procedureId?: string; procedimentoNome: string }[];
+  },
+  consumos: ConsumoPadrao[],
+  produtos: ProdutoDeEstoque[],
+  catalogo: Procedure[]
+): MaterialUsado[] => {
+  const linhas: MaterialUsado[] = [];
+  [alvo, ...(alvo.procedimentosAdicionais || [])].forEach((procedimento) => {
+    materiaisSugeridos(procedimento, consumos, produtos, catalogo).forEach((m) => {
+      const mesma = m.produtoId ? linhas.find((l) => l.produtoId === m.produtoId) : undefined;
+      if (mesma) mesma.quantidade = arredondar(mesma.quantidade + m.quantidade);
+      else linhas.push({ ...m });
+    });
+  });
+  return linhas;
+};
+
 /** O produto aparece em algum consumo padrão? — o que decide entre excluir e arquivar. */
 export const produtoEmUso = (produtoId: string, consumos: ConsumoPadrao[]): boolean =>
   (consumos || []).some((c) => c.itens.some((i) => i.produtoId === produtoId));

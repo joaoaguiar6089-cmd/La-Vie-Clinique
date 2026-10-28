@@ -8,6 +8,15 @@ interface ProcedureSearchSelectProps {
   nome: string;
   onSelect: (escolha: { procedureId?: string; procedimentoNome: string }) => void;
   erro?: string;
+  /** Mais de um campo na mesma tela (os procedimentos de uma visita) pede ids distintos. */
+  id?: string;
+  rotulo?: string;
+  /**
+   * Presente = o campo pode sair da tela (um procedimento a mais da visita): o X da direita remove
+   * o campo inteiro em vez de só limpar o texto, e aparece mesmo com o campo vazio.
+   */
+  onRemover?: () => void;
+  autoFocus?: boolean;
 }
 
 /**
@@ -27,6 +36,10 @@ export const ProcedureSearchSelect: React.FC<ProcedureSearchSelectProps> = ({
   nome,
   onSelect,
   erro,
+  id = 'atendimento-procedimento',
+  rotulo = 'Procedimento',
+  onRemover,
+  autoFocus,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,17 +72,17 @@ export const ProcedureSearchSelect: React.FC<ProcedureSearchSelectProps> = ({
   return (
     <div ref={containerRef} className="relative">
       <label
-        htmlFor="atendimento-procedimento"
+        htmlFor={id}
         className={`flex items-center gap-2.5 rounded-[14px] px-4 pt-2 pb-2.5 min-h-[56px] cursor-text transition-colors focus-within:bg-card focus-within:ring-2 focus-within:ring-ink ${
           erro ? 'bg-danger-bg ring-2 ring-danger' : 'bg-line-soft'
         }`}
       >
         <span className="min-w-0 flex-1">
           <span className="block text-[12px] font-semibold text-ink-soft leading-tight mb-0.5">
-            Procedimento
+            {rotulo}
           </span>
           <input
-            id="atendimento-procedimento"
+            id={id}
             type="text"
             value={nome}
             onChange={(e) => {
@@ -79,13 +92,26 @@ export const ProcedureSearchSelect: React.FC<ProcedureSearchSelectProps> = ({
               setIsOpen(true);
             }}
             onFocus={() => setIsOpen(true)}
+            autoFocus={autoFocus}
             placeholder="Buscar no catálogo ou digitar"
             aria-invalid={!!erro}
             autoComplete="off"
             className="w-full min-w-0 bg-transparent border-0 p-0 text-[16px] font-semibold text-ink placeholder:text-muted placeholder:font-medium focus:outline-none"
           />
         </span>
-        {nome ? (
+        {onRemover ? (
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              onRemover();
+            }}
+            aria-label={`Remover ${nome.trim() || 'este procedimento'}`}
+            className="w-9 h-9 -mr-2 shrink-0 rounded-full flex items-center justify-center text-ink-soft hover:text-danger hover:bg-danger-bg"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        ) : nome ? (
           <button
             type="button"
             onClick={() => {

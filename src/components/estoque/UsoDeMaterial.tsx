@@ -3,10 +3,11 @@ import { AlertCircle, Info, Loader2 } from 'lucide-react';
 import { ConsumoPadrao, MateriaisDoAtendimento, Procedure, ProdutoDeEstoque } from '../../types';
 import { AlvoDaFicha } from '../../utils/fichasClinicas';
 import { procedimentoDoAtendimento } from '../../utils/evaluations';
+import { nomeDosProcedimentos } from '../../utils/attendances';
 import {
   LinhaDeMaterial,
   PlanoDosMateriais,
-  materiaisSugeridos,
+  materiaisSugeridosDaVisita,
   planoDosMateriais,
 } from '../../utils/estoque';
 import {
@@ -130,7 +131,7 @@ export const useUsoDeMaterial = (
   // Marcado sem registro: as linhas do consumo padrão, assim que o estoque chegar.
   useEffect(() => {
     if (!ativo || !usou || montadas || !lido || !produtos || !consumos) return;
-    const sugeridos = materiaisSugeridos(alvo, consumos, produtos, catalogo);
+    const sugeridos = materiaisSugeridosDaVisita(alvo, consumos, produtos, catalogo);
     setLinhas(sugeridos);
     setVeioDoPadrao(sugeridos.length > 0);
     setMontadas(true);
@@ -155,7 +156,9 @@ export const useUsoDeMaterial = (
     produtos: produtos || [],
     registro,
     veioDoPadrao,
-    nomeDoProcedimento: procedimentoDoAtendimento(alvo, catalogo)?.title || alvo.procedimentoNome,
+    nomeDoProcedimento: alvo.procedimentosAdicionais?.length
+      ? nomeDosProcedimentos(alvo)
+      : procedimentoDoAtendimento(alvo, catalogo)?.title || alvo.procedimentoNome,
     mexido,
     plano: () => planoDosMateriais({ usou, linhas, existia: !!registro, pronto: lido }),
   };

@@ -966,6 +966,18 @@ export interface SessionPlan {
 }
 
 /**
+ * Um procedimento de uma visita, com o plano que ele consome. Cada um tem o seu porque a mesma
+ * visita pode ser a 4ª sessão do laser e um botox avulso — ou a 2ª de dois planos diferentes.
+ */
+export interface ProcedimentoDaVisita {
+  /** Origem no catálogo. Ausente quando o procedimento foi digitado à mão. */
+  procedureId?: string;
+  procedimentoNome: string;
+  /** Vínculo com o plano deste procedimento. Ausente = avulso. */
+  planoId?: string;
+}
+
+/**
  * Uma visita: o que aconteceu, ou o que está marcado para acontecer.
  *
  * Diferente da ficha de anamnese, que é documento clínico assinado, isto é o diário da clínica —
@@ -994,6 +1006,16 @@ export interface Attendance {
   procedimentoNome: string;
   /** Vínculo com o plano. Ausente = sessão avulsa. */
   planoId?: string;
+  /**
+   * Os outros procedimentos da mesma visita — "Botox + Preenchimento labial" num horário só.
+   *
+   * O primeiro continua em `procedureId`/`procedimentoNome`/`planoId`, e é por isso que esta lista
+   * guarda só **os demais**: todo registro gravado antes dela continua inteiro, e quem só precisa
+   * de um procedimento (a ficha, o acompanhamento, o palpite do formulário) segue lendo o
+   * principal. Quem mostra a visita usa `procedimentosDoAtendimento` e `nomeDosProcedimentos`
+   * (`utils/attendances.ts`). Ausente ou vazia = um procedimento só.
+   */
+  procedimentosAdicionais?: ProcedimentoDaVisita[];
   professionalId?: string;
   profissionalNome?: string; // Congelado no registro, para o caso de a equipe mudar depois
   /**

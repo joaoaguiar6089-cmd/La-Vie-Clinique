@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import { Attendance, Procedure, Professional, Quote } from '../../types';
 import { formatBRL, formatDateOnly } from '../../utils/formatters';
-import { hojeISO } from '../../utils/attendances';
+import { hojeISO, nomeDosProcedimentos } from '../../utils/attendances';
 import { MateriaisDoAtendimentoPanel } from '../estoque/MateriaisDoAtendimentoPanel';
 import { Chip, ValorEmReais } from '../common/Tinta';
 import {
@@ -231,7 +231,7 @@ const MateriaisPorAtendimento: React.FC<{
                   <span className="min-w-0 flex-1">
                     <span className="block text-body-lg font-semibold text-ink truncate">{a.pacienteNome}</span>
                     <span className="block text-body text-ink-soft truncate">
-                      {[a.procedimentoNome, profissional].filter(Boolean).join(' · ')}
+                      {[nomeDosProcedimentos(a), profissional].filter(Boolean).join(' · ')}
                     </span>
                   </span>
                   <span className="shrink-0 text-right">

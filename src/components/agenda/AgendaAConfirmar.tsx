@@ -3,6 +3,7 @@ import { CheckCheck, ChevronDown, MessageCircle, PhoneOff } from 'lucide-react';
 import { Attendance, ClinicProfile, Patient, Procedure } from '../../types';
 import { contatoDoAtendimento, mensagemDeConfirmacao } from '../../utils/agenda';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
+import { nomeDosProcedimentos } from '../../utils/attendances';
 
 /**
  * Os agendamentos de **amanhã** que ninguém confirmou ainda.
@@ -81,7 +82,7 @@ export const AgendaAConfirmar: React.FC<AgendaAConfirmarProps> = ({
                     {a.pacienteNome}
                   </span>
                   <span className="block text-body text-muted truncate">
-                    {a.procedimentoNome}
+                    {nomeDosProcedimentos(a)}
                     {a.profissionalNome ? ` · ${a.profissionalNome}` : ''}
                   </span>
                 </button>

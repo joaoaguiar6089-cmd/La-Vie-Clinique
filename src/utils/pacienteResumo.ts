@@ -9,7 +9,15 @@ import {
   Quote,
   SessionPlan,
 } from '../types';
-import { DataISO, ehRealizado, hojeISO, instanteDoAtendimento, progressoDoPlano } from './attendances';
+import {
+  DataISO,
+  ehRealizado,
+  hojeISO,
+  instanteDoAtendimento,
+  nomeDosProcedimentos,
+  pertenceAoPlano,
+  progressoDoPlano,
+} from './attendances';
 import { fotosDaSessao } from './evaluations';
 import { paraArray } from './firestoreShapes';
 
@@ -182,7 +190,7 @@ export const progressoDosPlanos = (
   planos
     .filter((p) => !p.encerradoEm)
     .map((plano) => {
-      const doPlano = atendimentos.filter((a) => a.planoId === plano.id);
+      const doPlano = atendimentos.filter((a) => pertenceAoPlano(a, plano.id));
       const { realizadas } = progressoDoPlano(plano, doPlano);
       const realizados = doPlano
         .filter(ehRealizado)
@@ -326,7 +334,7 @@ export const linhaDoTempo = (
       tipo: 'atendimento' as const,
       id: a.id,
       data: a.data,
-      titulo: a.procedimentoNome,
+      titulo: nomeDosProcedimentos(a),
       profissional: a.profissionalNome,
       ref: a,
     })),

@@ -1,4 +1,4 @@
-import { Attendance, EvaluationRecord, Patient } from '../types';
+import { Attendance, EvaluationRecord, Patient, ProcedimentoDaVisita } from '../types';
 import { ehRealizado, hojeISO } from './attendances';
 
 /**
@@ -175,6 +175,11 @@ export interface AlvoDaFicha {
   pacienteNome: string;
   procedureId?: string;
   procedimentoNome: string;
+  /**
+   * Os outros procedimentos da visita (`Attendance.procedimentosAdicionais`). A ficha continua
+   * sendo do principal; estes servem aos materiais, que sugerem o consumo de todos.
+   */
+  procedimentosAdicionais?: ProcedimentoDaVisita[];
   /** YYYY-MM-DD. */
   data: string;
   professionalId?: string;
@@ -201,6 +206,7 @@ export const alvoDoAtendimento = (a: Attendance): AlvoDaFicha => ({
   pacienteNome: a.pacienteNome,
   procedureId: a.procedureId,
   procedimentoNome: a.procedimentoNome,
+  procedimentosAdicionais: a.procedimentosAdicionais,
   data: a.data,
   professionalId: a.professionalId,
   profissionalNome: a.profissionalNome,
