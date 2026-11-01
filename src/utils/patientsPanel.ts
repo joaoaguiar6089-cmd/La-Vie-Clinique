@@ -1,5 +1,12 @@
 import { AnamnesisRecord, Attendance, Patient, Quote } from '../types';
-import { ehRealizado } from './attendances';
+import {
+  DataISO,
+  ehPendente,
+  ehRealizado,
+  hojeISO,
+  instanteDoAtendimento,
+  nomeDosProcedimentos,
+} from './attendances';
 
 /**
  * As linhas do painel de clientes — quem aparece na lista, em que ordem e o que ainda falta
@@ -13,12 +20,30 @@ import { ehRealizado } from './attendances';
 /** Ordem escolhida na lista. */
 export type OrdemDaLista = 'alfabetica' | 'interacao';
 
+/**
+ * O filtro do topo da lista: todas, só quem já foi atendida, só quem tem horário marcado.
+ *
+ * Os dois recortes respondem às perguntas que a recepção faz à lista — "quem já é cliente de
+ * verdade?" e "quem vem por aí?" — e por isso não olham anamnese nem orçamento: quem só pediu um
+ * orçamento ainda não passou pela cadeira.
+ */
+export type FiltroDaLista = 'todas' | 'com_atendimento' | 'com_agendamento';
+
 export type TipoDeInteracao = 'atendimento' | 'anamnese' | 'orcamento';
 
 export interface UltimaInteracao {
   tipo: TipoDeInteracao;
   /** Como veio do documento: ISO completo ou "YYYY-MM-DD". */
   data: string;
+}
+
+/** Uma visita resumida para a linha da lista — a última feita ou a próxima marcada. */
+export interface VisitaDaLinha {
+  atendimentoId: string;
+  data: DataISO;
+  hora?: string;
+  /** "Botox + Preenchimento labial" — todos os procedimentos da visita. */
+  procedimento: string;
 }
 
 /**
@@ -45,6 +70,14 @@ export interface LinhaDePaciente {
   totalAnamneses: number;
   totalOrcamentos: number;
   totalAtendimentos: number;
+  /** A visita feita mais recente — o que o filtro "Com atendimento" mostra na linha. */
+  ultimoAtendimento?: VisitaDaLinha;
+  /**
+   * O agendamento mais próximo, de hoje em diante, ainda sem desfecho. O que o filtro "Com
+   * agendamento" mostra na linha. Agendamento de dia que já passou não entra: aquele é trabalho
+   * represado da agenda, não horário marcado.
+   */
+  proximoAgendamento?: VisitaDaLinha;
 }
 
 /**
@@ -131,7 +164,32 @@ interface FontesDaLista {
   records: AnamnesisRecord[];
   quotes: Quote[];
   atendimentos?: Attendance[];
+  /** "Hoje", para decidir o que é agendamento futuro. Parâmetro só para os testes. */
+  hoje?: DataISO;
 }
+
+const resumoDaVisita = (a: Attendance): VisitaDaLinha => ({
+  atendimentoId: a.id,
+  data: a.data,
+  hora: a.hora,
+  procedimento: nomeDosProcedimentos(a),
+});
+
+/** Fica com a visita certa entre a guardada e a nova: a mais recente, ou a mais próxima. */
+const guardarVisita = (
+  mapa: Map<string, Attendance>,
+  chave: string,
+  a: Attendance,
+  ganha: 'mais_recente' | 'mais_proxima'
+) => {
+  const atual = mapa.get(chave);
+  if (!atual) {
+    mapa.set(chave, a);
+    return;
+  }
+  const diferenca = instanteDoAtendimento(a) - instanteDoAtendimento(atual);
+  if (ganha === 'mais_recente' ? diferenca > 0 : diferenca < 0) mapa.set(chave, a);
+};
 
 /** Acumulador de uma pessoa sem cadastro, montado a partir dos documentos que a citam. */
 interface Pendente {
@@ -157,6 +215,7 @@ export const montarLinhasDePacientes = ({
   records,
   quotes,
   atendimentos = [],
+  hoje = hojeISO(),
 }: FontesDaLista): LinhaDePaciente[] => {
   /** Cadastro por chave de nome, para acolher o que veio avulso. Em homônimos, o 1º leva. */
   const porNome = new Map<string, Patient>();
@@ -173,6 +232,12 @@ export const montarLinhasDePacientes = ({
     { anamneses: number; orcamentos: number; atendimentos: number }
   >();
   const pendentes = new Map<string, Pendente>();
+  /**
+   * Última visita feita e próximo agendamento, por id do cadastro — ou por chave do nome, para
+   * quem não tem cadastro.
+   */
+  const ultimos = new Map<string, Attendance>();
+  const proximos = new Map<string, Attendance>();
 
   const contar = (patientId: string, tipo: TipoDeInteracao) => {
     const atual = contagens.get(patientId) || { anamneses: 0, orcamentos: 0, atendimentos: 0 };
@@ -229,14 +294,28 @@ export const montarLinhasDePacientes = ({
   });
 
   atendimentos.forEach((a) => {
+    const dono = (a.pacienteId && porId.get(a.pacienteId)) || porNome.get(chaveDoNome(a.pacienteNome));
+    const chave = dono ? dono.id : chaveDoNome(a.pacienteNome);
+
+    // O horário marcado de hoje em diante — o que o filtro "Com agendamento" procura.
+    if (ehPendente(a) && !!a.data && a.data >= hoje) {
+      if (chave) guardarVisita(proximos, chave, a, 'mais_proxima');
+      return;
+    }
+
     // Agendamento futuro não conta como interação: ele ainda não aconteceu. Falta e remarcação
     // também não — ninguém veio à clínica.
     if (!ehRealizado(a)) return;
     const interacao: UltimaInteracao = { tipo: 'atendimento', data: dataDoAtendimento(a) };
-    const dono = (a.pacienteId && porId.get(a.pacienteId)) || porNome.get(chaveDoNome(a.pacienteNome));
     if (dono) registrar(dono.id, interacao);
     else registrarPendente(a.pacienteNome, undefined, interacao);
+    if (chave) guardarVisita(ultimos, chave, a, 'mais_recente');
   });
+
+  const visita = (mapa: Map<string, Attendance>, chave: string): VisitaDaLinha | undefined => {
+    const a = mapa.get(chave);
+    return a ? resumoDaVisita(a) : undefined;
+  };
 
   const doCadastro: LinhaDePaciente[] = patients.map((p) => {
     const totais = contagens.get(p.id) || { anamneses: 0, orcamentos: 0, atendimentos: 0 };
@@ -251,6 +330,8 @@ export const montarLinhasDePacientes = ({
       totalAnamneses: totais.anamneses,
       totalOrcamentos: totais.orcamentos,
       totalAtendimentos: totais.atendimentos,
+      ultimoAtendimento: visita(ultimos, p.id),
+      proximoAgendamento: visita(proximos, p.id),
     };
   });
 
@@ -263,6 +344,10 @@ export const montarLinhasDePacientes = ({
     totalAnamneses: p.totalAnamneses,
     totalOrcamentos: p.totalOrcamentos,
     totalAtendimentos: p.totalAtendimentos,
+    ultimoAtendimento: visita(ultimos, chave),
+    // Quem só tem um horário marcado e nenhum outro documento não vira linha: sem cadastro e sem
+    // histórico, não há página a abrir. Na prática não acontece — agendar cria o cadastro.
+    proximoAgendamento: visita(proximos, chave),
   }));
 
   return [...doCadastro, ...semCadastro];
@@ -287,6 +372,51 @@ export const ordenarLinhas = (
     if (ta !== tb) return tb - ta;
     return porNome(a, b);
   });
+};
+
+/** As linhas que passam no filtro do topo da lista. */
+export const filtrarLinhas = (linhas: LinhaDePaciente[], filtro: FiltroDaLista): LinhaDePaciente[] =>
+  filtro === 'com_atendimento'
+    ? linhas.filter((l) => l.totalAtendimentos > 0)
+    : filtro === 'com_agendamento'
+    ? linhas.filter((l) => !!l.proximoAgendamento)
+    : linhas;
+
+/**
+ * No filtro "Com agendamento" a ordem é a da agenda: o horário mais próximo primeiro. Em ordem
+ * alfabética, a paciente de amanhã ficaria no meio da lista, atrás de quem vem só em março.
+ */
+export const ordenarPorAgendamento = (linhas: LinhaDePaciente[]): LinhaDePaciente[] => {
+  const instante = (l: LinhaDePaciente) => {
+    const v = l.proximoAgendamento;
+    if (!v) return Number.MAX_SAFE_INTEGER;
+    const t = new Date(`${v.data}T${v.hora || '12:00'}:00`).getTime();
+    return isNaN(t) ? Number.MAX_SAFE_INTEGER : t;
+  };
+  return [...linhas].sort(
+    (a, b) =>
+      instante(a) - instante(b) || a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
+  );
+};
+
+const DIAS_DA_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+/**
+ * Quando é o agendamento, para a linha da lista: "Hoje", "Amanhã" ou "qui, 05/11" — com o ano só
+ * quando não é o deste ano ("qua, 06/01/27"). O dia da semana fica porque é por ele que a
+ * recepção pensa a semana; a data sozinha obriga a abrir o calendário.
+ */
+export const diaDoAgendamento = (data: DataISO, hoje: DataISO = hojeISO()): string => {
+  const meioDia = (iso: string) => new Date(`${iso}T12:00:00Z`);
+  const d = meioDia(data);
+  if (isNaN(d.getTime())) return '';
+  if (data === hoje) return 'Hoje';
+  const amanha = new Date(meioDia(hoje).getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (data === amanha) return 'Amanhã';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const diaMes = `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}`;
+  const ano = data.slice(0, 4) === hoje.slice(0, 4) ? '' : `/${data.slice(2, 4)}`;
+  return `${DIAS_DA_SEMANA[d.getUTCDay()]}, ${diaMes}${ano}`;
 };
 
 export const ROTULO_DA_INTERACAO: Record<TipoDeInteracao, string> = {
