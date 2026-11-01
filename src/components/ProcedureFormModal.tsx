@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Plus, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope, FileText, Move, Loader2, Layers } from 'lucide-react';
+import { Upload, Trash2, Image as ImageIcon, Sparkles, AlertCircle, Check, Link as LinkIcon, Star, UserCheck, Stethoscope, Move, Loader2, Layers } from 'lucide-react';
 import {
   AreaDoProcedimento,
   ClinicProfile,
   EnquadramentosDaFoto,
   Procedure,
   Professional,
-  QuoteItemDetail,
   VistaDoMapa,
 } from '../types';
 import { PRESET_IMAGE_LIBRARY, INITIAL_CATEGORIES } from '../data/initialData';
@@ -28,6 +27,21 @@ import { MapaDeAreasEditor } from './laser/MapaDeAreasEditor';
 import { CampoMaisDeUmaSessao } from './common/CampoMaisDeUmaSessao';
 import { SidePanel } from './common/SidePanel';
 import { ConfirmDialog, ConfirmRequest } from './ConfirmDialog';
+import { CampoDoCard, CampoEmDestaque, PreviaDoCardIndividual } from './PreviaDoCardIndividual';
+
+const IMAGEM_PADRAO =
+  'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80';
+
+/** O campo do formulário (marcado com `data-campo-do-card`) onde o evento aconteceu. */
+const campoDoEvento = (alvo: EventTarget | null): CampoEmDestaque | null => {
+  const elemento =
+    alvo instanceof Element ? alvo.closest<HTMLElement>('[data-campo-do-card]') : null;
+  if (!elemento) return null;
+  return { campo: elemento.dataset.campoDoCard as CampoDoCard, elemento };
+};
+
+const mesmoCampo = (a: CampoEmDestaque | null, b: CampoEmDestaque | null) =>
+  a?.elemento === b?.elemento && a?.campo === b?.campo;
 
 /**
  * O recorte corta o próprio arquivo — serve para girar e para tirar o que não deve aparecer em
@@ -125,7 +139,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [contraindications, setContraindications] = useState('');
   const [idealCandidate, setIdealCandidate] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
-  const [quoteDetails, setQuoteDetails] = useState<QuoteItemDetail[]>([]);
+  /**
+   * Prévia do card: o campo sob o mouse e o campo com o foco. O do mouse manda — é o que a pessoa
+   * está apontando —, e o do foco segura a seta enquanto ela digita com o mouse fora do formulário.
+   */
+  const [campoSobMouse, setCampoSobMouse] = useState<CampoEmDestaque | null>(null);
+  const [campoEmFoco, setCampoEmFoco] = useState<CampoEmDestaque | null>(null);
 
   // Doctors assignment state
   const [assignedDoctorIds, setAssignedDoctorIds] = useState<string[]>([]);
@@ -207,7 +226,6 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setContraindications(procedureToEdit.contraindications || '');
       setIdealCandidate(procedureToEdit.idealCandidate || '');
       setIsFeatured(Boolean(procedureToEdit.isFeatured));
-      setQuoteDetails(procedureToEdit.quoteDetails || []);
       setExigeSelecaoDeArea(Boolean(procedureToEdit.exigeSelecaoDeArea));
       setVistasDoMapa(procedureToEdit.vistasDoMapa || []);
       setAreasDoMapa(procedureToEdit.areasDoMapa || []);
@@ -240,7 +258,6 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       setContraindications('Gestantes e infecção ativa na área');
       setIdealCandidate('Pessoas que buscam harmonia e prevenção do envelhecimento');
       setIsFeatured(false);
-      setQuoteDetails([]);
       setExigeSelecaoDeArea(false);
       setVistasDoMapa([]);
       setAreasDoMapa([]);
@@ -258,6 +275,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setCropQueueTotal(0);
     setAdjustingImage(null);
     setFotoEmAjuste(null);
+    setCampoSobMouse(null);
+    setCampoEmFoco(null);
     // availableDoctors is intentionally excluded: it's a new array reference on every
     // clinic profile sync, and including it would reset all in-progress form edits
     // (including image removals) whenever that background sync fires while editing.
@@ -382,20 +401,15 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     setAreasTreated((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleAddQuoteDetail = () => {
-    setQuoteDetails((prev) => [
-      ...prev,
-      { id: `qd-${Date.now()}-${prev.length}`, titulo: '', valor: '' },
-    ]);
-  };
+  /** A categoria que vai ser gravada: a nova que está sendo digitada, ou a escolhida na lista. */
+  const categoriaFinal = () =>
+    customCategory.trim() || category.trim() || 'Harmonização & Injetáveis';
 
-  const handleUpdateQuoteDetail = (id: string, field: 'titulo' | 'valor', value: string) => {
-    setQuoteDetails((prev) => prev.map((d) => (d.id === id ? { ...d, [field]: value } : d)));
-  };
-
-  const handleRemoveQuoteDetail = (id: string) => {
-    setQuoteDetails((prev) => prev.filter((d) => d.id !== id));
-  };
+  /** Médicas cadastradas escolhidas (só o nome) e as avulsas, na ordem em que vão para o catálogo. */
+  const nomesDasMedicas = () => [
+    ...availableDoctors.filter((d) => assignedDoctorIds.includes(d.id)).map((d) => d.name),
+    ...customDoctorNames,
+  ];
 
   /** Grava o procedimento e fecha o painel. Devolve `true` quando gravou. */
   const salvarProcedimento = async (): Promise<boolean> => {
@@ -428,20 +442,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       return false;
     }
 
-    const finalCategory = (isAddingCustomCategory && customCategory.trim())
-      ? customCategory.trim()
-      : (customCategory.trim() || category.trim() || 'Harmonização & Injetáveis');
-
-    // Build assigned doctors names formatted (clean name only)
-    const selectedRegisteredDoctorNames = availableDoctors
-      .filter((d) => assignedDoctorIds.includes(d.id))
-      .map((d) => d.name);
-    
-    const finalDoctorNames = [...selectedRegisteredDoctorNames, ...customDoctorNames];
-
-    const finalImages = images.length > 0
-      ? images
-      : ['https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80'];
+    const finalCategory = categoriaFinal();
+    const finalDoctorNames = nomesDasMedicas();
+    const finalImages = images.length > 0 ? images : [IMAGEM_PADRAO];
 
     const baseDoProcedimento = procedureToEdit;
     const procedureId = baseDoProcedimento ? baseDoProcedimento.id : idDoNovoRef.current;
@@ -495,11 +498,6 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     const precosDasAreas = areasDoMapa.map(precoDaArea);
     const precoDoMapa = precosDasAreas.length > 0 ? Math.min(...precosDasAreas) : 0;
 
-    // Linhas em branco (ou só com título) não viram detalhe: iriam para o PDF como rótulo sem resposta
-    const cleanedQuoteDetails: QuoteItemDetail[] = quoteDetails
-      .map((d) => ({ ...d, titulo: d.titulo.trim(), valor: d.valor.trim() }))
-      .filter((d) => d.titulo && d.valor);
-
     const sessoesDoPacote = maisDeUmaSessao
       ? Math.max(2, Math.floor(Number(sessoesInclusas)) || 2)
       : undefined;
@@ -532,9 +530,6 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       contraindications: contraindications.trim() || undefined,
       idealCandidate: idealCandidate.trim() || undefined,
       isFeatured: isFeatured,
-      // Array sempre presente (mesmo vazio): saveProcedureToDb usa merge:true e descarta
-      // undefined, então `undefined` deixaria os detalhes antigos gravados ao apagar todos
-      quoteDetails: cleanedQuoteDetails,
       assignedDoctorIds: assignedDoctorIds.length > 0 ? assignedDoctorIds : undefined,
       assignedDoctorNames: finalDoctorNames.length > 0 ? finalDoctorNames : undefined,
       // Desmarcado, o mapa vai como `undefined`, e é o `saveProcedureToDb` que apaga os campos do
@@ -663,6 +658,48 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
   if (!isOpen) return null;
 
+  /**
+   * O procedimento como ficaria se fosse salvo agora — com as mesmas regras do `salvarProcedimento`
+   * (valor do mapa, "por sessão" quando a condição fica em branco, benefício padrão), para a prévia
+   * mostrar o card que vai sair, e não o formulário. As fotos novas ainda são `data:`, que o
+   * navegador mostra igual.
+   */
+  const precosDoMapa = areasDoMapa.map(precoDaArea);
+  const procedimentoDaPrevia: Procedure = {
+    id: procedureToEdit?.id || idDoNovoRef.current || 'previa',
+    title: title.trim() || 'Nome do procedimento',
+    subtitle: subtitle.trim() || undefined,
+    category: categoriaFinal(),
+    description: description.trim(),
+    price: exigeSelecaoDeArea
+      ? precosDoMapa.length > 0 ? Math.min(...precosDoMapa) : 0
+      : Number(price) || 0,
+    promotionalPrice:
+      !exigeSelecaoDeArea && Number(promotionalPrice) > 0 ? Number(promotionalPrice) : undefined,
+    priceNote: priceNote.trim() || 'por sessão',
+    isStartingPrice: exigeSelecaoDeArea ? areasDoMapa.length > 1 : isStartingPrice,
+    duration: duration.trim() || undefined,
+    sessionsRecommended: sessionsRecommended.trim() || undefined,
+    recoveryTime: recoveryTime.trim() || undefined,
+    images: images.length > 0 ? images : [IMAGEM_PADRAO],
+    enquadramentosDasFotos: listaDeEnquadramentosParaGravar(enquadramentos, images.length),
+    benefits: benefits.length > 0 ? benefits : ['Melhora estética e bem-estar'],
+    areasTreated: areasTreated.length > 0 ? areasTreated : undefined,
+    contraindications: contraindications.trim() || undefined,
+    idealCandidate: idealCandidate.trim() || undefined,
+    isFeatured,
+    assignedDoctorIds: assignedDoctorIds.length > 0 ? assignedDoctorIds : undefined,
+    assignedDoctorNames: nomesDasMedicas(),
+    exigeSelecaoDeArea: exigeSelecaoDeArea || undefined,
+    areasDoMapa: exigeSelecaoDeArea ? areasDoMapa : undefined,
+    order: procedureToEdit?.order || 99,
+    createdAt: procedureToEdit?.createdAt || '',
+  };
+
+  // Com o recorte ou o ajuste da foto abertos, eles cobrem o formulário: a seta ficaria por cima.
+  const campoAtivo =
+    cropSource !== null || fotoEmAjuste !== null ? null : campoSobMouse ?? campoEmFoco;
+
   /* Rodapé fixo abaixo da área que rola. */
   const rodape = (
     <div className="flex items-center justify-end gap-3">
@@ -716,9 +753,27 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       /* Foto adicionada, vista e área desenhada não passam por `input`/`change`. */
       alterado={images.length > 0 || (exigeSelecaoDeArea && (areasDoMapa.length > 0 || areaEmEdicao))}
       rodape={rodape}
+      aoLado={
+        clinic && (
+          <PreviaDoCardIndividual procedure={procedimentoDaPrevia} clinic={clinic} ativo={campoAtivo} />
+        )
+      }
     >
       <div id="procedure-form-modal">
-        <form id="form-procedimento" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
+        {/* Cada bloco com `data-campo-do-card` é um campo que a prévia sabe achar no card: passar o
+            mouse (ou entrar nele pelo teclado) desenha a seta até lá. */}
+        <form
+          id="form-procedimento"
+          onSubmit={handleSubmit}
+          onMouseOver={(e) => {
+            const campo = campoDoEvento(e.target);
+            setCampoSobMouse((atual) => (mesmoCampo(atual, campo) ? atual : campo));
+          }}
+          onMouseLeave={() => setCampoSobMouse(null)}
+          onFocus={(e) => setCampoEmFoco(campoDoEvento(e.target))}
+          onBlur={() => setCampoEmFoco(null)}
+          className="p-4 sm:p-6 space-y-6"
+        >
           {/* Section 1: Basic Information */}
           <div className="space-y-4">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
@@ -727,7 +782,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2" data-campo-do-card="titulo">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Título do Procedimento *
                 </label>
@@ -744,7 +799,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
               {/* Logo abaixo do nome: é a primeira decisão sobre o procedimento — vendido inteiro
                   ou por área — e muda o que o resto do formulário pede. */}
-              <div className="sm:col-span-2 space-y-4">
+              <div className="sm:col-span-2 space-y-4" data-campo-do-card="mapa">
                 <label className="flex items-start gap-2.5 cursor-pointer bg-card px-3.5 py-2.5 rounded-sm border border-white/80 hover:border-brand/60 transition-colors">
                   <input
                     type="checkbox"
@@ -787,7 +842,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 )}
               </div>
 
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2" data-campo-do-card="subtitulo">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Subtítulo / Tagline de Destaque
                 </label>
@@ -800,7 +855,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 />
               </div>
 
-              <div>
+              <div data-campo-do-card="categoria">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Categoria
                 </label>
@@ -862,7 +917,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               </div>
 
               <div className="flex items-center pt-5">
-                <label className="flex items-center gap-2.5 cursor-pointer bg-card px-3.5 py-2 rounded-sm border border-white/80 w-full hover:border-brand/60 transition-colors">
+                <label
+                  data-campo-do-card="destaque"
+                  className="flex items-center gap-2.5 cursor-pointer bg-card px-3.5 py-2 rounded-sm border border-white/80 w-full hover:border-brand/60 transition-colors"
+                >
                   <input
                     type="checkbox"
                     checked={isFeatured}
@@ -879,7 +937,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
           </div>
 
           {/* Section: Doctor / Professional Assignment (Required by User) */}
-          <div className="space-y-4 bg-white/40 p-4 rounded-sm border border-white/80 shadow-xs">
+          <div
+            data-campo-do-card="profissionais"
+            className="space-y-4 bg-white/40 p-4 rounded-sm border border-white/80 shadow-xs"
+          >
             <div className="flex items-center justify-between pb-1 border-b border-white/60">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
                 <Stethoscope className="w-3.5 h-3.5" />
@@ -1002,7 +1063,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </h3>
 
             {exigeSelecaoDeArea && (
-              <p className="text-body text-muted bg-card border border-white/80 rounded-sm px-3.5 py-2.5 leading-relaxed">
+              <p
+                data-campo-do-card="valor"
+                className="text-body text-muted bg-card border border-white/80 rounded-sm px-3.5 py-2.5 leading-relaxed"
+              >
                 O valor de cada área é definido no mapa, acima.{' '}
                 {areasDoMapa.length > 0 && (
                   <>
@@ -1020,7 +1084,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             <div className={`grid grid-cols-1 gap-4 ${exigeSelecaoDeArea ? '' : 'sm:grid-cols-3'}`}>
               {!exigeSelecaoDeArea && (
               <>
-              <div>
+              <div data-campo-do-card="valor">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Valor Normal (R$) *
                 </label>
@@ -1036,7 +1100,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 {errors.price && <p className="text-xs text-red-600 mt-1">{errors.price}</p>}
               </div>
 
-              <div>
+              <div data-campo-do-card="valor-promocional">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Valor Promocional (R$) <span className="text-gray-500 font-normal">(Opcional)</span>
                 </label>
@@ -1052,7 +1116,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               </>
               )}
 
-              <div>
+              <div data-campo-do-card="sufixo">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Condição / Sufixo do Valor
                 </label>
@@ -1068,7 +1132,10 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             {/* Checkbox "A partir de" — com mapa, ele é decidido pelas áreas. */}
             {!exigeSelecaoDeArea && (
-            <div className="bg-card border border-white/80 rounded-sm p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div
+              data-campo-do-card="a-partir-de"
+              className="bg-card border border-white/80 rounded-sm p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            >
               <label 
                 htmlFor="procedure-is-starting-price" 
                 className="flex items-start sm:items-center gap-3 cursor-pointer select-none group"
@@ -1112,7 +1179,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
+              <div data-campo-do-card="duracao">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Duração do Atendimento
                 </label>
@@ -1125,7 +1192,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 />
               </div>
 
-              <div>
+              <div data-campo-do-card="recomendacao">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Plano Recomendado
                 </label>
@@ -1138,7 +1205,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 />
               </div>
 
-              <div>
+              <div data-campo-do-card="intervalo">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Intervalo entre sessões (dias)
                 </label>
@@ -1153,7 +1220,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 />
               </div>
 
-              <div>
+              <div data-campo-do-card="downtime">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Recuperação / Downtime
                 </label>
@@ -1168,7 +1235,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
               {/* Com mapa, as sessões do pacote são de cada área. */}
               {!exigeSelecaoDeArea && (
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2" data-campo-do-card="sessoes">
                 <span className="block text-xs font-medium text-ink mb-2">Sessões do pacote</span>
                 <CampoMaisDeUmaSessao
                   marcado={maisDeUmaSessao}
@@ -1183,7 +1250,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             {/* Preparo da paciente. Diferente de "Contraindicações": aquilo é motivo para não
                 fazer; isto é o que fazer antes de quem já vai. */}
-            <div>
+            <div data-campo-do-card="orientacoes">
               <label className="block text-body font-medium text-ink mb-1">
                 Orientações de preparo (antes de vir)
               </label>
@@ -1200,7 +1267,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               </p>
             </div>
 
-            <div>
+            <div data-campo-do-card="descricao">
               <label className="block text-xs font-medium text-ink mb-1">
                 Descrição Completa do Procedimento *
               </label>
@@ -1216,7 +1283,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </div>
 
             {/* Interactive Benefits list */}
-            <div>
+            <div data-campo-do-card="beneficios">
               <label className="block text-xs font-medium text-ink mb-1">
                 Benefícios & Destaques (Tags)
               </label>
@@ -1262,7 +1329,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </div>
 
             {/* Areas Treated */}
-            <div>
+            <div data-campo-do-card="regioes">
               <label className="block text-xs font-medium text-ink mb-1">
                 Regiões Aplicadas (Opcional)
               </label>
@@ -1308,64 +1375,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </div>
           </div>
 
-          {/* Section 3.5: Quote Details — pré-preenchem a grade de detalhes do item no orçamento */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
-              <FileText className="w-3.5 h-3.5" />
-              Detalhes para Orçamento ({quoteDetails.length})
-            </h3>
-
-            <p className="text-body leading-relaxed text-gray-500">
-              Campos que já nascem preenchidos no orçamento deste procedimento — produto, unidades,
-              duração do efeito, anestesia, intervalo. É só aqui que eles se editam: no orçamento aparecem
-              como estão, sem campo para mexer.
-              <span className="block mt-1 text-gray-400">
-                Duração, sessões, recuperação e regiões aplicadas já entram automaticamente, não
-                precisa repetir aqui.
-              </span>
-            </p>
-
-            <div className="space-y-2">
-              {quoteDetails.map((detail) => (
-                <div key={detail.id} className="flex gap-2 items-start">
-                  <input
-                    type="text"
-                    value={detail.titulo}
-                    onChange={(e) => handleUpdateQuoteDetail(detail.id, 'titulo', e.target.value)}
-                    placeholder="Produto / marca"
-                    className="w-2/5 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-ink"
-                  />
-                  <input
-                    type="text"
-                    value={detail.valor}
-                    onChange={(e) => handleUpdateQuoteDetail(detail.id, 'valor', e.target.value)}
-                    placeholder="Botulift® 100U"
-                    className="flex-1 px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs text-ink"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveQuoteDetail(detail.id)}
-                    aria-label={`Remover detalhe ${detail.titulo || 'sem título'}`}
-                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-sm transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-
-              <button
-                type="button"
-                onClick={handleAddQuoteDetail}
-                className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Adicionar campo
-              </button>
-            </div>
-          </div>
-
           {/* Section 4: Images & Visuals */}
-          <div className="space-y-4">
+          <div className="space-y-4" data-campo-do-card="fotos">
             <div className="flex items-center justify-between pb-1 border-b border-white/60">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
                 <ImageIcon className="w-3.5 h-3.5" />

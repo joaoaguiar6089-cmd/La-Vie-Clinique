@@ -206,7 +206,11 @@ export interface Procedure {
   contraindications?: string;
   idealCandidate?: string;
   isFeatured?: boolean;
-  quoteDetails?: QuoteItemDetail[]; // "Detalhes para orçamento" — pares título/resposta que pré-preenchem o item no orçamento
+  /**
+   * Antigo "Detalhes para orçamento" (produto, unidades...). Saiu do cadastro e o orçamento não lê
+   * mais; fica no tipo só porque procedimentos antigos ainda podem tê-lo gravado.
+   */
+  quoteDetails?: QuoteItemDetail[];
   /**
    * Quantos dias entre uma sessão e a seguinte, num plano de sessões.
    *

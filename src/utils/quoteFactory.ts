@@ -17,10 +17,11 @@ const novoId = (prefixo: string) =>
   `${prefixo}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
 /**
- * Detalhes que o item nasce mostrando. Os quatro campos que já existem no cadastro
- * do procedimento entram automaticamente; `quoteDetails` traz o que só faz sentido
- * em orçamento (produto, unidades, duração do efeito). A ordem segue o design:
- * áreas tratadas, campos próprios do procedimento, e por fim tempo e recuperação.
+ * Detalhes que o item nasce mostrando: os quatro campos do cadastro do procedimento, na
+ * ordem do design — áreas tratadas, tempo em clínica, recuperação e sessões.
+ *
+ * Os "Detalhes para orçamento" do procedimento (`quoteDetails` — produto, unidades) saíram
+ * do cadastro e não entram mais: ficariam aparecendo no orçamento sem ter onde mudar.
  */
 export const montarDetalhesDoProcedimento = (procedure: Procedure): QuoteItemDetail[] => {
   const detalhes: QuoteItemDetail[] = [];
@@ -31,9 +32,6 @@ export const montarDetalhesDoProcedimento = (procedure: Procedure): QuoteItemDet
   };
 
   push("Áreas tratadas", procedure.areasTreated?.join(", "));
-
-  (procedure.quoteDetails || []).forEach((d) => push(d.titulo, d.valor));
-
   push("Tempo em clínica", procedure.duration);
   push("Recuperação", procedure.recoveryTime);
   push("Sessões", procedure.sessionsRecommended);
