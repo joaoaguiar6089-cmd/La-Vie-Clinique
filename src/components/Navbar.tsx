@@ -3,24 +3,25 @@ import {
   Settings,
   Syringe,
   ClipboardList,
-  ClipboardCheck,
   Share2,
   LogOut,
   Receipt,
   Users,
   CalendarDays,
   Home,
-  NotebookPen,
   Package,
   Search,
   Wallet,
 } from 'lucide-react';
 import { ClinicProfile, AppView } from '../types';
 import { clinicMonogram } from './ClinicLogo';
+import { ehAbaDasFichas } from '../utils/abasDasFichas';
 
 interface NavbarProps {
   currentView: AppView;
   onSelectView: (view: AppView) => void;
+  /** Abre as Fichas na aba em que se estava da última vez (anamneses, avaliações ou relatórios). */
+  onAbrirFichas: () => void;
   onOpenExport: () => void;
   onOpenSettings: () => void;
   clinic: ClinicProfile;
@@ -54,8 +55,8 @@ interface ItemDoTrilho {
 
 /**
  * Um quadro do trilho: ícone em cima, rótulo embaixo. 84×60 — rótulo de 12px, o piso da escala
- * da casa, cabe inteiro até "Orçamentos"; os dois nomes que não cabem ("Procedimentos",
- * "Acompanhamento") encurtam, e o nome inteiro fica no `title`.
+ * da casa, cabe inteiro até "Orçamentos"; o nome que não cabe ("Procedimentos") encurta, e o
+ * nome inteiro fica no `title`.
  */
 const QuadroDoTrilho: React.FC<{ item: ItemDoTrilho; compacto?: boolean }> = ({ item, compacto }) => {
   const Icone = item.icone;
@@ -103,6 +104,7 @@ const QuadroDoTrilho: React.FC<{ item: ItemDoTrilho; compacto?: boolean }> = ({ 
 export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   onSelectView,
+  onAbrirFichas,
   onOpenExport,
   onOpenSettings,
   clinic,
@@ -173,8 +175,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       ativo: currentView === 'patients',
       onClick: ir('patients'),
     },
-    // Os documentos da paciente, na ordem da jornada: orçamento, anamnese, avaliação (antes do
-    // procedimento) e acompanhamento (depois do atendimento).
+    // Os documentos da paciente, na ordem da jornada: o orçamento e as fichas — anamnese,
+    // avaliação (antes do procedimento) e relatório (depois do atendimento), que são as abas de
+    // uma tela só e por isso um item só no menu.
     {
       id: 'quotes',
       rotulo: 'Orçamentos',
@@ -184,28 +187,15 @@ export const Navbar: React.FC<NavbarProps> = ({
       onClick: ir('quotes'),
     },
     {
-      id: 'anamnesis',
-      rotulo: 'Anamneses',
-      titulo: 'Anamneses',
+      id: 'fichas',
+      rotulo: 'Fichas',
+      titulo: 'Fichas — anamneses, avaliações e relatórios',
       icone: ClipboardList,
-      ativo: currentView === 'anamnesis',
-      onClick: ir('anamnesis'),
-    },
-    {
-      id: 'evaluations',
-      rotulo: 'Avaliações',
-      titulo: 'Fichas de avaliação',
-      icone: ClipboardCheck,
-      ativo: currentView === 'evaluations',
-      onClick: ir('evaluations'),
-    },
-    {
-      id: 'acompanhamento',
-      rotulo: 'Relatórios',
-      titulo: 'Relatórios',
-      icone: NotebookPen,
-      ativo: currentView === 'acompanhamento',
-      onClick: ir('acompanhamento'),
+      ativo: ehAbaDasFichas(currentView),
+      onClick: () => {
+        onAbrirFichas();
+        scrollToTop();
+      },
     },
     // A gestão da clínica, depois dos documentos — como no "Mais" do celular.
     {

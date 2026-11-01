@@ -25,6 +25,7 @@ import { AppView } from '../types';
 import { BottomSheet, ItemDaFolha } from './common/BottomSheet';
 import { Avatar } from './common/Tinta';
 import { useTravarRolagem, useVoltarFecha } from '../hooks/useVoltarFecha';
+import { ehAbaDasFichas } from '../utils/abasDasFichas';
 
 /**
  * A navegação do celular.
@@ -52,6 +53,8 @@ export type AcaoDeCriacao =
 interface BottomNavProps {
   currentView: AppView;
   onSelectView: (view: AppView) => void;
+  /** Abre as Fichas na aba em que se estava da última vez (anamneses, avaliações ou relatórios). */
+  onAbrirFichas: () => void;
   onCriar: (acao: AcaoDeCriacao) => void;
   onOpenSettings: () => void;
   onOpenExport: () => void;
@@ -160,6 +163,7 @@ const PainelMais: React.FC<{
   onFechar: () => void;
   currentView: AppView;
   ir: (view: AppView) => void;
+  abrirFichas: () => void;
   ehAdmin?: boolean;
   profissional?: BottomNavProps['profissional'];
   onOpenSettings: () => void;
@@ -170,6 +174,7 @@ const PainelMais: React.FC<{
   onFechar,
   currentView,
   ir,
+  abrirFichas,
   ehAdmin,
   profissional,
   onOpenSettings,
@@ -236,7 +241,8 @@ const PainelMais: React.FC<{
 
         <div>
           <p className="text-[13px] font-semibold text-brand-light">Documentos da paciente</p>
-          {/* Na ordem da jornada: orçamento, anamnese, avaliação (antes) e acompanhamento (depois). */}
+          {/* Na ordem da jornada: o orçamento e as fichas — anamnese, avaliação (antes do
+              procedimento) e relatório (depois do atendimento), que são as abas de uma tela só. */}
           <div className="flex flex-col">
             <LinhaDoMais
               icone={Receipt}
@@ -247,24 +253,10 @@ const PainelMais: React.FC<{
             />
             <LinhaDoMais
               icone={ClipboardList}
-              titulo="Anamneses"
-              sub="Histórico de saúde"
-              ativo={currentView === 'anamnesis'}
-              onClick={() => ir('anamnesis')}
-            />
-            <LinhaDoMais
-              icone={ClipboardCheck}
-              titulo="Avaliações"
-              sub="Antes do procedimento"
-              ativo={currentView === 'evaluations'}
-              onClick={() => ir('evaluations')}
-            />
-            <LinhaDoMais
-              icone={NotebookPen}
-              titulo="Relatórios"
-              sub="Depois do atendimento"
-              ativo={currentView === 'acompanhamento'}
-              onClick={() => ir('acompanhamento')}
+              titulo="Fichas"
+              sub="Anamneses, avaliações e relatórios"
+              ativo={ehAbaDasFichas(currentView)}
+              onClick={abrirFichas}
             />
           </div>
         </div>
@@ -327,6 +319,7 @@ const PainelMais: React.FC<{
 export const BottomNav: React.FC<BottomNavProps> = ({
   currentView,
   onSelectView,
+  onAbrirFichas,
   onCriar,
   onOpenSettings,
   onOpenExport,
@@ -341,9 +334,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   // "Mais" acende quando a tela atual mora lá dentro — senão a barra não diria onde se está.
   const emMais =
     currentView === 'procedures' ||
-    currentView === 'anamnesis' ||
-    currentView === 'evaluations' ||
-    currentView === 'acompanhamento' ||
+    ehAbaDasFichas(currentView) ||
     currentView === 'estoque' ||
     currentView === 'quotes' ||
     currentView === 'financeiro' ||
@@ -351,6 +342,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   const ir = (view: AppView) => {
     onSelectView(view);
+    setMaisAberto(false);
+    window.scrollTo({ top: 0 });
+  };
+
+  const abrirFichas = () => {
+    onAbrirFichas();
     setMaisAberto(false);
     window.scrollTo({ top: 0 });
   };
@@ -456,6 +453,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         onFechar={() => setMaisAberto(false)}
         currentView={currentView}
         ir={ir}
+        abrirFichas={abrirFichas}
         ehAdmin={ehAdmin}
         profissional={profissional}
         onOpenSettings={onOpenSettings}

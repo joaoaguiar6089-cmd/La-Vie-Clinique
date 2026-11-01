@@ -522,7 +522,7 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
       aberto
       onFechar={onClose}
       titulo="Preencher anamnese"
-      sobretitulo="Fichas clínicas"
+      sobretitulo="Fichas"
       subtitulo={
         currentTemplate
           ? `${nomeDaPaciente || 'Paciente a escolher'} · ${currentTemplate.procedimentoNome}`
