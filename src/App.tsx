@@ -44,6 +44,7 @@ import {
 import { mapearTemplatesPorProcedimento } from './utils/templateMatching';
 import { sementeDaVisita, sementeDoAgendamento } from './utils/passosDaJornada';
 import { hojeISO } from './utils/attendances';
+import { AbaDasFichas, ehAbaDasFichas } from './utils/abasDasFichas';
 import type { AlvoDoPasso } from './components/linhaDoTempo/PainelDoEvento';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { ClinicLogo } from './components/ClinicLogo';
@@ -249,11 +250,23 @@ function MainCatalogApp() {
    * expediente ou conferir o mês.
    */
   const viewAnteriorRef = useRef<AppView>('hoje');
+  /**
+   * A aba das Fichas em que se estava da última vez. No menu as três abas são um item só,
+   * "Fichas", e voltar a ele cai onde se parou — quem estava nos relatórios não quer recomeçar
+   * pelas anamneses.
+   */
+  const abaDasFichasRef = useRef<AbaDasFichas>('anamnesis');
   useEffect(() => {
     if (currentView !== 'settings' && currentView !== 'financeiro') {
       viewAnteriorRef.current = currentView;
     }
+    if (ehAbaDasFichas(currentView)) abaDasFichasRef.current = currentView;
   }, [currentView]);
+
+  /** O item "Fichas" do menu: fica na aba aberta, ou volta à última que se usou. */
+  const abrirFichas = () => {
+    setCurrentView(ehAbaDasFichas(currentView) ? currentView : abaDasFichasRef.current);
+  };
 
   /** Busca global (Cmd/Ctrl+K no desktop, campo da tela Hoje no celular). */
   const [buscaAberta, setBuscaAberta] = useState(false);
@@ -931,6 +944,7 @@ function MainCatalogApp() {
         <Navbar
           currentView={currentView}
           onSelectView={(view) => setCurrentView(view)}
+          onAbrirFichas={abrirFichas}
           onOpenExport={() => {
             setSingleProcedureToExport(null);
             setIsExportModalOpen(true);
@@ -950,6 +964,7 @@ function MainCatalogApp() {
         <BottomNav
           currentView={currentView}
           onSelectView={(view) => setCurrentView(view)}
+          onAbrirFichas={abrirFichas}
           onCriar={criar}
           onOpenSettings={() => navegar({ view: 'settings' })}
           onOpenExport={() => {
@@ -1079,15 +1094,12 @@ function MainCatalogApp() {
               <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6">
                 <EstoqueModule catalogProcedures={procedures} />
               </div>
-            ) : currentView === 'anamnesis' ||
-              currentView === 'evaluations' ||
-              currentView === 'acompanhamento' ? (
-              /* As três fichas da paciente numa tela só, "Fichas clínicas", com as abas no topo:
-                 anamnese (o histórico de saúde), avaliação (antes do procedimento) e relatório
-                 (depois do atendimento). Cada aba continua sendo a seção que era — o menu leva
-                 direto a cada uma. */
+            ) : ehAbaDasFichas(currentView) ? (
+              /* As três fichas da paciente numa tela só, "Fichas", com as abas no topo: anamnese
+                 (o histórico de saúde), avaliação (antes do procedimento) e relatório (depois do
+                 atendimento). No menu é um item só; cada aba continua sendo a seção que era. */
               <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4">
-                <TituloDaTela titulo="Fichas clínicas" />
+                <TituloDaTela titulo="Fichas" />
                 <AbasSublinhadas
                   abas={[
                     { id: 'anamnesis' as const, rotulo: 'Anamneses' },
