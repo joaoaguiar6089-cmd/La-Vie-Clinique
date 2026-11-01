@@ -20,6 +20,11 @@ interface ProcedureSearchAddProps {
   onAbrirMapa?: (procedure: Procedure) => void;
   /** `id` das áreas já no orçamento — a contagem aparece na entrada do mapa. */
   areasNoOrcamento?: Set<string>;
+  /**
+   * O botão grande e preto, de largura toda, do orçamento — a ação principal da seção. Sem ele,
+   * o botão pequeno do recibo.
+   */
+  grande?: boolean;
 }
 
 /** Um procedimento na busca e, quando o termo casa com elas, as áreas dele. */
@@ -43,6 +48,7 @@ export const ProcedureSearchAdd: React.FC<ProcedureSearchAddProps> = ({
   onAddArea,
   onAbrirMapa,
   areasNoOrcamento,
+  grande = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -89,16 +95,21 @@ export const ProcedureSearchAdd: React.FC<ProcedureSearchAddProps> = ({
   };
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={grande ? 'relative w-full' : 'relative'}>
       <button
         type="button"
         onClick={() => {
           setSearchTerm('');
           setIsOpen((v) => !v);
         }}
-        className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+        aria-expanded={isOpen}
+        className={
+          grande
+            ? 'w-full h-12 px-5 rounded-full bg-ink text-white text-[15px] font-semibold whitespace-nowrap hover:bg-black active:scale-[.99] transition-colors flex items-center justify-center gap-2'
+            : 'px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5'
+        }
       >
-        <Plus className="w-3.5 h-3.5" />
+        <Plus className={grande ? 'w-[18px] h-[18px] shrink-0' : 'w-3.5 h-3.5'} />
         Adicionar procedimento
       </button>
 

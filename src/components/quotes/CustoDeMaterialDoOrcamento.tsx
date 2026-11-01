@@ -17,6 +17,9 @@ interface CustoDeMaterialDoOrcamentoProps {
   onChange: (itemId: string, linhas: LinhaDeMaterial[]) => void;
   /** Volta o item a seguir o consumo padrão × sessões. */
   onRecalcular: (itemId: string) => void;
+  /** Custos à vista — o mesmo interruptor do olho no topo da seção de procedimentos. */
+  visivel: boolean;
+  onAlternarVisivel: () => void;
 }
 
 /**
@@ -33,7 +36,8 @@ interface CustoDeMaterialDoOrcamentoProps {
  *
  * Começa fechado, a cada abertura: o orçamento costuma ser montado com a paciente por perto, e
  * custo e margem não são para ela ver. Fechado, nenhum número aparece; a conta continua sendo
- * feita e gravada do mesmo jeito, porque o estado mora no formulário.
+ * feita e gravada do mesmo jeito, porque o estado mora no formulário. Abrir aqui ou no olho do
+ * topo da seção de procedimentos é a mesma coisa (`mostrarCustos` em `useOrcamentoEmEdicao`).
  */
 export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProps> = ({
   itens,
@@ -42,9 +46,10 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
   totalDoOrcamento,
   onChange,
   onRecalcular,
+  visivel,
+  onAlternarVisivel,
 }) => {
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
-  const [visivel, setVisivel] = useState(false);
 
   if (itens.length === 0) return null;
 
@@ -70,7 +75,7 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
         </h3>
         <button
           type="button"
-          onClick={() => setVisivel((atual) => !atual)}
+          onClick={onAlternarVisivel}
           aria-expanded={visivel}
           className="inline-flex items-center gap-1.5 min-h-[36px] px-2 -mr-2 rounded-lg text-body font-semibold text-brand hover:bg-surface-2 transition-colors"
         >

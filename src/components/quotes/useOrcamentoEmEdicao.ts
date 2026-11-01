@@ -139,6 +139,11 @@ export const useOrcamentoEmEdicao = ({
   const [avisoDaAnamnese, setAvisoDaAnamnese] = useState<{ quantidade: number; data: string } | null>(null);
   /** Interruptor da página do manequim no PDF. Padrão ligado. */
   const [mostrarMapaCorporal, setMostrarMapaCorporal] = useState(true);
+  /**
+   * Mostra, nos itens, o valor de compra dos produtos, o custo por unidade, o repassado e a margem.
+   * Desligado a cada abertura: o orçamento costuma ser montado com a paciente por perto.
+   */
+  const [mostrarCustos, setMostrarCustos] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   /**
@@ -201,6 +206,7 @@ export const useOrcamentoEmEdicao = ({
       setSexoDoMapa(initialPatient?.genero || 'feminino');
     }
     setMapaAberto(null);
+    setMostrarCustos(false);
     setErrors({});
     setAvisoDaAnamnese(null);
     setCustos({});
@@ -671,6 +677,8 @@ export const useOrcamentoEmEdicao = ({
     setAvisoDaAnamnese,
     mostrarMapaCorporal,
     setMostrarMapaCorporal,
+    mostrarCustos,
+    setMostrarCustos,
     errors,
     setErrors,
     custos,

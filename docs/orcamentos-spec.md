@@ -117,8 +117,10 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
   para alcançar sua melhor versão ✨"`), totalmente editável.
 
 **Procedimentos** (repetível, ordenável)
-- Dois botões lado a lado abaixo da lista: **"+ Adicionar procedimento"** (abre a
-  busca no catálogo) e **"+ Procedimento fora do catálogo"** (item em branco).
+- Abaixo da lista, lado a lado e do mesmo tamanho: **"+ Adicionar procedimento"** (preto, a
+  ação principal; abre a busca no catálogo) e **"+ Adicionar produto"** (branco). Embaixo deles,
+  menor, **"+ Procedimento fora do catálogo"** (item em branco). No celular os dois grandes
+  ficam um sobre o outro. (2026-11-01)
 - O item nasce com categoria, título, valor (`promotionalPrice` quando houver, senão
   `price`), as sessões do cadastro e os detalhes pré-preenchidos. Título, valor e sessões
   seguem editáveis no item; **os detalhes não** — ver seção 3.
@@ -134,6 +136,17 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
   o item de fora do catálogo nasce desmarcado.
 - **Sem nota de preço.** A linha abaixo do valor mostra apenas o desconto e, quando
   houver, a quantidade de sessões.
+
+**Custos escondidos por padrão — o olho** (2026-11-01)
+- O orçamento costuma ser preenchido junto com a cliente. Por isso, no item "calcular por consumo
+  de produto", o **custo por unidade**, o **valor de compra**, o **repassado à cliente** e a
+  **margem** ficam escondidos por padrão; aparecem só a quantidade, o valor por unidade para a
+  cliente e o **valor da linha** (quantidade × valor para a cliente — a soma delas é o valor do
+  item).
+- Um olho pequeno e discreto no canto do título "Procedimentos e produtos" mostra tudo de novo.
+  É o mesmo interruptor do "Ver custo e margem" do custo de material, lá embaixo: ligar um liga o
+  outro. Volta a ficar desligado a cada abertura do formulário (`mostrarCustos` em
+  `useOrcamentoEmEdicao`).
 
 **Produtos do estoque** (2026-10-16)
 - Ao lado de "+ Adicionar procedimento", **"+ Adicionar produto"** (`ProdutoSearchAdd`) busca

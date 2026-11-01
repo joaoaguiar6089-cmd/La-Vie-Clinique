@@ -10,6 +10,7 @@ import {
   numeroValido,
   produtosAtivos,
   totaisDosMateriais,
+  valorClienteDaLinha,
 } from '../../utils/estoque';
 
 interface EditorDeMateriaisProps {
@@ -25,6 +26,17 @@ interface EditorDeMateriaisProps {
    * as linhas continuam carregando o preço, só não o mostram.
    */
   mostrarValores?: boolean;
+  /**
+   * Com os valores à vista, mostra também o custo por unidade (o que a clínica pagou). Desligado
+   * no consumo do orçamento enquanto os custos estão escondidos — ele é preenchido com a cliente
+   * por perto, e ela vê só a quantidade e o valor dela.
+   */
+  mostrarCusto?: boolean;
+  /**
+   * O total de cada linha: o custo para a clínica (padrão) ou o valor para a cliente — no item
+   * calculado por consumo de produto, é o valor da cliente que vira o preço do item.
+   */
+  totalDaLinha?: 'custo' | 'cliente';
   /** Mostra a linha de totais embaixo. */
   mostrarTotais?: boolean;
   /** Oferece, nas linhas avulsas, "cadastrar este material no estoque ao salvar". */
@@ -54,6 +66,8 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
   produtos,
   permitirAvulso = true,
   mostrarValores = true,
+  mostrarCusto = true,
+  totalDaLinha = 'custo',
   mostrarTotais = true,
   oferecerCadastro = false,
   idBase,
@@ -161,7 +175,15 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
               </button>
             </div>
 
-            <div className={`grid gap-2 ${mostrarValores ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
+            <div
+              className={`grid gap-2 ${
+                !mostrarValores
+                  ? 'grid-cols-2'
+                  : mostrarCusto
+                  ? 'grid-cols-2 sm:grid-cols-4'
+                  : 'grid-cols-2 sm:grid-cols-3'
+              }`}
+            >
               <div>
                 <label className={miniLabel} htmlFor={`${id}-qtd`}>
                   Quantidade ({m.unidade || 'un'})
@@ -179,21 +201,23 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
               </div>
               {mostrarValores && (
                 <>
-                  <div>
-                    <label className={miniLabel} htmlFor={`${id}-custo`}>
-                      Custo / {m.unidade || 'un'}
-                    </label>
-                    <input
-                      id={`${id}-custo`}
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      inputMode="decimal"
-                      value={m.custoUnitario || ''}
-                      onChange={(e) => trocar(i, { custoUnitario: numeroValido(e.target.value) })}
-                      className={inputClass}
-                    />
-                  </div>
+                  {mostrarCusto && (
+                    <div>
+                      <label className={miniLabel} htmlFor={`${id}-custo`}>
+                        Custo / {m.unidade || 'un'}
+                      </label>
+                      <input
+                        id={`${id}-custo`}
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        inputMode="decimal"
+                        value={m.custoUnitario || ''}
+                        onChange={(e) => trocar(i, { custoUnitario: numeroValido(e.target.value) })}
+                        className={inputClass}
+                      />
+                    </div>
+                  )}
                   <div>
                     <label className={miniLabel} htmlFor={`${id}-cliente`}>
                       Cliente / {m.unidade || 'un'}
@@ -210,9 +234,11 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
                     />
                   </div>
                   <div className="flex flex-col justify-end">
-                    <span className={miniLabel}>Custo da linha</span>
+                    <span className={miniLabel}>
+                      {totalDaLinha === 'cliente' ? 'Valor da linha' : 'Custo da linha'}
+                    </span>
                     <span className="text-body-lg font-semibold text-ink tabular-nums py-1">
-                      {formatBRL(custoDaLinha(m))}
+                      {formatBRL(totalDaLinha === 'cliente' ? valorClienteDaLinha(m) : custoDaLinha(m))}
                     </span>
                   </div>
                 </>
@@ -275,12 +301,14 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
             Valor para a cliente:{' '}
             <strong className="text-ink tabular-nums">{formatBRL(totais.valorCliente)}</strong>
           </span>
-          <span className="text-body-lg text-ink">
-            Custo total:{' '}
-            <strong className="font-serif-luxury text-title tabular-nums">
-              {formatBRL(totais.custo)}
-            </strong>
-          </span>
+          {mostrarCusto && (
+            <span className="text-body-lg text-ink">
+              Custo total:{' '}
+              <strong className="font-serif-luxury text-title tabular-nums">
+                {formatBRL(totais.custo)}
+              </strong>
+            </span>
+          )}
         </div>
       )}
     </div>
