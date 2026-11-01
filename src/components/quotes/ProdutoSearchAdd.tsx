@@ -7,6 +7,11 @@ interface ProdutoSearchAddProps {
   /** Todos os produtos do estoque — os arquivados ficam de fora da escolha. */
   produtos: ProdutoDeEstoque[];
   onAdd: (produto: ProdutoDeEstoque) => void;
+  /**
+   * O botão grande e branco do orçamento, do mesmo tamanho do "Adicionar procedimento" preto ao
+   * lado. Sem ele, o botão pequeno do recibo.
+   */
+  grande?: boolean;
 }
 
 /**
@@ -17,7 +22,7 @@ interface ProdutoSearchAddProps {
  * Mostra o valor repassado à cliente por unidade, que é o preço com que o item nasce. O valor
  * comprado nunca aparece aqui: a busca é aberta com a cliente por perto.
  */
-export const ProdutoSearchAdd: React.FC<ProdutoSearchAddProps> = ({ produtos, onAdd }) => {
+export const ProdutoSearchAdd: React.FC<ProdutoSearchAddProps> = ({ produtos, onAdd, grande = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -46,21 +51,32 @@ export const ProdutoSearchAdd: React.FC<ProdutoSearchAddProps> = ({ produtos, on
   }, [ativos, searchTerm]);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={grande ? 'relative w-full' : 'relative'}>
       <button
         type="button"
         onClick={() => {
           setSearchTerm('');
           setIsOpen((v) => !v);
         }}
-        className="px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5"
+        aria-expanded={isOpen}
+        className={
+          grande
+            ? 'w-full h-12 px-5 rounded-full bg-white border border-ink/15 text-ink text-[15px] font-semibold whitespace-nowrap hover:border-ink/40 active:scale-[.99] transition-colors flex items-center justify-center gap-2'
+            : 'px-3 py-1.5 bg-white/60 border border-white/80 text-ink text-xs font-medium rounded-sm hover:bg-white/80 transition-colors flex items-center gap-1.5'
+        }
       >
-        <Package className="w-3.5 h-3.5" />
+        <Package className={grande ? 'w-[18px] h-[18px] shrink-0' : 'w-3.5 h-3.5'} />
         Adicionar produto
       </button>
 
       {isOpen && (
-        <div className="absolute z-30 mt-1 w-[min(380px,80vw)] bg-white rounded-sm border border-gray-200 shadow-xl overflow-hidden">
+        // No orçamento, o botão fica à direita do "Adicionar procedimento" a partir do `sm`: a
+        // lista se alinha pela direita para não sair da tela.
+        <div
+          className={`absolute z-30 mt-1 w-[min(380px,80vw)] bg-white rounded-sm border border-gray-200 shadow-xl overflow-hidden ${
+            grande ? 'left-0 sm:left-auto sm:right-0' : ''
+          }`}
+        >
           <div className="p-2.5 border-b border-gray-100">
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />

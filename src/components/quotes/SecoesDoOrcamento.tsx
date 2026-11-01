@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, Calculator, CreditCard, MessageSquare, Plus, Sparkles } from 'lucide-react';
+import { AlertCircle, Calculator, CreditCard, Eye, EyeOff, MessageSquare, Plus, Sparkles } from 'lucide-react';
 import { ClinicProfile, Patient, Procedure } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { sugerirDescontoCombinado } from '../../utils/quoteCalc';
@@ -143,7 +143,13 @@ export const SecaoDadosDoOrcamento: React.FC<{
   </>
 );
 
-/** Os procedimentos e produtos, o desconto, os totais e o custo de material (interno). */
+/**
+ * Os procedimentos e produtos, o desconto, os totais e o custo de material (interno).
+ *
+ * O olho pequeno no canto da seção mostra os custos — valor de compra, custo por unidade,
+ * repassado e margem — no consumo de cada item e no custo de material. Começa desligado a cada
+ * abertura e é discreto de propósito: o orçamento costuma ser preenchido junto com a cliente.
+ */
 export const SecaoItensDoOrcamento: React.FC<{
   orc: OrcamentoEmEdicao;
   procedures: Procedure[];
@@ -153,9 +159,23 @@ export const SecaoItensDoOrcamento: React.FC<{
   return (
     <>
       <div className="space-y-3">
-        <SectionHeader icon={<Sparkles className="w-4 h-4" />}>
-          Procedimentos e produtos ({itens.length})
-        </SectionHeader>
+        <div className="flex items-center justify-between gap-2">
+          <SectionHeader icon={<Sparkles className="w-4 h-4" />}>
+            Procedimentos e produtos ({itens.length})
+          </SectionHeader>
+          <button
+            type="button"
+            onClick={() => orc.setMostrarCustos(!orc.mostrarCustos)}
+            aria-pressed={orc.mostrarCustos}
+            aria-label={orc.mostrarCustos ? 'Esconder custos e margem' : 'Mostrar custos e margem'}
+            title={orc.mostrarCustos ? 'Esconder custos e margem' : 'Mostrar custos e margem'}
+            className={`shrink-0 w-8 h-8 -mr-1.5 rounded-full flex items-center justify-center transition-colors hover:bg-ink/5 ${
+              orc.mostrarCustos ? 'text-ink-soft' : 'text-ink/25 hover:text-ink-soft'
+            }`}
+          >
+            {orc.mostrarCustos ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
+        </div>
 
         {orc.errors.itens && (
           <AvisoTinta tom="erro" icone={AlertCircle}>
@@ -179,19 +199,32 @@ export const SecaoItensDoOrcamento: React.FC<{
               onAlternarConsumo={(marcado) => orc.alternarConsumoDoItem(item, marcado)}
               onMudarConsumo={(linhas) => orc.mudarConsumoDoItem(item.id, linhas)}
               onRecalcularConsumo={() => orc.recalcularConsumoDoItem(item.id)}
+              mostrarCustos={orc.mostrarCustos}
             />
           ))}
         </div>
 
-        <div className="flex flex-wrap items-start gap-2">
-          <ProcedureSearchAdd
-            procedures={procedures}
-            onAdd={orc.addProcedure}
-            onAddArea={orc.addArea}
-            onAbrirMapa={(procedimento) => orc.setMapaAberto(procedimento.id)}
-            areasNoOrcamento={orc.areasNoOrcamento}
-          />
-          <ProdutoSearchAdd produtos={orc.produtos} onAdd={orc.addProduto} />
+        <div className="space-y-2">
+          {/* Procedimento é a ação principal (preto); produto, do mesmo tamanho, em branco. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <ProcedureSearchAdd
+              grande
+              procedures={procedures}
+              onAdd={orc.addProcedure}
+              onAddArea={orc.addArea}
+              onAbrirMapa={(procedimento) => orc.setMapaAberto(procedimento.id)}
+              areasNoOrcamento={orc.areasNoOrcamento}
+            />
+            <ProdutoSearchAdd grande produtos={orc.produtos} onAdd={orc.addProduto} />
+          </div>
+          <button
+            type="button"
+            onClick={orc.addItemAvulso}
+            className="h-8 px-3 rounded-full border border-ink/15 text-ink-soft text-[13px] font-semibold hover:border-ink/40 hover:text-ink transition-colors flex w-fit items-center gap-1"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Procedimento fora do catálogo
+          </button>
           {orc.areasNoOrcamento.size > 0 && (
             <label className="w-full flex items-center gap-2 text-body text-ink cursor-pointer">
               <input
@@ -221,14 +254,6 @@ export const SecaoItensDoOrcamento: React.FC<{
               </button>
             </p>
           )}
-          <button
-            type="button"
-            onClick={orc.addItemAvulso}
-            className="h-10 px-4 rounded-full border border-ink/15 text-ink text-[14px] font-semibold hover:border-ink/40 transition-colors flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            Procedimento fora do catálogo
-          </button>
         </div>
       </div>
 
@@ -300,6 +325,8 @@ export const SecaoItensDoOrcamento: React.FC<{
         totalDoOrcamento={totais.total}
         onChange={orc.mudarConsumoDoItem}
         onRecalcular={orc.recalcularConsumoDoItem}
+        visivel={orc.mostrarCustos}
+        onAlternarVisivel={() => orc.setMostrarCustos(!orc.mostrarCustos)}
       />
     </>
   );

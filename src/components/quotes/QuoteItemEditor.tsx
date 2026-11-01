@@ -44,6 +44,11 @@ interface QuoteItemEditorProps {
   onMudarConsumo: (linhas: LinhaDeMaterial[]) => void;
   /** Refaz o consumo pelo padrão do procedimento × sessões. */
   onRecalcularConsumo: () => void;
+  /**
+   * Mostra, no consumo, o custo por unidade, o valor de compra, o repassado e a margem. Desligado
+   * por padrão (o olho no topo da seção liga): o orçamento costuma ser montado com a cliente perto.
+   */
+  mostrarCustos: boolean;
 }
 
 /** Campos numéricos guardam o texto digitado para não travar em "0" enquanto se apaga. */
@@ -63,6 +68,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
   onAlternarConsumo,
   onMudarConsumo,
   onRecalcularConsumo,
+  mostrarCustos,
 }) => {
   const [valorTabelaStr, setValorTabelaStr] = useState(numeroDigitado(item.valorTabela));
   const [valorDescontoStr, setValorDescontoStr] = useState(numeroDigitado(item.valorComDesconto));
@@ -345,9 +351,10 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
       </div>
 
       {/*
-        Consumo de produto — só para a equipe. O valor do item é a soma do repassado à cliente;
-        compra e margem aparecem aqui para a conta ficar à vista. No documento da cliente saem só
-        os nomes dos produtos.
+        Consumo de produto. O valor do item é a soma do repassado à cliente, e cada linha mostra o
+        valor dela para a cliente. Custo por unidade, compra, repassado e margem só aparecem com o
+        olho do topo da seção ligado — o orçamento costuma ser montado com a cliente por perto. No
+        documento da cliente saem só os nomes dos produtos.
       */}
       {porConsumo && (
         <div className="rounded-xl border border-line bg-surface p-3 space-y-3">
@@ -371,29 +378,33 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
             itens={linhasDoConsumo}
             onChange={onMudarConsumo}
             produtos={produtos}
+            mostrarCusto={mostrarCustos}
+            totalDaLinha="cliente"
             mostrarTotais={false}
           />
 
-          <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-line tabular-nums">
-            <div>
-              <span className="block text-label text-muted">Valor de compra</span>
-              <span className="text-body-lg font-semibold text-ink">{formatBRL(consumo.custo)}</span>
+          {mostrarCustos && (
+            <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-line tabular-nums">
+              <div>
+                <span className="block text-label text-muted">Valor de compra</span>
+                <span className="text-body-lg font-semibold text-ink">{formatBRL(consumo.custo)}</span>
+              </div>
+              <div>
+                <span className="block text-label text-muted">Repassado à cliente</span>
+                <span className="text-body-lg font-semibold text-ink">
+                  {formatBRL(consumo.valorCliente)}
+                </span>
+              </div>
+              <div>
+                <span className="block text-label text-muted">Margem</span>
+                <span
+                  className={`text-body-lg font-semibold ${margemDoConsumo < 0 ? 'text-danger' : 'text-ok'}`}
+                >
+                  {formatBRL(margemDoConsumo)}
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="block text-label text-muted">Repassado à cliente</span>
-              <span className="text-body-lg font-semibold text-ink">
-                {formatBRL(consumo.valorCliente)}
-              </span>
-            </div>
-            <div>
-              <span className="block text-label text-muted">Margem</span>
-              <span
-                className={`text-body-lg font-semibold ${margemDoConsumo < 0 ? 'text-danger' : 'text-ok'}`}
-              >
-                {formatBRL(margemDoConsumo)}
-              </span>
-            </div>
-          </div>
+          )}
 
           <p className="text-body text-muted">
             Na proposta da cliente saem só os nomes dos produtos — sem quantidade e sem valores.
