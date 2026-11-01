@@ -51,6 +51,8 @@ import {
   conflitosDeSala,
   corDaProfissional,
   deslocarDias,
+  duracaoAposMudarProcedimentos,
+  duracaoDoProcedimento,
   duracaoDosProcedimentos,
   expedienteDoDia,
   hhmmDeMinutos,
@@ -631,12 +633,24 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
 
   if (!isOpen) return null;
 
+  /**
+   * Toda mudança na lista de procedimentos passa por aqui: a duração escolhida à mão (digitada
+   * ou a gravada do agendamento editado) ganha o tempo do que entrou e perde o do que saiu. Sem
+   * isto, editar um agendamento salvo e acrescentar um procedimento deixava a duração do primeiro.
+   */
+  const trocarProcedimentos = (depois: LinhaDeProcedimento[]) => {
+    setDuracaoDigitada((escolhida) =>
+      duracaoAposMudarProcedimentos(escolhida, procedimentos, depois, procedures)
+    );
+    setProcedimentos(depois);
+  };
+
   const mudarProcedimento = (
     chave: string,
     escolha: { procedureId?: string; procedimentoNome: string }
   ) =>
-    setProcedimentos((atuais) =>
-      atuais.map((l) =>
+    trocarProcedimentos(
+      procedimentos.map((l) =>
         l.chave === chave
           ? { ...l, procedureId: escolha.procedureId, procedimentoNome: escolha.procedimentoNome }
           : l
@@ -645,12 +659,29 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
 
   const adicionarProcedimento = () => {
     const nova = linhaDeProcedimento();
-    setProcedimentos((atuais) => [...atuais, nova]);
+    trocarProcedimentos([...procedimentos, nova]);
     setLinhaEmFoco(nova.chave);
   };
 
   const removerProcedimento = (chave: string) =>
-    setProcedimentos((atuais) => atuais.filter((l) => l.chave !== chave));
+    trocarProcedimentos(procedimentos.filter((l) => l.chave !== chave));
+
+  /**
+   * A conta da duração, à vista quando a visita tem mais de um procedimento: quanto o catálogo dá
+   * para cada um e a soma. Quem não tem duração no catálogo (digitado à mão, ou sem o campo
+   * preenchido) é citado à parte, para o tempo dele ser somado na mão.
+   */
+  const partesDaDuracao = procedimentos
+    .filter((l) => l.procedimentoNome.trim())
+    .map((l) => ({
+      chave: l.chave,
+      nome: l.procedimentoNome.trim(),
+      minutos: l.procedureId
+        ? duracaoDoProcedimento(procedures.find((c) => c.id === l.procedureId)?.duration)
+        : undefined,
+    }));
+  const partesComDuracao = partesDaDuracao.filter((p) => p.minutos !== undefined);
+  const partesSemDuracao = partesDaDuracao.filter((p) => p.minutos === undefined);
 
   const desvincular = (chave: string) =>
     setProcedimentos((atuais) =>
@@ -942,6 +973,33 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               erro={i === 0 ? erros.procedimento : undefined}
             />
           ))}
+          {partesDaDuracao.length > 1 && (
+            <p className="px-1 text-[13px] text-ink-soft leading-snug">
+              {partesComDuracao.length > 0 && (
+                <>
+                  Duração somada:{' '}
+                  {partesComDuracao.map((p) => `${p.nome} ${p.minutos} min`).join(' + ')}
+                  {partesComDuracao.length > 1 && (
+                    <>
+                      {' '}
+                      ={' '}
+                      <strong className="text-ink tabular-nums">
+                        {partesComDuracao.reduce((soma, p) => soma + (p.minutos || 0), 0)} min
+                      </strong>
+                    </>
+                  )}
+                  .{' '}
+                </>
+              )}
+              {partesSemDuracao.length > 0 && (
+                <>
+                  {partesSemDuracao.map((p) => p.nome).join(', ')}{' '}
+                  {partesSemDuracao.length === 1 ? 'não tem' : 'não têm'} duração no catálogo —
+                  some o tempo na Duração.
+                </>
+              )}
+            </p>
+          )}
           <button
             type="button"
             onClick={adicionarProcedimento}

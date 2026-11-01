@@ -258,6 +258,33 @@ export const duracaoDosProcedimentos = (
   return algum ? soma : undefined;
 };
 
+/**
+ * A duração escolhida à mão, depois de mudar os procedimentos da visita: soma o tempo do que
+ * entrou e desconta o do que saiu, pelo catálogo. Assim a visita sempre considera todos os
+ * procedimentos — também ao editar um agendamento já salvo, cuja duração gravada antes ficava
+ * parada — sem perder o ajuste de quem digitou: botox que nesta paciente leva 50 min em vez de
+ * 30, mais um preenchimento de 45, dá 95.
+ *
+ * `null` = ninguém escolheu, e a sugestão do catálogo já acompanha sozinha. Campo vazio continua
+ * vazio (vale o catálogo ao salvar). Se a conta cair abaixo do mínimo aceitável — tirar um
+ * procedimento de uma duração digitada curta —, volta a seguir o catálogo.
+ */
+export const duracaoAposMudarProcedimentos = (
+  escolhida: string | null,
+  antes: { procedureId?: string }[],
+  depois: { procedureId?: string }[],
+  catalogo: Procedure[]
+): string | null => {
+  if (escolhida === null) return null;
+  const atual = Number(escolhida);
+  if (!escolhida.trim() || !(atual > 0)) return escolhida;
+  const delta =
+    (duracaoDosProcedimentos(depois, catalogo) ?? 0) - (duracaoDosProcedimentos(antes, catalogo) ?? 0);
+  if (!delta) return escolhida;
+  const nova = atual + delta;
+  return nova >= DURACAO_MIN_ACEITAVEL ? String(nova) : null;
+};
+
 /** O que o registro diz; na falta, o que o catálogo diz; na falta, o padrão. */
 export const duracaoDoAtendimento = (
   a: Pick<Attendance, 'duracaoMin' | 'procedureId' | 'procedimentosAdicionais'>,
