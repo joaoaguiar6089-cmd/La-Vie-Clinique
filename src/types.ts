@@ -494,6 +494,33 @@ export interface AnamnesisTemplate {
   updatedAt?: string;
 }
 
+/**
+ * A marca de um documento que foi para o arquivo junto com a paciente — ver `Patient.arquivadoEm`.
+ *
+ * O documento continua na coleção dele, com o mesmo id: o link de anamnese ou de orçamento que a
+ * paciente recebeu continua abrindo. O que muda é que as listas da plataforma (Anamneses,
+ * Orçamentos, Agenda, Fichas, Financeiro, Hoje, busca) deixam de enxergá-lo, e ele passa a ser
+ * visto só pela página da paciente, dentro do arquivo.
+ */
+export interface MarcaDeArquivo {
+  arquivadoEm?: string; // ISO
+  /** O id do cadastro arquivado de quem ele é — é por ele que a página do arquivo o encontra. */
+  arquivoDe?: string;
+}
+
+/** Quantos documentos foram para o arquivo com ela — a legenda da linha, sem ler documento nenhum. */
+export interface TotaisDoArquivo {
+  anamneses: number;
+  orcamentos: number;
+  /** Visitas feitas. */
+  atendimentos: number;
+  /** Agendamentos, faltas e remarcações — registro na agenda que não foi visita feita. */
+  agendamentos: number;
+  avaliacoes: number;
+  relatorios: number;
+  recibos: number;
+}
+
 export interface Patient {
   id: string;
   nome: string;
@@ -516,6 +543,18 @@ export interface Patient {
    */
   juntadoA?: string;
   juntadoEm?: string; // ISO
+  /**
+   * Excluída com documentos: o cadastro e tudo o que é dela foram para o arquivo. Some da lista de
+   * Pacientes (aparece só no filtro Arquivo) e os documentos somem das seções — ver
+   * `MarcaDeArquivo`. Excluir de dentro do arquivo é que apaga de vez.
+   */
+  arquivadoEm?: string; // ISO
+  arquivoTotais?: TotaisDoArquivo;
+  /**
+   * Ela só existia como nome em documentos, e o cadastro nasceu para guardá-la no arquivo. Tirar
+   * do arquivo apaga este cadastro, e ela volta a ser o que era — um nome "sem cadastro".
+   */
+  cadastroCriadoNoArquivo?: boolean;
   createdAt: string;
   updatedAt?: string;
 }
@@ -549,7 +588,7 @@ export interface FotoAntesDepois {
   enviada?: boolean;
 }
 
-export interface AnamnesisRecord {
+export interface AnamnesisRecord extends MarcaDeArquivo {
   id: string;
   pacienteId: string;
   pacienteNome: string;
@@ -755,7 +794,7 @@ export interface QuoteReference {
   numero: string;
 }
 
-export interface Quote {
+export interface Quote extends MarcaDeArquivo {
   id: string; // crypto.randomUUID() — o link público é secreto por ser imprevisível
   numero: string; // "2026-0148", gerado no 1º salvamento e imutável a partir dali
   ano: number;
@@ -884,7 +923,7 @@ export interface ReciboItem {
  * Mora em `receipts`, coleção só da equipe: diferente de `quotes`, ninguém a abre sem login —
  * ela leva o CPF da cliente.
  */
-export interface Recibo {
+export interface Recibo extends MarcaDeArquivo {
   id: string; // crypto.randomUUID()
   numero: string; // "2026-0007", gerado no primeiro salvamento e imutável
   ano: number;
@@ -949,7 +988,7 @@ export type AttendanceStatus = 'agendado' | 'compareceu' | 'faltou' | 'remarcado
  * mentir. O número da sessão, ao contrário, **não** é gravado em lugar nenhum — é contado na
  * leitura, o que faz excluir a 3ª sessão renumerar as outras sozinha.
  */
-export interface SessionPlan {
+export interface SessionPlan extends MarcaDeArquivo {
   id: string;
   pacienteId: string;
   /** Origem no catálogo. Ausente quando o procedimento foi digitado à mão. */
@@ -985,7 +1024,7 @@ export interface ProcedimentoDaVisita {
  * regras exigem login, ao contrário de `patients` e `anamnesis_records`, abertos porque a
  * paciente preenche a própria ficha sem conta).
  */
-export interface Attendance {
+export interface Attendance extends MarcaDeArquivo {
   id: string;
   pacienteId: string;
   /** Espelha o nome no momento do registro, como fazem a ficha e o orçamento. */
@@ -1347,7 +1386,7 @@ export interface CustoDoOrcamento {
  * de atendimentos é baixada inteira em toda sessão. No atendimento fica só a marca e o total
  * (`materiaisRegistradosEm`, `custoMateriais`).
  */
-export interface MateriaisDoAtendimento {
+export interface MateriaisDoAtendimento extends MarcaDeArquivo {
   /** Igual ao `Attendance.id`. */
   id: string;
   atendimentoId: string;
@@ -1478,7 +1517,7 @@ export interface GrupoDePerguntasExtra {
  * clínica em toda sessão, e cada correção de observação reescreveria o documento inteiro — a cota
  * do Firestore aqui é por KB gravado.
  */
-export interface EvaluationRecord {
+export interface EvaluationRecord extends MarcaDeArquivo {
   id: string;
   /** Obrigatório no acompanhamento. Na avaliação, só nas antigas (uma por visita). */
   atendimentoId?: string;
