@@ -26,8 +26,11 @@ export type OrdemDaLista = 'alfabetica' | 'interacao';
  * Os dois recortes respondem às perguntas que a recepção faz à lista — "quem já é cliente de
  * verdade?" e "quem vem por aí?" — e por isso não olham anamnese nem orçamento: quem só pediu um
  * orçamento ainda não passou pela cadeira.
+ *
+ * O `arquivo` é outra lista: as pacientes excluídas que tinham documentos. Elas não estão entre
+ * estas linhas — ver `utils/arquivoDePacientes.ts`.
  */
-export type FiltroDaLista = 'todas' | 'com_atendimento' | 'com_agendamento';
+export type FiltroDaLista = 'todas' | 'com_atendimento' | 'com_agendamento' | 'arquivo';
 
 export type TipoDeInteracao = 'atendimento' | 'anamnese' | 'orcamento';
 
@@ -376,7 +379,9 @@ export const ordenarLinhas = (
 
 /** As linhas que passam no filtro do topo da lista. */
 export const filtrarLinhas = (linhas: LinhaDePaciente[], filtro: FiltroDaLista): LinhaDePaciente[] =>
-  filtro === 'com_atendimento'
+  filtro === 'arquivo'
+    ? []
+    : filtro === 'com_atendimento'
     ? linhas.filter((l) => l.totalAtendimentos > 0)
     : filtro === 'com_agendamento'
     ? linhas.filter((l) => !!l.proximoAgendamento)

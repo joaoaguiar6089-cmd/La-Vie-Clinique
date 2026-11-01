@@ -21,7 +21,6 @@ import {
   subscribeToSessionPlans,
   subscribeToRegistrosDeFicha,
   savePatient,
-  deletePatient,
   saveAnamnesisRecord,
   deleteAnamnesisRecord,
   saveAttendance,
@@ -30,7 +29,14 @@ import {
   deleteSessionPlan,
   subscribeToParesDistintos,
   marcarComoDistintos,
+  subscribeToPacientesArquivadas,
+  subscribeToDocumentosDoArquivo,
+  DocumentosDoArquivo,
+  tirarDoArquivo,
+  excluirDoArquivo,
 } from '../../services/databaseService';
+import { excluirPaciente, prepararExclusao } from '../../services/arquivoDePacientes';
+import { resumoDosTotais } from '../../utils/arquivoDePacientes';
 import {
   FiltroDaLista,
   LinhaDePaciente,
@@ -52,6 +58,7 @@ import { salasDaClinica } from '../../utils/agenda';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PatientsListView } from './PatientsListView';
 import { PatientDetailView } from './PatientDetailView';
+import { PacienteArquivadaView } from './PacienteArquivadaView';
 import { NewPatientModal } from './NewPatientModal';
 import { JuntarPacientesPanel } from './JuntarPacientesPanel';
 import { CadastrosRepetidosPanel } from './CadastrosRepetidosPanel';
@@ -132,6 +139,13 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   /** Pares que a equipe disse que não são a mesma pessoa, por `chavePar`. */
   const [paresDistintos, setParesDistintos] = useState<string[]>([]);
   const [repetidosAbertos, setRepetidosAbertos] = useState(false);
+  /** O arquivo: quem foi excluída tendo documentos, e a página aberta de uma delas. */
+  const [arquivadas, setArquivadas] = useState<Patient[]>([]);
+  const [arquivadasCarregando, setArquivadasCarregando] = useState(true);
+  const [arquivadaAbertaId, setArquivadaAbertaId] = useState<string | null>(null);
+  const [documentosDoArquivo, setDocumentosDoArquivo] = useState<DocumentosDoArquivo | null>(null);
+  /** Aviso de que algo deu certo — "Fulana foi para o arquivo". O erro tem o banner dele. */
+  const [aviso, setAviso] = useState<string | null>(null);
   /** A junção em andamento. Sem `b`, o painel pede a outra. */
   const [juncao, setJuncao] = useState<{ a: LinhaDePaciente; b?: LinhaDePaciente } | null>(null);
   const recibosCtx = useRecibos();
@@ -155,6 +169,13 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
     );
     const unsubPlanos = subscribeToSessionPlans(setSessionPlans);
     const unsubDistintos = subscribeToParesDistintos(setParesDistintos);
+    const unsubArquivadas = subscribeToPacientesArquivadas(
+      (data) => {
+        setArquivadas(data);
+        setArquivadasCarregando(false);
+      },
+      () => setArquivadasCarregando(false)
+    );
 
     return () => {
       unsubPacientes();
@@ -164,8 +185,33 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
       unsubAtendimentos();
       unsubPlanos();
       unsubDistintos();
+      unsubArquivadas();
     };
   }, []);
+
+  /** A paciente aberta no arquivo — some sozinha se ela sair de lá (tirada ou excluída). */
+  const arquivadaAberta = useMemo(
+    () => (arquivadaAbertaId ? arquivadas.find((p) => p.id === arquivadaAbertaId) || null : null),
+    [arquivadaAbertaId, arquivadas]
+  );
+
+  /** Os documentos dela no arquivo, lidos só enquanto a página está aberta. */
+  useEffect(() => {
+    if (!arquivadaAberta) {
+      setDocumentosDoArquivo(null);
+      return;
+    }
+    return subscribeToDocumentosDoArquivo(arquivadaAberta.id, setDocumentosDoArquivo, (e) =>
+      setErro(`Não foi possível carregar os documentos do arquivo: ${e.message}`)
+    );
+  }, [arquivadaAberta?.id]);
+
+  /** O aviso de sucesso some sozinho — é confirmação, não tarefa. */
+  useEffect(() => {
+    if (!aviso) return;
+    const t = setTimeout(() => setAviso(null), 6000);
+    return () => clearTimeout(t);
+  }, [aviso]);
 
   /**
    * A lista não é só `patients`: quem recebeu um orçamento avulso (nome digitado na hora, sem
@@ -283,10 +329,13 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
    */
   useEffect(() => {
     if (!pedido) return;
+    // Quem chega de fora vem ver uma paciente ativa: a página do arquivo, se aberta, fecha.
+    setArquivadaAbertaId(null);
     if (pedido.pacienteId) setPacienteAbertoId(pedido.pacienteId);
     if (pedido.filtro === 'pendentes') {
       setPacienteAbertoId(null);
       setSoPendentes(true);
+      setFiltro('todas');
     }
     if (pedido.criarNovo) abrirCadastro();
     onPedidoAtendido?.();
@@ -408,32 +457,101 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   };
 
   /**
-   * Excluir apaga o cadastro, e só ele. Fichas, orçamentos e atendimentos são documentos
-   * próprios, com link já enviado à paciente no caso do orçamento — some com o cadastro e o nome
-   * volta para a lista como pendente, com o histórico intacto. O aviso diz isso antes, em vez de
-   * a equipe descobrir depois.
+   * Excluir sempre funciona. Sem documento nenhum, o cadastro é apagado. Com documentos, ela e
+   * tudo o que é dela vão para o 📁 Arquivo e somem das outras seções — ver
+   * `utils/arquivoDePacientes.ts`. O aviso diz qual dos dois vai acontecer, com os números, e para
+   * isso a exclusão é preparada antes (lê as avaliações e os relatórios, que não estão em memória).
    */
-  const pedirExclusao = (linha: LinhaDePaciente) => {
-    if (!linha.patient) return;
-    const { totalAnamneses: fichas, totalOrcamentos: orcamentos, totalAtendimentos } = linha;
-    const temHistorico = fichas > 0 || orcamentos > 0 || totalAtendimentos > 0;
+  const pedirExclusao = async (linha: LinhaDePaciente) => {
+    let preparo: Awaited<ReturnType<typeof prepararExclusao>>;
+    try {
+      preparo = await prepararExclusao({
+        linha,
+        arquivadas,
+        idsCadastrados,
+        emMemoria: {
+          fichas: records,
+          orcamentos: quotes,
+          recibos: recibosCtx?.recibos ?? [],
+          atendimentos: attendances,
+          planos: sessionPlans,
+        },
+      });
+    } catch (e) {
+      setErro(`Não foi possível conferir os documentos de ${linha.nome}: ${(e as Error).message}`);
+      return;
+    }
+
+    const { plano } = preparo;
+    const vaiParaOArquivo = plano.documentos.length > 0;
+    const resumo = resumoDosTotais(plano.totais) || 'um plano de sessões';
+    const agenda =
+      plano.totais.agendamentos > 0
+        ? ' Os agendamentos dela saem da agenda (e do Google Agenda).'
+        : '';
 
     setConfirmacao({
-      titulo: `Excluir o cadastro de ${linha.nome}?`,
-      mensagem: temHistorico
-        ? `Os dados pessoais são apagados para sempre.\n\n${totalAtendimentos} atendimento${
-            totalAtendimentos === 1 ? '' : 's'
-          }, ${fichas} ficha${fichas === 1 ? '' : 's'} de anamnese e ${orcamentos} orçamento${
-            orcamentos === 1 ? '' : 's'
-          } continuam no sistema — os links já enviados seguem valendo. Por causa deles, o nome volta a aparecer nesta lista marcado como "sem cadastro".`
-        : 'Os dados pessoais são apagados para sempre. Este paciente não tem nenhum atendimento, ficha ou orçamento, então nada mais sai junto.',
-      textoConfirmar: 'Excluir cadastro',
+      titulo: `Excluir ${linha.nome}?`,
+      mensagem: vaiParaOArquivo
+        ? `Ela tem ${resumo}.\n\nO cadastro e esses documentos vão para o 📁 Arquivo, aqui na lista de Pacientes, e saem de todas as outras seções — anamneses, orçamentos, agenda, fichas e financeiro.${agenda}\n\nNo arquivo dá para consultar tudo, tirar de lá ou excluir de vez.`
+        : 'Ela não tem nenhum documento, então o cadastro é apagado para sempre.',
+      textoConfirmar: vaiParaOArquivo ? 'Excluir e arquivar' : 'Excluir cadastro',
       onConfirmar: async () => {
         try {
-          await deletePatient(linha.patient!.id);
+          const resultado = await excluirPaciente(preparo);
           setErro(null);
+          setAviso(
+            resultado === 'arquivada'
+              ? `${linha.nome} foi para o 📁 Arquivo, com os documentos dela.`
+              : `O cadastro de ${linha.nome} foi apagado.`
+          );
         } catch (e) {
-          setErro(`Não foi possível excluir o cadastro: ${(e as Error).message}`);
+          setErro(`Não foi possível excluir ${linha.nome}: ${(e as Error).message}`);
+        }
+      },
+    });
+  };
+
+  /** Tirar do arquivo: ela e os documentos voltam para onde estavam. */
+  const pedirSaidaDoArquivo = (paciente: Patient) => {
+    setConfirmacao({
+      titulo: `Tirar ${paciente.nome} do arquivo?`,
+      mensagem:
+        'Ela volta para a lista de Pacientes, e os documentos voltam para as seções de onde ' +
+        'saíram. Agendamentos que ainda não passaram voltam para a agenda.',
+      textoConfirmar: 'Tirar do arquivo',
+      tom: 'neutro',
+      onConfirmar: async () => {
+        try {
+          await tirarDoArquivo(paciente);
+          setErro(null);
+          setArquivadaAbertaId(null);
+          setFiltro('todas');
+          setAviso(`${paciente.nome} saiu do arquivo e voltou para a lista.`);
+        } catch (e) {
+          setErro(`Não foi possível tirar ${paciente.nome} do arquivo: ${(e as Error).message}`);
+        }
+      },
+    });
+  };
+
+  /** Excluir de dentro do arquivo: apaga tudo, de vez — a paciente de teste. */
+  const pedirExclusaoDefinitiva = (paciente: Patient) => {
+    const resumo = resumoDosTotais(paciente.arquivoTotais);
+    setConfirmacao({
+      titulo: `Excluir ${paciente.nome} permanentemente?`,
+      mensagem:
+        `O cadastro e os documentos dela${resumo ? ` (${resumo})` : ''} são apagados para sempre.\n\n` +
+        'Não há como desfazer, e os links de anamnese ou orçamento que ela recebeu deixam de abrir.',
+      textoConfirmar: 'Excluir permanentemente',
+      onConfirmar: async () => {
+        try {
+          await excluirDoArquivo(paciente);
+          setErro(null);
+          setArquivadaAbertaId(null);
+          setAviso(`${paciente.nome} foi excluída permanentemente.`);
+        } catch (e) {
+          setErro(`Não foi possível excluir ${paciente.nome}: ${(e as Error).message}`);
         }
       },
     });
@@ -491,11 +609,36 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
     </>
   );
 
-  const bannerDeErro = erro && (
-    <div className="max-w-3xl mx-auto px-5 sm:px-8 pt-6">
-      <p className="px-4 py-3 rounded-[14px] bg-danger-bg text-[14px] text-danger">{erro}</p>
+  const bannerDeErro = (erro || aviso) && (
+    <div className="max-w-3xl mx-auto px-5 sm:px-8 pt-6 flex flex-col gap-2">
+      {erro && <p className="px-4 py-3 rounded-[14px] bg-danger-bg text-[14px] text-danger">{erro}</p>}
+      {aviso && (
+        <p role="status" className="px-4 py-3 rounded-[14px] bg-ok-bg text-[14px] text-ok">
+          {aviso}
+        </p>
+      )}
     </div>
   );
+
+  if (arquivadaAberta) {
+    return (
+      <>
+        {bannerDeErro}
+        <PacienteArquivadaView
+          paciente={arquivadaAberta}
+          documentos={documentosDoArquivo}
+          clinic={clinic}
+          catalogProcedures={catalogProcedures}
+          templates={templates}
+          todosPacientes={patients}
+          onVoltar={() => setArquivadaAbertaId(null)}
+          onTirarDoArquivo={() => pedirSaidaDoArquivo(arquivadaAberta)}
+          onExcluirDeVez={() => pedirExclusaoDefinitiva(arquivadaAberta)}
+        />
+        <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+      </>
+    );
+  }
 
   if (pacienteAberto) {
     return (
@@ -617,6 +760,13 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
         onAbrirPaciente={setPacienteAbertoId}
         onNovoPaciente={abrirCadastro}
         onExcluirPaciente={pedirExclusao}
+        arquivadas={arquivadas}
+        arquivadasCarregando={arquivadasCarregando}
+        onAbrirArquivada={(id) => {
+          setArquivadaAbertaId(id);
+          window.scrollTo({ top: 0 });
+        }}
+        onExcluirDoArquivo={pedirExclusaoDefinitiva}
         totalRepetidos={repetidos.length}
         onVerRepetidos={() => setRepetidosAbertos(true)}
         onJuntarPaciente={(linha) => setJuncao({ a: linha })}

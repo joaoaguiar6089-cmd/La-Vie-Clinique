@@ -78,6 +78,7 @@ import {
 } from '../utils/agendamentoLink';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../utils/fichasClinicas';
 import { AtualizacaoDaJuncao, ColecaoDaPaciente, DocumentoInterno } from '../utils/juncaoDePacientes';
+import type { DocumentoDoArquivo } from '../utils/arquivoDePacientes';
 import { caixaLida, linhasSemValor } from '../utils/estoque';
 import {
   montarMapasPublicos,
@@ -270,6 +271,17 @@ async function comConfirmacaoDoServidor<T>(gravacao: Promise<T>, oQue: string): 
     clearTimeout(timer);
   }
 }
+
+/**
+ * O documento foi para o arquivo junto com a paciente — ver `MarcaDeArquivo`. As listas da
+ * plataforma não o enxergam: a assinatura de cada coleção o deixa de fora, e quem o lê é só a
+ * página da paciente dentro do arquivo (`subscribeToDocumentosDoArquivo`).
+ *
+ * O filtro é aqui, no cliente, e não na consulta: `where('arquivadoEm', '==', null)` não acha o
+ * documento que nunca teve o campo — que é quase todos.
+ */
+const estaNoArquivo = (docSnap: { data: () => Record<string, unknown> | undefined }): boolean =>
+  !!docSnap.data()?.arquivadoEm;
 
 let quotaExhaustedSession = false;
 
@@ -1528,8 +1540,9 @@ function subscribeToPatientsDireto(
       const items: Patient[] = [];
       snapshot.forEach((docSnap) => {
         const patient = { ...(docSnap.data() as Patient), id: docSnap.id };
-        // O cadastro juntado a outro é só um redirecionamento — ver `Patient.juntadoA`.
-        if (!patient.juntadoA) items.push(patient);
+        // O cadastro juntado a outro é só um redirecionamento — ver `Patient.juntadoA`. O
+        // arquivado só aparece no filtro Arquivo, por `subscribeToPacientesArquivadas`.
+        if (!patient.juntadoA && !patient.arquivadoEm) items.push(patient);
       });
       items.sort((a, b) => a.nome.localeCompare(b.nome));
       onUpdate(items);
@@ -1679,6 +1692,253 @@ export async function gravarJuncaoDePacientes({
   }
 }
 
+// ==========================================
+// ARQUIVO DE PACIENTES
+// ==========================================
+//
+// Excluir uma paciente com documentos a manda para o arquivo, junto com eles. A decisão do que vai
+// mora em `utils/arquivoDePacientes.ts`; aqui, as gravações. Arquivar é marcar (`arquivadoEm` e
+// `arquivoDe`), e não mover: cada documento fica na coleção dele, com o mesmo id.
+
+function subscribeToPacientesArquivadasDireto(
+  onUpdate: (patients: Patient[]) => void,
+  onError?: (err: Error) => void
+) {
+  // `> ''` acha toda paciente com a data gravada — e só elas: a consulta não lê a coleção inteira.
+  return onSnapshot(
+    query(collection(db, PATIENTS_COLLECTION), where('arquivadoEm', '>', '')),
+    (snapshot) => {
+      const items: Patient[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ ...(docSnap.data() as Patient), id: docSnap.id });
+      });
+      // A arquivada mais recente primeiro: quem acabou de sair é quem se procura.
+      items.sort((a, b) => (b.arquivadoEm || '').localeCompare(a.arquivadoEm || ''));
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Pacientes arquivadas: offline/cota diária atingida.');
+      } else {
+        console.error('Pacientes arquivadas subscription error:', error);
+      }
+      onError?.(error);
+    }
+  );
+}
+
+/** As pacientes do arquivo — o filtro "📁 Arquivo" da lista. */
+export function subscribeToPacientesArquivadas(
+  onUpdate: (data: Patient[]) => void,
+  onError?: (err: Error) => void
+) {
+  return subscribeShared<Patient[]>(
+    'patients:arquivadas',
+    subscribeToPacientesArquivadasDireto,
+    onUpdate,
+    onError
+  );
+}
+
+/** Os documentos que estão no arquivo com ela, um grupo por coleção. */
+export interface DocumentosDoArquivo {
+  fichas: AnamnesisRecord[];
+  orcamentos: Quote[];
+  recibos: Recibo[];
+  atendimentos: Attendance[];
+  planos: SessionPlan[];
+  avaliacoes: EvaluationRecord[];
+  acompanhamentos: EvaluationRecord[];
+  materiais: { id: string }[];
+}
+
+const COLECOES_DO_ARQUIVO = Object.keys(COLECOES_DA_PACIENTE) as ColecaoDaPaciente[];
+
+type DocumentosBrutos = Record<ColecaoDaPaciente, { id: string; dados: Record<string, unknown> }[]>;
+
+const consultaDoArquivo = (colecao: ColecaoDaPaciente, pacienteId: string) =>
+  query(collection(db, COLECOES_DA_PACIENTE[colecao]), where('arquivoDe', '==', pacienteId));
+
+const documentosLidos = (brutos: DocumentosBrutos): DocumentosDoArquivo => ({
+  fichas: brutos.fichas.map(({ id, dados }) => ({ ...(dados as unknown as AnamnesisRecord), id })),
+  orcamentos: brutos.orcamentos.map(({ id, dados }) =>
+    normalizarQuote({ ...(dados as unknown as Quote), id })
+  ),
+  recibos: brutos.recibos.map(({ id, dados }) =>
+    normalizarRecibo({ ...(dados as unknown as Recibo), id })
+  ),
+  atendimentos: brutos.atendimentos.map(({ id, dados }) => ({ ...(dados as unknown as Attendance), id })),
+  planos: brutos.planos.map(({ id, dados }) => ({ ...(dados as unknown as SessionPlan), id })),
+  avaliacoes: brutos.avaliacoes.map(({ id, dados }) => normalizarRegistroDeFichaLido(id, dados)),
+  acompanhamentos: brutos.acompanhamentos.map(({ id, dados }) =>
+    normalizarRegistroDeFichaLido(id, dados)
+  ),
+  materiais: brutos.materiais.map(({ id }) => ({ id })),
+});
+
+/**
+ * Os documentos dela no arquivo, ao vivo — a página da paciente arquivada. Uma consulta por
+ * coleção, todas pelo `arquivoDe`, e só enquanto a página está aberta. Responde `null` até todas
+ * as coleções terem chegado, para a página não mostrar "nenhuma anamnese" no meio da leitura.
+ */
+export function subscribeToDocumentosDoArquivo(
+  pacienteId: string,
+  onUpdate: (docs: DocumentosDoArquivo | null) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const brutos: Partial<DocumentosBrutos> = {};
+  const paradas = COLECOES_DO_ARQUIVO.map((colecao) =>
+    onSnapshot(
+      consultaDoArquivo(colecao, pacienteId),
+      (snapshot) => {
+        brutos[colecao] = snapshot.docs.map((d) => ({ id: d.id, dados: d.data() }));
+        const prontas = COLECOES_DO_ARQUIVO.every((c) => brutos[c]);
+        onUpdate(prontas ? documentosLidos(brutos as DocumentosBrutos) : null);
+      },
+      (error) => {
+        console.error(`Arquivo (${colecao}) subscription error:`, error);
+        onError?.(error);
+      }
+    )
+  );
+  onUpdate(null);
+  return () => paradas.forEach((parar) => parar());
+}
+
+/** Os documentos dela no arquivo, numa leitura só — para tirar do arquivo ou apagar de vez. */
+async function lerDocumentosDoArquivo(pacienteId: string): Promise<DocumentosBrutos> {
+  const lidos = await Promise.all(
+    COLECOES_DO_ARQUIVO.map(async (colecao) => {
+      const snap = await getDocsFromServer(consultaDoArquivo(colecao, pacienteId));
+      return [colecao, snap.docs.map((d) => ({ id: d.id, dados: d.data() }))] as const;
+    })
+  );
+  return Object.fromEntries(lidos) as DocumentosBrutos;
+}
+
+const refDoArquivo = (d: DocumentoDoArquivo) => doc(db, COLECOES_DA_PACIENTE[d.colecao], d.id);
+
+const emLotes = <T,>(itens: T[], tamanho: number): T[][] => {
+  const lotes: T[][] = [];
+  for (let i = 0; i < itens.length; i += tamanho) lotes.push(itens.slice(i, i + tamanho));
+  return lotes.length > 0 ? lotes : [[]];
+};
+
+/**
+ * Manda a paciente e os documentos dela para o arquivo.
+ *
+ * Quase sempre é um lote só, e então tudo ou nada. Com mais de 400 documentos, o cadastro vai no
+ * **primeiro** lote: se a rede cair no meio, ela já está no arquivo e o que sobrou aparece na lista
+ * como "sem cadastro" com o mesmo nome — excluir de novo junta o resto a ela
+ * (`cadastroDoArquivo`), em vez de deixar documentos marcados sem dona.
+ *
+ * O atendimento perde a marca do Google Agenda (o evento sai de lá em seguida, por quem chama):
+ * tirado do arquivo, a sincronização o envia de novo se ainda for agendamento futuro.
+ */
+export async function gravarArquivamento({
+  paciente,
+  documentos,
+}: {
+  /** O cadastro já com `arquivadoEm` e `arquivoTotais`. Pode ser um cadastro novo. */
+  paciente: Patient;
+  documentos: DocumentoDoArquivo[];
+}): Promise<void> {
+  const agora = new Date().toISOString();
+  const marca = { arquivadoEm: agora, arquivoDe: paciente.id, updatedAt: agora };
+  const lotes = emLotes(documentos, GRAVACOES_POR_LOTE - 1);
+
+  for (let i = 0; i < lotes.length; i++) {
+    const batch = writeBatch(db);
+    if (i === 0) {
+      batch.set(
+        doc(db, PATIENTS_COLLECTION, paciente.id),
+        cleanForFirestore({ ...paciente, updatedAt: agora }),
+        { merge: true }
+      );
+    }
+    lotes[i].forEach((d) =>
+      batch.update(
+        refDoArquivo(d),
+        d.colecao === 'atendimentos' ? { ...marca, googleAgenda: deleteField() } : marca
+      )
+    );
+    await comConfirmacaoDoServidor(batch.commit(), 'do arquivo');
+  }
+}
+
+const documentosDosBrutos = (brutos: DocumentosBrutos): DocumentoDoArquivo[] =>
+  COLECOES_DO_ARQUIVO.flatMap((colecao) => brutos[colecao].map(({ id }) => ({ colecao, id })));
+
+/**
+ * Tira do arquivo: apaga as duas marcas de cada documento e a do cadastro. Quem só existia como
+ * nome perde o cadastro que nasceu no arquivo e volta a ser "sem cadastro", como era.
+ *
+ * O cadastro vai no **último** lote: se cair no meio, ela continua no arquivo com o que faltou, e
+ * tirar de novo termina o serviço.
+ */
+export async function tirarDoArquivo(paciente: Patient): Promise<void> {
+  const agora = new Date().toISOString();
+  const desmarca = { arquivadoEm: deleteField(), arquivoDe: deleteField(), updatedAt: agora };
+  const documentos = documentosDosBrutos(await lerDocumentosDoArquivo(paciente.id));
+  const lotes = emLotes(documentos, GRAVACOES_POR_LOTE - 1);
+
+  for (let i = 0; i < lotes.length; i++) {
+    const batch = writeBatch(db);
+    lotes[i].forEach((d) => batch.update(refDoArquivo(d), desmarca));
+    if (i === lotes.length - 1) {
+      const ref = doc(db, PATIENTS_COLLECTION, paciente.id);
+      if (paciente.cadastroCriadoNoArquivo) batch.delete(ref);
+      else {
+        batch.update(ref, {
+          arquivadoEm: deleteField(),
+          arquivoTotais: deleteField(),
+          updatedAt: agora,
+        });
+      }
+    }
+    await comConfirmacaoDoServidor(batch.commit(), 'da saída do arquivo');
+  }
+}
+
+/**
+ * Apaga de vez a paciente arquivada e tudo o que foi com ela — o caso da paciente de teste.
+ *
+ * O cadastro sai no **último** lote, pela mesma razão de `tirarDoArquivo`: interrompido, ela
+ * continua no arquivo com o que sobrou, e excluir de novo termina. De cada atendimento saem também
+ * o relatório e os materiais (o id deles é o do atendimento; apagar o que não existe não é erro).
+ * O custo dos orçamentos e o link dos agendamentos saem depois, fora dos lotes, como nas exclusões
+ * avulsas: um documento auxiliar que não saiu não pode impedir a exclusão.
+ */
+export async function excluirDoArquivo(paciente: Patient): Promise<void> {
+  const brutos = await lerDocumentosDoArquivo(paciente.id);
+  const refs = documentosDosBrutos(brutos).map(refDoArquivo);
+  brutos.atendimentos.forEach(({ id }) => {
+    refs.push(doc(db, FOLLOWUP_RECORDS_COLLECTION, id), doc(db, ATTENDANCE_MATERIALS_COLLECTION, id));
+  });
+  const unicos = refs.filter((r, i) => refs.findIndex((o) => o.path === r.path) === i);
+  const lotes = emLotes(unicos, GRAVACOES_POR_LOTE - 1);
+
+  for (let i = 0; i < lotes.length; i++) {
+    const batch = writeBatch(db);
+    lotes[i].forEach((ref) => batch.delete(ref));
+    if (i === lotes.length - 1) batch.delete(doc(db, PATIENTS_COLLECTION, paciente.id));
+    await comConfirmacaoDoServidor(batch.commit(), 'da exclusão');
+  }
+
+  const auxiliares = [
+    ...brutos.orcamentos.map(({ id }) => doc(db, QUOTE_COSTS_COLLECTION, id)),
+    ...brutos.atendimentos
+      .map(({ dados }) => dados.linkToken)
+      .filter((token): token is string => typeof token === 'string' && !!token)
+      .map((token) => doc(db, APPOINTMENT_LINKS_COLLECTION, token)),
+  ];
+  await Promise.all(
+    auxiliares.map((ref) =>
+      deleteDoc(ref).catch((e) => console.warn(`Ficou para trás ao excluir do arquivo: ${ref.path}`, e))
+    )
+  );
+}
+
 function subscribeToParesDistintosDireto(
   onUpdate: (pares: string[]) => void,
   onError?: (err: Error) => void
@@ -1735,6 +1995,7 @@ function subscribeToAnamnesisRecordsDireto(
     (snapshot) => {
       const items: AnamnesisRecord[] = [];
       snapshot.forEach((docSnap) => {
+        if (estaNoArquivo(docSnap)) return;
         items.push({ ...(docSnap.data() as AnamnesisRecord), id: docSnap.id });
       });
       // Sort newest first by dataAtendimento or createdAt
@@ -1786,6 +2047,7 @@ export function subscribeToAnamnesisRecordsDesde(
         (snapshot) => {
           const items: AnamnesisRecord[] = [];
           snapshot.forEach((docSnap) => {
+            if (estaNoArquivo(docSnap)) return;
             items.push({ ...(docSnap.data() as AnamnesisRecord), id: docSnap.id });
           });
           dados(items);
@@ -1955,6 +2217,7 @@ function subscribeToQuotesDireto(
     (snapshot) => {
       const items: Quote[] = [];
       snapshot.forEach((docSnap) => {
+        if (estaNoArquivo(docSnap)) return;
         items.push(normalizarQuote({ ...(docSnap.data() as Quote), id: docSnap.id }));
       });
       items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
@@ -2201,6 +2464,7 @@ function subscribeToRecibosDireto(
     (snapshot) => {
       const items: Recibo[] = [];
       snapshot.forEach((docSnap) => {
+        if (estaNoArquivo(docSnap)) return;
         items.push(normalizarRecibo({ ...(docSnap.data() as Recibo), id: docSnap.id }));
       });
       // Mais recentes primeiro: pelo dia do pagamento, e no mesmo dia pela emissão
@@ -2309,6 +2573,7 @@ function subscribeToAttendancesDireto(
     (snapshot) => {
       const items: Attendance[] = [];
       snapshot.forEach((docSnap) => {
+        if (estaNoArquivo(docSnap)) return;
         items.push({ ...(docSnap.data() as Attendance), id: docSnap.id });
       });
       onUpdate(items);
@@ -2447,6 +2712,7 @@ function subscribeToSessionPlansDireto(
     (snapshot) => {
       const items: SessionPlan[] = [];
       snapshot.forEach((docSnap) => {
+        if (estaNoArquivo(docSnap)) return;
         items.push({ ...(docSnap.data() as SessionPlan), id: docSnap.id });
       });
       onUpdate(items);
@@ -3240,6 +3506,7 @@ function subscribeToRegistrosDeFichaDireto(
     (snapshot) => {
       const items: EvaluationRecord[] = [];
       snapshot.forEach((docSnap) => {
+        if (estaNoArquivo(docSnap)) return;
         items.push(normalizarRegistroDeFichaLido(docSnap.id, docSnap.data()));
       });
       items.sort(
