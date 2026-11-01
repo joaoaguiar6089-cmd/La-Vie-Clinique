@@ -157,14 +157,23 @@ export type VisualizacaoDaFoto = 'menu' | 'catalogo' | 'cartao';
  * Posição da foto dentro do frame de uma visualização, sem cortar o arquivo.
  *
  * `x` e `y` vão de 0 a 100 e valem como no `object-position`: 0 encosta a borda esquerda (ou de
- * cima) da foto na do frame, 100 a direita (ou de baixo). `zoom` parte de 1, que é a foto cobrindo
- * o frame inteiro. Em proporção e não em pixels porque o mesmo ajuste serve ao frame do editor,
- * ao card da tela e à página exportada, que têm tamanhos diferentes.
+ * cima) da foto na do frame, 100 a direita (ou de baixo). `zoom` 1 é a foto cobrindo o frame
+ * inteiro; acima disso ela aproxima, abaixo ela encolhe para caber, e o que sobra do frame fica
+ * preto. Em proporção e não em pixels porque o mesmo ajuste serve ao frame do editor, ao card da
+ * tela e à página exportada, que têm tamanhos diferentes.
  */
 export interface EnquadramentoDaFoto {
   x: number;
   y: number;
   zoom: number;
+  /** Giro da foto neste lugar, em graus no sentido horário: 0, 90, 180 ou 270. Ausente = 0. */
+  giro?: number;
+  /**
+   * Largura / altura da foto original. Só a foto girada ou encolhida precisa dela: sem cobrir o
+   * frame, o tamanho dela lá dentro depende do formato da própria foto. Ausente, a foto é desenhada
+   * sem giro e com zoom de no mínimo 1, como antes de existir o giro.
+   */
+  proporcao?: number;
 }
 
 /** Ajuste de uma foto em cada visualização. Visualização ausente = foto centralizada. */
