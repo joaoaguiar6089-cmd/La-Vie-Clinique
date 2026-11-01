@@ -1,16 +1,37 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowDownAZ, Clock, Merge, MessageCircle, Trash2, UserPlus, Users } from 'lucide-react';
+import {
+  ArrowDownAZ,
+  CalendarClock,
+  Clock,
+  Merge,
+  MessageCircle,
+  Trash2,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
 import { formatDateShortYear } from '../../utils/formatters';
 import {
+  diaDoAgendamento,
+  FiltroDaLista,
+  filtrarLinhas,
   LinhaDePaciente,
   OrdemDaLista,
   ordenarLinhas,
+  ordenarPorAgendamento,
   ROTULO_DA_INTERACAO,
 } from '../../utils/patientsPanel';
 import { nomeCombina } from '../../utils/pacientesRepetidos';
 import { SkeletonLista } from '../common/Skeleton';
-import { AcaoDoMenu, Avatar, BotaoPilula, CampoDeBusca, MenuDeAcoes, TituloDaTela } from '../common/Tinta';
+import {
+  AcaoDoMenu,
+  Avatar,
+  BotaoPilula,
+  CampoDeBusca,
+  Chip,
+  MenuDeAcoes,
+  TituloDaTela,
+} from '../common/Tinta';
 
 interface PatientsListViewProps {
   /** Já montadas em `PatientsModule` — inclui quem só existe em orçamento ou ficha avulsa. */
@@ -19,6 +40,12 @@ interface PatientsListViewProps {
   /** Só os cadastros por completar — o quadro âmbar, ou a pendência da tela Hoje. */
   soPendentes: boolean;
   onSoPendentes: (so: boolean) => void;
+  /**
+   * Todas, só quem já foi atendida, ou só quem tem horário marcado. Mora no `PatientsModule`, e
+   * não aqui, para sobreviver à ida até a página de uma paciente e à volta.
+   */
+  filtro: FiltroDaLista;
+  onFiltro: (filtro: FiltroDaLista) => void;
   onAbrirPaciente: (patientId: string) => void;
   /** `nomeInicial` pré-preenche o nome no cadastro — usado quando a busca não achou ninguém. */
   onNovoPaciente: (nomeInicial?: string) => void;
@@ -29,6 +56,28 @@ interface PatientsListViewProps {
   /** "Juntar com outro cadastro", do "…" da linha. */
   onJuntarPaciente: (linha: LinhaDePaciente) => void;
 }
+
+/**
+ * `curto` é o rótulo do celular: com os nomes inteiros, os três chips não cabem em 390px e o
+ * "Todas" sumia pela esquerda. O título da lista, logo abaixo, diz o nome inteiro.
+ */
+const FILTROS: { id: FiltroDaLista; rotulo: string; curto: string; titulo: string }[] = [
+  { id: 'todas', rotulo: 'Todas', curto: 'Todas', titulo: 'Todas' },
+  {
+    id: 'com_atendimento',
+    rotulo: 'Com atendimento',
+    curto: 'Atendidas',
+    titulo: 'Com histórico de atendimento',
+  },
+  {
+    id: 'com_agendamento',
+    rotulo: 'Com agendamento',
+    curto: 'Agendadas',
+    titulo: 'Com agendamento futuro',
+  },
+];
+
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 /**
  * Lista de pacientes — deliberadamente enxuta: a inicial, o nome, quando foi a última vez que a
@@ -44,6 +93,8 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
   carregando,
   soPendentes,
   onSoPendentes,
+  filtro,
+  onFiltro,
   onAbrirPaciente,
   onNovoPaciente,
   onExcluirPaciente,
@@ -55,11 +106,18 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
   const [ordem, setOrdem] = useState<OrdemDaLista>('alfabetica');
 
   const totalPendentes = linhas.filter((l) => l.pendencia).length;
+  const comAgendamento = filtro === 'com_agendamento';
+
+  /** O quadro âmbar recorta primeiro; os chips contam o que sobra, para o número bater com a lista. */
+  const doQuadro = useMemo(
+    () => (soPendentes ? linhas.filter((l) => l.pendencia) : linhas),
+    [linhas, soPendentes]
+  );
+  const base = useMemo(() => filtrarLinhas(doQuadro, filtro), [doQuadro, filtro]);
 
   const listaFiltrada = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const digitos = termo.replace(/\D/g, '');
-    const base = soPendentes ? linhas.filter((l) => l.pendencia) : linhas;
     const filtradas = !termo
       ? base
       : base.filter(
@@ -69,8 +127,16 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
             (l.patient?.email || '').toLowerCase().includes(termo) ||
             (!!digitos && (l.contato || '').replace(/\D/g, '').includes(digitos))
         );
-    return ordenarLinhas(filtradas, ordem);
-  }, [linhas, busca, ordem, soPendentes]);
+    return comAgendamento ? ordenarPorAgendamento(filtradas) : ordenarLinhas(filtradas, ordem);
+  }, [base, busca, ordem, comAgendamento]);
+
+  const tituloDoFiltro = FILTROS.find((f) => f.id === filtro)?.titulo || 'Todas';
+  const tituloDaLista =
+    filtro === 'todas'
+      ? soPendentes
+        ? 'Por completar'
+        : 'Todas'
+      : `${tituloDoFiltro}${soPendentes ? ' · por completar' : ''}`;
 
   return (
     <div className="max-w-3xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4">
@@ -148,35 +214,60 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
         </button>
       )}
 
+      {/* O filtro. Rola de lado no celular estreito em vez de quebrar em duas linhas. */}
+      <div
+        role="group"
+        aria-label="Filtrar pacientes"
+        className="flex gap-2 overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {FILTROS.map((f) => (
+          <Chip key={f.id} ativo={filtro === f.id} onClick={() => onFiltro(f.id)} title={f.titulo}>
+            <span className="sm:hidden">{f.curto}</span>
+            <span className="hidden sm:inline">{f.rotulo}</span>
+            <span className={`tabular-nums ${filtro === f.id ? 'text-white/70' : 'text-ink-soft'}`}>
+              {filtrarLinhas(doQuadro, f.id).length}
+            </span>
+          </Chip>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between gap-3">
-        <h2 className="font-sans text-[16px] font-bold text-ink">
-          {soPendentes ? 'Por completar' : 'Todas'}
-          {listaFiltrada.length !== (soPendentes ? totalPendentes : linhas.length) && (
+        <h2 className="font-sans text-[16px] font-bold text-ink min-w-0">
+          {tituloDaLista}
+          {listaFiltrada.length !== base.length && (
             <span className="font-medium text-ink-soft"> · {listaFiltrada.length} na busca</span>
           )}
         </h2>
-        <button
-          type="button"
-          onClick={() => setOrdem(ordem === 'alfabetica' ? 'interacao' : 'alfabetica')}
-          title={
-            ordem === 'alfabetica'
-              ? 'Ordenado por nome — toque para ordenar pela anamnese, orçamento ou atendimento mais recente'
-              : 'Ordenado pela interação mais recente — toque para ordenar por nome'
-          }
-          className="inline-flex items-center gap-1.5 min-h-[40px] px-2 -mr-2 rounded-lg text-[14px] font-semibold text-ink-soft hover:text-ink transition-colors"
-        >
-          {ordem === 'alfabetica' ? (
-            <>
-              <ArrowDownAZ className="w-4 h-4" />
-              A–Z
-            </>
-          ) : (
-            <>
-              <Clock className="w-4 h-4" />
-              Recentes
-            </>
-          )}
-        </button>
+        {comAgendamento ? (
+          // Aqui a ordem é a da agenda, e não se troca: o horário mais próximo primeiro.
+          <span className="inline-flex items-center gap-1.5 min-h-[40px] shrink-0 text-[14px] font-semibold text-ink-soft">
+            <CalendarClock className="w-4 h-4" />
+            Mais próximos
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOrdem(ordem === 'alfabetica' ? 'interacao' : 'alfabetica')}
+            title={
+              ordem === 'alfabetica'
+                ? 'Ordenado por nome — toque para ordenar pela anamnese, orçamento ou atendimento mais recente'
+                : 'Ordenado pela interação mais recente — toque para ordenar por nome'
+            }
+            className="inline-flex items-center gap-1.5 min-h-[40px] px-2 -mr-2 rounded-lg text-[14px] font-semibold text-ink-soft hover:text-ink transition-colors"
+          >
+            {ordem === 'alfabetica' ? (
+              <>
+                <ArrowDownAZ className="w-4 h-4" />
+                A–Z
+              </>
+            ) : (
+              <>
+                <Clock className="w-4 h-4" />
+                Recentes
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Lista */}
@@ -188,9 +279,17 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
           <p className="text-[14px] text-ink-soft">
             {linhas.length === 0
               ? 'Nenhum paciente cadastrado ainda. Use "Nova paciente" acima — ou eles entram aqui sozinhos ao preencher a primeira anamnese.'
-              : soPendentes && !busca.trim()
-              ? 'Nenhum cadastro por completar.'
-              : 'Nenhum paciente encontrado com essa busca.'}
+              : busca.trim()
+              ? 'Nenhum paciente encontrado com essa busca.'
+              : comAgendamento
+              ? soPendentes
+                ? 'Nenhum cadastro por completar com agendamento marcado.'
+                : 'Nenhuma paciente com agendamento de hoje em diante.'
+              : filtro === 'com_atendimento'
+              ? soPendentes
+                ? 'Nenhum cadastro por completar com atendimento registrado.'
+                : 'Nenhuma paciente com atendimento registrado ainda.'
+              : 'Nenhum cadastro por completar.'}
           </p>
 
           {/* Buscar e não achar é justamente quando se descobre que o paciente ainda não existe —
@@ -236,7 +335,16 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
               });
             }
 
-            const sub = linha.ultimaInteracao
+            // A legenda muda com o filtro: cada recorte mostra o que fez a linha entrar nele.
+            const agendamento = comAgendamento ? linha.proximoAgendamento : undefined;
+            const ultimo = filtro === 'com_atendimento' ? linha.ultimoAtendimento : undefined;
+            const sub = agendamento
+              ? `${agendamento.procedimento}${linha.contato ? ` · ${linha.contato}` : ''}`
+              : ultimo
+              ? `${plural(linha.totalAtendimentos, 'atendimento', 'atendimentos')} · último ${formatDateShortYear(
+                  ultimo.data
+                )} · ${ultimo.procedimento}`
+              : linha.ultimaInteracao
               ? `${formatDateShortYear(linha.ultimaInteracao.data)} · ${
                   ROTULO_DA_INTERACAO[linha.ultimaInteracao.tipo]
                 }${linha.contato ? ` · ${linha.contato}` : ''}`
@@ -266,6 +374,19 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
                       {sub}
                     </span>
                   </span>
+                  {/* A data do agendamento, à direita e em destaque — é o que se procura neste filtro. */}
+                  {agendamento && (
+                    <span className="shrink-0 text-right">
+                      <span className="block text-[14px] font-bold text-ink whitespace-nowrap">
+                        {diaDoAgendamento(agendamento.data)}
+                      </span>
+                      {agendamento.hora && (
+                        <span className="block text-[13px] text-ink-soft tabular-nums">
+                          {agendamento.hora}
+                        </span>
+                      )}
+                    </span>
+                  )}
                   {linha.pendencia && (
                     <span
                       className="w-2 h-2 rounded-full bg-[#D97706] shrink-0"

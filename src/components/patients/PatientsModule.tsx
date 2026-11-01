@@ -32,6 +32,7 @@ import {
   marcarComoDistintos,
 } from '../../services/databaseService';
 import {
+  FiltroDaLista,
   LinhaDePaciente,
   montarLinhasDePacientes,
   pacienteProvisorio,
@@ -126,6 +127,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   const [erro, setErro] = useState<string | null>(null);
   /** Só os cadastros por completar — o quadro âmbar da lista, ou a pendência vinda da Hoje. */
   const [soPendentes, setSoPendentes] = useState(false);
+  /** O filtro do topo da lista. Aqui, e não na lista, para continuar valendo na volta da página dela. */
+  const [filtro, setFiltro] = useState<FiltroDaLista>('todas');
   /** Pares que a equipe disse que não são a mesma pessoa, por `chavePar`. */
   const [paresDistintos, setParesDistintos] = useState<string[]>([]);
   const [repetidosAbertos, setRepetidosAbertos] = useState(false);
@@ -609,6 +612,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
         carregando={carregando}
         soPendentes={soPendentes}
         onSoPendentes={setSoPendentes}
+        filtro={filtro}
+        onFiltro={setFiltro}
         onAbrirPaciente={setPacienteAbertoId}
         onNovoPaciente={abrirCadastro}
         onExcluirPaciente={pedirExclusao}
