@@ -1633,8 +1633,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
         <ImageCropperModal
           isOpen={cropSource !== null}
           source={cropSource}
-          title="Girar ou cortar a foto original"
-          description="Corta o próprio arquivo — serve para endireitar a foto e tirar o que não deve aparecer em lugar nenhum. Depois, os recortes da lista, do catálogo e do card recomeçam do centro."
+          title="Editar a foto original"
+          description="Gira ou corta o próprio arquivo, para todos os lugares de uma vez — serve para tirar o que não deve aparecer em nenhum. Depois, os recortes da lista, do catálogo e do card recomeçam do centro."
           aspectOptions={PROCEDURE_PHOTO_ASPECTS}
           maxOutputDim={1000}
           quality={0.78}

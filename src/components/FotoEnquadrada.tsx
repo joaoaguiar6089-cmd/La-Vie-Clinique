@@ -1,6 +1,6 @@
 import React from 'react';
 import { EnquadramentoDaFoto } from '../types';
-import { estiloDaFotoEnquadrada } from '../utils/enquadramentoDaFoto';
+import { desenhoDaFoto } from '../utils/enquadramentoDaFoto';
 
 interface FotoEnquadradaProps {
   src: string;
@@ -13,8 +13,9 @@ interface FotoEnquadradaProps {
 }
 
 /**
- * Foto que cobre o recipiente na posição ajustada para aquela visualização (menu, catálogo ou
- * cartão). Sem ajuste, o resultado é o mesmo `object-cover` centralizado de antes.
+ * Foto na posição ajustada para aquela visualização (lista, catálogo ou card individual). Sem
+ * ajuste, o resultado é o mesmo `object-cover` centralizado de antes. Girada ou encolhida para
+ * caber, o que sobra do recipiente fica preto (ver `desenhoDaFoto`).
  */
 export const FotoEnquadrada: React.FC<FotoEnquadradaProps> = ({
   src,
@@ -22,15 +23,21 @@ export const FotoEnquadrada: React.FC<FotoEnquadradaProps> = ({
   enquadramento,
   className = '',
   style,
-}) => (
-  <div className={`relative overflow-hidden ${className}`} style={style}>
+}) => {
+  const desenho = desenhoDaFoto(enquadramento);
+  const img = (
     <img
       src={src}
       alt={alt}
       draggable={false}
       referrerPolicy="no-referrer"
       className="block"
-      style={estiloDaFotoEnquadrada(enquadramento)}
+      style={desenho.foto}
     />
-  </div>
-);
+  );
+  return (
+    <div className={`relative overflow-hidden ${className}`} style={{ ...style, ...desenho.moldura }}>
+      {desenho.caixa ? <div style={desenho.caixa}>{img}</div> : img}
+    </div>
+  );
+};
