@@ -60,6 +60,12 @@ interface SidePanelProps {
   bloqueado?: boolean;
   /** Muda a cada etapa de um formulário em etapas — a rolagem volta ao topo. */
   etapa?: string | number;
+  /**
+   * O que ocupa, no computador, a faixa à esquerda do painel — onde normalmente só aparece o véu
+   * escuro sobre a lista. É onde o cadastro de procedimento mostra a prévia do card. Some abaixo
+   * de 1024px: no celular e no tablet o painel já ocupa a tela, e não sobra lado.
+   */
+  aoLado?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -77,6 +83,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   alterado,
   bloqueado,
   etapa,
+  aoLado,
   children,
 }) => {
   const painelRef = useRef<HTMLDivElement>(null);
@@ -150,10 +157,21 @@ export const SidePanel: React.FC<SidePanelProps> = ({
           if (e.target === e.currentTarget) tentarFechar();
         }}
       >
+        {aoLado && (
+          /* O vazio em volta do que mora aqui continua sendo véu: clicar nele fecha, como antes. */
+          <div
+            className="hidden lg:flex flex-1 min-w-0 h-full"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) tentarFechar();
+            }}
+          >
+            {aoLado}
+          </div>
+        )}
         <div
           ref={painelRef}
           tabIndex={-1}
-          className={`bg-surface w-full h-full flex flex-col shadow-2xl focus:outline-none sm:animate-slideInRight ${
+          className={`bg-surface w-full h-full flex flex-col shadow-2xl focus:outline-none sm:animate-slideInRight shrink-0 ${
             largura === 'mapa'
               ? 'sm:max-w-[1180px]'
               : largura === 'larga'

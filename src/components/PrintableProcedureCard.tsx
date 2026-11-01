@@ -35,6 +35,11 @@ interface PrintableProcedureCardProps {
    * mensagem pronta do WhatsApp deixa de citar o preço.
    */
   showPrices?: boolean;
+  /**
+   * `id` do elemento raiz. A exportação procura o card por `printable-single-card`; a prévia do
+   * cadastro de procedimento usa outro, para não haver dois elementos com o mesmo id na página.
+   */
+  id?: string;
 }
 
 /**
@@ -50,12 +55,16 @@ interface PrintableProcedureCardProps {
  * A altura é fixa em uma folha (794x1123 = A4 a 96dpi): `exportElementAsPDF` encaixa cada
  * `[data-pdf-page]` numa página inteira, então um conteúdo mais alto sairia esticado. Os textos
  * longos são cortados por `line-clamp` em vez de empurrar a folha.
+ *
+ * Os `data-campo` marcam onde cada campo do cadastro aparece. Não mudam nada no desenho: é por eles
+ * que a prévia ao lado do formulário (`PreviaDoCardIndividual`) acha para onde apontar a seta.
  */
 export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
   procedure: procedureBruto,
   clinic,
   discountPercent: descontoPedido = 0,
   showPrices = true,
+  id = 'printable-single-card',
 }) => {
   // Mesma resolução de padrões da tela de detalhes: nas áreas de laser os campos em branco vêm
   // das Configurações, e o card precisa mostrar o que a tela mostrou.
@@ -76,13 +85,13 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
     .join(' · ');
 
   const specs = [
-    { icon: Clock, label: 'Duração', value: procedure.duration },
-    { icon: Calendar, label: 'Recomendação', value: procedure.sessionsRecommended },
-    { icon: ShieldCheck, label: 'Downtime', value: procedure.recoveryTime },
+    { icon: Clock, label: 'Duração', value: procedure.duration, campo: 'duracao' },
+    { icon: Calendar, label: 'Recomendação', value: procedure.sessionsRecommended, campo: 'recomendacao' },
+    { icon: ShieldCheck, label: 'Downtime', value: procedure.recoveryTime, campo: 'downtime' },
   ].filter((s) => s.value);
 
   return (
-    <div id="printable-single-card" className="font-sans">
+    <div id={id} className="font-sans">
       <div
         data-pdf-page="1"
         className="relative bg-surface text-ink overflow-hidden flex flex-col shadow-2xl"
@@ -99,11 +108,11 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
         {/* Faixa superior — categoria e marca, no lugar do cabeçalho do modal */}
         <div className="bg-ink text-line-soft px-7 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-brand-light uppercase tracking-wider">
+            <span data-campo="categoria" className="text-[13px] font-semibold text-brand-light uppercase tracking-wider">
               {procedure.category}
             </span>
             {procedure.isFeatured && (
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand text-white">
+              <span data-campo="destaque" className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand text-white">
                 Destaque
               </span>
             )}
@@ -126,7 +135,7 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
         <div className="grid grid-cols-12 flex-1 min-h-0">
           {/* Coluna esquerda — foto, ficha técnica e regiões */}
           <div className="col-span-5 bg-surface p-6 flex flex-col border-r border-[rgba(26,26,26,.07)] overflow-hidden">
-            <div className="relative h-[240px] rounded-2xl overflow-hidden bg-line-soft mb-3 shrink-0">
+            <div data-campo="fotos" className="relative h-[240px] rounded-2xl overflow-hidden bg-line-soft mb-3 shrink-0">
               <FotoEnquadrada
                 src={images[0]}
                 alt={procedure.title}
@@ -136,7 +145,7 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
             </div>
 
             {images.length > 1 && (
-              <div className="flex gap-2 mb-4 shrink-0">
+              <div data-campo="fotos" className="flex gap-2 mb-4 shrink-0">
                 {images.slice(1, 5).map((img, idx) => (
                   <div key={idx} className="w-16 h-16 rounded-xl overflow-hidden shrink-0">
                     <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -146,11 +155,11 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
             )}
 
             {(specs.length > 0 || doctors.length > 0) && (
-              <div className="bg-white rounded-2xl p-4 border border-[rgba(26,26,26,.07)] space-y-2.5">
+              <div data-campo="ficha" className="bg-white rounded-2xl p-4 border border-[rgba(26,26,26,.07)] space-y-2.5">
                 {specs.map((s) => {
                   const Icon = s.icon;
                   return (
-                    <div key={s.label} className="flex items-start gap-2.5 text-[13px] text-ink-soft">
+                    <div key={s.label} data-campo={s.campo} className="flex items-start gap-2.5 text-[13px] text-ink-soft">
                       <Icon className="w-4 h-4 text-brand shrink-0 mt-0.5" />
                       <div>
                         <span className="font-semibold text-ink">{s.label}:</span> {s.value}
@@ -160,7 +169,7 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
                 })}
 
                 {doctors.length > 0 && (
-                  <div className="pt-2.5 border-t border-[rgba(26,26,26,.07)]">
+                  <div data-campo="profissionais" className="pt-2.5 border-t border-[rgba(26,26,26,.07)]">
                     <p className="text-[11px] font-semibold text-brand mb-1.5 uppercase tracking-wider">
                       {doctors.length > 1 ? 'Profissionais responsáveis' : 'Profissional responsável'}
                     </p>
@@ -180,7 +189,7 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
             )}
 
             {procedure.exigeSelecaoDeArea && (procedure.areasDoMapa?.length || 0) > 0 && (
-              <div className="mt-4 pt-3 border-t border-[rgba(26,26,26,.07)]">
+              <div data-campo="mapa" className="mt-4 pt-3 border-t border-[rgba(26,26,26,.07)]">
                 <p className="text-[11px] font-semibold text-muted mb-2 uppercase tracking-wider">
                   Áreas e valores
                 </p>
@@ -189,7 +198,7 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
             )}
 
             {procedure.areasTreated && procedure.areasTreated.length > 0 && (
-              <div className="mt-4 pt-3 border-t border-[rgba(26,26,26,.07)]">
+              <div data-campo="regioes" className="mt-4 pt-3 border-t border-[rgba(26,26,26,.07)]">
                 <p className="text-[11px] font-semibold text-muted mb-2 uppercase tracking-wider">
                   Regiões de aplicação
                 </p>
@@ -214,20 +223,20 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
                 <p className="text-[12px] font-semibold text-brand mb-1 uppercase tracking-wider">
                   {clinic.name} · Protocolo exclusivo
                 </p>
-                <h2 className="font-serif-luxury text-[34px] font-medium text-ink leading-tight">
+                <h2 data-campo="titulo" className="font-serif-luxury text-[34px] font-medium text-ink leading-tight">
                   {procedure.title}
                 </h2>
                 {procedure.subtitle && (
-                  <p className="text-[13px] text-muted mt-1.5">{procedure.subtitle}</p>
+                  <p data-campo="subtitulo" className="text-[13px] text-muted mt-1.5">{procedure.subtitle}</p>
                 )}
               </div>
 
-              <p className="text-[14px] text-ink-soft leading-[1.7] line-clamp-[10] whitespace-pre-line">
+              <p data-campo="descricao" className="text-[14px] text-ink-soft leading-[1.7] line-clamp-[10] whitespace-pre-line">
                 {procedure.description}
               </p>
 
               {procedure.benefits && procedure.benefits.length > 0 && (
-                <div>
+                <div data-campo="beneficios">
                   <h4 className="text-[13px] font-semibold text-ink mb-2 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-brand" />
                     Principais benefícios
@@ -273,23 +282,27 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
             {/* Investimento + contatos (mesmo lugar da barra de ações do modal) */}
             <div className="pt-4 border-t border-[rgba(26,26,26,.07)] space-y-3 shrink-0">
               {showPrices && (
-                <div className="flex items-center justify-between bg-ink text-white p-5 rounded-2xl">
+                <div data-campo="investimento" className="flex items-center justify-between bg-ink text-white p-5 rounded-2xl">
                   <div>
                     <span className="text-[10px] font-semibold text-brand-light block mb-1 uppercase tracking-widest">
                       Investimento
                     </span>
                     <div className="flex items-baseline gap-2 flex-wrap">
                       {procedure.isStartingPrice && (
-                        <span className="text-[12px] font-medium text-gray-300">a partir de</span>
+                        <span data-campo="a-partir-de" className="text-[12px] font-medium text-gray-300">a partir de</span>
                       )}
                       {strikePrice !== null && (
-                        <span className="text-[13px] text-gray-400 line-through">{formatBRL(strikePrice)}</span>
+                        <span data-campo="valor-normal" className="text-[13px] text-gray-400 line-through">{formatBRL(strikePrice)}</span>
                       )}
-                      <span className="font-serif-luxury text-[34px] font-medium text-white leading-none">
+                      {/* Com valor riscado, o que fica em destaque é o promocional; sem ele, o normal. */}
+                      <span
+                        data-campo={`valor-final ${strikePrice !== null ? 'valor-promocional' : 'valor-normal'}`}
+                        className="font-serif-luxury text-[34px] font-medium text-white leading-none"
+                      >
                         {formatBRL(finalPrice)}
                       </span>
                       {procedure.priceNote && (
-                        <span className="text-[12px] text-brand-light font-medium ml-1">{procedure.priceNote}</span>
+                        <span data-campo="sufixo" className="text-[12px] text-brand-light font-medium ml-1">{procedure.priceNote}</span>
                       )}
                     </div>
                   </div>
