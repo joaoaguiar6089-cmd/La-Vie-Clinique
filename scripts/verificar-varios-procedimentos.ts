@@ -21,6 +21,7 @@ import {
 import {
   AGENDA_DEFAULTS,
   conflitosDe,
+  duracaoAposMudarProcedimentos,
   duracaoDoAtendimento,
   mensagemDeConfirmacao,
   orientacoesDoAtendimento,
@@ -247,6 +248,48 @@ const realizada = { ...varios, data: '2026-10-01', status: 'compareceu' as const
 const fechadas = anamnesesAFechar(realizada, [ficha('preench', 'Preenchimento labial'), ficha('outro', 'Peeling')]);
 ok('fecha a do adicional', fechadas.some((f) => f.id === 'ficha-preench'));
 ok('não fecha a de outro tratamento', !fechadas.some((f) => f.id === 'ficha-outro'));
+
+// ---------------------------------------------------------------------------------------------
+// Duração escolhida à mão (digitada ou a gravada do agendamento editado) ao mudar os procedimentos
+// ---------------------------------------------------------------------------------------------
+console.log('\nDuração ao mudar os procedimentos');
+const so = (...ids: (string | undefined)[]) => ids.map((procedureId) => ({ procedureId }));
+ok(
+  'editar e somar um procedimento soma o tempo dele',
+  duracaoAposMudarProcedimentos('30', so('botox'), so('botox', 'preench'), CATALOGO) === '75'
+);
+ok(
+  'mantém o ajuste de quem digitou',
+  duracaoAposMudarProcedimentos('50', so('botox'), so('botox', 'preench'), CATALOGO) === '95'
+);
+ok(
+  'tirar um procedimento desconta o tempo dele',
+  duracaoAposMudarProcedimentos('95', so('botox', 'preench'), so('botox'), CATALOGO) === '50'
+);
+ok(
+  'trocar um procedimento ajusta pela diferença',
+  duracaoAposMudarProcedimentos('40', so('botox'), so('preench'), CATALOGO) === '55'
+);
+ok(
+  'linha nova em branco não muda nada',
+  duracaoAposMudarProcedimentos('30', so('botox'), so('botox', undefined), CATALOGO) === '30'
+);
+ok(
+  'procedimento sem duração no catálogo não muda nada',
+  duracaoAposMudarProcedimentos('30', so('botox'), so('botox', 'sem-cadastro'), CATALOGO) === '30'
+);
+ok(
+  'sem duração escolhida, segue o catálogo',
+  duracaoAposMudarProcedimentos(null, so('botox'), so('botox', 'preench'), CATALOGO) === null
+);
+ok(
+  'campo vazio continua vazio',
+  duracaoAposMudarProcedimentos('', so('botox'), so('botox', 'preench'), CATALOGO) === ''
+);
+ok(
+  'conta abaixo do mínimo volta a seguir o catálogo',
+  duracaoAposMudarProcedimentos('20', so('botox', 'preench'), so('botox'), CATALOGO) === null
+);
 
 console.log(falhas === 0 ? '\nTudo certo.' : `\n${falhas} falha(s).`);
 if (falhas > 0) process.exit(1);
