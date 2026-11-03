@@ -58,7 +58,6 @@ import { AgendaSemanaStrip } from './AgendaSemanaStrip';
 import { AgendaDiaMobile } from './AgendaDiaMobile';
 import { AgendaFiltros } from './AgendaFiltros';
 import { AgendaDetalheModal } from './AgendaDetalheModal';
-import { AgendamentoShareModal } from './AgendamentoShareModal';
 import { AgendaRespostasClientes } from './AgendaRespostasClientes';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { perguntaDoAcompanhamento } from '../fichas/perguntaDoAcompanhamento';
@@ -145,8 +144,6 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   const [formulario, setFormulario] = useState<EstadoDoFormulario | null>(null);
   const [pacienteDoForm, setPacienteDoForm] = useState<Patient | null>(null);
   const [detalhe, setDetalhe] = useState<Attendance | null>(null);
-  /** O agendamento cujo link está sendo compartilhado. */
-  const [compartilhando, setCompartilhando] = useState<Attendance | null>(null);
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
   const [arrastando, setArrastando] = useState<Attendance | null>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
@@ -288,13 +285,6 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
     };
   }, [detalhe, atendimentos]);
 
-  const compartilhandoAoVivo = useMemo(
-    () =>
-      compartilhando
-        ? atendimentos.find((a) => a.id === compartilhando.id) ?? compartilhando
-        : null,
-    [compartilhando, atendimentos]
-  );
 
   // ==========================================
   // NAVEGAÇÃO
@@ -719,6 +709,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
           onAbrirAtendimento={setDetalhe}
           onNovoEm={(data, hora) => abrirNovo({ data, hora })}
           onConfirmar={(a) => alternarConfirmacao(a, !a.confirmadoEm)}
+          onErro={setErro}
         />
       ) : visao === 'mes' ? (
         <AgendaMesView
@@ -783,24 +774,12 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
             setDetalhe(null);
             setAcompanhando(a);
           }}
-          onCompartilhar={setCompartilhando}
           onAprovarPedido={pedirAprovacao}
           onRecusarPedido={pedirRecusa}
           onAbrirPaciente={onAbrirPaciente}
         />
       )}
 
-      {/* Depois do detalhe, e não dentro dele: os dois são folhas do mesmo nível, e esta abre por
-          cima. Ao fechar, a equipe volta ao agendamento de onde veio. */}
-      {compartilhandoAoVivo && (
-        <AgendamentoShareModal
-          atendimento={compartilhandoAoVivo}
-          clinic={clinic}
-          catalogo={catalogProcedures}
-          pacientes={pacientes}
-          onFechar={() => setCompartilhando(null)}
-        />
-      )}
 
       {acompanhando && (
         <FichaFillModal
@@ -853,6 +832,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         modo={formulario?.modo || 'novo'}
         soVisitaFeita={formulario?.paraAcompanhar}
         onSalvar={handleSalvar}
+        onAvisoDoLink={setErro}
       />
 
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />

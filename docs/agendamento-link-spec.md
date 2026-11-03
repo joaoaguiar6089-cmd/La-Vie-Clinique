@@ -5,9 +5,33 @@ A página mostra o card do procedimento (foto, nome, data, hora, profissional, l
 deixa a cliente **confirmar presença**, **avisar que não vai** ou **pedir outro horário**.
 
 ```
-Agenda → agendamento → "Compartilhar link com a cliente"   (AgendamentoShareModal)
-        → https://<site>/?agendamento=<token>               (PublicAppointmentEntry + AppointmentCard)
+Agenda → WhatsApp / "Confirmar pelo WhatsApp" / "Copiar link de confirmação"   (linkDeConfirmacao.ts)
+        → https://<site>/?agendamento=<token>                                   (PublicAppointmentEntry + AppointmentCard)
 ```
+
+## A confirmação vai sempre pelo link (2026-11-03)
+
+Nenhum botão pede para a cliente "responder confirmando" a mensagem. Todo WhatsApp de
+confirmação manda a **mensagem do link** (`mensagemDoLink`), com o endereço da página do horário:
+
+| Onde | O que faz |
+|---|---|
+| Faixa "agendamentos de amanhã ainda sem confirmação" → **WhatsApp** | Gera o link e abre a conversa com a mensagem do link. |
+| Detalhe do agendamento → **Confirmar pelo WhatsApp** | O mesmo (era o "Enviar no WhatsApp" do antigo "Compartilhar link com a cliente"). |
+| Detalhe do agendamento → **Copiar link de confirmação** | Gera o link e copia só o endereço. Sem permissão de cópia, o link aparece num campo para copiar à mão. |
+| Cartão do celular (visão de dia) → ícone do WhatsApp | O mesmo do detalhe. |
+| Formulário → **Enviar link de confirmação no WhatsApp** (ao agendar) | Salva o agendamento e abre a conversa com o link. Se o link falhar, o agendamento continua salvo e o aviso aparece na tela de trás. |
+
+Todos passam por `components/agenda/linkDeConfirmacao.ts`. A aba do WhatsApp abre **no toque**
+(`abrirAbaDoWhatsApp`) e recebe o endereço quando o link é gravado — o celular bloqueia janela
+aberta depois de um `await`. Pela mesma razão a cópia começa no toque, com `ClipboardItem` de
+promessa. Um toque seguido de outro reaproveita o token recém-criado, para a cliente não receber
+um link que já não vale.
+
+"Marcar como confirmado" continua existindo para quando a cliente responde por outro caminho.
+O antigo modelo de mensagem das Configurações (`agendaConfirmacaoTemplate`, "pode confirmar pra
+gente?") e o "enviar também as orientações" saíram: as orientações de preparo já aparecem na
+página do link.
 
 ## Como funciona
 
@@ -22,8 +46,8 @@ padrão do espelho público do perfil da clínica — e a mantém em dia.
 | Resposta | `resposta`, `respostaPendente`, `respondidoEm` | **Única** escrita permitida a quem não tem login. |
 | Aplicação | `aplicarRespostaDoLink` (chamada em `App.tsx`) | O painel, quando aberto, copia a resposta para o atendimento e zera `respostaPendente`. |
 
-O link é criado (ou a cópia renovada) **quando a equipe abre "Compartilhar"**, nunca automaticamente:
-agendamento que não é compartilhado não custa cota do banco.
+O link é criado (ou a cópia renovada) **quando a equipe toca no WhatsApp ou em "Copiar link de
+confirmação"**, nunca automaticamente: agendamento que não é enviado não custa cota do banco.
 
 ## O que cada resposta faz
 
@@ -62,7 +86,7 @@ data, hora, profissional, título e `situacao` (`ativo` / `remarcado` / `encerra
 ## Depois de publicar o código
 
 1. **Publicar as regras do Firestore** — sem isso a página pública cai no `if false` do fim do
-   arquivo e não abre, e "Compartilhar" mostra o aviso de regras não publicadas:
+   arquivo e não abre, e o WhatsApp e o "Copiar link" mostram o aviso de regras não publicadas:
 
    ```
    firebase deploy --only firestore:rules
@@ -77,7 +101,6 @@ data, hora, profissional, título e `situacao` (`ativo` / `remarcado` / `encerra
 - Envio automático de WhatsApp e notificação push para a equipe: não há backend. A equipe vê as
   respostas ao abrir o painel.
 - Horários livres para a cliente escolher: ela digita data e hora, e a equipe valida ao aprovar.
-- `{link}` no modelo automático de confirmação (`ClinicSettingsModal`).
 
 ## Verificação
 

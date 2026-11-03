@@ -23,8 +23,7 @@ import {
   conflitosDe,
   duracaoAposMudarProcedimentos,
   duracaoDoAtendimento,
-  mensagemDeConfirmacao,
-  orientacoesDoAtendimento,
+  textoDasOrientacoes,
 } from '../src/utils/agenda';
 import { mensagemDoLink, montarSnapshotDoLink } from '../src/utils/agendamentoLink';
 import { eventoDoAtendimento } from '../src/utils/googleAgenda';
@@ -82,7 +81,6 @@ const CLINICA: ClinicProfile = {
   instagram: '',
   address: 'Rua A, 1',
   cityState: 'São Paulo/SP',
-  agendaConfirmacaoIncluirOrientacoes: true,
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -104,7 +102,7 @@ ok(
 );
 ok(
   'orientações sem cabeçalho por procedimento',
-  orientacoesDoAtendimento(antigo, CATALOGO) === 'Antes de vir:\nNão deitar por 4 horas.'
+  textoDasOrientacoes(antigo, CATALOGO) === 'Não deitar por 4 horas.'
 );
 
 // ---------------------------------------------------------------------------------------------
@@ -135,14 +133,18 @@ const minutosDoEvento = evento
   : 0;
 ok('evento do Google dura a soma', minutosDoEvento === 135, `${minutosDoEvento} min`);
 
-const mensagem = mensagemDeConfirmacao(CLINICA, varios, CATALOGO);
+// A confirmação vai pelo link: a mensagem leva o endereço, e o preparo fica na página.
+const mensagem = mensagemDoLink(CLINICA, varios, 'https://site/?agendamento=abc');
 ok('confirmação cita todos', mensagem.includes('Botox, Preenchimento labial e Depilação a Laser'), mensagem.split('\n')[0]);
+ok('confirmação leva o link', mensagem.endsWith('https://site/?agendamento=abc'));
+ok('confirmação não pede para responder a mensagem', !/pode confirmar pra gente/i.test(mensagem));
+const preparo = textoDasOrientacoes(varios, CATALOGO) || '';
 ok(
   'orientações de cada um, com o nome em cima',
-  mensagem.includes('Botox:\nNão deitar por 4 horas.') &&
-    mensagem.includes('Preenchimento labial:\nEvite anti-inflamatório.')
+  preparo.includes('Botox:\nNão deitar por 4 horas.') &&
+    preparo.includes('Preenchimento labial:\nEvite anti-inflamatório.')
 );
-ok('laser sem orientação não aparece', !mensagem.includes('Depilação a Laser:'));
+ok('laser sem orientação não aparece', !preparo.includes('Depilação a Laser:'));
 
 const snapshot = montarSnapshotDoLink(varios, CLINICA, CATALOGO);
 ok('link: título com todos', snapshot.procedimento.titulo === 'Botox + Preenchimento labial + Depilação a Laser');
