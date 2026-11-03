@@ -9,6 +9,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import { documento } from '../lib/clinicaAtual';
 import {
   Attendance,
   ContaGoogleAgenda,
@@ -25,7 +26,7 @@ import { ENDERECO_DO_SITE } from '../utils/publicLinks';
  * `utils/googleAgenda.ts`; o porquê do servidor, em `server/googleAgenda.ts`.
  */
 
-const CONFIG_REF = () => doc(db, 'clinic_settings', 'google_agenda');
+const CONFIG_REF = () => documento('clinic_settings', 'google_agenda');
 const CANAL = 'lavie-google-agenda';
 
 /**
@@ -227,7 +228,7 @@ export async function gravarMarcaGoogleAgenda(
   atendimentoId: string,
   marca: MarcaGoogleAgenda | null
 ): Promise<void> {
-  await updateDoc(doc(db, 'attendances', atendimentoId), {
+  await updateDoc(documento('attendances', atendimentoId), {
     googleAgenda: marca ?? deleteField(),
   });
 }

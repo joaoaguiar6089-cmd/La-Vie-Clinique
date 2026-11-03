@@ -1,5 +1,6 @@
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { app } from '../lib/firebase';
+import { pastaDaClinica } from '../lib/clinicaAtual';
 import { QuoteComprovante } from '../types';
 import { downscaleImage } from '../utils/imageCompressor';
 
@@ -92,7 +93,8 @@ async function enviarComprovanteParaPasta(
   }
 
   const extensao = EXTENSAO[tipo] || (tipo.startsWith('image/') ? 'jpg' : 'bin');
-  const objeto = ref(storage, `${pasta}/${crypto.randomUUID()}.${extensao}`);
+  // Dentro da pasta da clínica do login na plataforma; o caminho de sempre no modo legado.
+  const objeto = ref(storage, `${pastaDaClinica(pasta)}/${crypto.randomUUID()}.${extensao}`);
 
   try {
     await uploadBytes(objeto, corpo, { contentType: tipo });
