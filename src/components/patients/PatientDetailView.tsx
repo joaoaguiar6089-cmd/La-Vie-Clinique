@@ -45,6 +45,7 @@ import { AnamnesisFormFillModal } from '../anamnesis/AnamnesisFormFillModal';
 import { EscolhaDaAnamnese } from '../anamnesis/EscolhaDaAnamnese';
 import { ShareAnamnesisLinkModal } from '../anamnesis/ShareAnamnesisLinkModal';
 import { AlvoDoPasso } from '../linhaDoTempo/PainelDoEvento';
+import { OrigemDaVisita } from '../../utils/passosDaJornada';
 import { mapaDaArea, montarMapasPublicos } from '../../utils/laserAreas';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
 import { useAcoesDeOrcamento } from '../quotes/useAcoesDeOrcamento';
@@ -118,8 +119,11 @@ interface PatientDetailViewProps {
   onExcluirPlano: (plano: SessionPlan) => void;
   /** "Agendar", do painel da linha do tempo: o formulário de atendimento já com o procedimento. */
   onAgendar: (alvo: AlvoDoPasso & { professionalId?: string }) => void;
-  /** A visita que o acompanhamento da avaliação precisa — salva, abre o acompanhamento. */
-  onRegistrarVisita: (avaliacao: EvaluationRecord) => void;
+  /**
+   * A visita que o relatório precisa (da avaliação, ou da anamnese "Sem avaliação") — salva,
+   * abre o relatório.
+   */
+  onRegistrarVisita: (origem: OrigemDaVisita) => void;
   onAbrirNaAgenda: (a: Attendance) => void;
 }
 

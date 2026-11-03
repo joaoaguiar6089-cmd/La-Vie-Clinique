@@ -3769,6 +3769,21 @@ export async function encerrarAnamnese(recordId: string): Promise<void> {
   });
 }
 
+/**
+ * "Sem avaliação": o tratamento desta anamnese segue direto para o atendimento e o relatório.
+ * `false` desfaz — a avaliação volta a ser o próximo passo.
+ */
+export async function marcarAvaliacaoDispensada(recordId: string, dispensada: boolean): Promise<void> {
+  const agora = new Date().toISOString();
+  await comConfirmacaoDoServidor(
+    updateDoc(doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId), {
+      avaliacaoDispensadaEm: dispensada ? agora : deleteField(),
+      updatedAt: agora,
+    }),
+    'da ficha'
+  );
+}
+
 /** Reabre a ficha encerrada à mão. Não destrava o que a regra do atendimento fechou. */
 export async function reabrirAnamnese(recordId: string): Promise<void> {
   await updateDoc(doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId), {

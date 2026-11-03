@@ -642,6 +642,12 @@ export interface AnamnesisRecord extends MarcaDeArquivo {
    * indefinidamente — este botão é a saída, e não depende de inferência nenhuma.
    */
   encerradaEm?: string; // ISO
+  /**
+   * A equipe marcou que este tratamento **não terá avaliação** ("Sem avaliação", no painel da
+   * linha do tempo). A jornada pula da anamnese direto para o relatório do atendimento. Ausente =
+   * a avaliação continua sendo o próximo passo; uma avaliação feita depois vale do mesmo jeito.
+   */
+  avaliacaoDispensadaEm?: string; // ISO
   fotoModeloUrl?: string; // Foto do doutor / mapa anatômico de referência, já resolvida pelo gênero do paciente no momento da criação
   fotoModeloAnotadaUrl?: string; // Versão da foto de referência com anotações do profissional (imagem "achatada", usada no PDF)
   fotoModeloAnotacoesJson?: string; // Estado do canvas de anotação (JSON do Fabric.js) para permitir reabrir e continuar editando

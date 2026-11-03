@@ -35,14 +35,13 @@ import {
   AnamnesisTemplate,
   AnamnesisQuestion,
   Attendance,
-  EvaluationRecord,
   EvaluationTemplate,
   Patient,
   PedidoDeNavegacao,
   Quote,
 } from './types';
 import { mapearTemplatesPorProcedimento } from './utils/templateMatching';
-import { sementeDaVisita, sementeDoAgendamento } from './utils/passosDaJornada';
+import { OrigemDaVisita, sementeDaVisita, sementeDoAgendamento } from './utils/passosDaJornada';
 import { hojeISO } from './utils/attendances';
 import { AbaDasFichas, ehAbaDasFichas } from './utils/abasDasFichas';
 import type { AlvoDoPasso } from './components/linhaDoTempo/PainelDoEvento';
@@ -316,11 +315,11 @@ function MainCatalogApp() {
       }),
     });
 
-  const registrarVisitaPeloPainel = (avaliacao: EvaluationRecord) =>
+  const registrarVisitaPeloPainel = (origem: OrigemDaVisita) =>
     navegar({
       view: 'agenda',
       criarNovo: true,
-      sementeDoAtendimento: sementeDaVisita(avaliacao),
+      sementeDoAtendimento: sementeDaVisita(origem),
       paraAcompanhar: true,
     });
 
