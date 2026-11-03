@@ -21,6 +21,7 @@ import { respostasParaResolver } from './utils/agendamentoLink';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { PublicAppointmentEntry } from './components/agenda/PublicAppointmentEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
+import { AcessoAoPainelView } from './components/auth/AcessoAoPainelView';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { CommandPalette, AcaoRapida } from './components/common/CommandPalette';
 import { HojeView } from './components/hoje/HojeView';
@@ -71,6 +72,8 @@ import {
   subscribeToQuotes,
   isQuotaOrOfflineError,
   normalizeProcedureList,
+  conferirAcessoAoPainel,
+  type AcessoAoPainel,
 } from './services/databaseService';
 import { DEFAULT_PROCEDURE_TEMPLATES } from './data/anamnesisInitialData';
 import { onAuthChange, logout, type User } from './services/authService';
@@ -162,6 +165,29 @@ function MainCatalogApp() {
     });
     return unsubscribe;
   }, []);
+
+  // Estar logada não basta: o cadastro de contas do Firebase é aberto (o botão "Criar login" do
+  // painel depende dele), então qualquer pessoa pode criar uma conta. O painel só abre para quem
+  // está na lista de profissionais — e as regras do Firestore fazem a mesma conferência pelo
+  // `equipeUids` (ver utils/equipe.ts). Nada é lido nem gravado antes desta resposta.
+  const [acessoAoPainel, setAcessoAoPainel] = useState<AcessoAoPainel>('verificando');
+  const [tentativaDeAcesso, setTentativaDeAcesso] = useState(0);
+  useEffect(() => {
+    if (!authUser) {
+      setAcessoAoPainel('verificando');
+      return;
+    }
+    let cancelado = false;
+    setAcessoAoPainel('verificando');
+    conferirAcessoAoPainel(authUser.uid).then((acesso) => {
+      if (!cancelado) setAcessoAoPainel(acesso);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [authUser, tentativaDeAcesso]);
+  /** O login é de alguém da equipe e o painel pode carregar os dados. */
+  const painelLiberado = !!authUser && acessoAoPainel === 'liberado';
 
   // Firebase Real-time Synchronization Status
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced');
@@ -379,7 +405,7 @@ function MainCatalogApp() {
   // Initialize Firebase and subscribe to real-time updates — só depois de autenticado,
   // já que as regras do Firestore agora exigem login para procedures/clinic_settings.
   useEffect(() => {
-    if (!authUser) return;
+    if (!painelLiberado) return;
     let unsubscribeProcedures: (() => void) | undefined;
     let unsubscribeClinic: (() => void) | undefined;
 
@@ -504,11 +530,11 @@ function MainCatalogApp() {
       if (unsubscribeProcedures) unsubscribeProcedures();
       if (unsubscribeClinic) unsubscribeClinic();
     };
-  }, [authUser]);
+  }, [painelLiberado]);
 
   // Assinatura das fichas-modelo — mesma condição de login das demais coleções.
   useEffect(() => {
-    if (!authUser) return;
+    if (!painelLiberado) return;
     const unsubscribe = subscribeToAnamnesisTemplates(
       (data) => {
         setAnamnesisTemplates(data);
@@ -525,11 +551,11 @@ function MainCatalogApp() {
       }
     );
     return unsubscribe;
-  }, [authUser]);
+  }, [painelLiberado]);
 
   // Avaliações: fichas-modelo, perguntas gerais, atendimentos e pacientes.
   useEffect(() => {
-    if (!authUser) return;
+    if (!painelLiberado) return;
     const unsubs = [
       subscribeToEvaluationTemplates(setEvaluationTemplates, (err) => {
         if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
@@ -555,11 +581,11 @@ function MainCatalogApp() {
       }),
     ];
     return () => unsubs.forEach((u) => u());
-  }, [authUser]);
+  }, [painelLiberado]);
 
   // Leva os agendamentos para o Google Agenda de cada profissional que conectou o dela.
   useSincronizacaoGoogleAgenda({
-    ativo: !!authUser,
+    ativo: painelLiberado,
     atendimentos: attendances,
     carregando: atendimentosCarregando || proceduresCarregando,
     catalogo: procedures,
@@ -577,7 +603,7 @@ function MainCatalogApp() {
    */
   const respostasJaAplicadas = useRef(new Set<string>());
   useEffect(() => {
-    if (!authUser) return;
+    if (!painelLiberado) return;
     return subscribeToRespostasPendentes(
       (links) => {
         links.forEach((link) => {
@@ -598,7 +624,7 @@ function MainCatalogApp() {
         console.warn('Respostas dos links de agendamento indisponíveis:', err);
       }
     );
-  }, [authUser]);
+  }, [painelLiberado]);
 
   /**
    * O selo da Agenda no menu: agendamentos que já passaram e continuam sem desfecho, mais o que
@@ -913,6 +939,17 @@ function MainCatalogApp() {
 
   if (!authUser) {
     return <LoginScreen />;
+  }
+
+  if (acessoAoPainel !== 'liberado') {
+    return (
+      <AcessoAoPainelView
+        acesso={acessoAoPainel}
+        email={authUser.email}
+        onTentarDeNovo={() => setTentativaDeAcesso((n) => n + 1)}
+        onSair={() => logout()}
+      />
+    );
   }
 
   return (

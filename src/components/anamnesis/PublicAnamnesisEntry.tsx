@@ -3,15 +3,17 @@ import { buildPublicLink } from '../../utils/publicLinks';
 import { AnamnesisTemplate, AnamnesisRecord, Patient, ClinicProfile, AnamnesisQuestion, MapaDeAreasPublico } from '../../types';
 import {
   getAnamnesisTemplateById,
-  getPatientById,
-  getRecordsForPatient,
-  getAnamnesisRecordById,
   getGeneralQuestionsOnce,
   getClinicProfileOnce,
-  savePatient,
-  saveAnamnesisRecord,
   getMapasDeAreasPublicos,
 } from '../../services/databaseService';
+import {
+  abrirFichaPublica,
+  salvarFichaPublica,
+  mensagemDoErroDaFicha,
+  type ContextoDoLink,
+  type RespostaAbrirFicha,
+} from '../../services/fichaPublicaApi';
 import { OnlinePatientAnamnesisForm } from './OnlinePatientAnamnesisForm';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
 import { mapaDoTemplate } from '../../utils/laserAreas';
@@ -43,28 +45,33 @@ const formatCpf = (raw: string): string => {
 };
 
 /**
- * Confirmação de identidade antes de exibir uma ficha já anotada pela equipe. O elo real de
- * segurança continua sendo o ID (imprevisível) do link — isto é só uma camada de UX para
- * evitar que alguém que receba o link por engano (encaminhamento errado) veja os dados sem
- * saber o CPF e a data de nascimento da paciente.
+ * Confirmação de identidade antes de exibir uma ficha já fechada (atendimento realizado).
+ *
+ * Quem confere é o servidor (`server/fichaPublica.ts`): ele só entrega a ficha e o cadastro depois
+ * que CPF e nascimento batem, e limita as tentativas. Antes a conferência acontecia aqui, no
+ * navegador, com o cadastro inteiro já baixado — não protegia nada.
  */
 const IdentityConfirmGate: React.FC<{
-  expectedCpf: string;
-  expectedBirth?: string;
-  onConfirmed: () => void;
-}> = ({ expectedCpf, expectedBirth, onConfirmed }) => {
+  pedeNascimento: boolean;
+  onConfirmar: (cpf: string, nascimento: string) => Promise<void>;
+}> = ({ pedeNascimento, onConfirmar }) => {
   const [cpf, setCpf] = useState('');
   const [birth, setBirth] = useState('');
   const [error, setError] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cpfMatches = cpf.replace(/\D/g, '') === expectedCpf.replace(/\D/g, '');
-    const birthMatches = !expectedBirth || birth === expectedBirth;
-    if (cpfMatches && birthMatches) {
-      onConfirmed();
-    } else {
-      setError('CPF ou data de nascimento não confere. Confira os dados e tente novamente.');
+    setError('');
+    setEnviando(true);
+    try {
+      await onConfirmar(cpf.replace(/\D/g, ''), birth);
+    } catch (err) {
+      setError(
+        mensagemDoErroDaFicha(err, 'Não foi possível conferir seus dados agora. Verifique sua conexão e tente novamente.')
+      );
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -97,7 +104,7 @@ const IdentityConfirmGate: React.FC<{
           </div>
         </div>
 
-        {expectedBirth && (
+        {pedeNascimento && (
           <div>
             <label className="block text-[13px] font-semibold text-ink mb-1.5">Data de nascimento</label>
             <div className="relative">
@@ -122,8 +129,10 @@ const IdentityConfirmGate: React.FC<{
 
         <button
           type="submit"
-          className="w-full h-[50px] rounded-xl bg-brand text-white text-[15px] font-semibold hover:bg-brand-hover active:scale-97 transition-all"
+          disabled={enviando}
+          className="w-full h-[50px] rounded-xl bg-brand text-white text-[15px] font-semibold flex items-center justify-center gap-2 hover:bg-brand-hover active:scale-97 transition-all disabled:opacity-60"
         >
+          {enviando && <Loader2 className="w-4 h-4 animate-spin" />}
           Ver minha ficha
         </button>
       </form>
@@ -131,7 +140,7 @@ const IdentityConfirmGate: React.FC<{
   );
 };
 
-type Screen = 'loading' | 'error' | 'form' | 'success';
+type Screen = 'loading' | 'error' | 'confirmar' | 'form' | 'success';
 
 const DEFAULT_CLINIC: ClinicProfile = {
   name: 'La Vie Clinique',
@@ -162,11 +171,122 @@ export const PublicAnamnesisEntry: React.FC = () => {
   const [savedRecord, setSavedRecord] = useState<AnamnesisRecord | null>(null);
   const [copied, setCopied] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
-  const [identityConfirmed, setIdentityConfirmed] = useState(false);
+  /** A ficha está fechada e o servidor pediu CPF (e nascimento, quando há um para conferir). */
+  const [pedeNascimento, setPedeNascimento] = useState(false);
   /** Espelho público dos mapas de áreas. Vazio até chegar, ou se a clínica não publicou nenhum. */
   const [mapasDeAreas, setMapasDeAreas] = useState<MapaDeAreasPublico[]>([]);
   // Incrementado por "Tentar novamente" — reexecuta o carregamento sem recarregar a página inteira.
   const [reloadToken, setReloadToken] = useState(0);
+
+  /** O contexto do link, como o servidor entende: a ficha, ou o modelo e a paciente. */
+  const contextoDoLink: ContextoDoLink = fichaParam
+    ? { ficha: fichaParam }
+    : { anamnese: anamneseParam, paciente: pacienteParam || undefined };
+
+  /**
+   * MODE A — a paciente volta à ficha já criada, pelo link pessoal. A imagem orientativa mora na
+   * ficha-modelo, não no registro — por isso ela é buscada aqui junto do resto. A leitura é
+   * best-effort: uma ficha-modelo apagada (ou um registro antigo sem `templateId`) apenas deixa a
+   * ficha sem a imagem, nunca quebra a abertura.
+   */
+  const aplicarFichaDoLink = async (resposta: RespostaAbrirFicha, ativo: () => boolean): Promise<boolean> => {
+    const record = resposta.ficha;
+    if (!record) {
+      setErrorMsg('Não encontramos essa ficha. O link pode estar incorreto ou ter expirado.');
+      setScreen('error');
+      return false;
+    }
+    const [gq, tplDoRegistro] = await Promise.all([
+      getGeneralQuestionsOnce(),
+      record.templateId ? getAnamnesisTemplateById(record.templateId).catch(() => null) : Promise.resolve(null),
+    ]);
+    if (!ativo()) return false;
+    setGeneralQuestions(gq);
+    setInitialPatient(resposta.paciente);
+    setExistingRecord(record);
+    setTemplate({
+      id: record.templateId || '',
+      procedimentoNome: record.procedimentoNome,
+      // A categoria vem junto porque é ela que liga a etapa de áreas do laser. Sem isto, a
+      // paciente que voltasse ao próprio link para revisar não veria mais o manequim — e
+      // as áreas que ela já tinha marcado sumiriam da tela sem explicação.
+      categoria: tplDoRegistro?.categoria,
+      tem_foto: true,
+      fotoModeloUrl: record.fotoModeloUrl,
+      imagemOrientativaUrl: tplDoRegistro?.imagemOrientativaUrl,
+      imagemOrientativaTitulo: tplDoRegistro?.imagemOrientativaTitulo,
+      imagemOrientativaDescricao: tplDoRegistro?.imagemOrientativaDescricao,
+      termoConsentimentoAtivo: tplDoRegistro?.termoConsentimentoAtivo,
+      termoConsentimentoSecoes: tplDoRegistro?.termoConsentimentoSecoes,
+      perguntasEspecificas: record.perguntasSnapshot?.especificas || [],
+    });
+    return true;
+  };
+
+  /** MODE B com paciente — a ficha dela deste procedimento, se já existir, ou as respostas anteriores. */
+  const aplicarPacienteDoLink = (tpl: AnamnesisTemplate, resposta: RespostaAbrirFicha) => {
+    setInitialPatient(resposta.paciente);
+    const sameTemplateRecord = resposta.ficha;
+    if (sameTemplateRecord) {
+      // Já existe uma ficha desta paciente para este procedimento — reabrir para editar/visualizar
+      setExistingRecord(sameTemplateRecord);
+      setTemplate({
+        id: sameTemplateRecord.templateId || tpl.id,
+        procedimentoNome: sameTemplateRecord.procedimentoNome,
+        tem_foto: true,
+        fotoModeloUrl: sameTemplateRecord.fotoModeloUrl,
+        imagemOrientativaUrl: tpl.imagemOrientativaUrl,
+        imagemOrientativaTitulo: tpl.imagemOrientativaTitulo,
+        imagemOrientativaDescricao: tpl.imagemOrientativaDescricao,
+        termoConsentimentoAtivo: tpl.termoConsentimentoAtivo,
+        termoConsentimentoSecoes: tpl.termoConsentimentoSecoes,
+        perguntasEspecificas: sameTemplateRecord.perguntasSnapshot?.especificas || tpl.perguntasEspecificas,
+      });
+    } else if (resposta.respostasAnteriores) {
+      setPrefillGerais({ ...resposta.respostasAnteriores });
+    }
+  };
+
+  const confirmarIdentidade = async (cpf: string, nascimento: string) => {
+    const resposta = await abrirFichaPublica({
+      ...contextoDoLink,
+      cpf,
+      nascimento: pedeNascimento ? nascimento : undefined,
+    });
+    if (fichaParam) {
+      if (await aplicarFichaDoLink(resposta, () => true)) setScreen('form');
+      return;
+    }
+    if (template) aplicarPacienteDoLink(template, resposta);
+    setScreen('form');
+  };
+
+  /** Grava pelo servidor, no contexto do link — ou da ficha, depois que ela passa a existir. */
+  const salvarPeloServidor = (patient: Patient, record: AnamnesisRecord): Promise<AnamnesisRecord> =>
+    salvarFichaPublica({
+      ...(existingRecord
+        ? { ficha: existingRecord.id }
+        : { anamnese: anamneseParam || record.templateId, paciente: pacienteParam || undefined }),
+      dadosPaciente: {
+        nome: patient.nome,
+        contato: patient.contato,
+        dataNascimento: patient.dataNascimento,
+        genero: patient.genero,
+        cpf: patient.cpf,
+        email: patient.email,
+      },
+      dadosFicha: {
+        respostasGerais: record.respostasGerais,
+        respostasEspecificas: record.respostasEspecificas,
+        fotoPacienteUrl: record.fotoPacienteUrl,
+        fotoModeloUrl: record.fotoModeloUrl,
+        areasSolicitadas: record.areasSolicitadas,
+        professionalId: record.professionalId,
+        profissionalNome: record.profissionalNome,
+        perguntasSnapshot: record.perguntasSnapshot,
+        procedimentoNome: record.procedimentoNome,
+      },
+    });
 
   useEffect(() => {
     let cancelled = false;
@@ -205,44 +325,14 @@ export const PublicAnamnesisEntry: React.FC = () => {
 
         // MODE A — returning to an already-created ficha via its personal link
         if (fichaParam) {
-          const record = await getAnamnesisRecordById(fichaParam);
+          const resposta = await abrirFichaPublica({ ficha: fichaParam });
           if (cancelled) return;
-          if (!record) {
-            setErrorMsg('Não encontramos essa ficha. O link pode estar incorreto ou ter expirado.');
-            setScreen('error');
+          if (resposta.precisaConfirmar) {
+            setPedeNascimento(resposta.precisaConfirmar.pedeNascimento);
+            setScreen('confirmar');
             return;
           }
-          // A imagem orientativa mora na ficha-modelo, não no registro — por isso ela é buscada
-          // aqui junto do resto. A leitura é best-effort: uma ficha-modelo apagada (ou um registro
-          // antigo sem `templateId`) apenas deixa a ficha sem a imagem, nunca quebra a abertura.
-          const [patient, gq, tplDoRegistro] = await Promise.all([
-            getPatientById(record.pacienteId),
-            getGeneralQuestionsOnce(),
-            record.templateId
-              ? getAnamnesisTemplateById(record.templateId).catch(() => null)
-              : Promise.resolve(null),
-          ]);
-          if (cancelled) return;
-          setGeneralQuestions(gq);
-          setInitialPatient(patient);
-          setExistingRecord(record);
-          setTemplate({
-            id: record.templateId || '',
-            procedimentoNome: record.procedimentoNome,
-            // A categoria vem junto porque é ela que liga a etapa de áreas do laser. Sem isto, a
-            // paciente que voltasse ao próprio link para revisar não veria mais o manequim — e
-            // as áreas que ela já tinha marcado sumiriam da tela sem explicação.
-            categoria: tplDoRegistro?.categoria,
-            tem_foto: true,
-            fotoModeloUrl: record.fotoModeloUrl,
-            imagemOrientativaUrl: tplDoRegistro?.imagemOrientativaUrl,
-            imagemOrientativaTitulo: tplDoRegistro?.imagemOrientativaTitulo,
-            imagemOrientativaDescricao: tplDoRegistro?.imagemOrientativaDescricao,
-            termoConsentimentoAtivo: tplDoRegistro?.termoConsentimentoAtivo,
-            termoConsentimentoSecoes: tplDoRegistro?.termoConsentimentoSecoes,
-            perguntasEspecificas: record.perguntasSnapshot?.especificas || [],
-          });
-          setScreen('form');
+          if (await aplicarFichaDoLink(resposta, () => !cancelled)) setScreen('form');
           return;
         }
 
@@ -261,34 +351,16 @@ export const PublicAnamnesisEntry: React.FC = () => {
           setTemplate(tpl);
 
           if (pacienteParam) {
-            const patient = await getPatientById(pacienteParam);
+            // A paciente e as fichas dela vêm do servidor, que segue um cadastro juntado depois do
+            // envio do link e só devolve a ficha deste procedimento.
+            const resposta = await abrirFichaPublica({ anamnese: anamneseParam, paciente: pacienteParam });
             if (cancelled) return;
-            setInitialPatient(patient);
-
-            // `patient.id`, e não o do link: o link pode ser de um cadastro que depois foi juntado
-            // a outro, e as fichas dela agora apontam para o que ficou.
-            const priorRecords = await getRecordsForPatient(patient?.id || pacienteParam);
-            if (cancelled) return;
-
-            const sameTemplateRecord = priorRecords.find((r) => r.templateId === anamneseParam);
-            if (sameTemplateRecord) {
-              // Já existe uma ficha desta paciente para este procedimento — reabrir para editar/visualizar
-              setExistingRecord(sameTemplateRecord);
-              setTemplate({
-                id: sameTemplateRecord.templateId || tpl.id,
-                procedimentoNome: sameTemplateRecord.procedimentoNome,
-                tem_foto: true,
-                fotoModeloUrl: sameTemplateRecord.fotoModeloUrl,
-                imagemOrientativaUrl: tpl.imagemOrientativaUrl,
-                imagemOrientativaTitulo: tpl.imagemOrientativaTitulo,
-                imagemOrientativaDescricao: tpl.imagemOrientativaDescricao,
-                termoConsentimentoAtivo: tpl.termoConsentimentoAtivo,
-                termoConsentimentoSecoes: tpl.termoConsentimentoSecoes,
-                perguntasEspecificas: sameTemplateRecord.perguntasSnapshot?.especificas || tpl.perguntasEspecificas,
-              });
-            } else if (priorRecords.length > 0) {
-              setPrefillGerais({ ...priorRecords[0].respostasGerais });
+            if (resposta.precisaConfirmar) {
+              setPedeNascimento(resposta.precisaConfirmar.pedeNascimento);
+              setScreen('confirmar');
+              return;
             }
+            aplicarPacienteDoLink(tpl, resposta);
           } else {
             setWasGenericLink(true);
           }
@@ -302,7 +374,9 @@ export const PublicAnamnesisEntry: React.FC = () => {
       } catch (err) {
         console.error('Erro ao carregar ficha pública:', err);
         if (!cancelled) {
-          setErrorMsg('Não foi possível carregar a ficha agora. Verifique sua conexão e tente novamente.');
+          setErrorMsg(
+            mensagemDoErroDaFicha(err, 'Não foi possível carregar a ficha agora. Verifique sua conexão e tente novamente.')
+          );
           setScreen('error');
         }
       }
@@ -394,6 +468,10 @@ export const PublicAnamnesisEntry: React.FC = () => {
         </div>
       </div>
     );
+  }
+
+  if (screen === 'confirmar') {
+    return <IdentityConfirmGate pedeNascimento={pedeNascimento} onConfirmar={confirmarIdentidade} />;
   }
 
   if (screen === 'success' && savedRecord) {
@@ -525,21 +603,8 @@ export const PublicAnamnesisEntry: React.FC = () => {
    */
   const isLocked = !!existingRecord && anamneseFechada(existingRecord);
 
-  // Só pedimos a confirmação de identidade quando temos um CPF salvo para conferir contra —
-  // fichas antigas (criadas antes deste recurso) não têm CPF e continuam com acesso direto.
-  const gateCpf = initialPatient?.cpf;
-  const needsIdentityGate = isLocked && !!gateCpf && !identityConfirmed;
-
-  if (needsIdentityGate && existingRecord) {
-    return (
-      <IdentityConfirmGate
-        expectedCpf={gateCpf!}
-        expectedBirth={initialPatient?.dataNascimento || existingRecord.pacienteDataNascimento}
-        onConfirmed={() => setIdentityConfirmed(true)}
-      />
-    );
-  }
-
+  // A confirmação de identidade da ficha fechada já aconteceu no servidor (tela 'confirmar'), antes
+  // de a ficha chegar aqui. Fichas de cadastros sem CPF abrem direto — não há contra o que conferir.
   if (isLocked && existingRecord) {
     return (
       <div className="min-h-screen bg-surface">
@@ -573,8 +638,7 @@ export const PublicAnamnesisEntry: React.FC = () => {
         prefillRespostasGerais={prefillGerais}
         professionalId={profissionalParam || undefined}
         mapaDeAreas={mapaDoTemplate(template, mapasDeAreas)}
-        onSavePatient={savePatient}
-        onSaveRecord={saveAnamnesisRecord}
+        onSubmit={salvarPeloServidor}
         onSaved={handleSaved}
       />
     </div>

@@ -304,6 +304,12 @@ export interface ClinicProfile {
   professionalTitle?: string;
   registryNumber?: string;
   professionals: Professional[]; // Clinical team & registered doctors
+  /**
+   * Os uids das profissionais com login — a lista que as regras do Firestore conferem para liberar
+   * o painel. Gravada por `saveClinicProfileToDb` e conferida pelo servidor; nunca editar à mão.
+   * Ver `utils/equipe.ts`.
+   */
+  equipeUids?: string[];
   phone: string; // WhatsApp
   email?: string;
   instagram: string;
@@ -557,7 +563,7 @@ export interface Patient {
    * Este cadastro foi juntado a outro (era a mesma pessoa com dois cadastros) e só existe como
    * aviso de redirecionamento: o id do cadastro que ficou. O documento perde os dados pessoais e
    * some das listas, mas não é apagado — um link de anamnese já enviado com `?paciente=` este id
-   * continua abrindo a pessoa certa, em vez de criar um terceiro cadastro. Ver `getPatientById`.
+   * continua abrindo a pessoa certa, em vez de criar um terceiro cadastro. Ver `resolverPaciente` (server/fichaPublica.ts).
    */
   juntadoA?: string;
   juntadoEm?: string; // ISO

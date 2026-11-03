@@ -11,6 +11,7 @@ import {
 } from '../../types';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { subirImagemOuManter } from '../../services/imageStorage';
+import { mensagemDoErroDaFicha } from '../../services/fichaPublicaApi';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
@@ -69,8 +70,12 @@ interface OnlinePatientAnamnesisFormProps {
    * preparou o mapa; a ficha continua válida, só sem a etapa de áreas.
    */
   mapaDeAreas?: MapaDeAreasPublico | null;
-  onSaveRecord: (record: AnamnesisRecord) => Promise<void>;
-  onSavePatient: (patient: Patient) => Promise<void>;
+  /**
+   * Grava o cadastro e a ficha juntos e devolve a ficha como ficou no banco. Na página pública isto
+   * vai para o servidor (`salvarFichaPublica`), que gera os ids e só aceita o que a paciente
+   * preenche — por isso a ficha devolvida, e não a montada aqui, é a que segue para `onSaved`.
+   */
+  onSubmit: (patient: Patient, record: AnamnesisRecord) => Promise<AnamnesisRecord>;
   onSaved: (record: AnamnesisRecord) => void;
 }
 
@@ -88,8 +93,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
   prefillRespostasGerais,
   professionalId,
   mapaDeAreas,
-  onSaveRecord,
-  onSavePatient,
+  onSubmit,
   onSaved,
 }) => {
   // Every general question minus the ones already covered by dedicated identification fields
@@ -314,6 +318,8 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
 
     setIsSubmitting(true);
     try {
+      // Ids provisórios, só para montar os objetos: quem decide os ids de verdade é o servidor
+      // (`server/fichaPublica.ts`), que gera os novos de forma aleatória.
       const patientId = existingRecord?.pacienteId || initialPatient?.id || `pat-${Date.now()}`;
       const patientDoc: Patient = {
         id: patientId,
@@ -326,7 +332,6 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
         createdAt: initialPatient?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      await onSavePatient(patientDoc);
 
       const finalRespostasGerais: Record<string, any> = {
         ...respostasGerais,
@@ -389,17 +394,23 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
         createdAt: existingRecord?.createdAt || new Date().toISOString(),
       };
 
-      await onSaveRecord(record);
+      const salva = await onSubmit(patientDoc, record);
 
       if (isEditing) {
         setJustSaved(true);
         setTimeout(() => setJustSaved(false), 3000);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
-      onSaved(record);
+      onSaved(salva);
     } catch (err) {
       console.error('Erro ao enviar anamnese:', err);
-      setConfirmacao(aviso('Não foi possível enviar a ficha', 'Ocorreu um erro ao enviar. Por favor, tente novamente.', 'perigo'));
+      setConfirmacao(
+        aviso(
+          'Não foi possível enviar a ficha',
+          mensagemDoErroDaFicha(err, 'Ocorreu um erro ao enviar. Por favor, tente novamente.'),
+          'perigo'
+        )
+      );
     } finally {
       setIsSubmitting(false);
     }
