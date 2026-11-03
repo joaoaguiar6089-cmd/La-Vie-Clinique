@@ -6,11 +6,25 @@ rules_version = '2';
 // já estouravam o teto de 1 MB por documento, e toda leitura de uma ficha (ou da coleção inteira,
 // no início da sessão) baixava as fotos junto. Aqui a imagem vira um arquivo com URL própria.
 //
-// Leitura é aberta em todos os caminhos pelo mesmo motivo das fichas no Firestore: a paciente
-// abre a própria ficha por um link, sem login. O segredo é a URL — o Firebase gera um token
-// aleatório por arquivo, e sem ele o caminho não abre.
+// COMO AS FOTOS APARECEM PARA QUEM NÃO TEM LOGIN
+// A paciente vê imagens (o manequim, o logo, a foto da profissional, o comprovante do orçamento)
+// pela URL de download que ficou gravada no documento. Essa URL leva um token aleatório e abre
+// sozinha — estas regras não valem para ela. As regras valem para o acesso pelo SDK: listar uma
+// pasta, ler um arquivo pelo caminho, enviar, apagar.
 //
-// Para publicar:  firebase deploy --only storage
+// POR ISSO, NINGUÉM LISTA PASTA NENHUMA
+// O app nunca lista pastas. `read` (que inclui `list`) estava aberto em todos os caminhos, e
+// qualquer pessoa conseguia listar `acompanhamentos/` e baixar as fotos clínicas de antes e depois
+// de todas as pacientes. Agora cada caminho libera só `get` (ler um arquivo cujo caminho se
+// conhece — os nomes são randomUUID) e nada libera `list`.
+//
+// FOTOS CLÍNICAS SÓ PARA QUEM TEM LOGIN
+// Avaliação, acompanhamento, fotos anotadas e comprovantes: `get` só com login. Quem tem login e
+// não é da equipe não consegue chegar a esses caminhos — os nomes são aleatórios e as pastas não
+// listam. (A conferência de "é da equipe" mora em firestore.rules; daqui não dá para consultar o
+// banco nomeado do painel.)
+//
+// Para publicar:  npm run publicar-regras   (ver docs/publicar-regras.md)
 service firebase.storage {
   match /b/{bucket}/o {
 
@@ -22,108 +36,93 @@ service firebase.storage {
       return request.resource.size < 5 * 1024 * 1024;
     }
 
+    function logado() {
+      return request.auth != null;
+    }
+
     // Fotos de referência (mapa anatômico, por gênero) e imagem orientativa das fichas-modelo.
-    // Só a equipe logada envia; qualquer paciente com o link da ficha precisa conseguir ver.
+    // Só a equipe envia; a página da paciente mostra pela URL gravada na ficha-modelo.
     match /anamnese/fichas-modelo/{templateId}/{arquivo} {
-      allow read: if true;
-      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+      allow get: if true;
+      allow create, update: if logado() && ehImagem() && cabeNoLimite();
+      allow delete: if logado();
     }
 
-    // Fotos enviadas pela própria paciente no formulário online. Ela não tem login — é o mesmo
-    // motivo pelo qual `anamnesis_records` aceita escrita sem autenticação no Firestore.
+    // Fotos enviadas pela própria paciente no formulário online. Ela não tem login, então o
+    // envio de um arquivo NOVO é aberto (só imagem, até 5 MB) e o `get` também — o navegador
+    // dela pede a URL de download do arquivo que acabou de enviar. Trocar ou apagar uma foto
+    // existente é só da equipe.
     match /anamnese/fotos-pacientes/{arquivo} {
-      allow read: if true;
-      allow write: if ehImagem() && cabeNoLimite();
+      allow get: if true;
+      allow create: if ehImagem() && cabeNoLimite();
+      allow update: if logado() && ehImagem() && cabeNoLimite();
+      allow delete: if logado();
     }
 
-    // Versões com as anotações do profissional (doses, vetores, unidades). Só a equipe grava.
+    // Versões com as anotações do profissional (doses, vetores, unidades). Só a equipe.
     match /anamnese/fotos-anotadas/{arquivo} {
-      allow read: if true;
-      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+      allow get: if logado();
+      allow create, update: if logado() && ehImagem() && cabeNoLimite();
+      allow delete: if logado();
     }
 
-    // Identidade da clínica: logo, banner de capa e fotos da equipe.
-    //
-    // Estas eram as últimas imagens que ainda ficavam em base64 dentro do Firestore. O perfil da
-    // clínica é gravado em dois documentos e o espelho público é reescrito inteiro, então cada
-    // imagem embutida era cobrada de novo a cada gravação. Leitura aberta porque a página da
-    // paciente (ficha e orçamento, ambas sem login) mostra o logo e a foto da profissional.
+    // Identidade da clínica: logo, banner de capa e fotos da equipe; e os manequins do mapa
+    // corporal da depilação a laser (`clinica/laser-manequim/`). Não há dado de paciente aqui.
     match /clinica/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
-    }
-
-    // Manequins do mapa corporal da depilação a laser (corpo frente e corpo costas). Leitura
-    // aberta porque a paciente vê o manequim ao escolher as áreas na ficha, sem login.
-    match /clinica/laser-manequim/{arquivo} {
-      allow read: if true;
-      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+      allow get: if true;
+      allow create, update: if logado() && ehImagem() && cabeNoLimite();
+      allow delete: if logado();
     }
 
     // Fotos dos procedimentos do catálogo oficial.
-    // Qualquer paciente ou visitante com o catálogo aberto pode visualizar; apenas a equipe logada grava/atualiza.
     match /procedimentos/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+      allow get: if true;
+      allow create, update: if logado() && ehImagem() && cabeNoLimite();
+      allow delete: if logado();
     }
 
     // Fichas de avaliação: mapa anatômico das fichas-modelo, a foto da avaliação e as versões
-    // anotadas. Só a equipe envia — a paciente nunca preenche nem enxerga avaliação.
+    // anotadas. Só a equipe — a paciente nunca preenche nem enxerga avaliação.
     //
     // Precisa existir: sem regra, o envio falha, e `subirImagem` trata falha devolvendo a própria
     // data URL. O resultado silencioso seria a foto voltar a ser base64 dentro do documento do
     // Firestore — exatamente o que este arquivo existe para acabar.
-    //
-    // Leitura aberta como em todos os caminhos acima, pelo mesmo motivo: o segredo é o token
-    // aleatório que o Firebase põe na URL de cada arquivo. Quem mantém a avaliação fora da vista
-    // da paciente é `firestore.rules`, que fecha `evaluation_records` — sem o documento, não há
-    // como chegar a nenhuma destas URLs.
     match /avaliacoes/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+      allow get: if logado();
+      allow create, update: if logado() && ehImagem() && cabeNoLimite();
+      allow delete: if logado();
     }
 
-    // Acompanhamento: mapa anatômico das fichas-modelo, foto de cada atendimento e as versões
-    // anotadas. Mesma regra e mesmo motivo da avaliação logo acima — e a mesma consequência se
-    // faltar: a foto voltaria a ser base64 dentro do documento do Firestore.
-    //
-    // Também as fotos do antes e depois enviadas do aparelho direto para um ângulo da paciente
-    // (`acompanhamentos/antes-depois/{pacienteId}/`) — são fotos clínicas da mesma natureza. Ali o
-    // envio que falha é recusado em vez de cair na base64.
+    // Acompanhamento: mapa anatômico das fichas-modelo, foto de cada atendimento, as versões
+    // anotadas e as fotos do antes e depois (`acompanhamentos/antes-depois/{pacienteId}/`).
+    // Mesma regra e mesmo motivo da avaliação logo acima.
     match /acompanhamentos/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null && ehImagem() && cabeNoLimite();
+      allow get: if logado();
+      allow create, update: if logado() && ehImagem() && cabeNoLimite();
+      allow delete: if logado();
     }
 
     // Comprovantes de pagamento dos orçamentos — foto ou PDF, anexados pela equipe ao marcar o
-    // orçamento como pago. Só a equipe envia, troca ou apaga.
-    //
-    // Leitura aberta pelo mesmo motivo dos demais caminhos: a cliente vê o comprovante na página
-    // do orçamento, que ela abre pelo link sem login. O segredo é duplo — o ID do orçamento na
-    // pasta (randomUUID) e o token aleatório que o Firebase põe na URL de cada arquivo.
+    // orçamento como pago. A cliente vê o comprovante pela URL gravada no orçamento.
     //
     // 10 MB e não 5: aqui entra PDF, que não dá para reduzir no navegador como se faz com a foto.
     // `delete` separado de `create`/`update` porque na exclusão não existe `request.resource`, e
     // a checagem de tipo recusaria o pedido.
     match /orcamentos/{quoteId}/comprovantes/{arquivo} {
-      allow read: if true;
-      allow create, update: if request.auth != null
+      allow get: if logado();
+      allow create, update: if logado()
         && (ehImagem() || request.resource.contentType == 'application/pdf')
         && request.resource.size < 10 * 1024 * 1024;
-      allow delete: if request.auth != null;
+      allow delete: if logado();
     }
 
     // Comprovantes anexados às notas de recibo — foto ou PDF, mesmos limites do caminho acima.
-    //
-    // Leitura só da equipe: o recibo chega à cliente em PDF, com o comprovante já dentro, e nenhuma
-    // página pública aponta para cá. (A URL de download com token, que o painel usa para montar o
-    // PDF, abre por si mesma — as regras valem para o acesso pelo SDK.)
     match /recibos/{receiptId}/comprovantes/{arquivo} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null
+      allow get: if logado();
+      allow create, update: if logado()
         && (ehImagem() || request.resource.contentType == 'application/pdf')
         && request.resource.size < 10 * 1024 * 1024;
-      allow delete: if request.auth != null;
+      allow delete: if logado();
     }
 
     // Qualquer outro caminho fica fechado.

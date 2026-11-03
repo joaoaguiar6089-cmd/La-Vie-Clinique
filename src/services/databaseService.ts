@@ -68,6 +68,7 @@ import {
   planejarMigracao,
 } from '../utils/evaluations';
 import { paraArray } from '../utils/firestoreShapes';
+import { ehDaEquipe, uidsDaEquipe } from '../utils/equipe';
 import { nomeDosProcedimentos } from '../utils/attendances';
 import {
   efeitoDaResposta,
@@ -552,6 +553,30 @@ export function subscribeToProcedures(
 /**
  * Subscribe to real-time clinic profile updates.
  */
+/** O que o painel pode fazer com o login atual — ver `conferirAcessoAoPainel`. */
+export type AcessoAoPainel = 'verificando' | 'liberado' | 'negado' | 'indisponivel';
+
+/**
+ * O login `uid` pode abrir o painel? Só quem está na lista de profissionais da clínica.
+ *
+ * Lê o perfil uma vez (do servidor, ou do cache local quando sem rede). Com as regras novas, um
+ * login de fora nem consegue ler o perfil — `permission-denied` também é "negado". Qualquer outra
+ * falha (sem rede e sem cache, cota esgotada) é "indisponível": não dá para afirmar nada, e a tela
+ * oferece tentar de novo em vez de dizer à profissional que ela não tem acesso.
+ */
+export async function conferirAcessoAoPainel(uid: string): Promise<AcessoAoPainel> {
+  try {
+    const snap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID));
+    // Projeto novo, ainda sem perfil: é a primeira instalação, e o seed vai criá-lo.
+    if (!snap.exists()) return 'liberado';
+    return ehDaEquipe((snap.data() as ClinicProfile).professionals, uid) ? 'liberado' : 'negado';
+  } catch (err) {
+    if ((err as { code?: string })?.code === 'permission-denied') return 'negado';
+    console.warn('Não foi possível conferir o acesso ao painel:', err);
+    return 'indisponivel';
+  }
+}
+
 export function subscribeToClinicProfile(
   onUpdate: (clinic: ClinicProfile) => void,
   onError?: (err: Error) => void
@@ -849,6 +874,9 @@ export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<Cli
   const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
   const dataToSave = cleanForFirestore({
     ...comImagensNoStorage,
+    // Os logins da equipe, na forma que as regras do Firestore conseguem conferir. Recalculado a
+    // cada salvamento: um login criado ou removido aqui vale nas regras na mesma hora.
+    equipeUids: uidsDaEquipe(comImagensNoStorage.professionals),
     updatedAt: new Date().toISOString(),
   });
 
@@ -2111,38 +2139,6 @@ export async function getAnamnesisTemplateById(templateId: string): Promise<Anam
   // categoria no banco, quem lê avulso precisa normalizar por conta própria — é por aqui que a
   // página pública da paciente carrega a ficha, e é lá que uma tela branca é mais cara.
   return normalizarTemplateLido({ ...(snap.data() as AnamnesisTemplate), id: snap.id });
-}
-
-/** Saltos de redirecionamento seguidos por `getPatientById` — folga para juntar e juntar de novo. */
-const MAX_SALTOS_DE_JUNCAO = 5;
-
-/**
- * Fetch a single Patient by ID (one-time).
- *
- * O cadastro juntado a outro devolve o que ficou: é o que faz um link de anamnese enviado antes da
- * junção abrir a pessoa certa. Segue a cadeia, porque o que ficou pode ter sido juntado de novo
- * depois — A em B, e mais tarde B em C.
- */
-export async function getPatientById(patientId: string): Promise<Patient | null> {
-  let id = patientId;
-  for (let salto = 0; salto <= MAX_SALTOS_DE_JUNCAO; salto++) {
-    const snap = await getDoc(doc(db, PATIENTS_COLLECTION, id));
-    if (!snap.exists()) return null;
-    const patient = { ...(snap.data() as Patient), id: snap.id };
-    if (!patient.juntadoA) return patient;
-    id = patient.juntadoA;
-  }
-  return null;
-}
-
-/**
- * Fetch a single Anamnesis Record by ID (one-time).
- */
-export async function getAnamnesisRecordById(recordId: string): Promise<AnamnesisRecord | null> {
-  const docRef = doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId);
-  const snap = await getDoc(docRef);
-  if (!snap.exists()) return null;
-  return { ...(snap.data() as AnamnesisRecord), id: snap.id };
 }
 
 /**

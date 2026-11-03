@@ -12,11 +12,12 @@ import {
 /**
  * Descobre, para um link da clínica, o cartão que o WhatsApp deve mostrar.
  *
- * Lê o Firestore pela API REST, sem login e sem chave: são exatamente os documentos que as regras
- * já abrem à paciente (`anamnesis_templates`, `anamnesis_records`, `quotes` e `appointment_links`,
- * este último só por `get`) — o servidor não enxerga nada que o navegador dela não enxergue. E pede
- * só os campos de que precisa (`mask.fieldPaths`), então a ficha preenchida, com os dados da
- * paciente, nunca trafega até aqui além do nome do procedimento.
+ * Lê com a credencial do servidor quando ela está configurada (`lerComCredencial`) — é o único
+ * jeito de ler `anamnesis_records`, que deixou de ser legível sem login. Sem credencial, usa a API
+ * REST sem chave, que só alcança o que as regras abrem (`anamnesis_templates`, `quotes` e
+ * `appointment_links`, estes dois só por `get`). Nos dois casos pede só os campos de que precisa,
+ * então a ficha preenchida, com os dados da paciente, nunca trafega até aqui além do nome do
+ * procedimento.
  *
  * Duas regras valem acima do resto:
  *   - **nunca lança**: o cartão é enfeite. Banco fora do ar, cota esgotada, documento apagado — o
@@ -64,9 +65,22 @@ export const decodificarValor = (valor: Valor | undefined): unknown => {
 export const decodificarCampos = (campos: Record<string, Valor> | undefined): Record<string, unknown> =>
   Object.fromEntries(Object.entries(campos || {}).map(([nome, v]) => [nome, decodificarValor(v)]));
 
+/**
+ * Leitura com a credencial do servidor (ver `server/firebaseAdmin.ts`). Necessária para as fichas
+ * preenchidas: `anamnesis_records` deixou de ser legível sem login, e pela API REST sem chave o
+ * cartão cairia sempre no título genérico. `null` quando o documento não existe.
+ */
+export type LeitorDoBanco = (
+  colecao: string,
+  id: string,
+  campos: string[]
+) => Promise<Record<string, unknown> | null>;
+
 export interface OpcoesDoResolvedor {
   /** Para os testes: um `fetch` de mentira. */
   buscar?: typeof fetch;
+  /** Leitura pelo servidor; quando devolve `undefined` (sem credencial), cai na API REST. */
+  lerComCredencial?: () => LeitorDoBanco | undefined;
   /** Para os testes: um relógio que a gente controla. */
   agora?: () => number;
 }
@@ -79,6 +93,8 @@ export const criarResolvedorDePreview = (opcoes: OpcoesDoResolvedor = {}) => {
   /** `null` quando o documento não existe. Lança em qualquer outra falha. */
   const lerDocumento = async (fonte: FonteDoLink, id: string): Promise<Record<string, unknown> | null> => {
     const { colecao, campos } = ONDE_LER[fonte];
+    const leitor = opcoes.lerComCredencial?.();
+    if (leitor) return leitor(colecao, id, campos);
     const mascara = campos.map((c) => `mask.fieldPaths=${encodeURIComponent(c)}`).join('&');
     const resposta = await buscar(`${RAIZ_DO_BANCO}/${colecao}/${encodeURIComponent(id)}?${mascara}`, {
       signal: AbortSignal.timeout(PRAZO_DA_LEITURA_MS),

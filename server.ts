@@ -2,8 +2,11 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { manterEquipeSincronizada } from './server/equipe';
+import { bancoAdmin } from './server/firebaseAdmin';
+import { criarRotasFichaPublica } from './server/fichaPublica';
 import { criarRotasGoogleAgenda } from './server/googleAgenda';
-import { criarResolvedorDePreview } from './server/previewDosLinks';
+import { criarResolvedorDePreview, type LeitorDoBanco } from './server/previewDosLinks';
 import { servirPrivacidade } from './server/privacidade';
 import { aplicarPreviewNoHtml } from './src/utils/linkPreview';
 
@@ -35,11 +38,46 @@ if (!fs.existsSync(arquivoIndex)) {
 }
 
 const indexHtml = fs.readFileSync(arquivoIndex, 'utf-8');
-const resolverPreview = criarResolvedorDePreview();
+
+/** Leitura do cartão do link com a credencial do servidor, quando houver (ver previewDosLinks). */
+const lerComCredencial = (): LeitorDoBanco | undefined => {
+  const db = bancoAdmin();
+  if (!db) return undefined;
+  return async (colecao, id, campos) => {
+    const snap = await db.collection(colecao).doc(id).get();
+    if (!snap.exists) return null;
+    const dados = snap.data() || {};
+    // Só os campos pedidos, como a máscara da API REST: nada da paciente sai daqui.
+    const lerCaminho = (caminho: string) => caminho.split('.').reduce<any>((v, parte) => v?.[parte], dados);
+    const resultado: Record<string, unknown> = {};
+    for (const campo of campos) {
+      const valor = lerCaminho(campo);
+      if (valor === undefined) continue;
+      const partes = campo.split('.');
+      let alvo: any = resultado;
+      partes.slice(0, -1).forEach((parte) => (alvo = alvo[parte] ??= {}));
+      alvo[partes[partes.length - 1]] = valor;
+    }
+    return resultado;
+  };
+};
+const resolverPreview = criarResolvedorDePreview({ lerComCredencial });
 
 const app = express();
 app.disable('x-powered-by');
+// O AI Studio (Cloud Run) entrega o pedido por um proxy: o endereço de quem pediu vem no
+// X-Forwarded-For. É ele que o limite de pedidos da ficha pública usa.
+app.set('trust proxy', true);
 
+app.use((_req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// Ficha de anamnese da paciente, sem login: abrir e salvar passam pelo servidor, que confere o
+// link — `patients` e `anamnesis_records` não abrem mais para quem não é da equipe.
+app.use('/api/ficha-publica', criarRotasFichaPublica());
 // Conexão das profissionais com o Google Agenda e envio dos eventos (ver server/googleAgenda.ts).
 app.use('/api/google-agenda', criarRotasGoogleAgenda());
 // Política de privacidade pública — o Google exige o link dela na tela de consentimento.
@@ -73,4 +111,12 @@ app.get('*', async (req, res) => {
 const porta = Number(process.env.PORT) || 3000;
 app.listen(porta, '0.0.0.0', () => {
   console.log(`La Vie Clinique no ar em http://localhost:${porta}`);
+  if (!bancoAdmin()) {
+    console.warn(
+      '[admin] Sem credencial do servidor (FIREBASE_ADMIN_EMAIL/FIREBASE_ADMIN_CHAVE): a ficha ' +
+        'pública não vai abrir. Ver docs/ficha-publica-servidor.md.'
+    );
+  }
+  // A lista de logins da equipe que as regras do Firestore usam (ver server/equipe.ts).
+  manterEquipeSincronizada(bancoAdmin);
 });
