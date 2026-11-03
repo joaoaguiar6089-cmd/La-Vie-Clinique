@@ -36,7 +36,7 @@ import { useAcoesDeOrcamento } from '../quotes/useAcoesDeOrcamento';
 import { ItemDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoTempo';
 import { AcoesDaLinha, AlvoDoPasso, PainelDoEvento } from '../linhaDoTempo/PainelDoEvento';
 import { EmissaoDeAvaliacao } from '../evaluations/EmissaoDeAvaliacao';
-import { ContextoDaJornada } from '../../utils/passosDaJornada';
+import { ContextoDaJornada, OrigemDaVisita } from '../../utils/passosDaJornada';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { SkeletonLinhas } from '../common/Skeleton';
@@ -58,7 +58,7 @@ interface LinhaDoTempoDaClinicaProps {
    * nova abrem na Agenda e em Fichas, onde moram os formulários com tudo o que eles precisam.
    */
   onAgendar: (alvo: AlvoDoPasso & { professionalId?: string }) => void;
-  onRegistrarVisita: (avaliacao: EvaluationRecord) => void;
+  onRegistrarVisita: (origem: OrigemDaVisita) => void;
   onAbrirNaAgenda: (a: Attendance) => void;
   onNovaAnamnese: (alvo: AlvoDoPasso & { templateId?: string }) => void;
 }

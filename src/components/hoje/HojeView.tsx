@@ -17,7 +17,6 @@ import {
   AppView,
   Attendance,
   ClinicProfile,
-  EvaluationRecord,
   Patient,
   Procedure,
   Professional,
@@ -35,6 +34,7 @@ import { BotaoRedondo, GatilhoDeBusca, MenuDeAcoes, TituloDaTela } from '../comm
 import { AcaoDeCriacao } from '../BottomNav';
 import { LinhaDoTempoDaClinica } from './LinhaDoTempoDaClinica';
 import { AlvoDoPasso } from '../linhaDoTempo/PainelDoEvento';
+import { OrigemDaVisita } from '../../utils/passosDaJornada';
 
 /**
  * A tela inicial.
@@ -71,7 +71,7 @@ interface HojeViewProps {
   onAbrirPaciente: (pacienteId: string) => void;
   /** Os passos do painel da linha do tempo que abrem em outra tela — ver `LinhaDoTempoDaClinica`. */
   onAgendar: (alvo: AlvoDoPasso & { professionalId?: string }) => void;
-  onRegistrarVisita: (avaliacao: EvaluationRecord) => void;
+  onRegistrarVisita: (origem: OrigemDaVisita) => void;
   onAbrirNaAgenda: (a: Attendance) => void;
   onNovaAnamnese: (alvo: AlvoDoPasso & { templateId?: string }) => void;
 }

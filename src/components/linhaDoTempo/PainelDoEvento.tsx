@@ -1,12 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   CalendarClock,
   CalendarPlus,
   Copy,
   Eye,
+  Loader2,
   NotebookPen,
   Pencil,
   RefreshCw,
+  RotateCcw,
   Share2,
 } from 'lucide-react';
 import { AnamnesisRecord, Attendance, EvaluationRecord, Quote } from '../../types';
@@ -17,12 +19,16 @@ import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fi
 import { ROTULO_DO_STATUS, nomeDosProcedimentos } from '../../utils/attendances';
 import {
   ContextoDaJornada,
+  OrigemDaVisita,
   Tratamento,
   anamnesesDoOrcamento,
+  atendimentosDaAnamnese,
   atendimentosDaAvaliacao,
   avaliacaoDaAnamnese,
+  origemDaAnamnese,
   proximosAgendamentos,
 } from '../../utils/passosDaJornada';
+import { marcarAvaliacaoDispensada } from '../../services/databaseService';
 import { QuoteDesfecho } from '../quotes/QuoteDesfecho';
 import { AcoesDeOrcamento } from '../quotes/useAcoesDeOrcamento';
 import { BottomSheet } from '../common/BottomSheet';
@@ -52,11 +58,11 @@ export interface AcoesDaLinha {
   onNovaAvaliacao: (alvo: AlvoDoPasso) => void;
   onAgendar: (alvo: AlvoDoPasso & { professionalId?: string }) => void;
   /**
-   * A avaliação sem atendimento depois dela: o acompanhamento precisa de uma visita, então o
-   * formulário de atendimento abre com a data e a hora por preencher — e, salvo, abre o
-   * acompanhamento dela.
+   * A avaliação (ou a anamnese "Sem avaliação") sem atendimento depois dela: o relatório precisa
+   * de uma visita, então o formulário de atendimento abre com a data e a hora por preencher — e,
+   * salvo, abre o relatório dela.
    */
-  onRegistrarVisita: (av: EvaluationRecord) => void;
+  onRegistrarVisita: (origem: OrigemDaVisita) => void;
   onAbrirNaAgenda: (a: Attendance) => void;
   /** Só na linha da clínica: na página da paciente, ela já está aberta. */
   onAbrirPaciente?: (pacienteId: string) => void;
@@ -73,6 +79,9 @@ const botaoPrincipal =
   'inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl bg-ink text-white text-body font-semibold hover:bg-black transition-colors';
 const botaoSecundario =
   'inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl border border-line bg-card text-body font-semibold text-ink hover:border-brand transition-colors';
+/** O botão menor ao lado do principal — a alternativa, não o caminho de sempre. */
+const botaoAlternativo =
+  'inline-flex items-center justify-center gap-1.5 min-h-[36px] px-3 rounded-lg border border-line bg-card text-[13px] font-semibold text-ink-soft hover:border-brand hover:text-ink transition-colors disabled:opacity-60';
 const botaoFeito =
   'inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl border bg-ok-bg text-ok border-ok-line hover:border-ok text-body font-semibold transition-colors';
 
@@ -344,7 +353,41 @@ const PassosDoOrcamento: React.FC<PassosProps & { q: Quote }> = ({ q, contexto, 
 
 const PassosDaAnamnese: React.FC<PassosProps & { r: AnamnesisRecord }> = ({ r, contexto, acoes, fazer }) => {
   const avaliacao = useMemo(() => avaliacaoDaAnamnese(r, contexto), [r, contexto]);
+  const atendimentos = useMemo(() => atendimentosDaAnamnese(r, contexto), [r, contexto]);
   const online = r.origemPreenchimento === 'online_paciente';
+
+  /**
+   * "Sem avaliação": nem todo tratamento passa por avaliação, e aí o passo seguinte à anamnese é
+   * o relatório do atendimento. Muda na tela no toque e fica gravado na anamnese, para valer na
+   * próxima vez que o painel abrir.
+   */
+  const [dispensada, setDispensada] = useState(!!r.avaliacaoDispensadaEm);
+  const [gravando, setGravando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  useEffect(() => setDispensada(!!r.avaliacaoDispensadaEm), [r.id, r.avaliacaoDispensadaEm]);
+
+  const dispensar = async (valor: boolean) => {
+    const antes = dispensada;
+    setDispensada(valor);
+    setGravando(true);
+    setErro(null);
+    try {
+      await marcarAvaliacaoDispensada(r.id, valor);
+    } catch (e) {
+      setDispensada(antes);
+      setErro(`Não foi possível salvar: ${(e as Error).message}`);
+    } finally {
+      setGravando(false);
+    }
+  };
+
+  const preencherAvaliacao = fazer(() =>
+    acoes.onNovaAvaliacao({
+      pacienteId: r.pacienteId,
+      pacienteNome: r.pacienteNome,
+      tratamento: { procedureId: r.procedimentoId, procedimentoNome: r.procedimentoNome },
+    })
+  );
 
   return (
     <>
@@ -375,27 +418,99 @@ const PassosDaAnamnese: React.FC<PassosProps & { r: AnamnesisRecord }> = ({ r, c
               Ver
             </button>
           </LinhaDoPasso>
-        ) : (
-          <LinhaDoPasso titulo={r.procedimentoNome} detalhe="Ainda sem avaliação">
+        ) : dispensada ? (
+          <LinhaDoPasso titulo={r.procedimentoNome} detalhe="Sem avaliação — segue para o relatório">
             <button
               type="button"
-              onClick={fazer(() =>
-                acoes.onNovaAvaliacao({
-                  pacienteId: r.pacienteId,
-                  pacienteNome: r.pacienteNome,
-                  tratamento: { procedureId: r.procedimentoId, procedimentoNome: r.procedimentoNome },
-                })
-              )}
-              className={botaoPrincipal}
+              onClick={() => dispensar(false)}
+              disabled={gravando}
+              className={botaoAlternativo}
             >
+              {gravando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+              Desfazer
+            </button>
+          </LinhaDoPasso>
+        ) : (
+          <LinhaDoPasso titulo={r.procedimentoNome} detalhe="Ainda sem avaliação">
+            <button type="button" onClick={preencherAvaliacao} className={botaoPrincipal}>
               Preencher avaliação
+            </button>
+            <button
+              type="button"
+              onClick={() => dispensar(true)}
+              disabled={gravando}
+              title="Este tratamento não terá avaliação — mostra o passo seguinte"
+              className={botaoAlternativo}
+            >
+              {gravando && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Sem avaliação
             </button>
           </LinhaDoPasso>
         )}
+        {erro && <p className="text-body text-danger pt-1">{erro}</p>}
       </Secao>
+
+      {/* Sem avaliação, o passo seguinte à anamnese é o que viria depois dela: o relatório. */}
+      {!avaliacao && dispensada && (
+        <PassoDoRelatorio
+          atendimentos={atendimentos}
+          depoisDe="desta anamnese"
+          onAcompanhamento={(a) => fazer(() => acoes.onAcompanhamento(a))}
+          onRegistrar={fazer(() => acoes.onRegistrarVisita(origemDaAnamnese(r)))}
+        />
+      )}
     </>
   );
 };
+
+/**
+ * O relatório como próximo passo: os atendimentos que já aconteceram depois do documento, cada
+ * um com o seu relatório — ou, sem nenhum, o caminho para registrar a visita.
+ */
+const PassoDoRelatorio: React.FC<{
+  atendimentos: Attendance[];
+  /** "desta avaliação", "desta anamnese" — para a frase de quando não há visita. */
+  depoisDe: string;
+  onAcompanhamento: (a: Attendance) => () => void;
+  onRegistrar: () => void;
+}> = ({ atendimentos, depoisDe, onAcompanhamento, onRegistrar }) => (
+  <Secao titulo="Próximo passo · Relatório">
+    {atendimentos.length === 0 ? (
+      <>
+        <p className="text-body text-muted pb-2">
+          O relatório é de uma visita, e ainda não há atendimento registrado depois {depoisDe}.
+        </p>
+        <button type="button" onClick={onRegistrar} className={`${botaoPrincipal} w-full`}>
+          <NotebookPen className="w-4 h-4" />
+          Registrar o atendimento
+        </button>
+      </>
+    ) : (
+      <>
+        <ul className="max-h-56 overflow-y-auto overscroll-contain">
+          {atendimentos.map((a) => (
+            <li key={a.id}>
+              <LinhaDoPasso
+                titulo={nomeDosProcedimentos(a)}
+                detalhe={`${quandoDoAtendimento(a)}${a.profissionalNome ? ` · ${a.profissionalNome}` : ''}`}
+              >
+                <BotaoDoAcompanhamento a={a} onClick={onAcompanhamento(a)} />
+              </LinhaDoPasso>
+            </li>
+          ))}
+        </ul>
+        <button
+          type="button"
+          onClick={onRegistrar}
+          className="inline-flex items-center gap-1.5 min-h-[40px] mt-1 text-body font-semibold text-ink-soft hover:text-brand transition-colors"
+        >
+          <NotebookPen className="w-4 h-4" />
+          Registrar outro atendimento
+        </button>
+      </>
+    )}
+  </Secao>
+);
 
 /** O botão do acompanhamento de uma visita — verde quando já tem registro. */
 const BotaoDoAcompanhamento: React.FC<{ a: Attendance; onClick: () => void }> = ({ a, onClick }) => {
@@ -425,43 +540,12 @@ const PassosDaAvaliacao: React.FC<PassosProps & { av: EvaluationRecord }> = ({ a
         </LinhaDoPasso>
       </Secao>
 
-      <Secao titulo="Próximo passo · Relatório">
-        {atendimentos.length === 0 ? (
-          <>
-            <p className="text-body text-muted pb-2">
-              O relatório é de uma visita, e ainda não há atendimento registrado depois desta
-              avaliação.
-            </p>
-            <button type="button" onClick={fazer(() => acoes.onRegistrarVisita(av))} className={`${botaoPrincipal} w-full`}>
-              <NotebookPen className="w-4 h-4" />
-              Registrar o atendimento
-            </button>
-          </>
-        ) : (
-          <>
-            <ul className="max-h-56 overflow-y-auto overscroll-contain">
-              {atendimentos.map((a) => (
-                <li key={a.id}>
-                  <LinhaDoPasso
-                    titulo={nomeDosProcedimentos(a)}
-                    detalhe={`${quandoDoAtendimento(a)}${a.profissionalNome ? ` · ${a.profissionalNome}` : ''}`}
-                  >
-                    <BotaoDoAcompanhamento a={a} onClick={fazer(() => acoes.onAcompanhamento(a))} />
-                  </LinhaDoPasso>
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              onClick={fazer(() => acoes.onRegistrarVisita(av))}
-              className="inline-flex items-center gap-1.5 min-h-[40px] mt-1 text-body font-semibold text-ink-soft hover:text-brand transition-colors"
-            >
-              <NotebookPen className="w-4 h-4" />
-              Registrar outro atendimento
-            </button>
-          </>
-        )}
-      </Secao>
+      <PassoDoRelatorio
+        atendimentos={atendimentos}
+        depoisDe="desta avaliação"
+        onAcompanhamento={(a) => fazer(() => acoes.onAcompanhamento(a))}
+        onRegistrar={fazer(() => acoes.onRegistrarVisita(av))}
+      />
     </>
   );
 };

@@ -190,24 +190,40 @@ export const avaliacaoDaAnamnese = (
 // ==========================================
 
 /**
- * Os atendimentos que podem levar o acompanhamento da avaliação: os da paciente que já
- * aconteceram (ou já têm registro) a partir do dia da avaliação. Os do mesmo tratamento vêm
- * primeiro; dentro de cada grupo, o mais recente no topo.
+ * Os atendimentos que podem levar o relatório: os da paciente que já aconteceram (ou já têm
+ * registro) a partir do dia do documento. Os do mesmo tratamento vêm primeiro; dentro de cada
+ * grupo, o mais recente no topo.
  */
-export const atendimentosDaAvaliacao = (av: EvaluationRecord, contexto: ContextoDaJornada): Attendance[] => {
+const atendimentosDepoisDe = (
+  pacienteId: string | undefined,
+  dia: string,
+  tratamento: Tratamento,
+  contexto: ContextoDaJornada
+): Attendance[] => {
+  if (!pacienteId) return [];
   const fichaPorProcedimento = fichasDeAnamnesePorProcedimento(contexto);
-  const dia = diaDoRegistro(av);
   const candidatos = contexto.atendimentos.filter(
     (a) =>
-      a.pacienteId === av.pacienteId &&
+      a.pacienteId === pacienteId &&
       a.data >= dia &&
       (atendimentoAconteceu(a) || acompanhamentoComRegistro(a))
   );
-  const peso = (a: Attendance) => (mesmoTratamento(tratamentoDe(av), tratamentoDe(a), fichaPorProcedimento) ? 0 : 1);
+  const peso = (a: Attendance) => (mesmoTratamento(tratamento, tratamentoDe(a), fichaPorProcedimento) ? 0 : 1);
   return candidatos.sort(
     (a, b) => peso(a) - peso(b) || instanteDoAtendimento(b) - instanteDoAtendimento(a)
   );
 };
+
+/** Os atendimentos que podem levar o relatório da avaliação — o passo seguinte a ela. */
+export const atendimentosDaAvaliacao = (av: EvaluationRecord, contexto: ContextoDaJornada): Attendance[] =>
+  atendimentosDepoisDe(av.pacienteId, diaDoRegistro(av), tratamentoDe(av), contexto);
+
+/**
+ * A anamnese marcada "Sem avaliação" pula um passo: o seguinte a ela passa a ser o relatório do
+ * atendimento, com os mesmos atendimentos que a avaliação ofereceria.
+ */
+export const atendimentosDaAnamnese = (r: AnamnesisRecord, contexto: ContextoDaJornada): Attendance[] =>
+  atendimentosDepoisDe(r.pacienteId, diaDoRegistro(r), tratamentoDaAnamnese(r), contexto);
 
 // ==========================================
 // SEMENTES DO FORMULÁRIO DE ATENDIMENTO
@@ -236,15 +252,36 @@ export const sementeDoAgendamento = (alvo: {
 });
 
 /**
- * A visita que o acompanhamento da avaliação precisa: o procedimento e a profissional da
- * avaliação, a data de hoje e a hora por preencher (o formulário a exige neste caso).
+ * De onde sai a visita que o relatório precisa: a avaliação — ou a anamnese marcada "Sem
+ * avaliação", que ocupa o lugar dela na jornada.
  */
-export const sementeDaVisita = (av: EvaluationRecord): Attendance => ({
+export type OrigemDaVisita = {
+  pacienteId?: string;
+  pacienteNome: string;
+  procedureId?: string;
+  procedimentoNome: string;
+  professionalId?: string;
+};
+
+/** A origem da visita a partir da anamnese sem avaliação. */
+export const origemDaAnamnese = (r: AnamnesisRecord): OrigemDaVisita => ({
+  pacienteId: r.pacienteId,
+  pacienteNome: r.pacienteNome,
+  procedureId: r.procedimentoId,
+  procedimentoNome: r.procedimentoNome,
+  professionalId: r.professionalId,
+});
+
+/**
+ * A visita que o relatório precisa: o procedimento e a profissional da avaliação (ou da
+ * anamnese sem avaliação), a data de hoje e a hora por preencher (o formulário a exige aqui).
+ */
+export const sementeDaVisita = (origem: OrigemDaVisita): Attendance => ({
   ...sementeDoAgendamento({
-    pacienteId: av.pacienteId,
-    pacienteNome: av.pacienteNome,
-    tratamento: tratamentoDe(av),
-    professionalId: av.professionalId,
+    pacienteId: origem.pacienteId,
+    pacienteNome: origem.pacienteNome,
+    tratamento: tratamentoDe(origem),
+    professionalId: origem.professionalId,
   }),
   data: hojeISO(),
 });
