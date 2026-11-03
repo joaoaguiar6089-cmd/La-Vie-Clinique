@@ -23,6 +23,7 @@ import {
   criarLimitadores,
   dadosDoCadastro,
   idDoLink,
+  motivoDaFalha,
   salvarFicha,
   urlDeImagem,
 } from '../server/fichaPublica';
@@ -112,6 +113,18 @@ ok(
     FIREBASE_ADMIN_CREDENCIAL: JSON.stringify({ client_email: 'c@d.iam.gserviceaccount.com', private_key: CHAVE_FALSA, project_id: 'p' }),
   })?.projectId === 'p'
 );
+
+console.log('\nMotivo da falha da credencial');
+ok('papel faltando', motivoDaFalha({ code: 7, message: '7 PERMISSION_DENIED: Missing or insufficient permissions.' }) === 'sem-permissao');
+ok('chave de outra conta', motivoDaFalha(new Error('invalid_grant: Invalid JWT Signature.')) === 'chave-recusada');
+ok('não autenticado', motivoDaFalha({ code: 16, message: '16 UNAUTHENTICATED' }) === 'chave-recusada');
+ok(
+  'API desligada',
+  motivoDaFalha({ code: 7, message: 'Cloud Firestore API has not been used in project 1 before or it is disabled.' }) === 'api-desativada'
+);
+ok('banco inexistente', motivoDaFalha({ code: 5, message: '5 NOT_FOUND: The database banco-novo does not exist' }) === 'banco-nao-encontrado');
+ok('sem rede', motivoDaFalha({ code: 14, message: '14 UNAVAILABLE' }) === 'sem-rede');
+ok('o resto', motivoDaFalha(new Error('qualquer coisa')) === 'outro');
 
 // ==========================================
 // COM O EMULADOR
