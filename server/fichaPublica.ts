@@ -3,7 +3,7 @@ import express, { type Request, type Response, type Router } from 'express';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { anamneseFechada } from '../src/utils/evaluations';
 import { mesmaEquipe, uidsDaEquipe } from '../src/utils/equipe';
-import { bancoAdmin } from './firebaseAdmin';
+import { bancoAdmin, credencialDoAmbiente } from './firebaseAdmin';
 
 /**
  * A ficha de anamnese que a paciente abre pelo link, sem login — agora pelo servidor.
@@ -29,7 +29,7 @@ import { bancoAdmin } from './firebaseAdmin';
  * direto do banco: não tem dado de paciente, e as regras seguem abertas para leitura.
  *
  * Rotas (todas em /api/ficha-publica):
- *   GET  /status  → { configurado, conectado, equipeSincronizada }
+ *   GET  /status  → { configurado, conectado, equipeSincronizada } (ou o `motivo` da falha)
  *   POST /abrir   → { ficha, paciente, respostasAnteriores } ou { precisaConfirmar }
  *   POST /salvar  → { ficha }
  */
@@ -427,6 +427,40 @@ export async function salvarFicha(
 }
 
 // ==========================================
+// DIAGNÓSTICO DA CREDENCIAL
+// ==========================================
+
+/**
+ * Por que a credencial não conseguiu ler o banco, numa palavra que diz o que fazer:
+ *   - `sem-permissao`: a conta existe, mas não tem o papel "Usuário do Cloud Datastore" neste
+ *     projeto (ou o papel acabou de ser dado e ainda está propagando — leva alguns minutos);
+ *   - `chave-recusada`: o e-mail e a chave não são da mesma conta, ou a chave foi apagada;
+ *   - `api-desativada`: a API do Firestore está desligada no projeto da conta;
+ *   - `banco-nao-encontrado`: o banco do `firebase-applet-config.json` não existe para essa conta;
+ *   - `sem-rede`: o servidor não alcançou o Google;
+ *   - `outro`: o resto — a mensagem completa fica no registro do servidor.
+ */
+export function motivoDaFalha(erro: unknown): string {
+  const e = erro as { code?: unknown; message?: unknown; details?: unknown };
+  const codigo = typeof e?.code === 'number' ? e.code : Number.NaN;
+  const texto = `${String(e?.code ?? '')} ${String(e?.message ?? '')} ${String(e?.details ?? '')}`;
+  if (codigo === 7 || /PERMISSION_DENIED|insufficient permissions|permission denied/i.test(texto)) {
+    return /has not been used|SERVICE_DISABLED|is disabled/i.test(texto) ? 'api-desativada' : 'sem-permissao';
+  }
+  if (codigo === 16 || /UNAUTHENTICATED|invalid_grant|invalid_client|JWT Signature|account not found|unauthorized_client/i.test(texto)) {
+    return 'chave-recusada';
+  }
+  if (/has not been used|SERVICE_DISABLED/i.test(texto)) return 'api-desativada';
+  if (codigo === 5 || /NOT_FOUND|does not exist/i.test(texto)) return 'banco-nao-encontrado';
+  if (codigo === 14 || codigo === 4 || /UNAVAILABLE|ENOTFOUND|ETIMEDOUT|ECONNREFUSED|DEADLINE/i.test(texto)) return 'sem-rede';
+  return 'outro';
+}
+
+/** O projeto onde a conta de serviço foi criada (o que vem depois do @ no e-mail dela). */
+const projetoDaConta = (): string | undefined =>
+  /@([^.]+)\.iam\.gserviceaccount\.com$/.exec(credencialDoAmbiente()?.clientEmail || '')?.[1];
+
+// ==========================================
 // ROTAS
 // ==========================================
 
@@ -474,7 +508,14 @@ export function criarRotasFichaPublica(opcoes: OpcoesDasRotas = {}): Router {
       });
     } catch (erro) {
       console.error('[ficha-publica] a credencial não conseguiu ler o banco:', erro);
-      res.json({ configurado: true, conectado: false });
+      // O motivo vai junto, em categoria — sem a mensagem crua, que poderia trazer detalhe da
+      // conta. É o que permite resolver pelo navegador, sem acesso aos registros do servidor.
+      res.set('Cache-Control', 'no-store').json({
+        configurado: true,
+        conectado: false,
+        motivo: motivoDaFalha(erro),
+        projetoDaConta: projetoDaConta(),
+      });
     }
   });
 

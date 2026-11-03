@@ -75,8 +75,18 @@ O esperado é:
 ```
 
 - `configurado: false` — os Secrets não chegaram ao app. Confira os nomes e publique de novo.
-- `conectado: false` — a chave foi lida, mas o Google recusou: confira o papel *Cloud Datastore
-  User* da conta e se a chave é dela.
+- `conectado: false` — a chave foi lida, mas o Google recusou. O campo `motivo` diz por quê:
+  - `sem-permissao`: falta o papel *Usuário do Cloud Datastore* na conta, no projeto
+    `database-dra-karoline` (em IAM, não só na tela da conta de serviço). Se acabou de dar o
+    papel, espere uns 5 minutos e recarregue.
+  - `chave-recusada`: o e-mail e a chave não são da mesma conta, ou a chave foi apagada. Gere uma
+    chave nova e troque os dois Secrets.
+  - `api-desativada`: a conta foi criada num projeto onde o Firestore não está ligado — confira
+    `projetoDaConta`, que precisa ser `database-dra-karoline`.
+  - `banco-nao-encontrado`, `sem-rede`, `outro`: chame o Claude com o resultado.
+
+  `projetoDaConta` é o projeto onde a conta de serviço foi criada. Se não for
+  `database-dra-karoline`, a conta foi criada no projeto errado: crie de novo pelo link do passo 1.
 - `equipeSincronizada: false` — espere um minuto e recarregue: o servidor grava a lista de logins
   da equipe ao subir. Se continuar `false`, abra o painel e salve as Configurações uma vez.
 
