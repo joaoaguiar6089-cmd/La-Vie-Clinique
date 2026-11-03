@@ -1,5 +1,6 @@
 import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
 import { app } from '../lib/firebase';
+import { pastaDaClinica } from '../lib/clinicaAtual';
 
 /**
  * Envio de imagens para o Firebase Storage, em vez de guardá-las em base64 dentro do documento.
@@ -52,7 +53,8 @@ export async function subirImagem(dataUrl: string, pasta: string): Promise<Resul
 
   try {
     const extensao = dataUrl.startsWith('data:image/png') ? 'png' : 'jpg';
-    const caminho = `${pasta.replace(/\/+$/, '')}/${nomeUnico(extensao)}`;
+    // Dentro da pasta da clínica do login na plataforma; o caminho de sempre no modo legado.
+    const caminho = `${pastaDaClinica(pasta.replace(/\/+$/, ''))}/${nomeUnico(extensao)}`;
     const objeto = ref(storage, caminho);
     await uploadString(objeto, dataUrl, 'data_url');
     const url = await getDownloadURL(objeto);

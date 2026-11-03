@@ -20,6 +20,8 @@ import {
   QuerySnapshot,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+// Todo caminho do banco passa por aqui: dentro da clínica do login, ou na raiz no modo legado.
+import { colecao as colecaoDaClinica, documento as documentoDaClinica } from '../lib/clinicaAtual';
 import { subscribeShared } from './sharedSubscription';
 import { removerDoGoogleAgenda } from './googleAgenda';
 import {
@@ -320,7 +322,7 @@ export function isQuotaOrOfflineError(error: unknown): boolean {
  */
 async function colecaoVaziaNoServidor(nomeColecao: string): Promise<boolean | null> {
   try {
-    const snap = await getDocsFromServer(query(collection(db, nomeColecao), limit(1)));
+    const snap = await getDocsFromServer(query(colecaoDaClinica(nomeColecao), limit(1)));
     return snap.empty;
   } catch (err) {
     // 'unavailable' é o código que o SDK usa quando a leitura forçada no servidor não sai por
@@ -342,7 +344,7 @@ export async function replaceAllProceduresWithOfficialPdfCatalog(): Promise<void
   try {
     console.log('Synchronizing official PDF catalog to Firebase Firestore...');
     // 1. Delete existing procedures
-    const procSnapshot = await getDocs(collection(db, PROCEDURES_COLLECTION));
+    const procSnapshot = await getDocs(colecaoDaClinica(PROCEDURES_COLLECTION));
     const deleteBatch = writeBatch(db);
     procSnapshot.forEach((docSnap) => {
       deleteBatch.delete(docSnap.ref);
@@ -352,7 +354,7 @@ export async function replaceAllProceduresWithOfficialPdfCatalog(): Promise<void
     // 2. Insert all 34 procedures from PDF
     const insertBatch = writeBatch(db);
     for (const proc of SAMPLE_PROCEDURES) {
-      const docRef = doc(db, PROCEDURES_COLLECTION, proc.id);
+      const docRef = documentoDaClinica(PROCEDURES_COLLECTION, proc.id);
       insertBatch.set(docRef, cleanForFirestore({
         ...proc,
         updatedAt: new Date().toISOString(),
@@ -361,7 +363,7 @@ export async function replaceAllProceduresWithOfficialPdfCatalog(): Promise<void
     await insertBatch.commit();
 
     // 3. Update clinic profile for Dra. Karoline Ferreira
-    const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
+    const clinicRef = documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
     await setDoc(clinicRef, cleanForFirestore({
       ...DEFAULT_CLINIC_PROFILE,
       updatedAt: new Date().toISOString(),
@@ -392,8 +394,8 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
     const [proc1, proc2] = colecaoVazia
       ? [null, null]
       : await Promise.all([
-          getDocFromServer(doc(db, PROCEDURES_COLLECTION, 'proc-1')),
-          getDocFromServer(doc(db, PROCEDURES_COLLECTION, 'proc-2')),
+          getDocFromServer(documentoDaClinica(PROCEDURES_COLLECTION, 'proc-1')),
+          getDocFromServer(documentoDaClinica(PROCEDURES_COLLECTION, 'proc-2')),
         ]);
     const hasOldTemplate = !!proc1?.exists() || !!proc2?.exists();
 
@@ -403,14 +405,14 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
     } else {
       // Se houver algum procedimento de teste legado, remove individualmente sem apagar as alterações do usuário
       if (hasOldTemplate) {
-        if (proc1?.exists()) await deleteDoc(doc(db, PROCEDURES_COLLECTION, 'proc-1')).catch(() => {});
-        if (proc2?.exists()) await deleteDoc(doc(db, PROCEDURES_COLLECTION, 'proc-2')).catch(() => {});
+        if (proc1?.exists()) await deleteDoc(documentoDaClinica(PROCEDURES_COLLECTION, 'proc-1')).catch(() => {});
+        if (proc2?.exists()) await deleteDoc(documentoDaClinica(PROCEDURES_COLLECTION, 'proc-2')).catch(() => {});
       }
 
       // Ensure clinic profile exists and has official doctor photo. A leitura precisa vir do
       // servidor: o setDoc abaixo grava o perfil padrão por cima, e um "não existe" vindo de um
       // cache frio apagaria nome, contato e equipe da clínica.
-      const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
+      const clinicRef = documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
       const clinicSnap = await getDocFromServer(clinicRef);
       if (!clinicSnap.exists()) {
         await setDoc(clinicRef, cleanForFirestore({
@@ -518,7 +520,7 @@ export function subscribeToProcedures(
   onUpdate: (procedures: Procedure[]) => void,
   onError?: (err: Error) => void
 ) {
-  const q = query(collection(db, PROCEDURES_COLLECTION), orderBy('order', 'asc'));
+  const q = query(colecaoDaClinica(PROCEDURES_COLLECTION), orderBy('order', 'asc'));
   
   return onSnapshot(
     q,
@@ -566,7 +568,7 @@ export type AcessoAoPainel = 'verificando' | 'liberado' | 'negado' | 'indisponiv
  */
 export async function conferirAcessoAoPainel(uid: string): Promise<AcessoAoPainel> {
   try {
-    const snap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID));
+    const snap = await getDoc(documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID));
     // Projeto novo, ainda sem perfil: é a primeira instalação, e o seed vai criá-lo.
     if (!snap.exists()) return 'liberado';
     return ehDaEquipe((snap.data() as ClinicProfile).professionals, uid) ? 'liberado' : 'negado';
@@ -581,7 +583,7 @@ export function subscribeToClinicProfile(
   onUpdate: (clinic: ClinicProfile) => void,
   onError?: (err: Error) => void
 ) {
-  const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
+  const clinicRef = documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
 
   return onSnapshot(
     clinicRef,
@@ -645,7 +647,7 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure
     updatedAt: new Date().toISOString(),
   };
 
-  const docRef = doc(db, PROCEDURES_COLLECTION, procedureAtualizado.id);
+  const docRef = documentoDaClinica(PROCEDURES_COLLECTION, procedureAtualizado.id);
   const temMapa = !!procedureAtualizado.exigeSelecaoDeArea;
   const areasGravaveis = temMapa ? serializarAreasDoMapa(procedureAtualizado.areasDoMapa) : undefined;
   // Os campos do mapa ficam fora do `cleanForFirestore` e entram logo abaixo, cada um do seu jeito.
@@ -756,7 +758,7 @@ export async function arquivarProcedimentosNoDb(ids: string[], emFavorDe: string
   const batch = writeBatch(db);
   const agora = new Date().toISOString();
   ids.forEach((id) => {
-    batch.update(doc(db, PROCEDURES_COLLECTION, id), {
+    batch.update(documentoDaClinica(PROCEDURES_COLLECTION, id), {
       arquivado: true,
       arquivadoEmFavorDe: emFavorDe,
       updatedAt: agora,
@@ -769,7 +771,7 @@ export async function arquivarProcedimentosNoDb(ids: string[], emFavorDe: string
  * Delete a procedure by ID.
  */
 export async function deleteProcedureFromDb(procedureId: string): Promise<void> {
-  const docRef = doc(db, PROCEDURES_COLLECTION, procedureId);
+  const docRef = documentoDaClinica(PROCEDURES_COLLECTION, procedureId);
   // Sem confirmação do servidor a exclusão fica apenas na fila local do SDK e a promise nunca
   // resolve: a tela diria "removido" para um procedimento que continua no banco.
   await comConfirmacaoDoServidor(deleteDoc(docRef), 'da exclusão do procedimento');
@@ -871,7 +873,7 @@ async function subirImagensDaClinica(profile: ClinicProfile): Promise<ClinicProf
 export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<ClinicProfile> {
   const comImagensNoStorage = await subirImagensDaClinica(profile);
 
-  const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
+  const clinicRef = documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
   const dataToSave = cleanForFirestore({
     ...comImagensNoStorage,
     // Os logins da equipe, na forma que as regras do Firestore conseguem conferir. Recalculado a
@@ -912,13 +914,13 @@ export async function saveClinicProfileToDb(profile: ClinicProfile): Promise<Cli
  * Regravar o perfil inteiro ali arriscaria sobrescrever uma edição feita em outra aba.
  */
 export async function salvarEnderecoPublicoDaClinica(publicBaseUrl: string): Promise<void> {
-  const clinicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
+  const clinicRef = documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID);
   await updateDoc(clinicRef, { publicBaseUrl });
 }
 
 /** Escreve (ou reescreve) o espelho público do perfil da clínica. */
 export async function publishPublicClinicProfile(profile: ClinicProfile): Promise<void> {
-  const publicRef = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_PUBLIC_PROFILE_DOC_ID);
+  const publicRef = documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_PUBLIC_PROFILE_DOC_ID);
   await setDoc(
     publicRef,
     cleanForFirestore({
@@ -1027,7 +1029,7 @@ export async function publicarMapasDeAreas(procedures: Procedure[]): Promise<voi
     const assinatura = JSON.stringify(mapas);
     if (assinatura === assinaturaDosMapasPublicados) return;
 
-    const ref = doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_AREA_MAPS_DOC_ID);
+    const ref = documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_AREA_MAPS_DOC_ID);
     // Sem merge: um mapa removido do catálogo precisa sumir daqui também — e o formato antigo
     // (um mapa só, com `manequimFrenteUrl` e `areas` na raiz) sai junto.
     // Com os polígonos serializados pelo mesmo motivo de `procedures`: o espelho é um documento do
@@ -1069,7 +1071,7 @@ export async function publicarMapasDeAreas(procedures: Procedure[]): Promise<voi
  */
 export async function getMapasDeAreasPublicos(): Promise<MapaDeAreasPublico[]> {
   try {
-    const snap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_AREA_MAPS_DOC_ID));
+    const snap = await getDoc(documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_AREA_MAPS_DOC_ID));
     if (!snap.exists()) return [];
     const dados = snap.data() as Partial<EspelhoDosMapas> & Record<string, unknown>;
 
@@ -1103,7 +1105,7 @@ export async function getMapasDeAreasPublicos(): Promise<MapaDeAreasPublico[]> {
 export async function reorderProceduresInDb(procedures: Procedure[]): Promise<void> {
   const batch = writeBatch(db);
   procedures.forEach((proc, index) => {
-    const docRef = doc(db, PROCEDURES_COLLECTION, proc.id);
+    const docRef = documentoDaClinica(PROCEDURES_COLLECTION, proc.id);
     batch.update(docRef, { order: index + 1 });
   });
   await batch.commit();
@@ -1158,7 +1160,7 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       console.log('Seeding initial general questions for anamnesis...');
       const batch = writeBatch(db);
       DEFAULT_GENERAL_QUESTIONS.forEach((q) => {
-        const ref = doc(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, q.id);
+        const ref = documentoDaClinica(ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, q.id);
         batch.set(ref, cleanForFirestore(q));
       });
       await batch.commit();
@@ -1171,7 +1173,7 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       console.log('Seeding initial procedure templates for anamnesis...');
       const batch = writeBatch(db);
       DEFAULT_PROCEDURE_TEMPLATES.forEach((tpl) => {
-        const ref = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, tpl.id);
+        const ref = documentoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION, tpl.id);
         batch.set(ref, cleanForFirestore({
           ...tpl,
           updatedAt: new Date().toISOString(),
@@ -1181,7 +1183,7 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
     } else if (!laserSyncJaRodou()) {
       // Sincroniza fichas das categorias Depilação a Laser (Facial, Íntima e Corporal) e suas 13
       // perguntas. Só aqui a coleção inteira é lida — e só na primeira vez em cada navegador.
-      const tplSnap = await getDocsFromServer(collection(db, ANAMNESIS_TEMPLATES_COLLECTION));
+      const tplSnap = await getDocsFromServer(colecaoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION));
       await syncLaserAnamnesisTemplates(tplSnap);
       marcarLaserSyncComoFeito();
     }
@@ -1209,7 +1211,7 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       const batch = writeBatch(db);
       DEFAULT_EVALUATION_TEMPLATES.forEach((f) => {
         batch.set(
-          doc(db, EVALUATION_TEMPLATES_COLLECTION, f.id),
+          documentoDaClinica(EVALUATION_TEMPLATES_COLLECTION, f.id),
           cleanForFirestore({ ...f, updatedAt: new Date().toISOString() })
         );
       });
@@ -1230,7 +1232,7 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       console.log('Seeding initial sample patients...');
       const batch = writeBatch(db);
       SAMPLE_PATIENTS.forEach((p) => {
-        const ref = doc(db, PATIENTS_COLLECTION, p.id);
+        const ref = documentoDaClinica(PATIENTS_COLLECTION, p.id);
         batch.set(ref, cleanForFirestore(p));
       });
       await batch.commit();
@@ -1243,7 +1245,7 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       console.log('Seeding initial sample anamnesis records...');
       const batch = writeBatch(db);
       SAMPLE_ANAMNESIS_RECORDS.forEach((r) => {
-        const ref = doc(db, ANAMNESIS_RECORDS_COLLECTION, r.id);
+        const ref = documentoDaClinica(ANAMNESIS_RECORDS_COLLECTION, r.id);
         batch.set(ref, cleanForFirestore(r));
       });
       await batch.commit();
@@ -1330,7 +1332,7 @@ async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void
 
     if (!unicaExistente && modeloUnico) {
       batch.set(
-        doc(db, ANAMNESIS_TEMPLATES_COLLECTION, LASER_TEMPLATE_UNICO_ID),
+        documentoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION, LASER_TEMPLATE_UNICO_ID),
         cleanForFirestore({
           ...modeloUnico,
           procedimentoNome: 'Depilação a Laser',
@@ -1390,7 +1392,7 @@ async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void
       }
 
       if (Object.keys(ajustes).length > 0) {
-        batch.update(doc(db, ANAMNESIS_TEMPLATES_COLLECTION, LASER_TEMPLATE_UNICO_ID), {
+        batch.update(documentoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION, LASER_TEMPLATE_UNICO_ID), {
           ...cleanForFirestore(ajustes),
           updatedAt: new Date().toISOString(),
         });
@@ -1401,7 +1403,7 @@ async function syncLaserAnamnesisTemplates(tplSnap: QuerySnapshot): Promise<void
     // 2. As fichas por área: ocultar as que existem, e **não recriar** as que não existem.
     for (const existente of existentes) {
       if (existente.oculta || !ehFichaDeLaserPorArea(existente)) continue;
-      batch.update(doc(db, ANAMNESIS_TEMPLATES_COLLECTION, existente.id), {
+      batch.update(documentoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION, existente.id), {
         oculta: true,
         updatedAt: new Date().toISOString(),
       });
@@ -1424,7 +1426,7 @@ function subscribeToGeneralQuestionsDireto(
   onUpdate: (questions: AnamnesisQuestion[]) => void,
   onError?: (err: Error) => void
 ) {
-  const q = query(collection(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION), orderBy('ordem', 'asc'));
+  const q = query(colecaoDaClinica(ANAMNESIS_GENERAL_QUESTIONS_COLLECTION), orderBy('ordem', 'asc'));
   return onSnapshot(
     q,
     (snapshot) => {
@@ -1460,7 +1462,7 @@ export function subscribeToGeneralQuestions(
  * Save a single General Question
  */
 export async function saveGeneralQuestion(question: AnamnesisQuestion): Promise<void> {
-  const docRef = doc(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, question.id);
+  const docRef = documentoDaClinica(ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, question.id);
   await setDoc(docRef, cleanForFirestore(question), { merge: true });
 }
 
@@ -1470,7 +1472,7 @@ export async function saveGeneralQuestion(question: AnamnesisQuestion): Promise<
 export async function saveAllGeneralQuestions(questions: AnamnesisQuestion[]): Promise<void> {
   const batch = writeBatch(db);
   questions.forEach((q, index) => {
-    const docRef = doc(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, q.id);
+    const docRef = documentoDaClinica(ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, q.id);
     batch.set(docRef, cleanForFirestore({ ...q, ordem: index + 1 }), { merge: true });
   });
   await batch.commit();
@@ -1480,7 +1482,7 @@ export async function saveAllGeneralQuestions(questions: AnamnesisQuestion[]): P
  * Delete a General Question
  */
 export async function deleteGeneralQuestion(questionId: string): Promise<void> {
-  const docRef = doc(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, questionId);
+  const docRef = documentoDaClinica(ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, questionId);
   await deleteDoc(docRef);
 }
 
@@ -1491,7 +1493,7 @@ export function subscribeToAnamnesisTemplates(
   onUpdate: (templates: AnamnesisTemplate[]) => void,
   onError?: (err: Error) => void
 ) {
-  const colRef = collection(db, ANAMNESIS_TEMPLATES_COLLECTION);
+  const colRef = colecaoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION);
   return onSnapshot(
     colRef,
     (snapshot) => {
@@ -1528,7 +1530,7 @@ export function subscribeToAnamnesisTemplates(
  * ressincroniza. Barrar aqui troca esse "salvou e desfez sozinho" por um erro imediato.
  */
 export async function saveAnamnesisTemplate(template: AnamnesisTemplate): Promise<void> {
-  const docRef = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, template.id);
+  const docRef = documentoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION, template.id);
   const dataToSave = cleanForFirestore({
     ...template,
     updatedAt: new Date().toISOString(),
@@ -1550,7 +1552,7 @@ export async function saveAnamnesisTemplate(template: AnamnesisTemplate): Promis
  * Delete a Procedure Template
  */
 export async function deleteAnamnesisTemplate(templateId: string): Promise<void> {
-  const docRef = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, templateId);
+  const docRef = documentoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION, templateId);
   await deleteDoc(docRef);
 }
 
@@ -1561,7 +1563,7 @@ function subscribeToPatientsDireto(
   onUpdate: (patients: Patient[]) => void,
   onError?: (err: Error) => void
 ) {
-  const colRef = collection(db, PATIENTS_COLLECTION);
+  const colRef = colecaoDaClinica(PATIENTS_COLLECTION);
   return onSnapshot(
     colRef,
     (snapshot) => {
@@ -1601,7 +1603,7 @@ export function subscribeToPatients(
  * Save or update a Patient record
  */
 export async function savePatient(patient: Patient): Promise<void> {
-  const docRef = doc(db, PATIENTS_COLLECTION, patient.id);
+  const docRef = documentoDaClinica(PATIENTS_COLLECTION, patient.id);
   const dataToSave = cleanForFirestore({
     ...patient,
     updatedAt: new Date().toISOString(),
@@ -1613,7 +1615,7 @@ export async function savePatient(patient: Patient): Promise<void> {
  * Delete a Patient
  */
 export async function deletePatient(patientId: string): Promise<void> {
-  const docRef = doc(db, PATIENTS_COLLECTION, patientId);
+  const docRef = documentoDaClinica(PATIENTS_COLLECTION, patientId);
   await deleteDoc(docRef);
 }
 
@@ -1657,7 +1659,7 @@ export async function getDocumentosInternosDaPaciente(
   const leituras = colecoes.flatMap((colecao) =>
     pacienteIds.map(async (pacienteId) => {
       const snap = await getDocs(
-        query(collection(db, COLECOES_DA_PACIENTE[colecao]), where('pacienteId', '==', pacienteId))
+        query(colecaoDaClinica(COLECOES_DA_PACIENTE[colecao]), where('pacienteId', '==', pacienteId))
       );
       return snap.docs.map((d): DocumentoInterno => {
         const dados = d.data() as { pacienteId?: string; pacienteNome?: string };
@@ -1698,16 +1700,16 @@ export async function gravarJuncaoDePacientes({
 
   for (let i = 0; i < lotes.length; i++) {
     const batch = writeBatch(db);
-    lotes[i].forEach((a) => batch.update(doc(db, COLECOES_DA_PACIENTE[a.colecao], a.id), a.dados));
+    lotes[i].forEach((a) => batch.update(documentoDaClinica(COLECOES_DA_PACIENTE[a.colecao], a.id), a.dados));
     if (i === lotes.length - 1) {
       batch.set(
-        doc(db, PATIENTS_COLLECTION, final.id),
+        documentoDaClinica(PATIENTS_COLLECTION, final.id),
         cleanForFirestore({ ...final, updatedAt: agora }),
         { merge: true }
       );
       if (saiu) {
         // Sem `merge`: os dados pessoais do que saiu não ficam para trás num documento público.
-        batch.set(doc(db, PATIENTS_COLLECTION, saiu.id), {
+        batch.set(documentoDaClinica(PATIENTS_COLLECTION, saiu.id), {
           id: saiu.id,
           nome: saiu.nome,
           createdAt: saiu.createdAt,
@@ -1734,7 +1736,7 @@ function subscribeToPacientesArquivadasDireto(
 ) {
   // `> ''` acha toda paciente com a data gravada — e só elas: a consulta não lê a coleção inteira.
   return onSnapshot(
-    query(collection(db, PATIENTS_COLLECTION), where('arquivadoEm', '>', '')),
+    query(colecaoDaClinica(PATIENTS_COLLECTION), where('arquivadoEm', '>', '')),
     (snapshot) => {
       const items: Patient[] = [];
       snapshot.forEach((docSnap) => {
@@ -1785,7 +1787,7 @@ const COLECOES_DO_ARQUIVO = Object.keys(COLECOES_DA_PACIENTE) as ColecaoDaPacien
 type DocumentosBrutos = Record<ColecaoDaPaciente, { id: string; dados: Record<string, unknown> }[]>;
 
 const consultaDoArquivo = (colecao: ColecaoDaPaciente, pacienteId: string) =>
-  query(collection(db, COLECOES_DA_PACIENTE[colecao]), where('arquivoDe', '==', pacienteId));
+  query(colecaoDaClinica(COLECOES_DA_PACIENTE[colecao]), where('arquivoDe', '==', pacienteId));
 
 const documentosLidos = (brutos: DocumentosBrutos): DocumentosDoArquivo => ({
   fichas: brutos.fichas.map(({ id, dados }) => ({ ...(dados as unknown as AnamnesisRecord), id })),
@@ -1844,7 +1846,7 @@ async function lerDocumentosDoArquivo(pacienteId: string): Promise<DocumentosBru
   return Object.fromEntries(lidos) as DocumentosBrutos;
 }
 
-const refDoArquivo = (d: DocumentoDoArquivo) => doc(db, COLECOES_DA_PACIENTE[d.colecao], d.id);
+const refDoArquivo = (d: DocumentoDoArquivo) => documentoDaClinica(COLECOES_DA_PACIENTE[d.colecao], d.id);
 
 const emLotes = <T,>(itens: T[], tamanho: number): T[][] => {
   const lotes: T[][] = [];
@@ -1879,7 +1881,7 @@ export async function gravarArquivamento({
     const batch = writeBatch(db);
     if (i === 0) {
       batch.set(
-        doc(db, PATIENTS_COLLECTION, paciente.id),
+        documentoDaClinica(PATIENTS_COLLECTION, paciente.id),
         cleanForFirestore({ ...paciente, updatedAt: agora }),
         { merge: true }
       );
@@ -1914,7 +1916,7 @@ export async function tirarDoArquivo(paciente: Patient): Promise<void> {
     const batch = writeBatch(db);
     lotes[i].forEach((d) => batch.update(refDoArquivo(d), desmarca));
     if (i === lotes.length - 1) {
-      const ref = doc(db, PATIENTS_COLLECTION, paciente.id);
+      const ref = documentoDaClinica(PATIENTS_COLLECTION, paciente.id);
       if (paciente.cadastroCriadoNoArquivo) batch.delete(ref);
       else {
         batch.update(ref, {
@@ -1941,7 +1943,7 @@ export async function excluirDoArquivo(paciente: Patient): Promise<void> {
   const brutos = await lerDocumentosDoArquivo(paciente.id);
   const refs = documentosDosBrutos(brutos).map(refDoArquivo);
   brutos.atendimentos.forEach(({ id }) => {
-    refs.push(doc(db, FOLLOWUP_RECORDS_COLLECTION, id), doc(db, ATTENDANCE_MATERIALS_COLLECTION, id));
+    refs.push(documentoDaClinica(FOLLOWUP_RECORDS_COLLECTION, id), documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, id));
   });
   const unicos = refs.filter((r, i) => refs.findIndex((o) => o.path === r.path) === i);
   const lotes = emLotes(unicos, GRAVACOES_POR_LOTE - 1);
@@ -1949,16 +1951,16 @@ export async function excluirDoArquivo(paciente: Patient): Promise<void> {
   for (let i = 0; i < lotes.length; i++) {
     const batch = writeBatch(db);
     lotes[i].forEach((ref) => batch.delete(ref));
-    if (i === lotes.length - 1) batch.delete(doc(db, PATIENTS_COLLECTION, paciente.id));
+    if (i === lotes.length - 1) batch.delete(documentoDaClinica(PATIENTS_COLLECTION, paciente.id));
     await comConfirmacaoDoServidor(batch.commit(), 'da exclusão');
   }
 
   const auxiliares = [
-    ...brutos.orcamentos.map(({ id }) => doc(db, QUOTE_COSTS_COLLECTION, id)),
+    ...brutos.orcamentos.map(({ id }) => documentoDaClinica(QUOTE_COSTS_COLLECTION, id)),
     ...brutos.atendimentos
       .map(({ dados }) => dados.linkToken)
       .filter((token): token is string => typeof token === 'string' && !!token)
-      .map((token) => doc(db, APPOINTMENT_LINKS_COLLECTION, token)),
+      .map((token) => documentoDaClinica(APPOINTMENT_LINKS_COLLECTION, token)),
   ];
   await Promise.all(
     auxiliares.map((ref) =>
@@ -1972,7 +1974,7 @@ function subscribeToParesDistintosDireto(
   onError?: (err: Error) => void
 ) {
   return onSnapshot(
-    doc(db, CLINIC_SETTINGS_COLLECTION, PACIENTES_DISTINTAS_DOC_ID),
+    documentoDaClinica(CLINIC_SETTINGS_COLLECTION, PACIENTES_DISTINTAS_DOC_ID),
     (snap) => onUpdate(paraArray<string>(snap.data()?.pares)),
     (error) => {
       if (isQuotaOrOfflineError(error)) {
@@ -2002,7 +2004,7 @@ export function subscribeToParesDistintos(
 export async function marcarComoDistintos(chave: string): Promise<void> {
   await comConfirmacaoDoServidor(
     setDoc(
-      doc(db, CLINIC_SETTINGS_COLLECTION, PACIENTES_DISTINTAS_DOC_ID),
+      documentoDaClinica(CLINIC_SETTINGS_COLLECTION, PACIENTES_DISTINTAS_DOC_ID),
       { pares: arrayUnion(chave) },
       { merge: true }
     ),
@@ -2017,7 +2019,7 @@ function subscribeToAnamnesisRecordsDireto(
   onUpdate: (records: AnamnesisRecord[]) => void,
   onError?: (err: Error) => void
 ) {
-  const colRef = collection(db, ANAMNESIS_RECORDS_COLLECTION);
+  const colRef = colecaoDaClinica(ANAMNESIS_RECORDS_COLLECTION);
   return onSnapshot(
     colRef,
     (snapshot) => {
@@ -2071,7 +2073,7 @@ export function subscribeToAnamnesisRecordsDesde(
     `anamnesis_records:desde:${desde}`,
     (dados, erro) =>
       onSnapshot(
-        query(collection(db, ANAMNESIS_RECORDS_COLLECTION), where('dataAtendimento', '>=', desde)),
+        query(colecaoDaClinica(ANAMNESIS_RECORDS_COLLECTION), where('dataAtendimento', '>=', desde)),
         (snapshot) => {
           const items: AnamnesisRecord[] = [];
           snapshot.forEach((docSnap) => {
@@ -2098,7 +2100,7 @@ export function subscribeToAnamnesisRecordsDesde(
  * Save or update an Anamnesis Record
  */
 export async function saveAnamnesisRecord(record: AnamnesisRecord): Promise<void> {
-  const docRef = doc(db, ANAMNESIS_RECORDS_COLLECTION, record.id);
+  const docRef = documentoDaClinica(ANAMNESIS_RECORDS_COLLECTION, record.id);
   const dataToSave: Record<string, any> = cleanForFirestore({
     ...record,
     updatedAt: new Date().toISOString(),
@@ -2119,7 +2121,7 @@ export async function saveAnamnesisRecord(record: AnamnesisRecord): Promise<void
  * Delete an Anamnesis Record
  */
 export async function deleteAnamnesisRecord(recordId: string): Promise<void> {
-  const docRef = doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId);
+  const docRef = documentoDaClinica(ANAMNESIS_RECORDS_COLLECTION, recordId);
   await deleteDoc(docRef);
 }
 
@@ -2132,7 +2134,7 @@ export async function deleteAnamnesisRecord(recordId: string): Promise<void> {
  * Fetch a single Anamnesis Template by ID (one-time).
  */
 export async function getAnamnesisTemplateById(templateId: string): Promise<AnamnesisTemplate | null> {
-  const docRef = doc(db, ANAMNESIS_TEMPLATES_COLLECTION, templateId);
+  const docRef = documentoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION, templateId);
   const snap = await getDoc(docRef);
   if (!snap.exists()) return null;
   // Mesma normalização de exibição da assinatura em tempo real: agora que ninguém reescreve a
@@ -2147,7 +2149,7 @@ export async function getAnamnesisTemplateById(templateId: string): Promise<Anam
  * for a given template so the same public link can be reopened to keep editing.
  */
 export async function getRecordsForPatient(patientId: string): Promise<AnamnesisRecord[]> {
-  const q = query(collection(db, ANAMNESIS_RECORDS_COLLECTION), where('pacienteId', '==', patientId));
+  const q = query(colecaoDaClinica(ANAMNESIS_RECORDS_COLLECTION), where('pacienteId', '==', patientId));
   const snap = await getDocs(q);
   const items: AnamnesisRecord[] = [];
   snap.forEach((docSnap) => {
@@ -2161,7 +2163,7 @@ export async function getRecordsForPatient(patientId: string): Promise<Anamnesis
  * Fetch General Questions once (no live subscription) — used by the public form page.
  */
 export async function getGeneralQuestionsOnce(): Promise<AnamnesisQuestion[]> {
-  const q = query(collection(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION), orderBy('ordem', 'asc'));
+  const q = query(colecaoDaClinica(ANAMNESIS_GENERAL_QUESTIONS_COLLECTION), orderBy('ordem', 'asc'));
   const snap = await getDocs(q);
   const items: AnamnesisQuestion[] = [];
   snap.forEach((docSnap) => {
@@ -2180,14 +2182,14 @@ export async function getGeneralQuestionsOnce(): Promise<AnamnesisQuestion[]> {
  */
 export async function getClinicProfileOnce(): Promise<ClinicProfile | null> {
   try {
-    const publicSnap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_PUBLIC_PROFILE_DOC_ID));
+    const publicSnap = await getDoc(documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_PUBLIC_PROFILE_DOC_ID));
     if (publicSnap.exists()) return publicSnap.data() as ClinicProfile;
   } catch (err) {
     console.warn('Espelho público do perfil da clínica indisponível:', err);
   }
 
   try {
-    const snap = await getDoc(doc(db, CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID));
+    const snap = await getDoc(documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID));
     if (snap.exists()) return snap.data() as ClinicProfile;
   } catch (err) {
     console.warn('Perfil da clínica não pôde ser lido (esperado sem login):', err);
@@ -2207,7 +2209,7 @@ function subscribeToQuotesDireto(
   onUpdate: (quotes: Quote[]) => void,
   onError?: (err: Error) => void
 ) {
-  const colRef = collection(db, QUOTES_COLLECTION);
+  const colRef = colecaoDaClinica(QUOTES_COLLECTION);
   return onSnapshot(
     colRef,
     (snapshot) => {
@@ -2251,9 +2253,9 @@ export function subscribeToQuotes(
 export async function createQuote(draft: QuoteDraft): Promise<Quote> {
   const emissao = new Date(draft.dataEmissao);
   const ano = isNaN(emissao.getTime()) ? new Date().getFullYear() : emissao.getFullYear();
-  const counterRef = doc(db, COUNTERS_COLLECTION, `quotes_${ano}`);
+  const counterRef = documentoDaClinica(COUNTERS_COLLECTION, `quotes_${ano}`);
   const id = crypto.randomUUID();
-  const quoteRef = doc(db, QUOTES_COLLECTION, id);
+  const quoteRef = documentoDaClinica(QUOTES_COLLECTION, id);
 
   return await runTransaction(db, async (tx) => {
     const counterSnap = await tx.get(counterRef);
@@ -2282,7 +2284,7 @@ export async function createQuote(draft: QuoteDraft): Promise<Quote> {
  */
 export async function updateQuote(quote: Quote, draft: QuoteDraft): Promise<Quote> {
   const atualizado: Quote = { ...quote, ...draft, updatedAt: new Date().toISOString() };
-  const docRef = doc(db, QUOTES_COLLECTION, quote.id);
+  const docRef = documentoDaClinica(QUOTES_COLLECTION, quote.id);
   // setDoc sem merge: campos removidos (desconto desmarcado, item excluído) precisam sumir
   await setDoc(docRef, cleanForFirestore(atualizado));
   return atualizado;
@@ -2290,7 +2292,7 @@ export async function updateQuote(quote: Quote, draft: QuoteDraft): Promise<Quot
 
 /** Marca o orçamento como enviado na primeira vez que o link é compartilhado. */
 export async function markQuoteAsSent(quoteId: string): Promise<void> {
-  const docRef = doc(db, QUOTES_COLLECTION, quoteId);
+  const docRef = documentoDaClinica(QUOTES_COLLECTION, quoteId);
   await updateDoc(docRef, {
     status: 'enviado' as QuoteStoredStatus,
     enviadoEm: new Date().toISOString(),
@@ -2310,7 +2312,7 @@ export async function marcarQuoteComoPago(
   pagoEm: string,
   comprovante?: QuoteComprovante
 ): Promise<void> {
-  await updateDoc(doc(db, QUOTES_COLLECTION, quoteId), {
+  await updateDoc(documentoDaClinica(QUOTES_COLLECTION, quoteId), {
     status: 'pago' as QuoteStoredStatus,
     pagoEm,
     comprovante: comprovante ? cleanForFirestore(comprovante) : deleteField(),
@@ -2323,7 +2325,7 @@ export async function marcarQuoteComoPago(
 /** A cliente recusou. O link dela continua mostrando o orçamento como estava. */
 export async function marcarQuoteComoRecusado(quoteId: string): Promise<void> {
   const agora = new Date().toISOString();
-  await updateDoc(doc(db, QUOTES_COLLECTION, quoteId), {
+  await updateDoc(documentoDaClinica(QUOTES_COLLECTION, quoteId), {
     status: 'recusado' as QuoteStoredStatus,
     recusadoEm: agora,
     pagoEm: deleteField(),
@@ -2340,7 +2342,7 @@ export async function marcarQuoteComoRecusado(quoteId: string): Promise<void> {
  * comprovante, se havia, quem apaga é quem chama (`apagarComprovante`).
  */
 export async function desfazerDesfechoDoQuote(quote: Quote): Promise<void> {
-  await updateDoc(doc(db, QUOTES_COLLECTION, quote.id), {
+  await updateDoc(documentoDaClinica(QUOTES_COLLECTION, quote.id), {
     status: statusAntesDoDesfecho(quote),
     pagoEm: deleteField(),
     comprovante: deleteField(),
@@ -2355,7 +2357,7 @@ export async function anexarComprovanteAoQuote(
   quoteId: string,
   comprovante: QuoteComprovante | null
 ): Promise<void> {
-  await updateDoc(doc(db, QUOTES_COLLECTION, quoteId), {
+  await updateDoc(documentoDaClinica(QUOTES_COLLECTION, quoteId), {
     comprovante: comprovante ? cleanForFirestore(comprovante) : deleteField(),
     updatedAt: new Date().toISOString(),
   });
@@ -2363,7 +2365,7 @@ export async function anexarComprovanteAoQuote(
 
 /** Cancela um orçamento já enviado — o "excluir" de quem já saiu da clínica. */
 export async function cancelarQuote(quoteId: string): Promise<void> {
-  await updateDoc(doc(db, QUOTES_COLLECTION, quoteId), {
+  await updateDoc(documentoDaClinica(QUOTES_COLLECTION, quoteId), {
     status: 'cancelado' as QuoteStoredStatus,
     updatedAt: new Date().toISOString(),
   });
@@ -2377,15 +2379,15 @@ export async function cancelarQuote(quoteId: string): Promise<void> {
  * espaço; um orçamento que não sai da lista é um problema na frente da equipe.
  */
 export async function deleteQuote(quoteId: string): Promise<void> {
-  await deleteDoc(doc(db, QUOTES_COLLECTION, quoteId));
-  await deleteDoc(doc(db, QUOTE_COSTS_COLLECTION, quoteId)).catch((e) =>
+  await deleteDoc(documentoDaClinica(QUOTES_COLLECTION, quoteId));
+  await deleteDoc(documentoDaClinica(QUOTE_COSTS_COLLECTION, quoteId)).catch((e) =>
     console.warn('O orçamento saiu, mas o custo estimado dele não:', e)
   );
 }
 
 /** O custo estimado de um orçamento, ou `null`. Leitura direta: o id é o do orçamento. */
 export async function getCustoDoOrcamento(quoteId: string): Promise<CustoDoOrcamento | null> {
-  const snap = await getDoc(doc(db, QUOTE_COSTS_COLLECTION, quoteId));
+  const snap = await getDoc(documentoDaClinica(QUOTE_COSTS_COLLECTION, quoteId));
   if (!snap.exists()) return null;
   const bruto = snap.data() as Record<string, unknown>;
   return {
@@ -2403,7 +2405,7 @@ export async function getCustoDoOrcamento(quoteId: string): Promise<CustoDoOrcam
 
 /** Grava o custo estimado. Sem linha nenhuma, apaga: custo vazio é a ausência dele. */
 export async function saveCustoDoOrcamento(custo: CustoDoOrcamento): Promise<void> {
-  const ref = doc(db, QUOTE_COSTS_COLLECTION, custo.quoteId);
+  const ref = documentoDaClinica(QUOTE_COSTS_COLLECTION, custo.quoteId);
   if (custo.itens.length === 0) {
     await deleteDoc(ref);
     return;
@@ -2427,10 +2429,10 @@ export async function replaceQuote(
   };
 
   const batch = writeBatch(db);
-  batch.update(doc(db, QUOTES_COLLECTION, novo.id), {
+  batch.update(documentoDaClinica(QUOTES_COLLECTION, novo.id), {
     substituiu: { id: anterior.id, numero: anterior.numero },
   });
-  batch.update(doc(db, QUOTES_COLLECTION, anterior.id), {
+  batch.update(documentoDaClinica(QUOTES_COLLECTION, anterior.id), {
     substituidoPor: { id: novo.id, numero: novo.numero },
     updatedAt: new Date().toISOString(),
   });
@@ -2441,7 +2443,7 @@ export async function replaceQuote(
 
 /** Busca um orçamento pelo ID — usado pela página pública do link. */
 export async function getQuoteById(quoteId: string): Promise<Quote | null> {
-  const snap = await getDoc(doc(db, QUOTES_COLLECTION, quoteId));
+  const snap = await getDoc(documentoDaClinica(QUOTES_COLLECTION, quoteId));
   if (!snap.exists()) return null;
   return normalizarQuote({ ...(snap.data() as Quote), id: snap.id });
 }
@@ -2456,7 +2458,7 @@ function subscribeToRecibosDireto(
   onError?: (err: Error) => void
 ) {
   return onSnapshot(
-    collection(db, RECEIPTS_COLLECTION),
+    colecaoDaClinica(RECEIPTS_COLLECTION),
     (snapshot) => {
       const items: Recibo[] = [];
       snapshot.forEach((docSnap) => {
@@ -2497,8 +2499,8 @@ export function subscribeToRecibos(
  */
 export async function criarRecibo(id: string, draft: ReciboDraft): Promise<Recibo> {
   const ano = new Date().getFullYear();
-  const counterRef = doc(db, COUNTERS_COLLECTION, `receipts_${ano}`);
-  const reciboRef = doc(db, RECEIPTS_COLLECTION, id);
+  const counterRef = documentoDaClinica(COUNTERS_COLLECTION, `receipts_${ano}`);
+  const reciboRef = documentoDaClinica(RECEIPTS_COLLECTION, id);
 
   return await comConfirmacaoDoServidor(
     runTransaction(db, async (tx) => {
@@ -2536,7 +2538,7 @@ export async function atualizarRecibo(recibo: Recibo, draft: ReciboDraft): Promi
   };
   // Sem merge: o comprovante removido e a observação apagada precisam sumir do documento
   await comConfirmacaoDoServidor(
-    setDoc(doc(db, RECEIPTS_COLLECTION, recibo.id), cleanForFirestore(atualizado)),
+    setDoc(documentoDaClinica(RECEIPTS_COLLECTION, recibo.id), cleanForFirestore(atualizado)),
     'do recibo'
   );
   return atualizado;
@@ -2544,7 +2546,7 @@ export async function atualizarRecibo(recibo: Recibo, draft: ReciboDraft): Promi
 
 /** Exclui o recibo. O arquivo do comprovante, se havia, quem apaga é quem chama. */
 export async function excluirRecibo(reciboId: string): Promise<void> {
-  await deleteDoc(doc(db, RECEIPTS_COLLECTION, reciboId));
+  await deleteDoc(documentoDaClinica(RECEIPTS_COLLECTION, reciboId));
 }
 
 
@@ -2563,7 +2565,7 @@ function subscribeToAttendancesDireto(
   onUpdate: (data: Attendance[]) => void,
   onError?: (err: Error) => void
 ) {
-  const colRef = collection(db, ATTENDANCES_COLLECTION);
+  const colRef = colecaoDaClinica(ATTENDANCES_COLLECTION);
   return onSnapshot(
     colRef,
     (snapshot) => {
@@ -2601,7 +2603,7 @@ export async function saveAttendance(
   attendance: Attendance,
   opcoes?: { limparConfirmacao?: boolean }
 ): Promise<void> {
-  const docRef = doc(db, ATTENDANCES_COLLECTION, attendance.id);
+  const docRef = documentoDaClinica(ATTENDANCES_COLLECTION, attendance.id);
   const dataToSave: Record<string, unknown> = cleanForFirestore({
     ...attendance,
     updatedAt: new Date().toISOString(),
@@ -2648,12 +2650,12 @@ export async function saveAttendance(
  */
 export async function deleteAttendance(atendimento: Attendance): Promise<void> {
   const batch = writeBatch(db);
-  batch.delete(doc(db, ATTENDANCES_COLLECTION, atendimento.id));
+  batch.delete(documentoDaClinica(ATTENDANCES_COLLECTION, atendimento.id));
   if (atendimento.acompanhamentoPreenchidoEm) {
-    batch.delete(doc(db, FOLLOWUP_RECORDS_COLLECTION, atendimento.id));
+    batch.delete(documentoDaClinica(FOLLOWUP_RECORDS_COLLECTION, atendimento.id));
   }
   if (atendimento.materiaisRegistradosEm) {
-    batch.delete(doc(db, ATTENDANCE_MATERIALS_COLLECTION, atendimento.id));
+    batch.delete(documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, atendimento.id));
   }
   await batch.commit();
 
@@ -2666,7 +2668,7 @@ export async function deleteAttendance(atendimento: Attendance): Promise<void> {
   if (atendimento.linkToken) {
     try {
       await comConfirmacaoDoServidor(
-        deleteDoc(doc(db, APPOINTMENT_LINKS_COLLECTION, atendimento.linkToken)),
+        deleteDoc(documentoDaClinica(APPOINTMENT_LINKS_COLLECTION, atendimento.linkToken)),
         'da exclusão do link'
       );
     } catch (e) {
@@ -2690,7 +2692,7 @@ export async function marcarConfirmacao(
   confirmado: boolean
 ): Promise<void> {
   await comConfirmacaoDoServidor(
-    updateDoc(doc(db, ATTENDANCES_COLLECTION, attendanceId), {
+    updateDoc(documentoDaClinica(ATTENDANCES_COLLECTION, attendanceId), {
       confirmadoEm: confirmado ? new Date().toISOString() : deleteField(),
       updatedAt: new Date().toISOString(),
     }),
@@ -2702,7 +2704,7 @@ function subscribeToSessionPlansDireto(
   onUpdate: (data: SessionPlan[]) => void,
   onError?: (err: Error) => void
 ) {
-  const colRef = collection(db, SESSION_PLANS_COLLECTION);
+  const colRef = colecaoDaClinica(SESSION_PLANS_COLLECTION);
   return onSnapshot(
     colRef,
     (snapshot) => {
@@ -2787,7 +2789,7 @@ export async function remarcarAtendimento(
   };
 
   const batch = writeBatch(db);
-  batch.update(doc(db, ATTENDANCES_COLLECTION, original.id), {
+  batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, original.id), {
     status: 'remarcado',
     updatedAt: agora,
     // Estado final: o token e as respostas da paciente seguem com o agendamento novo.
@@ -2795,7 +2797,7 @@ export async function remarcarAtendimento(
     avisoAusenciaEm: deleteField(),
     pedidoRemarcacao: deleteField(),
   });
-  batch.set(doc(db, ATTENDANCES_COLLECTION, novo.id), cleanForFirestore(novo), { merge: true });
+  batch.set(documentoDaClinica(ATTENDANCES_COLLECTION, novo.id), cleanForFirestore(novo), { merge: true });
   await comConfirmacaoDoServidor(batch.commit(), 'da remarcação');
 
   await sincronizarLinkDoAtendimento(novo, {
@@ -2864,7 +2866,7 @@ async function sincronizarLinkDoAtendimento(
   if (!atendimento.linkToken) return;
   try {
     await comConfirmacaoDoServidor(
-      updateDoc(doc(db, APPOINTMENT_LINKS_COLLECTION, atendimento.linkToken), {
+      updateDoc(documentoDaClinica(APPOINTMENT_LINKS_COLLECTION, atendimento.linkToken), {
         ...camposDoLinkDoAtendimento(atendimento),
         ...extra,
       }),
@@ -2896,7 +2898,7 @@ export async function garantirLinkDoAgendamento(
   const snapshot = montarSnapshotDoLink(atendimento, clinic, catalogo);
 
   const token = atendimento.linkToken || crypto.randomUUID();
-  const linkRef = doc(db, APPOINTMENT_LINKS_COLLECTION, token);
+  const linkRef = documentoDaClinica(APPOINTMENT_LINKS_COLLECTION, token);
 
   if (atendimento.linkToken) {
     const existente = await getDoc(linkRef);
@@ -2928,7 +2930,7 @@ export async function garantirLinkDoAgendamento(
     })
   );
   if (!atendimento.linkToken) {
-    batch.update(doc(db, ATTENDANCES_COLLECTION, atendimento.id), { linkToken: token });
+    batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, atendimento.id), { linkToken: token });
   }
   await comConfirmacaoDoServidor(batch.commit(), 'do link do agendamento');
   return token;
@@ -2936,7 +2938,7 @@ export async function garantirLinkDoAgendamento(
 
 /** Lê o link pelo token — é o que a página pública da paciente faz, sem login. */
 export async function getLinkDoAgendamento(token: string): Promise<AppointmentLink | null> {
-  const snap = await getDoc(doc(db, APPOINTMENT_LINKS_COLLECTION, token));
+  const snap = await getDoc(documentoDaClinica(APPOINTMENT_LINKS_COLLECTION, token));
   if (!snap.exists()) return null;
   return { ...(snap.data() as AppointmentLink), id: snap.id };
 }
@@ -2954,7 +2956,7 @@ export async function responderAoLink(
   resposta: AppointmentLinkResposta
 ): Promise<void> {
   await comConfirmacaoDoServidor(
-    updateDoc(doc(db, APPOINTMENT_LINKS_COLLECTION, token), {
+    updateDoc(documentoDaClinica(APPOINTMENT_LINKS_COLLECTION, token), {
       resposta: respostaParaGravar(resposta),
       respostaPendente: true,
       respondidoEm: new Date().toISOString(),
@@ -2972,7 +2974,7 @@ function subscribeToRespostasPendentesDireto(
   onError?: (err: Error) => void
 ) {
   const consulta = query(
-    collection(db, APPOINTMENT_LINKS_COLLECTION),
+    colecaoDaClinica(APPOINTMENT_LINKS_COLLECTION),
     where('respostaPendente', '==', true)
   );
   return onSnapshot(
@@ -3020,11 +3022,11 @@ export function subscribeToRespostasPendentes(
  */
 export async function aplicarRespostaDoLink(link: AppointmentLink): Promise<void> {
   const agora = new Date().toISOString();
-  const linkRef = doc(db, APPOINTMENT_LINKS_COLLECTION, link.id);
+  const linkRef = documentoDaClinica(APPOINTMENT_LINKS_COLLECTION, link.id);
   const batch = writeBatch(db);
 
   if (link.resposta && link.respondidoEm) {
-    const atendimentoRef = doc(db, ATTENDANCES_COLLECTION, link.attendanceId);
+    const atendimentoRef = documentoDaClinica(ATTENDANCES_COLLECTION, link.attendanceId);
     const atual = await getDoc(atendimentoRef);
     const dados = atual.exists() ? (atual.data() as Attendance) : null;
 
@@ -3049,7 +3051,7 @@ export async function aplicarRespostaDoLink(link: AppointmentLink): Promise<void
 export async function recusarPedidoDeRemarcacao(atendimento: Attendance): Promise<void> {
   const agora = new Date().toISOString();
   await comConfirmacaoDoServidor(
-    updateDoc(doc(db, ATTENDANCES_COLLECTION, atendimento.id), {
+    updateDoc(documentoDaClinica(ATTENDANCES_COLLECTION, atendimento.id), {
       pedidoRemarcacao: deleteField(),
       updatedAt: agora,
     }),
@@ -3079,7 +3081,7 @@ export async function aprovarPedidoDeRemarcacao(atendimento: Attendance): Promis
 }
 
 export async function saveSessionPlan(plan: SessionPlan): Promise<void> {
-  const docRef = doc(db, SESSION_PLANS_COLLECTION, plan.id);
+  const docRef = documentoDaClinica(SESSION_PLANS_COLLECTION, plan.id);
   const dataToSave = cleanForFirestore({
     ...plan,
     updatedAt: new Date().toISOString(),
@@ -3108,9 +3110,9 @@ export async function deleteSessionPlan(
         cleanForFirestore(p.planoId === planId ? { ...p, planoId: undefined } : p)
       );
     }
-    batch.update(doc(db, ATTENDANCES_COLLECTION, a.id), campos);
+    batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, a.id), campos);
   });
-  batch.delete(doc(db, SESSION_PLANS_COLLECTION, planId));
+  batch.delete(documentoDaClinica(SESSION_PLANS_COLLECTION, planId));
   await batch.commit();
 }
 
@@ -3171,7 +3173,7 @@ function subscribeToFichasModeloDireto(
   onUpdate: (data: EvaluationTemplate[]) => void,
   onError?: (err: Error) => void
 ) {
-  const colRef = collection(db, COLECOES_DA_FICHA[tipo].modelos);
+  const colRef = colecaoDaClinica(COLECOES_DA_FICHA[tipo].modelos);
   return onSnapshot(
     colRef,
     (snapshot) => {
@@ -3235,7 +3237,7 @@ export async function saveFichaModelo(tipo: TipoDeFicha, ficha: EvaluationTempla
     subirImagemOuManter(ficha.fotoModeloMasculinoUrl || '', pasta),
   ]);
 
-  const docRef = doc(db, COLECOES_DA_FICHA[tipo].modelos, ficha.id);
+  const docRef = documentoDaClinica(COLECOES_DA_FICHA[tipo].modelos, ficha.id);
   await setDoc(
     docRef,
     cleanForFirestore({
@@ -3254,7 +3256,7 @@ export async function saveEvaluationTemplate(ficha: EvaluationTemplate): Promise
 }
 
 export async function deleteFichaModelo(tipo: TipoDeFicha, fichaId: string): Promise<void> {
-  await deleteDoc(doc(db, COLECOES_DA_FICHA[tipo].modelos, fichaId));
+  await deleteDoc(documentoDaClinica(COLECOES_DA_FICHA[tipo].modelos, fichaId));
 }
 
 export async function deleteEvaluationTemplate(fichaId: string): Promise<void> {
@@ -3268,7 +3270,7 @@ function subscribeToPerguntasGeraisDaFichaDireto(
   onUpdate: (data: AnamnesisQuestion[]) => void,
   onError?: (err: Error) => void
 ) {
-  const q = query(collection(db, COLECOES_DA_FICHA[tipo].gerais), orderBy('ordem', 'asc'));
+  const q = query(colecaoDaClinica(COLECOES_DA_FICHA[tipo].gerais), orderBy('ordem', 'asc'));
   return onSnapshot(
     q,
     (snapshot) => {
@@ -3313,7 +3315,7 @@ export async function savePerguntaGeralDaFicha(
   tipo: TipoDeFicha,
   question: AnamnesisQuestion
 ): Promise<void> {
-  const docRef = doc(db, COLECOES_DA_FICHA[tipo].gerais, question.id);
+  const docRef = documentoDaClinica(COLECOES_DA_FICHA[tipo].gerais, question.id);
   await setDoc(docRef, cleanForFirestore(question), { merge: true });
 }
 
@@ -3323,7 +3325,7 @@ export async function saveTodasPerguntasGeraisDaFicha(
 ): Promise<void> {
   const batch = writeBatch(db);
   questions.forEach((q) => {
-    batch.set(doc(db, COLECOES_DA_FICHA[tipo].gerais, q.id), cleanForFirestore(q), {
+    batch.set(documentoDaClinica(COLECOES_DA_FICHA[tipo].gerais, q.id), cleanForFirestore(q), {
       merge: true,
     });
   });
@@ -3334,7 +3336,7 @@ export async function deletePerguntaGeralDaFicha(
   tipo: TipoDeFicha,
   questionId: string
 ): Promise<void> {
-  await deleteDoc(doc(db, COLECOES_DA_FICHA[tipo].gerais, questionId));
+  await deleteDoc(documentoDaClinica(COLECOES_DA_FICHA[tipo].gerais, questionId));
 }
 
 // ---- Fichas preenchidas ----
@@ -3351,7 +3353,7 @@ export async function getRegistroDeFicha(
   tipo: TipoDeFicha,
   registroId: string
 ): Promise<EvaluationRecord | null> {
-  const snap = await getDoc(doc(db, COLECOES_DA_FICHA[tipo].registros, registroId));
+  const snap = await getDoc(documentoDaClinica(COLECOES_DA_FICHA[tipo].registros, registroId));
   if (!snap.exists()) return null;
   return normalizarRegistroDeFichaLido(snap.id, snap.data());
 }
@@ -3444,10 +3446,10 @@ export async function saveRegistroDeFicha(
 
   const batch = writeBatch(db);
 
-  batch.set(doc(db, COLECOES_DA_FICHA[tipo].registros, registro.id), dados, { merge: true });
+  batch.set(documentoDaClinica(COLECOES_DA_FICHA[tipo].registros, registro.id), dados, { merge: true });
 
   if (tipo === 'acompanhamento' && registro.atendimentoId) {
-    batch.update(doc(db, ATTENDANCES_COLLECTION, registro.atendimentoId), {
+    batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, registro.atendimentoId), {
       acompanhamentoPreenchidoEm: registro.preenchidoEm || agora,
       updatedAt: agora,
     });
@@ -3462,9 +3464,9 @@ export async function deleteRegistroDeFicha(
   registro: Pick<EvaluationRecord, 'id' | 'atendimentoId'>
 ): Promise<void> {
   const batch = writeBatch(db);
-  batch.delete(doc(db, COLECOES_DA_FICHA[tipo].registros, registro.id));
+  batch.delete(documentoDaClinica(COLECOES_DA_FICHA[tipo].registros, registro.id));
   if (tipo === 'acompanhamento' && registro.atendimentoId) {
-    batch.update(doc(db, ATTENDANCES_COLLECTION, registro.atendimentoId), {
+    batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, registro.atendimentoId), {
       acompanhamentoPreenchidoEm: deleteField(),
       updatedAt: new Date().toISOString(),
     });
@@ -3488,7 +3490,7 @@ function subscribeToRegistrosDeFichaDireto(
   onUpdate: (data: EvaluationRecord[]) => void,
   onError?: (err: Error) => void
 ) {
-  const colRef = collection(db, COLECOES_DA_FICHA[tipo].registros);
+  const colRef = colecaoDaClinica(COLECOES_DA_FICHA[tipo].registros);
   // Um filtro por vez: paciente e data juntos pediriam índice composto, e nenhuma tela precisa
   // dos dois — a página da paciente quer a história inteira dela.
   const alvo = filtro.pacienteId
@@ -3564,7 +3566,7 @@ function subscribeToProdutosDeEstoqueDireto(
   onError?: (err: Error) => void
 ) {
   return onSnapshot(
-    collection(db, STOCK_PRODUCTS_COLLECTION),
+    colecaoDaClinica(STOCK_PRODUCTS_COLLECTION),
     (snapshot) => {
       const items: ProdutoDeEstoque[] = [];
       snapshot.forEach((docSnap) => {
@@ -3620,7 +3622,7 @@ export async function saveProdutoDeEstoque(produto: ProdutoDeEstoque): Promise<v
   (['caixa', 'marca', 'observacoes'] as const).forEach((campo) => {
     if (produto[campo] === undefined) dataToSave[campo] = deleteField();
   });
-  await setDoc(doc(db, STOCK_PRODUCTS_COLLECTION, produto.id), dataToSave, { merge: true });
+  await setDoc(documentoDaClinica(STOCK_PRODUCTS_COLLECTION, produto.id), dataToSave, { merge: true });
 }
 
 /**
@@ -3628,7 +3630,7 @@ export async function saveProdutoDeEstoque(produto: ProdutoDeEstoque): Promise<v
  * histórico dos atendimentos não depende do produto: cada linha guardou nome e preço do dia.
  */
 export async function deleteProdutoDeEstoque(produtoId: string): Promise<void> {
-  await deleteDoc(doc(db, STOCK_PRODUCTS_COLLECTION, produtoId));
+  await deleteDoc(documentoDaClinica(STOCK_PRODUCTS_COLLECTION, produtoId));
 }
 
 function subscribeToConsumosPadraoDireto(
@@ -3636,7 +3638,7 @@ function subscribeToConsumosPadraoDireto(
   onError?: (err: Error) => void
 ) {
   return onSnapshot(
-    collection(db, PROCEDURE_CONSUMPTION_COLLECTION),
+    colecaoDaClinica(PROCEDURE_CONSUMPTION_COLLECTION),
     (snapshot) => {
       const items: ConsumoPadrao[] = [];
       snapshot.forEach((docSnap) => {
@@ -3686,7 +3688,7 @@ export async function saveConsumosPadrao(consumos: ConsumoPadrao[]): Promise<voi
   const batch = writeBatch(db);
   const agora = new Date().toISOString();
   consumos.forEach((c) => {
-    const ref = doc(db, PROCEDURE_CONSUMPTION_COLLECTION, c.procedureId);
+    const ref = documentoDaClinica(PROCEDURE_CONSUMPTION_COLLECTION, c.procedureId);
     if (c.itens.length === 0) {
       batch.delete(ref);
     } else {
@@ -3703,7 +3705,7 @@ export async function saveConsumosPadrao(consumos: ConsumoPadrao[]): Promise<voi
 export async function getMateriaisDoAtendimento(
   atendimentoId: string
 ): Promise<MateriaisDoAtendimento | null> {
-  const snap = await getDoc(doc(db, ATTENDANCE_MATERIALS_COLLECTION, atendimentoId));
+  const snap = await getDoc(documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, atendimentoId));
   if (!snap.exists()) return null;
   const bruto = snap.data() as Record<string, unknown>;
   return {
@@ -3725,10 +3727,10 @@ export async function saveMateriaisDoAtendimento(registro: MateriaisDoAtendiment
   const semValor = linhasSemValor(registro.itens);
   const batch = writeBatch(db);
   batch.set(
-    doc(db, ATTENDANCE_MATERIALS_COLLECTION, registro.atendimentoId),
+    documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, registro.atendimentoId),
     cleanForFirestore({ ...registro, id: registro.atendimentoId, updatedAt: agora })
   );
-  batch.update(doc(db, ATTENDANCES_COLLECTION, registro.atendimentoId), {
+  batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, registro.atendimentoId), {
     materiaisRegistradosEm: registro.createdAt || agora,
     custoMateriais: registro.custoTotal,
     // Some quando a última linha ganha valor — é o "falta valor" do Financeiro que se apaga.
@@ -3741,8 +3743,8 @@ export async function saveMateriaisDoAtendimento(registro: MateriaisDoAtendiment
 /** O inverso de `saveMateriaisDoAtendimento`: apaga as linhas, a marca e o total. */
 export async function deleteMateriaisDoAtendimento(atendimentoId: string): Promise<void> {
   const batch = writeBatch(db);
-  batch.delete(doc(db, ATTENDANCE_MATERIALS_COLLECTION, atendimentoId));
-  batch.update(doc(db, ATTENDANCES_COLLECTION, atendimentoId), {
+  batch.delete(documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, atendimentoId));
+  batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, atendimentoId), {
     materiaisRegistradosEm: deleteField(),
     custoMateriais: deleteField(),
     materiaisSemValor: deleteField(),
@@ -3759,7 +3761,7 @@ export async function deleteMateriaisDoAtendimento(atendimentoId: string): Promi
  */
 export async function encerrarAnamnese(recordId: string): Promise<void> {
   const agora = new Date().toISOString();
-  await updateDoc(doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId), {
+  await updateDoc(documentoDaClinica(ANAMNESIS_RECORDS_COLLECTION, recordId), {
     encerradaEm: agora,
     updatedAt: agora,
   });
@@ -3772,7 +3774,7 @@ export async function encerrarAnamnese(recordId: string): Promise<void> {
 export async function marcarAvaliacaoDispensada(recordId: string, dispensada: boolean): Promise<void> {
   const agora = new Date().toISOString();
   await comConfirmacaoDoServidor(
-    updateDoc(doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId), {
+    updateDoc(documentoDaClinica(ANAMNESIS_RECORDS_COLLECTION, recordId), {
       avaliacaoDispensadaEm: dispensada ? agora : deleteField(),
       updatedAt: agora,
     }),
@@ -3782,7 +3784,7 @@ export async function marcarAvaliacaoDispensada(recordId: string, dispensada: bo
 
 /** Reabre a ficha encerrada à mão. Não destrava o que a regra do atendimento fechou. */
 export async function reabrirAnamnese(recordId: string): Promise<void> {
-  await updateDoc(doc(db, ANAMNESIS_RECORDS_COLLECTION, recordId), {
+  await updateDoc(documentoDaClinica(ANAMNESIS_RECORDS_COLLECTION, recordId), {
     encerradaEm: deleteField(),
     updatedAt: new Date().toISOString(),
   });
@@ -3794,7 +3796,7 @@ const MIGRACAO_AVALIACAO_LOCAL_KEY = 'lavie:avaliacao-separada:v1';
 /** As migrações que já rodaram nesta clínica. Documento único, lido do servidor. */
 async function migracoesAplicadasNaClinica(): Promise<string[] | null> {
   try {
-    const snap = await getDocFromServer(doc(db, CLINIC_SETTINGS_COLLECTION, MIGRATIONS_DOC_ID));
+    const snap = await getDocFromServer(documentoDaClinica(CLINIC_SETTINGS_COLLECTION, MIGRATIONS_DOC_ID));
     if (!snap.exists()) return [];
     return paraArray<string>((snap.data() as Record<string, unknown>).aplicadas);
   } catch (e) {
@@ -3844,9 +3846,9 @@ async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
     // Do servidor nos três casos: um cache frio devolveria as fichas sem o que a equipe
     // acrescentou na tela, e as gravações abaixo apagariam esse trabalho.
     const [tplSnap, procSnap, gerSnap] = await Promise.all([
-      getDocsFromServer(collection(db, ANAMNESIS_TEMPLATES_COLLECTION)),
-      getDocsFromServer(collection(db, PROCEDURES_COLLECTION)),
-      getDocsFromServer(collection(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION)),
+      getDocsFromServer(colecaoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION)),
+      getDocsFromServer(colecaoDaClinica(PROCEDURES_COLLECTION)),
+      getDocsFromServer(colecaoDaClinica(ANAMNESIS_GENERAL_QUESTIONS_COLLECTION)),
     ]);
 
     const catalogo: Procedure[] = [];
@@ -3865,7 +3867,7 @@ async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
 
     plano.fichas.forEach((ficha) => {
       batch.set(
-        doc(db, EVALUATION_TEMPLATES_COLLECTION, ficha.id),
+        documentoDaClinica(EVALUATION_TEMPLATES_COLLECTION, ficha.id),
         cleanForFirestore({ ...ficha, updatedAt: new Date().toISOString() }),
         { merge: true }
       );
@@ -3874,7 +3876,7 @@ async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
 
     plano.anamneses.forEach((alvo) => {
       const original = todas.find((t) => t.id === alvo.id);
-      batch.update(doc(db, ANAMNESIS_TEMPLATES_COLLECTION, alvo.id), {
+      batch.update(documentoDaClinica(ANAMNESIS_TEMPLATES_COLLECTION, alvo.id), {
         perguntasEspecificas: alvo.perguntasQueFicam.map((q) => cleanForFirestore(q)),
         migracoesAplicadas: Array.from(
           new Set([...(paraArray<string>(original?.migracoesAplicadas) || []), MIGRACAO_AVALIACAO])
@@ -3890,16 +3892,16 @@ async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
       const q = { ...(d.data() as AnamnesisQuestion), id: d.id };
       if ((q.publicoAlvo || 'paciente') !== 'medico') return;
       batch.set(
-        doc(db, EVALUATION_GENERAL_QUESTIONS_COLLECTION, q.id),
+        documentoDaClinica(EVALUATION_GENERAL_QUESTIONS_COLLECTION, q.id),
         cleanForFirestore({ ...q, publicoAlvo: undefined }),
         { merge: true }
       );
-      batch.delete(doc(db, ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, q.id));
+      batch.delete(documentoDaClinica(ANAMNESIS_GENERAL_QUESTIONS_COLLECTION, q.id));
       mexeu = true;
     });
 
     batch.set(
-      doc(db, CLINIC_SETTINGS_COLLECTION, MIGRATIONS_DOC_ID),
+      documentoDaClinica(CLINIC_SETTINGS_COLLECTION, MIGRATIONS_DOC_ID),
       {
         aplicadas: Array.from(new Set([...jaAplicadas, MIGRACAO_AVALIACAO])),
         updatedAt: new Date().toISOString(),
@@ -3975,8 +3977,8 @@ async function instalarFichasDeAvaliacaoPadrao(): Promise<void> {
 
   try {
     const [avalSnap, procSnap] = await Promise.all([
-      getDocsFromServer(collection(db, EVALUATION_TEMPLATES_COLLECTION)),
-      getDocsFromServer(collection(db, PROCEDURES_COLLECTION)),
+      getDocsFromServer(colecaoDaClinica(EVALUATION_TEMPLATES_COLLECTION)),
+      getDocsFromServer(colecaoDaClinica(PROCEDURES_COLLECTION)),
     ]);
 
     const catalogo: Procedure[] = [];
@@ -3999,13 +4001,13 @@ async function instalarFichasDeAvaliacaoPadrao(): Promise<void> {
     const batch = writeBatch(db);
     aInstalar.forEach((ficha) => {
       batch.set(
-        doc(db, EVALUATION_TEMPLATES_COLLECTION, ficha.id),
+        documentoDaClinica(EVALUATION_TEMPLATES_COLLECTION, ficha.id),
         cleanForFirestore({ ...ficha, updatedAt: new Date().toISOString() })
       );
     });
 
     batch.set(
-      doc(db, CLINIC_SETTINGS_COLLECTION, MIGRATIONS_DOC_ID),
+      documentoDaClinica(CLINIC_SETTINGS_COLLECTION, MIGRATIONS_DOC_ID),
       {
         aplicadas: Array.from(new Set([...jaAplicadas, MIGRACAO_FICHAS_PADRAO])),
         updatedAt: new Date().toISOString(),
