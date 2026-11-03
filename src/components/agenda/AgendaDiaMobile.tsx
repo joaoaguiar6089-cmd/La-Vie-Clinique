@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { CheckCheck, MessageCircle, Plus } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCheck, Loader2, MessageCircle, Plus } from 'lucide-react';
 import { Attendance, ClinicProfile, Patient, Procedure, Professional } from '../../types';
 import { DataISO, nomeDosProcedimentos } from '../../utils/attendances';
 import {
@@ -12,14 +12,18 @@ import {
   expedienteDoDia,
   hhmmDeMinutos,
   horariosLivresDoDia,
-  mensagemDeConfirmacao,
   minutosDoHHMM,
   nomeCurtoDaProfissional,
   nomeDaSala,
   ocupaAGrade,
   semHorario,
 } from '../../utils/agenda';
-import { buildWhatsAppUrl } from '../../utils/whatsapp';
+import {
+  abrirAbaDoWhatsApp,
+  enviarLinkNoWhatsApp,
+  explicarErroDoLink,
+  temWhatsApp,
+} from './linkDeConfirmacao';
 import { ROTULO_DA_SITUACAO, SituacaoDoCartao, situacaoDoCartao } from './AgendaCard';
 
 /**
@@ -46,6 +50,8 @@ interface AgendaDiaMobileProps {
   onAbrirAtendimento: (a: Attendance) => void;
   onNovoEm: (data: DataISO, hora: string) => void;
   onConfirmar: (a: Attendance) => void;
+  /** O link de confirmação não saiu — o aviso vai para o topo da agenda. */
+  onErro: (mensagem: string | null) => void;
 }
 
 /** A cor do status escrito no bloco preto — todas acima de 7:1 sobre o #1A1A1A. */
@@ -83,6 +89,7 @@ export const AgendaDiaMobile: React.FC<AgendaDiaMobileProps> = ({
   onAbrirAtendimento,
   onNovoEm,
   onConfirmar,
+  onErro,
 }) => {
   const agoraRef = useRef<HTMLDivElement>(null);
 
@@ -163,6 +170,7 @@ export const AgendaDiaMobile: React.FC<AgendaDiaMobileProps> = ({
               rotuloDoPlano={rotulosDePlano.get(a.id)}
               onAbrir={onAbrirAtendimento}
               onConfirmar={onConfirmar}
+              onErro={onErro}
             />
           ))}
         </div>
@@ -222,6 +230,7 @@ export const AgendaDiaMobile: React.FC<AgendaDiaMobileProps> = ({
                     rotuloDoPlano={rotulosDePlano.get(linha.atendimento.id)}
                     onAbrir={onAbrirAtendimento}
                     onConfirmar={onConfirmar}
+                    onErro={onErro}
                   />
                 </div>
               </div>
@@ -261,6 +270,7 @@ const CartaoDeAtendimento: React.FC<{
   rotuloDoPlano?: string;
   onAbrir: (a: Attendance) => void;
   onConfirmar: (a: Attendance) => void;
+  onErro: (mensagem: string | null) => void;
 }> = ({
   atendimento,
   clinic,
@@ -270,7 +280,9 @@ const CartaoDeAtendimento: React.FC<{
   rotuloDoPlano,
   onAbrir,
   onConfirmar,
+  onErro,
 }) => {
+  const [enviando, setEnviando] = useState(false);
   const situacao = situacaoDoCartao(atendimento);
   const inicioMin = minutosDoHHMM(atendimento.hora);
   const duracao = duracaoDoAtendimento(atendimento, catalogo);
@@ -290,10 +302,22 @@ const CartaoDeAtendimento: React.FC<{
   const faixa =
     inicioMin === null ? 'Sem horário' : `${atendimento.hora}–${hhmmDeMinutos(inicioMin + duracao)}`;
 
-  const link = buildWhatsAppUrl(
-    contatoDoAtendimento(atendimento, pacientes),
-    mensagemDeConfirmacao(clinic, atendimento, catalogo)
-  );
+  const telefone = contatoDoAtendimento(atendimento, pacientes);
+
+  /** Manda o link de confirmação — a aba do WhatsApp nasce no toque, o link é gravado depois. */
+  const enviarLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (enviando) return;
+    const aba = abrirAbaDoWhatsApp();
+    setEnviando(true);
+    onErro(null);
+    enviarLinkNoWhatsApp(atendimento, clinic, catalogo, telefone, aba)
+      .catch((erro) => {
+        console.warn('Falha ao enviar o link de confirmação:', erro);
+        onErro(explicarErroDoLink(erro));
+      })
+      .finally(() => setEnviando(false));
+  };
 
   return (
     <div
@@ -344,18 +368,21 @@ const CartaoDeAtendimento: React.FC<{
       {/* Confirmar não passa pelo detalhe: é o gesto mais repetido do dia da recepção. */}
       {pendente && (
         <span className="flex items-center gap-0.5 pr-1.5 shrink-0">
-          {!confirmado && link && (
-            <a
-              href={link}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`Confirmar ${atendimento.pacienteNome} pelo WhatsApp`}
-              title="Confirmar pelo WhatsApp"
-              className="w-11 h-11 rounded-xl flex items-center justify-center text-cream hover:bg-white/10 transition-colors"
+          {!confirmado && temWhatsApp(telefone) && (
+            <button
+              type="button"
+              onClick={enviarLink}
+              disabled={enviando}
+              aria-label={`Enviar a ${atendimento.pacienteNome} o link de confirmação pelo WhatsApp`}
+              title="Confirmar pelo WhatsApp (envia o link de confirmação)"
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-cream hover:bg-white/10 transition-colors disabled:opacity-60"
             >
-              <MessageCircle className="w-[18px] h-[18px]" />
-            </a>
+              {enviando ? (
+                <Loader2 className="w-[18px] h-[18px] animate-spin" />
+              ) : (
+                <MessageCircle className="w-[18px] h-[18px]" />
+              )}
+            </button>
           )}
           <button
             type="button"

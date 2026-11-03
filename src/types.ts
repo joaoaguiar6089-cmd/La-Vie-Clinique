@@ -230,8 +230,8 @@ export interface Procedure {
   intervaloEntreSessoesDias?: number;
   /**
    * O que a paciente precisa fazer (ou evitar) antes de vir — "não depilar com cera nos 30 dias
-   * anteriores", "venha sem maquiagem". Entra na mensagem de confirmação do WhatsApp quando a
-   * clínica liga `agendaConfirmacaoIncluirOrientacoes`.
+   * anteriores", "venha sem maquiagem". Aparece na página do link de confirmação que a cliente
+   * recebe pelo WhatsApp (`textoDasOrientacoes`).
    *
    * Separado de `contraindications` de propósito: contraindicação é motivo para **não** fazer o
    * procedimento; isto é preparo para quem já vai fazer.
@@ -334,8 +334,13 @@ export interface ClinicProfile {
   agendaIntervaloMin?: number; // Granularidade da grade em minutos: 15, 30 ou 60 (padrão 30)
   /** Salas e equipamentos. Vazio = a clínica não usa o conceito, e o campo some do formulário. */
   agendaSalas?: AgendaSala[];
-  agendaConfirmacaoTemplate?: string; // Mensagem de confirmação no WhatsApp; ver `mensagemDeConfirmacao`
-  /** Anexa `Procedure.orientacoesPreProcedimento` ao fim da mensagem de confirmação. */
+  /**
+   * **Legado.** O modelo da antiga mensagem de confirmação ("pode confirmar pra gente?") e o
+   * interruptor de anexar o preparo a ela. A confirmação vai sempre pelo link do agendamento
+   * (`components/agenda/linkDeConfirmacao.ts`), que já mostra o preparo; os campos ficam só para
+   * ler documentos antigos.
+   */
+  agendaConfirmacaoTemplate?: string;
   agendaConfirmacaoIncluirOrientacoes?: boolean;
   /**
    * **Legado.** Os dois manequins do mapa antigo da depilação a laser, de quando o mapa morava nas

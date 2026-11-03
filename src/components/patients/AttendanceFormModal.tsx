@@ -58,12 +58,16 @@ import {
   hhmmDeMinutos,
   intervaloDaGrade,
   intervaloDoAtendimento,
-  mensagemDeConfirmacao,
   minutosDoHHMM,
 } from '../../utils/agenda';
 import { resolveQuoteStatus } from '../../utils/quoteCalc';
 import { formatDateShortYear } from '../../utils/formatters';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
+import {
+  abrirAbaDoWhatsApp,
+  enviarLinkNoWhatsApp,
+  explicarErroDoLink,
+} from '../agenda/linkDeConfirmacao';
 import { SidePanel } from '../common/SidePanel';
 import {
   Avatar,
@@ -111,8 +115,8 @@ interface AttendanceFormModalProps {
    */
   atendimentosDaClinica?: Attendance[];
   /**
-   * A clínica: o expediente (os dias que abrem e os horários livres do "Quando") e o modelo da
-   * mensagem de confirmação no WhatsApp. Ausente = só os campos digitados.
+   * A clínica: o expediente (os dias que abrem e os horários livres do "Quando") e os dados do
+   * link de confirmação enviado no WhatsApp. Ausente = só os campos digitados.
    */
   clinic?: ClinicProfile;
   /**
@@ -158,6 +162,11 @@ interface AttendanceFormModalProps {
     planoNovo?: SessionPlan,
     opcoes?: { limparConfirmacao?: boolean }
   ) => Promise<void>;
+  /**
+   * O agendamento foi salvo, mas o link de confirmação não saiu para o WhatsApp. O formulário já
+   * fechou (o salvamento deu certo); o aviso vai para a tela de trás.
+   */
+  onAvisoDoLink?: (mensagem: string) => void;
 }
 
 const DIAS_DA_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
@@ -255,6 +264,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   planoFixoId,
   soVisitaFeita,
   onSalvar,
+  onAvisoDoLink,
 }) => {
   const [data, setData] = useState('');
   const [hora, setHora] = useState('');
@@ -738,9 +748,10 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
 
     /* A aba do WhatsApp abre **agora**, ainda dentro do toque: o navegador do celular só deixa
        abrir janela como resposta direta a um toque, e depois do `await` isso já não vale. Ela
-       nasce em branco e recebe o endereço quando a gravação confirma — ou fecha, se falhar. */
+       nasce em branco e recebe o endereço quando a gravação e o link confirmam — ou fecha, se
+       falhar. */
     const confirmarNoWhatsApp = podeConfirmarNoWhatsApp && enviarConfirmacao;
-    const janela = confirmarNoWhatsApp ? window.open('', '_blank') : null;
+    const janela = confirmarNoWhatsApp ? abrirAbaDoWhatsApp() : null;
 
     setSalvando(true);
     setErroGeral(null);
@@ -830,13 +841,14 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
           (!!atendimento?.linkToken && horarioMudou),
       });
 
+      // A confirmação vai pelo link: a cliente confirma, avisa que não vai ou pede outro horário
+      // na página do horário. O agendamento já está salvo — se o link falhar, a aba fecha e o
+      // aviso vai para a tela de trás, sem desfazer nada.
       if (confirmarNoWhatsApp && clinic) {
-        const link = buildWhatsAppUrl(
-          contatoDaPaciente,
-          mensagemDeConfirmacao(clinic, registro, procedures)
-        );
-        if (link && janela) janela.location.href = link;
-        else if (link) window.open(link, '_blank', 'noopener,noreferrer');
+        enviarLinkNoWhatsApp(registro, clinic, procedures, contatoDaPaciente, janela).catch((e) => {
+          console.warn('Agendamento salvo, mas o link de confirmação não saiu:', e);
+          onAvisoDoLink?.(`Agendamento salvo, mas o link não foi enviado. ${explicarErroDoLink(e)}`);
+        });
       }
       onClose();
     } catch (e) {
@@ -1327,10 +1339,10 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
                 // Sem armazenamento, a escolha vale só para este agendamento.
               }
             }}
-            rotulo="Enviar confirmação no WhatsApp"
+            rotulo="Enviar link de confirmação no WhatsApp"
             descricao={
               podeConfirmarNoWhatsApp
-                ? 'Abre a conversa com a mensagem de confirmação pronta, logo depois de agendar.'
+                ? 'Logo depois de agendar, abre a conversa com o link em que a cliente confirma, avisa que não vai ou pede outro horário.'
                 : patient
                 ? 'Sem telefone no cadastro desta paciente.'
                 : 'Escolha a paciente primeiro.'

@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
-import { CheckCheck, ChevronDown, MessageCircle, PhoneOff } from 'lucide-react';
+import { AlertCircle, CheckCheck, ChevronDown, Loader2, MessageCircle, PhoneOff } from 'lucide-react';
 import { Attendance, ClinicProfile, Patient, Procedure } from '../../types';
-import { contatoDoAtendimento, mensagemDeConfirmacao } from '../../utils/agenda';
-import { buildWhatsAppUrl } from '../../utils/whatsapp';
+import { contatoDoAtendimento } from '../../utils/agenda';
 import { nomeDosProcedimentos } from '../../utils/attendances';
+import {
+  abrirAbaDoWhatsApp,
+  enviarLinkNoWhatsApp,
+  explicarErroDoLink,
+  temWhatsApp,
+} from './linkDeConfirmacao';
 
 /**
  * Os agendamentos de **amanhã** que ninguém confirmou ainda.
@@ -13,8 +18,9 @@ import { nomeDosProcedimentos } from '../../utils/attendances';
  * viraria mais um aviso permanente que se aprende a ignorar. Some sozinha quando está vazia, pela
  * mesma razão da faixa de pendências.
  *
- * Os dois botões de cada linha são os dois passos, nessa ordem: mandar a mensagem e, quando a
- * paciente responder, marcar. Nenhum dos dois faz o outro sozinho.
+ * O WhatsApp de cada linha manda o **link de confirmação**: a cliente confirma, avisa que não vai
+ * ou pede outro horário pela página, e a resposta volta sozinha para a agenda. O "Confirmar" fica
+ * para quando ela responde por outro caminho (ligação, mensagem) — nenhum dos dois faz o outro.
  */
 
 interface AgendaAConfirmarProps {
@@ -36,7 +42,24 @@ export const AgendaAConfirmar: React.FC<AgendaAConfirmarProps> = ({
 }) => {
   // Aberta por padrão, ao contrário das pendências: é a lista de hoje, não um acúmulo antigo.
   const [aberto, setAberto] = useState(true);
+  /** O agendamento cujo link está sendo gerado — o botão espera, e um segundo toque não duplica. */
+  const [enviando, setEnviando] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
   if (aConfirmar.length === 0) return null;
+
+  const enviar = (a: Attendance, telefone?: string) => {
+    if (enviando) return;
+    // A aba nasce no toque; o link é gravado depois.
+    const aba = abrirAbaDoWhatsApp();
+    setEnviando(a.id);
+    setErro(null);
+    enviarLinkNoWhatsApp(a, clinic, catalogo, telefone, aba)
+      .catch((e) => {
+        console.warn('Falha ao enviar o link de confirmação:', e);
+        setErro(explicarErroDoLink(e));
+      })
+      .finally(() => setEnviando(null));
+  };
 
   return (
     <div className="rounded-card border border-brand/35 bg-brand-bg/60 overflow-hidden">
@@ -60,13 +83,18 @@ export const AgendaAConfirmar: React.FC<AgendaAConfirmarProps> = ({
         />
       </button>
 
+      {aberto && erro && (
+        <p className="px-4 py-2.5 border-t border-brand/25 bg-danger-bg text-body text-danger flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+          {erro}
+        </p>
+      )}
+
       {aberto && (
         <ul className="border-t border-brand/25 divide-y divide-brand/15">
           {aConfirmar.map((a) => {
-            const link = buildWhatsAppUrl(
-              contatoDoAtendimento(a, pacientes),
-              mensagemDeConfirmacao(clinic, a, catalogo)
-            );
+            const telefone = contatoDoAtendimento(a, pacientes);
+            const esteEnviando = enviando === a.id;
             return (
               <li
                 key={a.id}
@@ -88,16 +116,21 @@ export const AgendaAConfirmar: React.FC<AgendaAConfirmarProps> = ({
                 </button>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {link ? (
-                    <a
-                      href={link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 min-h-[44px] px-3 rounded-lg bg-whatsapp text-white text-body font-semibold transition-colors"
+                  {temWhatsApp(telefone) ? (
+                    <button
+                      type="button"
+                      onClick={() => enviar(a, telefone)}
+                      disabled={!!enviando}
+                      title="Enviar o link de confirmação pelo WhatsApp"
+                      className="inline-flex items-center justify-center gap-1.5 min-h-[44px] px-3 rounded-lg bg-whatsapp text-white text-body font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
                     >
-                      <MessageCircle className="w-4 h-4" />
+                      {esteEnviando ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <MessageCircle className="w-4 h-4" />
+                      )}
                       WhatsApp
-                    </a>
+                    </button>
                   ) : (
                     <span
                       className="inline-flex items-center gap-1.5 min-h-[44px] px-3 text-body text-muted"

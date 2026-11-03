@@ -724,6 +724,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           planoFixoId={formAtendimento?.planoFixoId}
           soVisitaFeita={formAtendimento?.paraAcompanhar}
           onSalvar={handleSalvarAtendimento}
+          onAvisoDoLink={setErro}
         />
 
         {acompanhando && (

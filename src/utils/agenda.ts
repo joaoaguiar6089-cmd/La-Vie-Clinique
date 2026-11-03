@@ -46,8 +46,6 @@ export const AGENDA_DEFAULTS = {
   /** Altura de uma linha da grade, em minutos. */
   intervaloMin: 30,
   expediente: EXPEDIENTE_PADRAO,
-  confirmacaoTemplate:
-    'Oi {primeiroNome}! Confirmando seu horário na {clinica}: {data} às {hora} — {procedimento}. Pode confirmar pra gente? 💛',
   /** Grade de um dia sem expediente configurado. */
   gradeInicioMin: 8 * 60,
   gradeFimMin: 20 * 60,
@@ -702,52 +700,8 @@ export const corDaProfissional = (professionalId?: string): string => {
 };
 
 // ==========================================
-// CONFIRMAÇÃO NO WHATSAPP
+// PREPARO (vai na página do link de confirmação)
 // ==========================================
-
-const primeiroNomeDe = (nome: string): string => (nome || '').trim().split(/\s+/)[0] || '';
-
-/**
- * Monta a mensagem de confirmação a partir do template da clínica.
- *
- * Marcador desconhecido fica como está, para um erro de digitação no template aparecer na hora em
- * vez de sumir calado; marcador conhecido e vazio vira string vazia. De todo jeito quem envia revê
- * a mensagem no WhatsApp antes de mandar.
- *
- * `{nome}` é o nome inteiro e `{primeiroNome}` é só o primeiro — os dois existem porque o template
- * padrão sempre usou o primeiro nome, e trocar o significado do marcador reescreveria a mensagem
- * de toda clínica que já personalizou a sua.
- *
- * Quando a clínica liga `agendaConfirmacaoIncluirOrientacoes`, o preparo do procedimento
- * (`Procedure.orientacoesPreProcedimento`) entra ao fim, separado por uma linha em branco. Ele vem
- * do catálogo em memória — a mensagem não faz leitura nenhuma.
- */
-export const mensagemDeConfirmacao = (
-  clinic: Pick<
-    ClinicProfile,
-    'name' | 'agendaConfirmacaoTemplate' | 'agendaConfirmacaoIncluirOrientacoes'
-  >,
-  atendimento: Attendance,
-  catalogo: Procedure[] = []
-): string => {
-  const template = clinic.agendaConfirmacaoTemplate?.trim() || AGENDA_DEFAULTS.confirmacaoTemplate;
-  const valores: Record<string, string> = {
-    nome: (atendimento.pacienteNome || '').trim(),
-    primeiroNome: primeiroNomeDe(atendimento.pacienteNome),
-    data: dataExtensa(atendimento.data),
-    hora: atendimento.hora || '',
-    procedimento: nomeDosProcedimentosPorExtenso(atendimento),
-    profissional: atendimento.profissionalNome || '',
-    clinica: clinic.name || '',
-  };
-  const corpo = template.replace(/\{(\w+)\}/g, (inteiro, chave: string) =>
-    chave in valores ? valores[chave] : inteiro
-  );
-
-  if (!clinic.agendaConfirmacaoIncluirOrientacoes) return corpo;
-  const orientacoes = orientacoesDoAtendimento(atendimento, catalogo);
-  return orientacoes ? `${corpo}\n\n${orientacoes}` : corpo;
-};
 
 /**
  * O preparo dos procedimentos agendados (`Procedure.orientacoesPreProcedimento`). Com mais de um
@@ -773,15 +727,6 @@ export const textoDasOrientacoes = (
   if (blocos.length === 0) return undefined;
   if (blocos.length === 1) return blocos[0].texto;
   return blocos.map((b) => `${b.nome}:\n${b.texto}`).join('\n\n');
-};
-
-/** O preparo, pronto para colar na mensagem. */
-export const orientacoesDoAtendimento = (
-  atendimento: Parameters<typeof textoDasOrientacoes>[0],
-  catalogo: Procedure[]
-): string | undefined => {
-  const texto = textoDasOrientacoes(atendimento, catalogo);
-  return texto ? `Antes de vir:\n${texto}` : undefined;
 };
 
 // ==========================================

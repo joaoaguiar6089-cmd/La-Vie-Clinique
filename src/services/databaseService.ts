@@ -2820,10 +2820,10 @@ export async function remarcarAtendimento(
  * Os campos do link que dependem só do atendimento e por isso acompanham cada gravação dele.
  *
  * Não refaz a cópia inteira: foto, descrição e dados da clínica exigem o catálogo e o perfil, que
- * a gravação de um atendimento não tem à mão — esses são renovados quando a equipe abre
- * "Compartilhar" (`garantirLinkDoAgendamento`). Aqui vão o horário, a profissional, o nome do
- * procedimento e a situação: o que, se ficasse velho, faria a paciente confirmar um horário que
- * já não existe.
+ * a gravação de um atendimento não tem à mão — esses são renovados quando a equipe toca no
+ * WhatsApp ou em "Copiar link de confirmação" (`garantirLinkDoAgendamento`). Aqui vão o horário,
+ * a profissional, o nome do procedimento e a situação: o que, se ficasse velho, faria a paciente
+ * confirmar um horário que já não existe.
  */
 function camposDoLinkDoAtendimento(a: Attendance): Record<string, unknown> {
   const campos: Record<string, unknown> = {
@@ -2882,14 +2882,14 @@ async function sincronizarLinkDoAtendimento(
 /**
  * Cria o link do agendamento — ou renova a cópia dele — e devolve o token.
  *
- * Chamado quando a equipe abre "Compartilhar", isto é, por uma ação explícita e nunca por um
+ * Chamado quando a equipe toca no WhatsApp ou em "Copiar link de confirmação", isto é, por uma ação explícita e nunca por um
  * `onSnapshot`: cada chamada custa uma leitura e uma gravação da cota diária.
  *
  * No primeiro uso o token nasce aqui (`crypto.randomUUID()`, o mesmo segredo dos orçamentos) e vai
  * para o atendimento junto com o documento público, num lote — um sem o outro deixaria um link
  * órfão ou um atendimento apontando para o nada. Nas demais vezes só a cópia é renovada, sem tocar
  * na resposta que a paciente já deu. Diferente da sincronização, **aqui os erros sobem**: quem
- * clicou em "Compartilhar" precisa saber que o link não funciona.
+ * tocou para enviar precisa saber que o link não funciona.
  */
 export async function garantirLinkDoAgendamento(
   atendimento: Attendance,

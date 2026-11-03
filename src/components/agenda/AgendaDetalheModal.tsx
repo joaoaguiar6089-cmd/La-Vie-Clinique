@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  AlertCircle,
   CalendarClock,
   Check,
   CheckCheck,
   ChevronRight,
+  Copy,
+  Loader2,
   MessageCircle,
   NotebookPen,
   Pencil,
-  Send,
   Stethoscope,
   Trash2,
   User,
@@ -22,13 +24,18 @@ import {
   duracaoDoAtendimento,
   ehConfirmado,
   hhmmDeMinutos,
-  mensagemDeConfirmacao,
   minutosDoHHMM,
 } from '../../utils/agenda';
 import { ROTULO_DO_STATUS, ehPendente, procedimentosDoAtendimento } from '../../utils/attendances';
-import { buildWhatsAppUrl } from '../../utils/whatsapp';
 import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fichasClinicas';
 import { ausenciaAvisada, instanteCurto } from '../../utils/agendamentoLink';
+import {
+  abrirAbaDoWhatsApp,
+  copiarLinkDeConfirmacao,
+  enviarLinkNoWhatsApp,
+  explicarErroDoLink,
+  temWhatsApp,
+} from './linkDeConfirmacao';
 
 /**
  * O que um cartão da grade abre.
@@ -57,8 +64,6 @@ interface AgendaDetalheModalProps {
    * atendimento na ficha da paciente.
    */
   onAcompanhamento: (a: Attendance) => void;
-  /** Abre o modal do link que a cliente recebe para confirmar, avisar que não vai ou pedir outro horário. */
-  onCompartilhar: (a: Attendance) => void;
   /** Aprova o horário que a cliente pediu pelo link — é uma remarcação, com confirmação em diálogo. */
   onAprovarPedido: (a: Attendance) => void;
   onRecusarPedido: (a: Attendance) => void;
@@ -83,7 +88,6 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
   onExcluir,
   onAlternarConfirmacao,
   onAcompanhamento,
-  onCompartilhar,
   onAprovarPedido,
   onRecusarPedido,
   onAbrirPaciente,
@@ -91,10 +95,6 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
   const inicioMin = minutosDoHHMM(atendimento.hora);
   const duracao = duracaoDoAtendimento(atendimento, catalogo);
   const contato = contatoDoAtendimento(atendimento, pacientes);
-  const linkWhatsApp = buildWhatsAppUrl(
-    contato,
-    mensagemDeConfirmacao(clinic, atendimento, catalogo)
-  );
   const pendente = ehPendente(atendimento);
   const confirmado = ehConfirmado(atendimento);
   /**
@@ -104,6 +104,48 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
    */
   const avisouAusencia = ausenciaAvisada(atendimento);
   const pedido = pendente ? atendimento.pedidoRemarcacao : undefined;
+
+  /** O link de confirmação sendo gerado — para o WhatsApp ou para a área de transferência. */
+  const [gerando, setGerando] = useState<'whatsapp' | 'copiar' | null>(null);
+  const [copiado, setCopiado] = useState(false);
+  /** O link que não deu para copiar sozinho — fica à vista para copiar à mão. */
+  const [linkParaCopiar, setLinkParaCopiar] = useState<string | null>(null);
+  const [erroDoLink, setErroDoLink] = useState<string | null>(null);
+
+  const enviarNoWhatsApp = () => {
+    if (gerando) return;
+    // A aba nasce no toque; o link é gravado depois.
+    const aba = abrirAbaDoWhatsApp();
+    setGerando('whatsapp');
+    setErroDoLink(null);
+    enviarLinkNoWhatsApp(atendimento, clinic, catalogo, contato, aba)
+      .catch((e) => {
+        console.warn('Falha ao enviar o link de confirmação:', e);
+        setErroDoLink(explicarErroDoLink(e));
+      })
+      .finally(() => setGerando(null));
+  };
+
+  const copiarLink = () => {
+    if (gerando) return;
+    setGerando('copiar');
+    setErroDoLink(null);
+    setLinkParaCopiar(null);
+    copiarLinkDeConfirmacao(atendimento, clinic, catalogo)
+      .then(({ link, copiado: deuCerto }) => {
+        if (deuCerto) {
+          setCopiado(true);
+          setTimeout(() => setCopiado(false), 2500);
+        } else {
+          setLinkParaCopiar(link);
+        }
+      })
+      .catch((e) => {
+        console.warn('Falha ao gerar o link de confirmação:', e);
+        setErroDoLink(explicarErroDoLink(e));
+      })
+      .finally(() => setGerando(null));
+  };
 
   return (
     <div
@@ -230,36 +272,69 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
             </p>
           )}
 
-          {/* Confirmação, em dois passos separados de propósito.
-
-              O botão de WhatsApp **não grava nada**: ele só abre a conversa com a mensagem
-              pronta. Quem confirma é a paciente, respondendo; então a recepção volta aqui e
-              marca. Gravar "confirmado" no momento do envio seria registrar uma pergunta como
-              se fosse resposta, e a agenda de amanhã passaria a mentir. */}
+          {/* Confirmação pelo link. O WhatsApp manda a mensagem com o endereço da página do
+              horário, em que a cliente confirma, avisa que não vai ou pede outro horário — e a
+              resposta volta sozinha para cá. Enviar **não grava** "confirmado": seria registrar
+              uma pergunta como se fosse resposta. O "Marcar como confirmado" fica para quando ela
+              responde por outro caminho. */}
           {pendente && (
             <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => onCompartilhar(atendimento)}
-                className={`${acaoBase} w-full bg-ink text-white hover:bg-ink/90`}
-              >
-                <Send className="w-4 h-4" />
-                Compartilhar link com a cliente
-              </button>
-
-              {linkWhatsApp ? (
-                <a
-                  href={linkWhatsApp}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`${acaoBase} w-full bg-whatsapp text-white`}
+              {temWhatsApp(contato) ? (
+                <button
+                  type="button"
+                  onClick={enviarNoWhatsApp}
+                  disabled={!!gerando}
+                  className={`${acaoBase} w-full bg-whatsapp text-white hover:opacity-90 disabled:opacity-60`}
                 >
-                  <MessageCircle className="w-4 h-4" />
+                  {gerando === 'whatsapp' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <MessageCircle className="w-4 h-4" />
+                  )}
                   Confirmar pelo WhatsApp
-                </a>
+                </button>
               ) : (
                 <p className="px-3 py-2.5 rounded-sm bg-surface-2 border border-line text-body text-muted text-center">
-                  Sem telefone no cadastro — não dá para confirmar pelo WhatsApp.
+                  Sem telefone no cadastro — copie o link e envie por onde preferir.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={copiarLink}
+                disabled={!!gerando}
+                className={`${acaoBase} w-full border ${
+                  copiado
+                    ? 'bg-ok-bg text-ok border-ok-line'
+                    : 'bg-card text-ink border-line hover:border-brand disabled:opacity-60'
+                }`}
+              >
+                {gerando === 'copiar' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : copiado ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+                {copiado ? 'Link copiado' : 'Copiar link de confirmação'}
+              </button>
+
+              {linkParaCopiar && (
+                <input
+                  type="text"
+                  readOnly
+                  value={linkParaCopiar}
+                  autoFocus
+                  onFocus={(e) => e.currentTarget.select()}
+                  aria-label="Link de confirmação"
+                  className="w-full glass-input px-3 py-2 rounded-sm text-xs text-gray-600 focus:outline-hidden"
+                />
+              )}
+
+              {erroDoLink && (
+                <p className="flex items-start gap-2 px-3 py-2.5 rounded-sm bg-danger-bg border border-danger-line text-body text-danger">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+                  {erroDoLink}
                 </p>
               )}
 
