@@ -1,0 +1,12 @@
+{
+  "projectId": "zulia-plataforma",
+  "appId": "1:1031812147083:web:b164181d211d1d68a4718e",
+  "apiKey": "AIzaSyCxU2ygcszfEbINZzNFIbG5ygzXMiwhNME",
+  "authDomain": "zulia-plataforma.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "zulia-plataforma.firebasestorage.app",
+  "messagingSenderId": "1031812147083",
+  "measurementId": "",
+  "oAuthClientId": "",
+  "recaptchaSiteKey": ""
+}

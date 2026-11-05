@@ -80,6 +80,33 @@ disso. Toda mudança de rumo deve ser registrada aqui.
   Brasil, a Apple cobra 15% sobre compras por link externo (acordo com o CADE, dez/2025). As
   regras do Google Play para link externo serão conferidas quando os apps forem feitos.
 
+## Projeto no Firebase: `zulia-plataforma`
+
+Projeto nº `1031812147083`, nome "Zulia". A configuração do app web fica em
+`zulia-firebase-config.json`, no mesmo formato do `firebase-applet-config.json` da La Vie (que
+continua apontando para o `database-dra-karoline` até a migração).
+
+| Item | Situação |
+| --- | --- |
+| Plano Blaze | Ativo (conta de faturamento vinculada) |
+| APIs | Firestore, Identity Toolkit, Firebase Storage, Firebase Rules e Cloud Billing ativas |
+| Firestore `(default)`, `southamerica-east1` | **Pendente** — o papel Editor não pode criar banco (`datastore.databases.create`) |
+| Storage `zulia-plataforma.firebasestorage.app`, `southamerica-east1` | Criado e vinculado ao Firebase, com regras fechadas (`allow read, write: if false`) |
+| Login por e-mail e senha | **Pendente** — o Auth nunca foi iniciado no projeto |
+| App web "Zulia Web" | Registrado: `1:1031812147083:web:b164181d211d1d68a4718e` |
+
+- **Regras fechadas até existirem as regras multi-clínica.** O `firestore.rules` e o
+  `storage.rules` deste repositório são os da La Vie (coleções na raiz) e **não** devem ser
+  publicados no projeto da Zulia.
+- **Iniciar o Auth pela API faz o upgrade para o Identity Platform**
+  (`identityPlatform:initializeAuth`), que não tem volta. O upgrade é o que libera a verificação
+  em duas etapas exigida para o login do dono e as *blocking functions*. Para logins com e-mail e
+  senha, ele é gratuito até 50 mil usuários ativos por mês. O botão "Começar" do console inicia o
+  Auth sem o upgrade.
+- **Conta de serviço temporária** `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com`
+  (papel Editor), usada para esta configuração. **Apagar a chave dela antes de migrar os dados
+  das pacientes.**
+
 ## Arquitetura multi-clínica
 
 ### Dados
