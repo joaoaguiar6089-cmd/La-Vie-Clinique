@@ -90,19 +90,22 @@ continua apontando para o `database-dra-karoline` até a migração).
 | --- | --- |
 | Plano Blaze | Ativo (conta de faturamento vinculada) |
 | APIs | Firestore, Identity Toolkit, Firebase Storage, Firebase Rules e Cloud Billing ativas |
-| Firestore `(default)`, `southamerica-east1` | **Pendente** — o papel Editor não pode criar banco (`datastore.databases.create`) |
+| Firestore `(default)` | **Refazer** — criado pelo console em `nam5` (EUA), vazio. Apagar e recriar em `southamerica-east1`; regras fechadas já publicadas |
 | Storage `zulia-plataforma.firebasestorage.app`, `southamerica-east1` | Criado e vinculado ao Firebase, com regras fechadas (`allow read, write: if false`) |
-| Login por e-mail e senha | **Pendente** — o Auth nunca foi iniciado no projeto |
+| Login por e-mail e senha | Ligado, com o Auth já no Identity Platform. Duas etapas (MFA) ainda desligada |
 | App web "Zulia Web" | Registrado: `1:1031812147083:web:b164181d211d1d68a4718e` |
 
 - **Regras fechadas até existirem as regras multi-clínica.** O `firestore.rules` e o
   `storage.rules` deste repositório são os da La Vie (coleções na raiz) e **não** devem ser
   publicados no projeto da Zulia.
-- **Iniciar o Auth pela API faz o upgrade para o Identity Platform**
-  (`identityPlatform:initializeAuth`), que não tem volta. O upgrade é o que libera a verificação
-  em duas etapas exigida para o login do dono e as *blocking functions*. Para logins com e-mail e
-  senha, ele é gratuito até 50 mil usuários ativos por mês. O botão "Começar" do console inicia o
-  Auth sem o upgrade.
+- **O Auth está no Identity Platform** (decisão do João; o upgrade não tem volta). É o que libera
+  a verificação em duas etapas exigida para o login do dono e as *blocking functions*. Para
+  logins com e-mail e senha, é gratuito até 50 mil usuários ativos por mês.
+- **Domínios autorizados no login:** por enquanto só `zulia-plataforma.firebaseapp.com` e
+  `zulia-plataforma.web.app`. O endereço em que o site for publicado precisa entrar na lista.
+- **A região do Firestore não muda depois de criado.** Por isso o banco tem de estar em
+  `southamerica-east1` antes de receber qualquer dado: as fichas são dados de saúde, e ficar no
+  Brasil evita declarar transferência internacional (LGPD), além de deixar o painel mais rápido.
 - **Conta de serviço temporária** `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com`
   (papel Editor), usada para esta configuração. **Apagar a chave dela antes de migrar os dados
   das pacientes.**
