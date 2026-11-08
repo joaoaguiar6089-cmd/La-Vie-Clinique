@@ -52,9 +52,13 @@ service firebase.storage {
     // envio de um arquivo NOVO é aberto (só imagem, até 5 MB) e o `get` também — o navegador
     // dela pede a URL de download do arquivo que acabou de enviar. Trocar ou apagar uma foto
     // existente é só da equipe.
+    //
+    // `resource == null` é o que faz valer o "NOVO": no Storage, enviar por cima de um arquivo
+    // que já existe conta como `create`, não `update`. Sem isso, quem soubesse o caminho de uma
+    // foto trocaria a imagem da paciente sem login.
     match /anamnese/fotos-pacientes/{arquivo} {
       allow get: if true;
-      allow create: if ehImagem() && cabeNoLimite();
+      allow create: if (resource == null || logado()) && ehImagem() && cabeNoLimite();
       allow update: if logado() && ehImagem() && cabeNoLimite();
       allow delete: if logado();
     }

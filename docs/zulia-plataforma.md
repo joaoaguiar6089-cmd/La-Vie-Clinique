@@ -121,6 +121,12 @@ continua apontando para o `database-dra-karoline` até a migração).
   são publicadas com `npm run publicar-regras -- --projeto zulia`. O `firestore.rules` e o
   `storage.rules` da raiz são os da La Vie (coleções na raiz) e **nunca** são publicados no
   projeto da Zulia.
+- **O `storage.rules` da raiz tem uma correção que não está no ar:** a paciente sem login só
+  envia foto *nova* em `anamnese/fotos-pacientes/` e não troca uma que já existe (PR #68).
+  Decisão do João em 8/11/2026: fica para a migração, quando a La Vie passa a usar
+  `zulia/storage.rules`, que já tem a correção. Atenção: `npm run publicar-regras` publica o
+  `firestore.rules` e o `storage.rules` juntos, então qualquer publicação das regras da La Vie
+  antes disso leva essa correção junto (o que não quebra nada para a paciente nem para a equipe).
 - **O Auth está no Identity Platform** (decisão do João; o upgrade não tem volta). É o que libera
   a verificação em duas etapas exigida para o login do dono e as *blocking functions*. Para
   logins com e-mail e senha, é gratuito até 50 mil usuários ativos por mês.
