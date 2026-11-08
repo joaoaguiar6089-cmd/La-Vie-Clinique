@@ -50,7 +50,8 @@ service firebase.storage {
       //
       // `resource == null` é o que faz valer o "NOVO": no Storage, enviar por cima de um arquivo
       // que já existe conta como `create`, não `update`. Sem isso, quem soubesse o caminho de uma
-      // foto trocaria a imagem da paciente. (A regra da La Vie, em /storage.rules, tem essa brecha.)
+      // foto trocaria a imagem da paciente. (A regra da La Vie, em /storage.rules, tem a mesma
+      // correção, com `logado()` no lugar de `daClinica(c)`.)
       match /anamnese/fotos-pacientes/{arquivo} {
         allow get: if true;
         allow create: if (resource == null || daClinica(c)) && ehImagem() && cabeNoLimite();
