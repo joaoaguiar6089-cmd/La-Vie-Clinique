@@ -229,6 +229,26 @@ poder ler os dados das pacientes depois que eles existirem**.
   A tela de login e o `index.html` (plugin no `vite.config.ts`) mostram a marca Zulia.
 - **Google Agenda:** sem `recursos.googleAgenda`, a seção mostra "em breve".
 
+### Criar uma clínica (até o cadastro da etapa 3)
+
+    npm run criar-clinica -- --nome "Clínica Alfa" --email dona@alfa.com.br --admin "Dra. Ana Souza"
+
+Opções: `--plano completo`, `--cortesia` (completo sem pagar), `--google-agenda` (liga o
+recurso), `--id <id>` (só para testes e para a La Vie na migração), `--sem-convite`, `--emulador`.
+O script, com o Admin SDK (credencial `ZULIA_CLIENT_EMAIL`/`ZULIA_PRIVATE_KEY`):
+1. gera o id aleatório (6 caracteres, sem os que se confundem) e confere que está livre;
+2. grava `clinicas/{id}` com nome, plano, cortesia, situação, dona, datas, `recursos` e o índice da
+   equipe;
+3. cria o login da admin (ou reaproveita um login dela sem clínica; recusa o de outra clínica e o
+   do dono) e grava as claims `clinicaId` e `papel: 'admin'`;
+4. grava `main_profile` e `public_profile` mínimos, com o nome e a admin na equipe;
+5. manda o e-mail de definir a senha (o convite).
+
+As sementes (fichas padrão e os 2 procedimentos de exemplo) entram no primeiro login dela.
+`scripts/verificar-ponta-a-ponta-zulia.ts` cria duas clínicas, entra no painel com cada uma pelo
+navegador, cria um login de profissional pela tela, abre e responde os links da paciente e
+confere que uma clínica não vê a outra.
+
 ### Testar sem tocar em projeto nenhum
 Os emuladores do Firebase (precisam de Java) rodam Auth, Firestore e Storage na máquina. Com eles,
 o painel e o servidor falam só com a máquina: `VITE_EMULADORES=1` no build, e no Node as variáveis
@@ -241,6 +261,9 @@ que o `firebase emulators:exec` define. Nunca no ar.
     # painel no legado, num navegador (config com as regras da raiz e o banco (default))
     VITE_EMULADORES=1 npm run build
     npx -y firebase-tools@15 emulators:exec --only auth,firestore,storage --config <config do legado> --project demo-zulia "npx tsx scripts/verificar-ponta-a-ponta-legado.ts"
+    # painel no modo Zulia, num navegador (criar-clinica, sementes, equipe, links, isolamento)
+    VITE_PLATAFORMA=zulia VITE_EMULADORES=1 npm run build
+    PLATAFORMA=zulia npx -y firebase-tools@15 emulators:exec --only auth,firestore,storage --config zulia/firebase.json --project demo-zulia "npx tsx scripts/verificar-ponta-a-ponta-zulia.ts"
 
 Depois, `npm run build` sem as variáveis.
 
@@ -264,7 +287,7 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
 | 2 | Regras multi-clínica em `zulia/` e o teste de isolamento `scripts/verificar-regras-zulia.ts` | Feita; passa nos emuladores. Falta publicar no `zulia-plataforma` e rodar lá |
 | 3 | Servidor por clínica: login pela claim, caminhos `clinicas/{c}/...`, rotas `/api/equipe` | Feita; testada nos emuladores (`scripts/verificar-servidor-zulia.ts`) |
 | 4 | Painel e páginas das pacientes por clínica: entrada pela claim, links com `c=`, sementes e marca | Feita; testada de ponta a ponta nos emuladores, no modo Zulia e no legado |
-| 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | A fazer |
+| 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | Feita; testada de ponta a ponta nos emuladores. Falta rodar no `zulia-plataforma` |
 | 6 | `scripts/migrar-la-vie.ts`, ensaio, e a migração no dia combinado com o João | A fazer |
 
 ### A chave do projeto (`plataforma.json`)
