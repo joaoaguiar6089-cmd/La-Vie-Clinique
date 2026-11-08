@@ -80,6 +80,28 @@ disso. Toda mudança de rumo deve ser registrada aqui.
   Brasil, a Apple cobra 15% sobre compras por link externo (acordo com o CADE, dez/2025). As
   regras do Google Play para link externo serão conferidas quando os apps forem feitos.
 
+### A La Vie na plataforma (decidido em 8/11/2026)
+- **A La Vie é uma clínica cliente da Zulia**, com o plano completo vitalício (cortesia
+  permanente). O login da Dra. Karoline (`enfesteta.karoline@gmail.com`) é a **admin dessa
+  clínica**, não dona da plataforma. O dono continua sendo o login do João.
+- **Mesmo endereço:** o app atual do AI Studio vira a Zulia na migração. Todas as clínicas usam
+  `drakaroline-lavie.ai.studio` até existir domínio próprio. Os links antigos, sem `c=`, abrem na
+  clínica da La Vie.
+- **Id da clínica:** código aleatório (ex.: `c=k3P9xq`), que nunca muda — nem quando a clínica
+  muda de nome.
+- **Clínica nova começa com** as fichas padrão (perguntas gerais e fichas de anamnese, avaliação e
+  acompanhamento) e **2 procedimentos genéricos de exemplo**, sem fotos nem textos da La Vie.
+  Nenhuma paciente de exemplo. Os 2 exemplos ocupam as vagas do plano gratuito até a clínica
+  apagá-los.
+- **Testes das regras no próprio `zulia-plataforma`**, enquanto ele está vazio. As clínicas de
+  teste são apagadas antes da migração. O projeto de testes separado é criado (pelo João) antes
+  da migração.
+- **Migração com acesso temporário do Claude:** durante a janela da migração, o João dá à conta
+  `claude-configuracao@zulia-plataforma` papéis **de leitura** no projeto da La Vie
+  (`database-dra-karoline`) e os tira logo depois.
+- **Google Agenda:** só a La Vie usa até haver domínio próprio e o app ser verificado no Google.
+  Nas outras clínicas, o botão aparece como "em breve" (`clinicas/{c}.recursos.googleAgenda`).
+
 ## Projeto no Firebase: `zulia-plataforma`
 
 Projeto nº `1031812147083`, nome "Zulia". A configuração do app web fica em
@@ -127,7 +149,9 @@ poder ler os dados das pacientes depois que eles existirem**.
   tiraria o João do controle), permissões (IAM) e faturamento. Isso fica com o João.
 - **Projeto da La Vie (`database-dra-karoline`):** o Claude continua só publicando regras. A
   chave do servidor (`servidor-fichas`) fica só nos Secrets do AI Studio e nunca vai para o
-  ambiente do Claude.
+  ambiente do Claude. **Exceção combinada:** na janela da migração, a conta do Claude recebe
+  papéis de leitura nesse projeto (Firestore, Storage e Authentication), e o João os tira logo
+  depois.
 
 ## Arquitetura multi-clínica
 
@@ -156,3 +180,17 @@ poder ler os dados das pacientes depois que eles existirem**.
 - Contadores de uso no documento da clínica, conferidos nas regras do Firestore junto com cada
   criação e exclusão (o contador sobe na mesma gravação em que o documento nasce). Assim o
   limite vale mesmo para quem tentar burlar a tela.
+
+## Etapa 2: várias clínicas e a migração da La Vie
+
+Plano aprovado pelo João em 8/11/2026. Cada fase é um PR mesclado na `main`. **Até a fase 6, a
+La Vie no ar (modo legado) não sente nenhuma mudança.**
+
+| Fase | O que entra | Situação |
+| --- | --- | --- |
+| 1 | `plataforma.json` escolhe o projeto (`legado` ou `zulia`) para o painel, o servidor e os scripts | A fazer |
+| 2 | Regras multi-clínica em `zulia/` e o teste de isolamento `scripts/verificar-regras-zulia.ts` | A fazer |
+| 3 | Servidor por clínica: login pela claim, caminhos `clinicas/{c}/...`, rotas `/api/equipe` | A fazer |
+| 4 | Painel e páginas das pacientes por clínica: entrada pela claim, links com `c=`, sementes e marca | A fazer |
+| 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | A fazer |
+| 6 | `scripts/migrar-la-vie.ts`, ensaio, e a migração no dia combinado com o João | A fazer |
