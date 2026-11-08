@@ -1,0 +1,113 @@
+rules_version = '2';
+
+// Regras do Storage da Zulia (bucket `zulia-plataforma.firebasestorage.app`), com os arquivos de
+// cada clínica em `clinicas/{c}/<as mesmas pastas de hoje>`. São as regras da La Vie
+// (`/storage.rules`) trocando "está logado" por "é desta clínica" — o que a regra antiga não
+// conseguia fazer, porque o Storage não consulta o banco. Aqui a clínica vem da claim do login
+// (ver zulia/firestore.rules).
+//
+// Como na La Vie: ninguém lista pasta nenhuma (cada caminho libera só `get` de um arquivo cujo nome
+// é um randomUUID), e quem não tem login vê as imagens pela URL de download gravada no documento,
+// que leva um token próprio e não passa por estas regras.
+//
+// Publicar com:  npm run publicar-regras -- --projeto zulia
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function ehImagem() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function cabeNoLimite() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
+    function daClinica(c) {
+      return request.auth != null && request.auth.token.get('clinicaId', null) == c;
+    }
+
+    function imagemDaClinica(c) {
+      return daClinica(c) && ehImagem() && cabeNoLimite();
+    }
+
+    function comprovanteDaClinica(c) {
+      return daClinica(c)
+        && (ehImagem() || request.resource.contentType == 'application/pdf')
+        && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    match /clinicas/{c} {
+      // Fotos de referência e imagem orientativa das fichas-modelo: a página da paciente mostra.
+      match /anamnese/fichas-modelo/{templateId}/{arquivo} {
+        allow get: if true;
+        allow create, update: if imagemDaClinica(c);
+        allow delete: if daClinica(c);
+      }
+
+      // Foto enviada pela própria paciente no formulário online, sem login: o envio de um arquivo
+      // NOVO é aberto (só imagem, até 5 MB), e o `get` também — o navegador dela pede a URL de
+      // download do que acabou de enviar. Trocar ou apagar é só da clínica.
+      //
+      // `resource == null` é o que faz valer o "NOVO": no Storage, enviar por cima de um arquivo
+      // que já existe conta como `create`, não `update`. Sem isso, quem soubesse o caminho de uma
+      // foto trocaria a imagem da paciente. (A regra da La Vie, em /storage.rules, tem essa brecha.)
+      match /anamnese/fotos-pacientes/{arquivo} {
+        allow get: if true;
+        allow create: if (resource == null || daClinica(c)) && ehImagem() && cabeNoLimite();
+        allow update: if imagemDaClinica(c);
+        allow delete: if daClinica(c);
+      }
+
+      // Fotos anotadas pela profissional: só a clínica.
+      match /anamnese/fotos-anotadas/{arquivo} {
+        allow get: if daClinica(c);
+        allow create, update: if imagemDaClinica(c);
+        allow delete: if daClinica(c);
+      }
+
+      // Identidade da clínica (logo, capa, equipe, manequins do mapa do laser) e fotos do catálogo.
+      match /clinica/{allPaths=**} {
+        allow get: if true;
+        allow create, update: if imagemDaClinica(c);
+        allow delete: if daClinica(c);
+      }
+
+      match /procedimentos/{allPaths=**} {
+        allow get: if true;
+        allow create, update: if imagemDaClinica(c);
+        allow delete: if daClinica(c);
+      }
+
+      // Avaliação e acompanhamento (fotos clínicas, antes e depois): só a clínica.
+      match /avaliacoes/{allPaths=**} {
+        allow get: if daClinica(c);
+        allow create, update: if imagemDaClinica(c);
+        allow delete: if daClinica(c);
+      }
+
+      match /acompanhamentos/{allPaths=**} {
+        allow get: if daClinica(c);
+        allow create, update: if imagemDaClinica(c);
+        allow delete: if daClinica(c);
+      }
+
+      // Comprovantes de pagamento (foto ou PDF, até 10 MB) de orçamentos e recibos.
+      match /orcamentos/{quoteId}/comprovantes/{arquivo} {
+        allow get: if daClinica(c);
+        allow create, update: if comprovanteDaClinica(c);
+        allow delete: if daClinica(c);
+      }
+
+      match /recibos/{receiptId}/comprovantes/{arquivo} {
+        allow get: if daClinica(c);
+        allow create, update: if comprovanteDaClinica(c);
+        allow delete: if daClinica(c);
+      }
+    }
+
+    // Qualquer outro caminho fica fechado.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

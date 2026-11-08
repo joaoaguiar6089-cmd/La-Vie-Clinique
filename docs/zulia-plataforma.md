@@ -117,9 +117,10 @@ continua apontando para o `database-dra-karoline` até a migração).
 | Login por e-mail e senha | Ligado, com o Auth já no Identity Platform. Duas etapas (MFA) ainda desligada |
 | App web "Zulia Web" | Registrado: `1:1031812147083:web:b164181d211d1d68a4718e` |
 
-- **Regras fechadas até existirem as regras multi-clínica.** O `firestore.rules` e o
-  `storage.rules` deste repositório são os da La Vie (coleções na raiz) e **não** devem ser
-  publicados no projeto da Zulia.
+- **As regras da Zulia moram em `zulia/`** (`zulia/firestore.rules` e `zulia/storage.rules`) e
+  são publicadas com `npm run publicar-regras -- --projeto zulia`. O `firestore.rules` e o
+  `storage.rules` da raiz são os da La Vie (coleções na raiz) e **nunca** são publicados no
+  projeto da Zulia.
 - **O Auth está no Identity Platform** (decisão do João; o upgrade não tem volta). É o que libera
   a verificação em duas etapas exigida para o login do dono e as *blocking functions*. Para
   logins com e-mail e senha, é gratuito até 50 mil usuários ativos por mês.
@@ -170,6 +171,12 @@ poder ler os dados das pacientes depois que eles existirem**.
   papel (`admin` ou `profissional`). As regras do Firestore **e do Storage** conferem a clínica
   pela claim — sem leitura extra de documento, e funcionando no Storage, que não consulta o banco.
 - O dono da plataforma tem a claim `donoDaPlataforma`.
+- As regras (`zulia/firestore.rules`, `zulia/storage.rules`) conferem só a claim (`daClinica(c)`,
+  `adminDa(c)`, `dono()`), **sem `get()` de perfil**. O documento `clinicas/{c}` é lido pelos
+  membros e pelo dono, e **ninguém grava nele pelo navegador**. O dono **não** lê as coleções de
+  dentro da clínica (a Zulia é operadora dos dados). As leituras públicas e a resposta anônima ao
+  link do agendamento são as mesmas da La Vie. `scripts/verificar-regras-zulia.ts` confere o
+  isolamento entrando com cada tipo de login.
 - Criar clínica, criar login de profissional e mudar plano passam pelo servidor (Admin SDK).
 
 ### Links das pacientes
@@ -189,7 +196,7 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
 | Fase | O que entra | Situação |
 | --- | --- | --- |
 | 1 | `plataforma.json` escolhe o projeto (`legado` ou `zulia`) para o painel, o servidor e os scripts | Feita |
-| 2 | Regras multi-clínica em `zulia/` e o teste de isolamento `scripts/verificar-regras-zulia.ts` | A fazer |
+| 2 | Regras multi-clínica em `zulia/` e o teste de isolamento `scripts/verificar-regras-zulia.ts` | Feita; passa nos emuladores. Falta publicar no `zulia-plataforma` e rodar lá |
 | 3 | Servidor por clínica: login pela claim, caminhos `clinicas/{c}/...`, rotas `/api/equipe` | A fazer |
 | 4 | Painel e páginas das pacientes por clínica: entrada pela claim, links com `c=`, sementes e marca | A fazer |
 | 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | A fazer |
