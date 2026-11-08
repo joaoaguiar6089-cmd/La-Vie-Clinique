@@ -1,7 +1,11 @@
 import crypto from 'node:crypto';
 import express, { type Request, type Response, type Router } from 'express';
-import { firebaseConfig } from '../src/lib/projetoFirebase';
+import type { Firestore } from 'firebase-admin/firestore';
+import { ehZulia } from '../src/lib/projetoFirebase';
 import { ENDERECO_DO_SITE } from '../src/utils/publicLinks';
+import { caminhoDaColecao } from './clinicas';
+import { bancoAdmin } from './firebaseAdmin';
+import { loginDoPedido, type LoginDoPainel } from './login';
 
 /**
  * A parte do Google Agenda que precisa de servidor: conectar a conta Google de cada profissional e
@@ -26,6 +30,11 @@ import { ENDERECO_DO_SITE } from '../src/utils/publicLinks';
  *
  * Configuração (Secrets do AI Studio): GOOGLE_AGENDA_CLIENT_ID e GOOGLE_AGENDA_CLIENT_SECRET.
  * Ver docs/google-agenda.md.
+ *
+ * Na Zulia, `/sincronizar` e `/desconectar` exigem também, pela claim do login, uma clínica com o
+ * recurso ligado (`clinicas/{c}.recursos.googleAgenda`) — por enquanto, só a La Vie. E a conta
+ * enviada tem de ser uma das guardadas em `clinicas/{c}/clinic_settings/google_agenda`: a
+ * autorização cifrada de uma clínica não serve no pedido de outra.
  */
 
 const ESCOPOS = ['openid', 'email', 'https://www.googleapis.com/auth/calendar.app.created'];
@@ -108,84 +117,69 @@ export const decifrar = (cifrado: string, segredo: string): string => {
 };
 
 // ==========================================
-// LOGIN DO PAINEL (Firebase ID token)
+// LOGIN DO PAINEL E CLÍNICA
 // ==========================================
 
-const CERTIFICADOS_FIREBASE =
-  'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
-let certificados: { ate: number; chaves: Record<string, string> } | null = null;
+export interface OpcoesDaAgenda {
+  /** Para os testes: as rotas como na Zulia (por clínica) ou no legado. */
+  zulia?: boolean;
+  /** Para os testes: outro banco (um emulador). */
+  banco?: () => Firestore | null;
+  /** Para os testes: outra conferência de login. */
+  login?: (req: Request) => Promise<LoginDoPainel | null>;
+}
 
-const buscarCertificados = async (forcar = false): Promise<Record<string, string>> => {
-  if (!forcar && certificados && certificados.ate > Date.now()) return certificados.chaves;
-  const resposta = await fetch(CERTIFICADOS_FIREBASE);
-  if (!resposta.ok) throw new Error(`certificados: HTTP ${resposta.status}`);
-  const idade = /max-age=(\d+)/.exec(resposta.headers.get('cache-control') || '');
-  const chaves = (await resposta.json()) as Record<string, string>;
-  certificados = { ate: Date.now() + (idade ? Number(idade[1]) : 3600) * 1000, chaves };
-  return chaves;
-};
+const criarConferencias = (opcoes: OpcoesDaAgenda) => {
+  const zulia = opcoes.zulia ?? ehZulia;
+  const banco = opcoes.banco ?? bancoAdmin;
+  const verificar = opcoes.login ?? loginDoPedido;
 
-const lerParteDoJwt = (parte: string): any => JSON.parse(Buffer.from(parte, 'base64url').toString('utf8'));
-
-/**
- * Confere o login do painel: o mesmo token que o Firebase Auth entrega à profissional logada.
- * Devolve o uid, ou `null` se não for um login válido deste projeto.
- */
-export const verificarLoginDoPainel = async (
-  token: string,
-  projeto: string = firebaseConfig.projectId,
-  agora: number = Date.now()
-): Promise<string | null> => {
-  const partes = token.split('.');
-  if (partes.length !== 3) return null;
-  let cabecalho: any;
-  let conteudo: any;
-  try {
-    cabecalho = lerParteDoJwt(partes[0]);
-    conteudo = lerParteDoJwt(partes[1]);
-  } catch {
+  /** O login do painel (ver `server/login.ts`), ou `null` com a resposta já dada. */
+  const exigirLogin = async (req: Request, res: Response): Promise<LoginDoPainel | null> => {
+    try {
+      const login = await verificar(req);
+      if (login && (!zulia || login.clinicaId)) return login;
+    } catch (e) {
+      console.warn('[google-agenda] não foi possível conferir o login:', e);
+    }
+    res.status(401).json({ erro: 'login' });
     return null;
-  }
-  const segundos = agora / 1000;
-  if (
-    cabecalho?.alg !== 'RS256' ||
-    typeof cabecalho.kid !== 'string' ||
-    conteudo?.aud !== projeto ||
-    conteudo?.iss !== `https://securetoken.google.com/${projeto}` ||
-    typeof conteudo.sub !== 'string' ||
-    !conteudo.sub ||
-    typeof conteudo.exp !== 'number' ||
-    conteudo.exp < segundos ||
-    (typeof conteudo.iat === 'number' && conteudo.iat > segundos + 300)
-  ) {
-    return null;
-  }
+  };
 
-  let chaves = await buscarCertificados();
-  if (!chaves[cabecalho.kid]) chaves = await buscarCertificados(true);
-  const certificado = chaves[cabecalho.kid];
-  if (!certificado) return null;
+  /**
+   * Na Zulia: a clínica do login tem o recurso, e `tokenCifrado` é de uma conta dela. Responde e
+   * devolve `false` quando não. No legado, sempre `true` (uma clínica só).
+   */
+  const conferirClinica = async (login: LoginDoPainel, tokenCifrado: unknown, res: Response): Promise<boolean> => {
+    if (!zulia) return true;
+    const db = banco();
+    if (!db || !login.clinicaId) {
+      res.status(503).json({ erro: 'servidor-nao-configurado' });
+      return false;
+    }
+    try {
+      const [clinica, config] = await Promise.all([
+        db.doc(`clinicas/${login.clinicaId}`).get(),
+        db.doc(`${caminhoDaColecao(login.clinicaId, 'clinic_settings')}/google_agenda`).get(),
+      ]);
+      if (clinica.data()?.recursos?.googleAgenda !== true) {
+        res.status(403).json({ erro: 'recurso-indisponivel' });
+        return false;
+      }
+      const contas = Object.values((config.data()?.contas || {}) as Record<string, { tokenCifrado?: unknown }>);
+      if (typeof tokenCifrado !== 'string' || !contas.some((c) => c?.tokenCifrado === tokenCifrado)) {
+        res.status(403).json({ erro: 'conta-de-outra-clinica' });
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.warn('[google-agenda] não foi possível conferir a clínica:', e);
+      res.status(503).json({ erro: 'indisponivel' });
+      return false;
+    }
+  };
 
-  const valido = crypto.verify(
-    'RSA-SHA256',
-    Buffer.from(`${partes[0]}.${partes[1]}`),
-    new crypto.X509Certificate(certificado).publicKey,
-    Buffer.from(partes[2], 'base64url')
-  );
-  return valido ? conteudo.sub : null;
-};
-
-const exigirLogin = async (req: Request, res: Response): Promise<string | null> => {
-  const cabecalho = req.headers.authorization || '';
-  const token = cabecalho.startsWith('Bearer ') ? cabecalho.slice(7).trim() : '';
-  try {
-    const uid = token ? await verificarLoginDoPainel(token) : null;
-    if (uid) return uid;
-  } catch (e) {
-    console.warn('[google-agenda] não foi possível conferir o login:', e);
-  }
-  res.status(401).json({ erro: 'login' });
-  return null;
+  return { exigirLogin, conferirClinica };
 };
 
 // ==========================================
@@ -193,6 +187,8 @@ const exigirLogin = async (req: Request, res: Response): Promise<string | null> 
 // ==========================================
 
 class ContaInvalida extends Error {}
+
+const lerParteDoJwt = (parte: string): any => JSON.parse(Buffer.from(parte, 'base64url').toString('utf8'));
 
 /** Resposta inesperada da API do Google Agenda. */
 class ErroDoGoogle extends Error {
@@ -420,8 +416,9 @@ const mensagemDoErroDoGoogle = (erro: string): string =>
 // ROTAS
 // ==========================================
 
-export const criarRotasGoogleAgenda = (): Router => {
+export const criarRotasGoogleAgenda = (opcoes: OpcoesDaAgenda = {}): Router => {
   const rotas = express.Router();
+  const { exigirLogin, conferirClinica } = criarConferencias(opcoes);
 
   // O painel também roda fora deste endereço (dentro do AI Studio, por exemplo) e chama estas
   // rotas de lá. Liberar a origem é seguro porque nada aqui depende de cookie: o que autoriza é o
@@ -572,7 +569,8 @@ export const criarRotasGoogleAgenda = (): Router => {
       res.status(503).json({ erro: 'nao-configurado' });
       return;
     }
-    if (!(await exigirLogin(req, res))) return;
+    const login = await exigirLogin(req, res);
+    if (!login) return;
 
     const { tokenCifrado, calendarioId, operacoes } = req.body || {};
     if (
@@ -586,6 +584,7 @@ export const criarRotasGoogleAgenda = (): Router => {
       res.status(400).json({ erro: 'pedido-invalido' });
       return;
     }
+    if (!(await conferirClinica(login, tokenCifrado, res))) return;
 
     let acesso: string;
     try {
@@ -639,8 +638,10 @@ export const criarRotasGoogleAgenda = (): Router => {
   });
 
   rotas.post('/desconectar', express.json({ limit: '16kb' }), async (req, res) => {
-    if (!(await exigirLogin(req, res))) return;
+    const login = await exigirLogin(req, res);
+    if (!login) return;
     const tokenCifrado = req.body?.tokenCifrado;
+    if (!(await conferirClinica(login, tokenCifrado, res))) return;
     if (typeof tokenCifrado === 'string' && configurado()) {
       acessos.delete(tokenCifrado);
       try {

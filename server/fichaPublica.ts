@@ -1,8 +1,11 @@
 import crypto from 'node:crypto';
 import express, { type Request, type Response, type Router } from 'express';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import { ehZulia } from '../src/lib/projetoFirebase';
+import { CLINICA_DOS_LINKS_ANTIGOS } from '../src/utils/clinicas';
 import { anamneseFechada } from '../src/utils/evaluations';
 import { mesmaEquipe, uidsDaEquipe } from '../src/utils/equipe';
+import { caminhoDaColecao, clinicaDoPedido, colecaoDaClinica } from './clinicas';
 import { bancoAdmin, credencialDoAmbiente } from './firebaseAdmin';
 
 /**
@@ -29,9 +32,14 @@ import { bancoAdmin, credencialDoAmbiente } from './firebaseAdmin';
  * direto do banco: não tem dado de paciente, e as regras seguem abertas para leitura.
  *
  * Rotas (todas em /api/ficha-publica):
- *   GET  /status  → { configurado, conectado, equipeSincronizada } (ou o `motivo` da falha)
+ *   GET  /status  → { configurado, conectado, equipeSincronizada } (ou o `motivo` da falha); na
+ *                   Zulia, { configurado, conectado, modo, linksAntigos }
  *   POST /abrir   → { ficha, paciente, respostasAnteriores } ou { precisaConfirmar }
  *   POST /salvar  → { ficha }
+ *
+ * Na Zulia, `/abrir` e `/salvar` recebem também `c`, a clínica do link: tudo é lido e gravado em
+ * `clinicas/{c}/...`. Link sem `c` é um link antigo da La Vie (`CLINICA_DOS_LINKS_ANTIGOS`). No
+ * modo legado, o `c` é ignorado e tudo fica na raiz, como sempre.
  */
 
 const PACIENTES = 'patients';
@@ -42,6 +50,18 @@ const MAX_SALTOS_DE_JUNCAO = 5;
 const OBSERVACAO_PADRAO = 'Ficha preenchida online previamente pelo(a) paciente via link compartilhado.';
 
 type Doc = Record<string, any> & { id: string };
+
+/** O banco e a clínica onde a ficha mora (`clinicaId` nulo: a raiz, no modo legado). */
+export interface LugarDaClinica {
+  db: Firestore;
+  clinicaId: string | null;
+}
+
+/** Aceita o banco sozinho (a raiz, como nos testes antigos) ou banco e clínica. */
+const lugarDe = (onde: Firestore | LugarDaClinica): LugarDaClinica =>
+  'clinicaId' in onde ? onde : { db: onde, clinicaId: null };
+
+const col = (l: LugarDaClinica, nome: string) => colecaoDaClinica(l.db, l.clinicaId, nome);
 
 /** Ficha fechada: atendimento feito. Mesma regra da página da paciente (`anamneseFechada`). */
 const fechada = (ficha: Doc): boolean =>
@@ -183,16 +203,17 @@ export const criarLimitadores = (agora?: () => number) => ({
 // LEITURAS
 // ==========================================
 
-const lerDoc = async (db: Firestore, colecao: string, id: string): Promise<Doc | null> => {
-  const snap = await db.collection(colecao).doc(id).get();
+const lerDoc = async (l: LugarDaClinica, colecao: string, id: string): Promise<Doc | null> => {
+  const snap = await col(l, colecao).doc(id).get();
   return snap.exists ? ({ ...(snap.data() as Record<string, any>), id: snap.id } as Doc) : null;
 };
 
 /** O cadastro do link, seguindo a cadeia de cadastros juntados (ver `Patient.juntadoA`). */
-export async function resolverPaciente(db: Firestore, pacienteId: string): Promise<Doc | null> {
+export async function resolverPaciente(onde: Firestore | LugarDaClinica, pacienteId: string): Promise<Doc | null> {
+  const l = lugarDe(onde);
   let id = pacienteId;
   for (let salto = 0; salto <= MAX_SALTOS_DE_JUNCAO; salto++) {
-    const paciente = await lerDoc(db, PACIENTES, id);
+    const paciente = await lerDoc(l, PACIENTES, id);
     if (!paciente) return null;
     if (!paciente.juntadoA) return paciente;
     id = String(paciente.juntadoA);
@@ -200,8 +221,8 @@ export async function resolverPaciente(db: Firestore, pacienteId: string): Promi
   return null;
 }
 
-const fichasDaPaciente = async (db: Firestore, pacienteId: string): Promise<Doc[]> => {
-  const snap = await db.collection(FICHAS).where('pacienteId', '==', pacienteId).get();
+const fichasDaPaciente = async (l: LugarDaClinica, pacienteId: string): Promise<Doc[]> => {
+  const snap = await col(l, FICHAS).where('pacienteId', '==', pacienteId).get();
   return snap.docs
     .map((d) => ({ ...(d.data() as Record<string, any>), id: d.id }) as Doc)
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -235,9 +256,11 @@ const conferirIdentidade = (
   paciente: Doc,
   pedido: PedidoAbrir,
   limites: Limitadores,
-  ip: string
+  ip: string,
+  clinicaId: string | null = null
 ): void => {
-  const chaveDaFicha = `ficha:${ficha.id}`;
+  // Com a clínica na chave: duas clínicas podem ter fichas com o mesmo id.
+  const chaveDaFicha = `ficha:${clinicaId ? `${clinicaId}/` : ''}${ficha.id}`;
   if (limites.identidadePorFicha.esgotado(chaveDaFicha) || limites.identidadePorIp.esgotado(`ip:${ip}`)) {
     throw new ErroDaFicha(429, 'tentativas');
   }
@@ -251,11 +274,12 @@ const conferirIdentidade = (
 };
 
 export async function abrirFicha(
-  db: Firestore,
+  onde: Firestore | LugarDaClinica,
   pedido: PedidoAbrir,
   limites: Limitadores,
   ip: string
 ): Promise<RespostaAbrir> {
+  const l = lugarDe(onde);
   const fichaId = idDoLink(pedido.ficha);
   const anamneseId = idDoLink(pedido.anamnese);
   const pacienteId = idDoLink(pedido.paciente);
@@ -265,14 +289,14 @@ export async function abrirFicha(
   let respostasAnteriores: Record<string, any> | null = null;
 
   if (fichaId) {
-    ficha = await lerDoc(db, FICHAS, fichaId);
+    ficha = await lerDoc(l, FICHAS, fichaId);
     if (!ficha) throw new ErroDaFicha(404, 'ficha-nao-encontrada');
-    paciente = ficha.pacienteId ? await resolverPaciente(db, String(ficha.pacienteId)) : null;
+    paciente = ficha.pacienteId ? await resolverPaciente(l, String(ficha.pacienteId)) : null;
   } else if (anamneseId && pacienteId) {
-    paciente = await resolverPaciente(db, pacienteId);
+    paciente = await resolverPaciente(l, pacienteId);
     // `paciente.id`, e não o do link: o link pode ser de um cadastro que depois foi juntado a
     // outro, e as fichas dela agora apontam para o que ficou.
-    const fichas = await fichasDaPaciente(db, paciente?.id || pacienteId);
+    const fichas = await fichasDaPaciente(l, paciente?.id || pacienteId);
     ficha = fichas.find((f) => f.templateId === anamneseId) || null;
     if (!ficha && fichas.length > 0 && ehObjetoSimples(fichas[0].respostasGerais)) {
       respostasAnteriores = { ...fichas[0].respostasGerais };
@@ -293,7 +317,7 @@ export async function abrirFicha(
         precisaConfirmar: { pedeNascimento: !!(paciente.dataNascimento || ficha.pacienteDataNascimento) },
       };
     }
-    conferirIdentidade(ficha, paciente, pedido, limites, ip);
+    conferirIdentidade(ficha, paciente, pedido, limites, ip, l.clinicaId);
   }
 
   return { ficha, paciente, respostasAnteriores };
@@ -312,10 +336,11 @@ export interface PedidoSalvar {
 }
 
 export async function salvarFicha(
-  db: Firestore,
+  onde: Firestore | LugarDaClinica,
   pedido: PedidoSalvar,
   agora: Date = new Date()
 ): Promise<{ ficha: Doc }> {
+  const l = lugarDe(onde);
   const cadastro = dadosDoCadastro(pedido.dadosPaciente);
   const enviada = ehObjetoSimples(pedido.dadosFicha) ? pedido.dadosFicha : {};
   const agoraIso = agora.toISOString();
@@ -329,16 +354,16 @@ export async function salvarFicha(
   let pacienteId: string | null = null;
 
   if (fichaId) {
-    existente = await lerDoc(db, FICHAS, fichaId);
+    existente = await lerDoc(l, FICHAS, fichaId);
     if (!existente) throw new ErroDaFicha(404, 'ficha-nao-encontrada');
   } else if (anamneseId) {
-    modelo = await lerDoc(db, MODELOS, anamneseId);
+    modelo = await lerDoc(l, MODELOS, anamneseId);
     if (!modelo) throw new ErroDaFicha(404, 'modelo-nao-encontrado');
     if (pacienteDoLink) {
-      const paciente = await resolverPaciente(db, pacienteDoLink);
+      const paciente = await resolverPaciente(l, pacienteDoLink);
       if (paciente) {
         pacienteId = paciente.id;
-        const fichas = await fichasDaPaciente(db, paciente.id);
+        const fichas = await fichasDaPaciente(l, paciente.id);
         existente = fichas.find((f) => f.templateId === anamneseId) || null;
       }
     }
@@ -350,8 +375,8 @@ export async function salvarFicha(
   if (existente?.pacienteId) pacienteId = String(existente.pacienteId);
 
   // O cadastro: o que já existe (seguindo uma junção feita depois do envio do link) ou um novo.
-  const pacienteFinal = pacienteId ? (await resolverPaciente(db, pacienteId))?.id || pacienteId : novoId('pat');
-  const pacienteRef = db.collection(PACIENTES).doc(pacienteFinal);
+  const pacienteFinal = pacienteId ? (await resolverPaciente(l, pacienteId))?.id || pacienteId : novoId('pat');
+  const pacienteRef = col(l, PACIENTES).doc(pacienteFinal);
   const pacienteExiste = pacienteId ? (await pacienteRef.get()).exists : false;
 
   const dadosDaPacienteNaFicha = {
@@ -370,7 +395,7 @@ export async function salvarFicha(
     profissionalNome: texto(enviada.profissionalNome, 200),
   };
 
-  const fichaRef = existente ? db.collection(FICHAS).doc(existente.id) : db.collection(FICHAS).doc(novoId('rec'));
+  const fichaRef = existente ? col(l, FICHAS).doc(existente.id) : col(l, FICHAS).doc(novoId('rec'));
   let dadosDaFicha: Record<string, any>;
 
   if (existente) {
@@ -413,7 +438,7 @@ export async function salvarFicha(
   // `fotoUrl` é o espelho antigo de `fotoPacienteUrl` — ver `saveAnamnesisRecord`.
   if (fotoPacienteUrl) dadosDaFicha.fotoUrl = FieldValue.delete();
 
-  const lote = db.batch();
+  const lote = l.db.batch();
   lote.set(
     pacienteRef,
     { ...cadastro, updatedAt: agoraIso, ...(pacienteExiste ? {} : { createdAt: agoraIso }) },
@@ -470,11 +495,24 @@ export interface OpcoesDasRotas {
   /** Para os testes: outro banco (um emulador). */
   banco?: () => Firestore | null;
   limites?: Limitadores;
+  /** Para os testes: as rotas no modo Zulia (clínica do link) ou legado (raiz). */
+  zulia?: boolean;
 }
 
 export function criarRotasFichaPublica(opcoes: OpcoesDasRotas = {}): Router {
   const banco = opcoes.banco ?? bancoAdmin;
   const limites = opcoes.limites ?? criarLimitadores();
+  const zulia = opcoes.zulia ?? ehZulia;
+
+  /** O lugar da ficha deste pedido, ou `null` (já respondido) quando o link não diz a clínica. */
+  const lugarDoPedido = (db: Firestore, req: Request, res: Response): LugarDaClinica | null => {
+    const clinicaId = clinicaDoPedido(req.body?.c, zulia);
+    if (clinicaId === undefined) {
+      res.status(404).json({ erro: 'clinica-nao-encontrada' });
+      return null;
+    }
+    return { db, clinicaId };
+  };
   const rotas = express.Router();
   // A foto da paciente pode chegar embutida quando o envio dela para o Storage falhou.
   rotas.use(express.json({ limit: '4mb' }));
@@ -495,10 +533,21 @@ export function criarRotasFichaPublica(opcoes: OpcoesDasRotas = {}): Router {
       return;
     }
     try {
+      if (zulia) {
+        // Na Zulia não há lista de equipe a sincronizar (a claim do login é que vale). O que
+        // interessa no dia da migração: a credencial lê o banco, e a clínica dos links antigos
+        // existe. Só sim ou não; nenhum dado sai daqui.
+        await db.collection('clinicas').limit(1).get();
+        const linksAntigos = CLINICA_DOS_LINKS_ANTIGOS
+          ? (await db.doc(`clinicas/${CLINICA_DOS_LINKS_ANTIGOS}`).get()).exists
+          : false;
+        res.set('Cache-Control', 'no-store').json({ configurado: true, conectado: true, modo: 'zulia', linksAntigos });
+        return;
+      }
       // `equipeSincronizada`: a lista de logins que as regras conferem já bate com a equipe. As
       // regras novas só podem ser publicadas com isto em `true` — senão a equipe fica trancada
       // fora do próprio painel. Só um sim ou não; nenhum dado sai daqui.
-      const perfil = await db.collection('clinic_settings').doc('main_profile').get();
+      const perfil = await db.collection(caminhoDaColecao(null, 'clinic_settings')).doc('main_profile').get();
       const dados = perfil.data() || {};
       const uids = uidsDaEquipe(dados.professionals);
       res.set('Cache-Control', 'no-store').json({
@@ -529,8 +578,10 @@ export function criarRotasFichaPublica(opcoes: OpcoesDasRotas = {}): Router {
       res.status(429).json({ erro: 'muitos-pedidos' });
       return;
     }
+    const lugar = lugarDoPedido(db, req, res);
+    if (!lugar) return;
     try {
-      res.set('Cache-Control', 'no-store').json(await abrirFicha(db, req.body || {}, limites, ipDe(req)));
+      res.set('Cache-Control', 'no-store').json(await abrirFicha(lugar, req.body || {}, limites, ipDe(req)));
     } catch (erro) {
       responderErro(res, erro, 'abrir');
     }
@@ -546,8 +597,10 @@ export function criarRotasFichaPublica(opcoes: OpcoesDasRotas = {}): Router {
       res.status(429).json({ erro: 'muitos-pedidos' });
       return;
     }
+    const lugar = lugarDoPedido(db, req, res);
+    if (!lugar) return;
     try {
-      res.set('Cache-Control', 'no-store').json(await salvarFicha(db, req.body || {}));
+      res.set('Cache-Control', 'no-store').json(await salvarFicha(lugar, req.body || {}));
     } catch (erro) {
       responderErro(res, erro, 'salvar');
     }

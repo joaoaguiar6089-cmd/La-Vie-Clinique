@@ -17,7 +17,8 @@ import {
   idDoEventoGoogle,
   planejarSincronizacao,
 } from '../src/utils/googleAgenda';
-import { cifrar, criarRotasGoogleAgenda, decifrar, verificarLoginDoPainel } from '../server/googleAgenda';
+import { cifrar, criarRotasGoogleAgenda, decifrar } from '../server/googleAgenda';
+import { verificarLogin } from '../server/login';
 import { paginaDePrivacidade } from '../server/privacidade';
 
 let falhas = 0;
@@ -205,29 +206,21 @@ console.log('\nCifra da autorização');
 
 console.log('\nLogin do painel');
 {
+  // A conferência agora é do Admin SDK (`server/login.ts`). Tokens montados à mão nunca passam:
+  // nem a assinatura nem o `kid` são do Google.
   const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
-  const agora = Date.parse('2026-10-15T12:00:00Z');
-  const jwt = (conteudo: Record<string, unknown>) =>
-    `${b64({ alg: 'RS256', kid: 'k1' })}.${b64(conteudo)}.assinatura`;
+  const jwt = (conteudo: Record<string, unknown>) => `${b64({ alg: 'RS256', kid: 'k1' })}.${b64(conteudo)}.assinatura`;
   const base = {
     aud: 'database-dra-karoline',
     iss: 'https://securetoken.google.com/database-dra-karoline',
     sub: 'uid-1',
-    exp: agora / 1000 + 600,
+    exp: Date.now() / 1000 + 600,
   };
-  ok('texto qualquer → recusado', (await verificarLoginDoPainel('abc', 'database-dra-karoline', agora)) === null);
-  ok(
-    'token de outro projeto → recusado',
-    (await verificarLoginDoPainel(jwt({ ...base, aud: 'outro' }), 'database-dra-karoline', agora)) === null
-  );
-  ok(
-    'token vencido → recusado',
-    (await verificarLoginDoPainel(jwt({ ...base, exp: agora / 1000 - 10 }), 'database-dra-karoline', agora)) === null
-  );
-  ok(
-    'emissor errado → recusado',
-    (await verificarLoginDoPainel(jwt({ ...base, iss: 'https://evil' }), 'database-dra-karoline', agora)) === null
-  );
+  ok('vazio → recusado', (await verificarLogin('')) === null);
+  ok('texto qualquer → recusado', (await verificarLogin('abc')) === null);
+  ok('token com assinatura falsa → recusado', (await verificarLogin(jwt(base))) === null);
+  ok('token de outro projeto → recusado', (await verificarLogin(jwt({ ...base, aud: 'outro' }))) === null);
+  ok('token vencido → recusado', (await verificarLogin(jwt({ ...base, exp: Date.now() / 1000 - 10 }))) === null);
 }
 
 console.log('\nRotas do servidor');

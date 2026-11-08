@@ -185,6 +185,28 @@ poder ler os dados das pacientes depois que eles existirem**.
   isolamento entrando com cada tipo de login.
 - Criar clínica, criar login de profissional e mudar plano passam pelo servidor (Admin SDK).
 
+### Servidor por clínica
+- **Login:** `server/login.ts` confere o token do painel pelo Admin SDK (`verifyIdToken`) e devolve
+  `{ uid, clinicaId, papel, dono }` das claims. Na Zulia confere também se o login continua ativo
+  (`checkRevoked`). No legado, só a assinatura, como sempre.
+- **Caminhos:** `server/clinicas.ts` monta `clinicas/{c}/<coleção>` na Zulia, ou a raiz no legado.
+  A ficha pública (`/abrir`, `/salvar`), o cartão do link, a política de privacidade e a leitura
+  com credencial passam por ele. A clínica dos pedidos públicos vem do `c` do link; sem `c`, é a
+  `CLINICA_DOS_LINKS_ANTIGOS` (`src/utils/clinicas.ts`, vazia até a migração).
+- **Cartão do link:** na Zulia, o nome no cartão vem do `public_profile` da clínica.
+- **Equipe:** na Zulia não existe `equipeUids` (a claim manda), e o servidor não sincroniza lista.
+  `/api/equipe/criar-login`, `/mudar-papel` e `/desativar`: só a admin da mesma clínica. Sempre
+  sobra uma admin, conferido no índice `clinicas/{c}.equipe` (`{ uid: papel }`), que só o servidor
+  grava. Um e-mail que já é login de outra clínica, ou uma conta criada por fora sem clínica, não
+  é reaproveitado. No legado, `createProfessionalLogin` continua como está.
+- **Google Agenda:** na Zulia, só clínica com `recursos.googleAgenda: true`, e só com uma conta
+  guardada em `clinicas/{c}/clinic_settings/google_agenda`.
+- **Credencial do servidor da Zulia:** Secrets `ZULIA_ADMIN_EMAIL` e `ZULIA_ADMIN_CHAVE` (ou
+  `ZULIA_ADMIN_CREDENCIAL`). São nomes separados dos `FIREBASE_ADMIN_*` da La Vie, para que virar o
+  `plataforma.json` (ou desvirar) não dependa de trocar valor de Secret. A conta precisa dos papéis
+  **Usuário do Cloud Datastore** e **Administrador do Firebase Authentication** no
+  `zulia-plataforma`.
+
 ### Links das pacientes
 - Os links passam a levar a clínica (`c=<clinicaId>`). Links antigos da La Vie, sem `c`, abrem
   na clínica da La Vie.
@@ -203,7 +225,7 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
 | --- | --- | --- |
 | 1 | `plataforma.json` escolhe o projeto (`legado` ou `zulia`) para o painel, o servidor e os scripts | Feita |
 | 2 | Regras multi-clínica em `zulia/` e o teste de isolamento `scripts/verificar-regras-zulia.ts` | Feita; passa nos emuladores. Falta publicar no `zulia-plataforma` e rodar lá |
-| 3 | Servidor por clínica: login pela claim, caminhos `clinicas/{c}/...`, rotas `/api/equipe` | A fazer |
+| 3 | Servidor por clínica: login pela claim, caminhos `clinicas/{c}/...`, rotas `/api/equipe` | Feita; testada nos emuladores (`scripts/verificar-servidor-zulia.ts`) |
 | 4 | Painel e páginas das pacientes por clínica: entrada pela claim, links com `c=`, sementes e marca | A fazer |
 | 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | A fazer |
 | 6 | `scripts/migrar-la-vie.ts`, ensaio, e a migração no dia combinado com o João | A fazer |

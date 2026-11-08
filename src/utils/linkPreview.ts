@@ -16,6 +16,10 @@ import { dataExtensa } from './agenda';
  * contato ou observação.
  */
 
+/**
+ * O nome da clínica quando ninguém diz outro: o da La Vie, no modo legado. Na Zulia, o servidor
+ * passa o nome do perfil público de cada clínica (`clinic_settings/public_profile.name`).
+ */
 export const NOME_DA_CLINICA = 'La Vie Clinique';
 
 /** O que o link abre — e, com isso, de onde sai o título. */
@@ -30,7 +34,12 @@ export interface LinkIdentificado {
 export interface PreviewDoLink {
   titulo: string;
   descricao: string;
+  /** O `og:site_name`. Ausente: `NOME_DA_CLINICA`. */
+  site?: string;
 }
+
+/** O nome a usar: o que veio, aparado, ou `NOME_DA_CLINICA`. */
+const nomeOuPadrao = (nome?: unknown): string => (typeof nome === 'string' && nome.trim()) || NOME_DA_CLINICA;
 
 /**
  * Ids do app são `tpl-<timestamp>`, `atd-<timestamp>` e UUIDs. Qualquer coisa fora disso não vai ao
@@ -70,35 +79,38 @@ export const identificarLink = (search: string): LinkIdentificado | null => {
 };
 
 /** O cartão de quando não dá para saber o procedimento: ainda diz do que se trata. */
-export const previewGenerico = (fonte: FonteDoLink): PreviewDoLink => {
+export const previewGenerico = (fonte: FonteDoLink, nomeDaClinica?: string): PreviewDoLink => {
+  const clinica = nomeOuPadrao(nomeDaClinica);
+  const site = nomeDaClinica ? clinica : undefined;
   switch (fonte) {
     case 'anamnese-modelo':
     case 'anamnese-ficha':
       return {
-        titulo: `Anamnese - ${NOME_DA_CLINICA}`,
-        descricao: `${NOME_DA_CLINICA} · Preencha sua ficha de anamnese antes do atendimento.`,
+        titulo: `Anamnese - ${clinica}`,
+        descricao: `${clinica} · Preencha sua ficha de anamnese antes do atendimento.`,
+        site,
       };
     case 'agendamento':
       return {
-        titulo: `Confirmação de agendamento - ${NOME_DA_CLINICA}`,
-        descricao: `${NOME_DA_CLINICA} · Confirme sua presença, avise se não puder ir ou peça outro horário.`,
+        titulo: `Confirmação de agendamento - ${clinica}`,
+        descricao: `${clinica} · Confirme sua presença, avise se não puder ir ou peça outro horário.`,
+        site,
       };
     case 'orcamento':
       return {
-        titulo: `Orçamento - ${NOME_DA_CLINICA}`,
-        descricao: `${NOME_DA_CLINICA} · Veja os detalhes do seu orçamento.`,
+        titulo: `Orçamento - ${clinica}`,
+        descricao: `${clinica} · Veja os detalhes do seu orçamento.`,
+        site,
       };
   }
 };
 
 /** "Anamnese - Botox". */
-export const previewDeAnamnese = (procedimentoNome?: unknown): PreviewDoLink => {
+export const previewDeAnamnese = (procedimentoNome?: unknown, nomeDaClinica?: string): PreviewDoLink => {
   const nome = aparar(procedimentoNome);
-  if (!nome) return previewGenerico('anamnese-modelo');
-  return {
-    titulo: limitar(`Anamnese - ${nome}`, TITULO_MAX),
-    descricao: `${NOME_DA_CLINICA} · Preencha sua ficha de anamnese antes do atendimento.`,
-  };
+  const generico = previewGenerico('anamnese-modelo', nomeDaClinica);
+  if (!nome) return generico;
+  return { ...generico, titulo: limitar(`Anamnese - ${nome}`, TITULO_MAX) };
 };
 
 /** O que `appointment_links/{token}` entrega à página pública — só a parte que o cartão usa. */
@@ -113,10 +125,13 @@ const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 const HORA_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** "Confirmação de agendamento - Botox", com "sexta-feira, 21/09 às 14:00" embaixo. */
-export const previewDeAgendamento = (link: DadosDoAgendamentoParaPreview): PreviewDoLink => {
-  const generico = previewGenerico('agendamento');
+export const previewDeAgendamento = (
+  link: DadosDoAgendamentoParaPreview,
+  nomeDaClinica?: string
+): PreviewDoLink => {
+  const generico = previewGenerico('agendamento', nomeDaClinica);
   const titulo = aparar(link.procedimento?.titulo);
-  const clinica = aparar(link.clinica?.name) || NOME_DA_CLINICA;
+  const clinica = aparar(link.clinica?.name) || nomeOuPadrao(nomeDaClinica);
   const data = aparar(link.data);
   const hora = aparar(link.hora);
 
@@ -127,6 +142,7 @@ export const previewDeAgendamento = (link: DadosDoAgendamentoParaPreview): Previ
   return {
     titulo: titulo ? limitar(`Confirmação de agendamento - ${titulo}`, TITULO_MAX) : generico.titulo,
     descricao: quando ? `${quando} · ${clinica}` : generico.descricao,
+    site: generico.site,
   };
 };
 
@@ -137,8 +153,11 @@ export interface DadosDoOrcamentoParaPreview {
 }
 
 /** "Orçamento - Botox", "Orçamento - Botox e Peeling" ou "Orçamento - Botox e mais 2". */
-export const previewDeOrcamento = (orcamento: DadosDoOrcamentoParaPreview): PreviewDoLink => {
-  const generico = previewGenerico('orcamento');
+export const previewDeOrcamento = (
+  orcamento: DadosDoOrcamentoParaPreview,
+  nomeDaClinica?: string
+): PreviewDoLink => {
+  const generico = previewGenerico('orcamento', nomeDaClinica);
   const nomes = [
     ...new Set(
       (Array.isArray(orcamento.itens) ? orcamento.itens : [])
@@ -160,8 +179,9 @@ export const previewDeOrcamento = (orcamento: DadosDoOrcamentoParaPreview): Prev
   return {
     titulo: resumo ? limitar(`Orçamento - ${resumo}`, TITULO_MAX) : generico.titulo,
     descricao: numero
-      ? `${NOME_DA_CLINICA} · Orçamento nº ${numero}`
+      ? `${nomeOuPadrao(nomeDaClinica)} · Orçamento nº ${numero}`
       : generico.descricao,
+    site: generico.site,
   };
 };
 
@@ -192,6 +212,6 @@ export const aplicarPreviewNoHtml = (html: string, preview: PreviewDoLink): stri
     .replace(tagMeta('property', 'og:description'), (_t, ini, fim) => `${ini}${descricao}${fim}`)
     .replace(
       /<meta\s+property="og:type"[^>]*>/i,
-      (tag) => `${tag}\n    <meta property="og:site_name" content="${escaparHtml(NOME_DA_CLINICA)}" />`
+      (tag) => `${tag}\n    <meta property="og:site_name" content="${escaparHtml(preview.site || NOME_DA_CLINICA)}" />`
     );
 };

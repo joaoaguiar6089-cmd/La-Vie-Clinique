@@ -1,4 +1,5 @@
-import { firebaseConfig } from '../src/lib/projetoFirebase';
+import { ehZulia, firebaseConfig } from '../src/lib/projetoFirebase';
+import { caminhoDaColecao, clinicaDoPedido } from './clinicas';
 import {
   FonteDoLink,
   PreviewDoLink,
@@ -24,6 +25,10 @@ import {
  *     link continua abrindo, só com o título genérico do tipo ("Anamnese - La Vie Clinique");
  *   - **não vira leitura infinita**: o resultado fica em memória por alguns minutos, e quem
  *     cola um id inventado na URL custa uma leitura por minuto, não uma por pedido.
+ *
+ * Na Zulia, o documento é o da clínica do link (`c=`, ou a dos links antigos sem ele), e o nome
+ * que aparece no cartão vem do perfil público dela (`clinic_settings/public_profile.name`), em vez
+ * do "La Vie Clinique" fixo. No modo legado, nada muda.
  */
 
 const RAIZ_DO_BANCO =
@@ -79,6 +84,8 @@ export type LeitorDoBanco = (
 export interface OpcoesDoResolvedor {
   /** Para os testes: um `fetch` de mentira. */
   buscar?: typeof fetch;
+  /** Para os testes: resolver como na Zulia (clínica do link) ou no legado (raiz). */
+  zulia?: boolean;
   /** Leitura pelo servidor; quando devolve `undefined` (sem credencial), cai na API REST. */
   lerComCredencial?: () => LeitorDoBanco | undefined;
   /** Para os testes: um relógio que a gente controla. */
@@ -88,11 +95,16 @@ export interface OpcoesDoResolvedor {
 export const criarResolvedorDePreview = (opcoes: OpcoesDoResolvedor = {}) => {
   const buscar = opcoes.buscar ?? fetch;
   const agora = opcoes.agora ?? Date.now;
+  const zulia = opcoes.zulia ?? ehZulia;
   const cache = new Map<string, { ate: number; preview: PreviewDoLink }>();
+  const nomes = new Map<string, { ate: number; nome: string | undefined }>();
 
   /** `null` quando o documento não existe. Lança em qualquer outra falha. */
-  const lerDocumento = async (fonte: FonteDoLink, id: string): Promise<Record<string, unknown> | null> => {
-    const { colecao, campos } = ONDE_LER[fonte];
+  const lerCampos = async (
+    colecao: string,
+    id: string,
+    campos: string[]
+  ): Promise<Record<string, unknown> | null> => {
     const leitor = opcoes.lerComCredencial?.();
     if (leitor) return leitor(colecao, id, campos);
     const mascara = campos.map((c) => `mask.fieldPaths=${encodeURIComponent(c)}`).join('&');
@@ -105,15 +117,38 @@ export const criarResolvedorDePreview = (opcoes: OpcoesDoResolvedor = {}) => {
     return decodificarCampos(corpo.fields);
   };
 
-  const montar = (fonte: FonteDoLink, dados: Record<string, any>): PreviewDoLink => {
+  const lerDocumento = (fonte: FonteDoLink, clinicaId: string | null, id: string) =>
+    lerCampos(caminhoDaColecao(clinicaId, ONDE_LER[fonte].colecao), id, ONDE_LER[fonte].campos);
+
+  /**
+   * O nome da clínica para o cartão. No legado, `undefined` (o padrão, "La Vie Clinique"). Na
+   * Zulia, o do perfil público, guardado por alguns minutos; falhou, o padrão.
+   */
+  const nomeDaClinica = async (clinicaId: string | null): Promise<string | undefined> => {
+    if (!zulia || !clinicaId) return undefined;
+    const guardado = nomes.get(clinicaId);
+    if (guardado && guardado.ate > agora()) return guardado.nome;
+    let nome: string | undefined;
+    try {
+      const perfil = await lerCampos(caminhoDaColecao(clinicaId, 'clinic_settings'), 'public_profile', ['name']);
+      nome = typeof perfil?.name === 'string' && perfil.name.trim() ? perfil.name.trim() : undefined;
+    } catch {
+      nome = undefined;
+    }
+    if (nomes.size >= MAX_NO_CACHE) nomes.clear();
+    nomes.set(clinicaId, { ate: agora() + (nome ? ACHADO_POR_MS : NAO_ACHADO_POR_MS), nome });
+    return nome;
+  };
+
+  const montar = (fonte: FonteDoLink, dados: Record<string, any>, nome?: string): PreviewDoLink => {
     switch (fonte) {
       case 'anamnese-modelo':
       case 'anamnese-ficha':
-        return previewDeAnamnese(dados.procedimentoNome);
+        return previewDeAnamnese(dados.procedimentoNome, nome);
       case 'agendamento':
-        return previewDeAgendamento(dados);
+        return previewDeAgendamento(dados, nome);
       case 'orcamento':
-        return previewDeOrcamento(dados);
+        return previewDeOrcamento(dados, nome);
     }
   };
 
@@ -133,26 +168,31 @@ export const criarResolvedorDePreview = (opcoes: OpcoesDoResolvedor = {}) => {
     const link = identificarLink(search);
     if (!link) return null;
 
-    // Id que não parece id nem chega ao banco.
-    if (!link.id) return previewGenerico(link.fonte);
+    // Na Zulia, a clínica do link; `undefined` quando o `c` não presta (o cartão sai genérico).
+    const clinicaId = clinicaDoPedido(new URLSearchParams(search).get('c'), zulia);
+    if (clinicaId === undefined) return previewGenerico(link.fonte);
+    const nome = await nomeDaClinica(clinicaId);
 
-    const chave = `${link.fonte}:${link.id}`;
+    // Id que não parece id nem chega ao banco.
+    if (!link.id) return previewGenerico(link.fonte, nome);
+
+    const chave = `${clinicaId ?? ''}:${link.fonte}:${link.id}`;
     const guardado = cache.get(chave);
     if (guardado && guardado.ate > agora()) return guardado.preview;
 
     try {
-      const dados = await lerDocumento(link.fonte, link.id);
+      const dados = await lerDocumento(link.fonte, clinicaId, link.id);
       if (!dados) {
-        const preview = previewGenerico(link.fonte);
+        const preview = previewGenerico(link.fonte, nome);
         guardar(chave, preview, NAO_ACHADO_POR_MS);
         return preview;
       }
-      const preview = montar(link.fonte, dados);
+      const preview = montar(link.fonte, dados, nome);
       guardar(chave, preview, ACHADO_POR_MS);
       return preview;
     } catch (erro) {
       console.warn(`[preview] ${link.fonte} indisponível:`, erro instanceof Error ? erro.message : erro);
-      const preview = previewGenerico(link.fonte);
+      const preview = previewGenerico(link.fonte, nome);
       guardar(chave, preview, NAO_ACHADO_POR_MS);
       return preview;
     }
