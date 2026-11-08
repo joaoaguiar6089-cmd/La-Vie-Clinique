@@ -288,7 +288,7 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
 | 3 | Servidor por clínica: login pela claim, caminhos `clinicas/{c}/...`, rotas `/api/equipe` | Feita; testada nos emuladores (`scripts/verificar-servidor-zulia.ts`) |
 | 4 | Painel e páginas das pacientes por clínica: entrada pela claim, links com `c=`, sementes e marca | Feita; testada de ponta a ponta nos emuladores, no modo Zulia e no legado |
 | 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | Feita; testada de ponta a ponta nos emuladores. Falta rodar no `zulia-plataforma` |
-| 6 | `scripts/migrar-la-vie.ts`, ensaio, e a migração no dia combinado com o João | A fazer |
+| 6 | `scripts/migrar-la-vie.ts`, ensaio, e a migração no dia combinado com o João | Script pronto e testado com dados falsos nos emuladores. **O dia da migração é só com o João** (roteiro abaixo) |
 
 ### A chave do projeto (`plataforma.json`)
 - `plataforma.json` na raiz diz qual projeto o código usa: `{ "modo": "legado" }` (a La Vie de
@@ -303,3 +303,70 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
 - Os scripts que só fazem sentido no projeto antigo (`exportar-banco`, `importar-banco`,
   `migrar-imagens-para-storage`, `bootstrap-first-admin`) apontam sempre para ele.
 - `scripts/verificar-plataforma.ts` confere o arquivo e a escolha.
+
+## Migração da La Vie (fase 6)
+
+### O que está pronto
+- `scripts/migrar-la-vie.ts`:
+  - `--ensaio --id ensaio-...`: só dados, sem logins;
+  - `--aplicar --id <id>`: dados, arquivos, logins e o documento da clínica;
+  - `--conferir`: compara origem e destino;
+  - `--apagar-ensaio`.
+
+  Os detalhes estão no topo do arquivo. Pontos principais:
+  - Firestore lido com `listCollections()` (com subcoleções), preservando ids e tipos;
+  - URLs de download do bucket antigo reescritas em qualquer campo, com o mesmo token;
+  - arquivos copiados para `clinicas/{id}/...` com o mesmo `firebaseStorageDownloadTokens`;
+  - logins importados com os mesmos uids e senhas (scrypt), com as claims. O `papel` vem de `professionals[].isAdmin`; contas fora da equipe ficam de fora; o dono (`--dono`) entra só com `donoDaPlataforma`;
+  - rodar de novo com o mesmo id regrava o mesmo conteúdo.
+- `scripts/verificar-migracao-la-vie.ts`: testa o script nos emuladores com uma "La Vie de mentira" (`demo-lavie`, banco `banco-novo`). Cobre coleções, subcoleção, documento fantasma, datas, URLs em vários campos e formatos, arquivos com token e logins. Roda ensaio → conferir → apagar e depois aplicar → conferir → aplicar de novo. **36 ok.** As senhas não são conferidas no emulador (ele não guarda hash scrypt); no dia, a conferência é a Karoline entrar com a senha de sempre.
+- `scripts/configurar-bucket-zulia.ts`: aplica o `cors.json` (o mesmo do bucket da La Vie) no bucket da Zulia. Sem ele, os PDFs saem sem as fotos.
+- **Id reservado para a La Vie: `u9JYfN`.** Vai em `--id` e em `CLINICA_DOS_LINKS_ANTIGOS`.
+- Índices: todas as consultas do painel e do servidor usam um campo só, e os índices automáticos bastam. Nenhum índice composto a copiar.
+
+### Antes do dia (Claude, quando a credencial `ZULIA_*` estiver no ambiente da sessão)
+1. `npm run publicar-regras -- --projeto zulia` e `npx tsx scripts/verificar-regras-zulia.ts` no `zulia-plataforma`.
+2. `npx tsx scripts/configurar-bucket-zulia.ts` (CORS).
+3. Pôr `drakaroline-lavie.ai.studio` nos domínios autorizados do login da Zulia. Não afeta a La Vie, então pode ser antes.
+4. Ponta a ponta no `zulia-plataforma` de verdade:
+   - `criar-clinica` cria uma clínica de teste;
+   - o painel é construído no modo Zulia e servido localmente;
+   - a equipe e os links são testados.
+
+   Depois, apagar todas as clínicas e logins de teste.
+5. O João cria o projeto de testes separado e combina a janela.
+
+### Dia da migração (só com o João)
+1. **João:** dá à conta `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com`, no projeto `database-dra-karoline`, os papéis **Leitor do Cloud Datastore**, **Leitor de objetos do Storage** e **Leitor do Firebase Authentication**. Se o script avisar que os logins vieram sem hash de senha, troca o último por **Administrador do Firebase Authentication** durante a janela.
+2. Avisar a equipe para não usar o painel.
+3. **Claude:** primeiro contato com os dados reais:
+   - ensaio: `--ensaio --id ensaio-<data>`, depois `--conferir --ensaio` e `--apagar-ensaio`;
+   - migração: `--aplicar --id u9JYfN --dono <e-mail do João>`;
+   - conferência: `--conferir --id u9JYfN`, sem diferenças.
+4. Regras da Zulia publicadas e conferidas (já feito antes; confirmar).
+5. Domínio autorizado (já feito antes; confirmar).
+6. **João:** cria a conta do servidor da Zulia (ex.: `servidor-zulia`) no `zulia-plataforma`.
+   - Papéis: **Usuário do Cloud Datastore** e **Administrador do Firebase Authentication**.
+   - Gera a chave JSON e põe nos Secrets do AI Studio como `ZULIA_ADMIN_EMAIL` e `ZULIA_ADMIN_CHAVE`. A chave nunca vai para o chat.
+   - Deixa os `FIREBASE_ADMIN_*` da La Vie onde estão: são a volta, se precisar.
+7. **Claude:**
+   - roda `--aplicar` de novo, para pegar o que as pacientes mandaram durante a janela, e `--conferir`;
+   - faz o commit que vira o `plataforma.json` para `zulia` e preenche `CLINICA_DOS_LINKS_ANTIGOS = 'u9JYfN'`, e mescla na `main`.
+8. **João:** publica pelo AI Studio.
+9. Conferir:
+   - `/api/ficha-publica/status` responde `{ configurado, conectado, modo: 'zulia', linksAntigos: true }`;
+   - a Karoline entra com a senha de sempre;
+   - um link antigo (sem `c=`) e um novo abrem;
+   - uma foto antiga abre pela URL reescrita.
+
+**Se der errado depois de publicar:** virar o `plataforma.json` de volta para `legado` e publicar. O projeto antigo continua com os dados. O que for gravado na Zulia nesse meio-tempo precisaria voltar à mão.
+
+### Depois
+1. **João** tira os papéis de leitura no projeto da La Vie.
+2. Os papéis do Claude na Zulia trocam Editor e Proprietário do Cloud Datastore por papéis que gerenciam sem ler dados, por exemplo:
+   - **Administrador de regras do Firebase**;
+   - **Administrador de índices do Cloud Datastore**;
+   - **Consumidor do Service Usage**.
+
+   O que precisar ler dados (ou mexer na configuração do login ou do bucket) o João libera por um tempo.
+3. As regras do projeto antigo viram somente leitura, como cópia de segurança. O Claude prepara e publica com a chave de publicar regras da La Vie.
