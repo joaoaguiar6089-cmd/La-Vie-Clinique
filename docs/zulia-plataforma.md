@@ -90,7 +90,7 @@ continua apontando para o `database-dra-karoline` até a migração).
 | --- | --- |
 | Plano Blaze | Ativo (conta de faturamento vinculada) |
 | APIs | Firestore, Identity Toolkit, Firebase Storage, Firebase Rules e Cloud Billing ativas |
-| Firestore `(default)` | **Refazer** — criado pelo console em `nam5` (EUA), vazio. Apagar e recriar em `southamerica-east1`; regras fechadas já publicadas |
+| Firestore `(default)`, `southamerica-east1` | Criado (nativo, Standard), com proteção contra exclusão e regras fechadas (`allow read, write: if false`) |
 | Storage `zulia-plataforma.firebasestorage.app`, `southamerica-east1` | Criado e vinculado ao Firebase, com regras fechadas (`allow read, write: if false`) |
 | Login por e-mail e senha | Ligado, com o Auth já no Identity Platform. Duas etapas (MFA) ainda desligada |
 | App web "Zulia Web" | Registrado: `1:1031812147083:web:b164181d211d1d68a4718e` |
@@ -107,8 +107,9 @@ continua apontando para o `database-dra-karoline` até a migração).
   `southamerica-east1` antes de receber qualquer dado: as fichas são dados de saúde, e ficar no
   Brasil evita declarar transferência internacional (LGPD), além de deixar o painel mais rápido.
 - **Conta de serviço temporária** `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com`
-  (papel Editor), usada para esta configuração. **Apagar a chave dela antes de migrar os dados
-  das pacientes.**
+  (papéis Editor e Proprietário do Cloud Datastore), usada para esta configuração. Tem duas chaves
+  (IDs começando com `32c6b227` e `f78efaf5`). **Apagar as duas chaves e tirar o papel de
+  Proprietário do Cloud Datastore antes de migrar os dados das pacientes.**
 
 ## Arquitetura multi-clínica
 
