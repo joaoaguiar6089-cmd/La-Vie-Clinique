@@ -107,9 +107,11 @@ continua apontando para o `database-dra-karoline` até a migração).
   `southamerica-east1` antes de receber qualquer dado: as fichas são dados de saúde, e ficar no
   Brasil evita declarar transferência internacional (LGPD), além de deixar o painel mais rápido.
 - **Conta de serviço temporária** `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com`
-  (papéis Editor e Proprietário do Cloud Datastore), usada para esta configuração. Tem duas chaves
-  (IDs começando com `32c6b227` e `f78efaf5`). **Apagar as duas chaves e tirar o papel de
-  Proprietário do Cloud Datastore antes de migrar os dados das pacientes.**
+  (papéis Editor e Proprietário do Cloud Datastore), usada para esta configuração. Tem uma chave
+  criada por nós (ID começando com `f78efaf5`); a outra que aparece na lista pública de
+  certificados (`32c6b227`) é interna do Google (`SYSTEM_MANAGED`) e não se apaga. **Apagar a
+  `f78efaf5` e tirar o papel de Proprietário do Cloud Datastore antes de migrar os dados das
+  pacientes.**
 
 ## Arquitetura multi-clínica
 
