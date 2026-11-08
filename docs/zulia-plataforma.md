@@ -89,7 +89,7 @@ continua apontando para o `database-dra-karoline` até a migração).
 | Item | Situação |
 | --- | --- |
 | Plano Blaze | Ativo (conta de faturamento vinculada) |
-| APIs | Firestore, Identity Toolkit, Firebase Storage, Firebase Rules e Cloud Billing ativas |
+| APIs | Firestore, Identity Toolkit, Firebase Storage, Firebase Rules, Cloud Billing e IAM ativas |
 | Firestore `(default)`, `southamerica-east1` | Criado (nativo, Standard), com proteção contra exclusão e regras fechadas (`allow read, write: if false`) |
 | Storage `zulia-plataforma.firebasestorage.app`, `southamerica-east1` | Criado e vinculado ao Firebase, com regras fechadas (`allow read, write: if false`) |
 | Login por e-mail e senha | Ligado, com o Auth já no Identity Platform. Duas etapas (MFA) ainda desligada |
@@ -106,12 +106,28 @@ continua apontando para o `database-dra-karoline` até a migração).
 - **A região do Firestore não muda depois de criado.** Por isso o banco tem de estar em
   `southamerica-east1` antes de receber qualquer dado: as fichas são dados de saúde, e ficar no
   Brasil evita declarar transferência internacional (LGPD), além de deixar o painel mais rápido.
-- **Conta de serviço temporária** `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com`
-  (papéis Editor e Proprietário do Cloud Datastore), usada para esta configuração. Tem uma chave
-  criada por nós (ID começando com `f78efaf5`); a outra que aparece na lista pública de
-  certificados (`32c6b227`) é interna do Google (`SYSTEM_MANAGED`) e não se apaga. **Apagar a
-  `f78efaf5` e tirar o papel de Proprietário do Cloud Datastore antes de migrar os dados das
-  pacientes.**
+
+### Acesso do Claude
+
+Decidido com o João: o Claude tem acesso amplo ao projeto da Zulia até o fim do trabalho, **sem
+poder ler os dados das pacientes depois que eles existirem**.
+
+- **Conta:** `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com`, com a chave nas
+  variáveis `ZULIA_CLIENT_EMAIL` e `ZULIA_PRIVATE_KEY` do ambiente do Claude. A única chave criada
+  é a que começa com `f78efaf5`; a `32c6b227`, que aparece na lista pública de certificados, é
+  interna do Google (`SYSTEM_MANAGED`) e não se apaga.
+- **Até a migração** (projeto sem dados de pacientes): papéis **Editor** e **Proprietário do
+  Cloud Datastore**. O Editor já lê e grava tudo no banco e no Storage; o segundo papel só
+  acrescenta criar e apagar bancos.
+- **Na migração, antes de entrar qualquer dado de paciente:** os dois papéis saem e entram papéis
+  que **gerenciam sem ler dados** (regras, índices, configuração do login, APIs, hospedagem). O
+  Claude monta a lista exata nessa hora. Quando um ajuste precisar ler dados, o João libera um
+  papel por um tempo e tira depois.
+- **Nunca:** papel de Proprietário do projeto (com ele, uma chave vazada apagaria o projeto ou
+  tiraria o João do controle), permissões (IAM) e faturamento. Isso fica com o João.
+- **Projeto da La Vie (`database-dra-karoline`):** o Claude continua só publicando regras. A
+  chave do servidor (`servidor-fichas`) fica só nos Secrets do AI Studio e nunca vai para o
+  ambiente do Claude.
 
 ## Arquitetura multi-clínica
 
