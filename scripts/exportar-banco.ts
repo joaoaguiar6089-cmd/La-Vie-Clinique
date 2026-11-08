@@ -22,13 +22,14 @@
  * O resultado vai para `backup/<AAAA-MM-DD-HHMM>/`, uma pasta nova a cada execução — rodar de
  * novo nunca sobrescreve um backup anterior.
  */
-import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, Timestamp } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { obterCredenciais, explicarErro, encerrar } from './credenciais';
+import { configDoProjeto } from '../src/lib/projetoFirebase';
 
 /** As 8 coleções do sistema. Conferido contra as constantes de `src/services/databaseService.ts`. */
 const COLECOES = [
@@ -43,7 +44,9 @@ const COLECOES = [
 ] as const;
 
 const raiz = dirname(dirname(fileURLToPath(import.meta.url)));
-const config = JSON.parse(readFileSync(join(raiz, 'firebase-applet-config.json'), 'utf8'));
+// Script do projeto da La Vie (coleções na raiz): aponta sempre para ele, qualquer que seja o
+// modo em `plataforma.json` — ver `src/lib/projetoFirebase.ts`.
+const config = configDoProjeto('legado');
 
 /** `--banco <id>` sobrepõe o banco do arquivo de config, sem precisar editá-lo. */
 function argumento(nome: string): string | undefined {

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import express, { type Request, type Response, type Router } from 'express';
-import firebaseConfig from '../firebase-applet-config.json';
+import { firebaseConfig } from '../src/lib/projetoFirebase';
 import { ENDERECO_DO_SITE } from '../src/utils/publicLinks';
 
 /**

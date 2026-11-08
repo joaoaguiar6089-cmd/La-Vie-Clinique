@@ -13,9 +13,6 @@
  *
  * Depois de rodar, Karoline recebe um e-mail do Firebase para definir a própria senha.
  */
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
@@ -25,9 +22,11 @@ import {
   signOut,
 } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { configDoProjeto } from '../src/lib/projetoFirebase';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const firebaseConfig = JSON.parse(readFileSync(join(__dirname, '../firebase-applet-config.json'), 'utf-8'));
+// Só existe no projeto da La Vie (coleções na raiz). Na Zulia, a admin de cada clínica nasce
+// com `scripts/criar-clinica.ts`.
+const firebaseConfig = configDoProjeto('legado');
 
 const ADMIN_EMAIL = 'enfesteta.karoline@gmail.com';
 // Senha temporária apenas para o Firebase aceitar a criação da conta — Karoline nunca a

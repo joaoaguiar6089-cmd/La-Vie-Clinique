@@ -436,7 +436,7 @@ export async function salvarFicha(
  *     projeto (ou o papel acabou de ser dado e ainda está propagando — leva alguns minutos);
  *   - `chave-recusada`: o e-mail e a chave não são da mesma conta, ou a chave foi apagada;
  *   - `api-desativada`: a API do Firestore está desligada no projeto da conta;
- *   - `banco-nao-encontrado`: o banco do `firebase-applet-config.json` não existe para essa conta;
+ *   - `banco-nao-encontrado`: o banco do projeto em uso (ver `src/lib/projetoFirebase.ts`) não existe para essa conta;
  *   - `sem-rede`: o servidor não alcançou o Google;
  *   - `outro`: o resto — a mensagem completa fica no registro do servidor.
  */

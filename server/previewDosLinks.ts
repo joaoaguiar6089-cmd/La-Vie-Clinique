@@ -1,4 +1,4 @@
-import firebaseConfig from '../firebase-applet-config.json';
+import { firebaseConfig } from '../src/lib/projetoFirebase';
 import {
   FonteDoLink,
   PreviewDoLink,

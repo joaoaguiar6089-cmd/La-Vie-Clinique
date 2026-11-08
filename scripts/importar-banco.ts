@@ -36,6 +36,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, writeBatch, Timestamp } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { obterCredenciais, explicarErro, encerrar } from './credenciais';
+import { configDoProjeto } from '../src/lib/projetoFirebase';
 
 const COLECOES = [
   'procedures',
@@ -55,7 +56,9 @@ const COLECOES = [
 const TAMANHO_DO_LOTE = 450;
 
 const raiz = dirname(dirname(fileURLToPath(import.meta.url)));
-const config = JSON.parse(readFileSync(join(raiz, 'firebase-applet-config.json'), 'utf8'));
+// Script do projeto da La Vie (coleções na raiz): aponta sempre para ele, qualquer que seja o
+// modo em `plataforma.json` — ver `src/lib/projetoFirebase.ts`.
+const config = configDoProjeto('legado');
 
 function argumento(nome: string): string | undefined {
   const i = process.argv.indexOf(nome);

@@ -1,6 +1,6 @@
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import { firebaseConfig } from '../src/lib/projetoFirebase';
 
 /**
  * Acesso do servidor ao banco, com uma conta de serviço — o mesmo banco do painel, mas sem passar

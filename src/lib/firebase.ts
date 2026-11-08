@@ -7,7 +7,8 @@ import {
   Firestore,
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
+// O projeto (La Vie ou Zulia) vem de `plataforma.json` — ver `src/lib/projetoFirebase.ts`.
+import { firebaseConfig, modoPlataforma } from './projetoFirebase';
 
 // Initialize Firebase App instance
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -36,5 +37,5 @@ export const db = firestoreInstance;
 // Firebase Authentication — login das profissionais/admin do painel
 export const auth = getAuth(app);
 
-export { firebaseConfig };
+export { firebaseConfig, modoPlataforma };
 export default db;

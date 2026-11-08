@@ -17,7 +17,8 @@
  *   npx tsx scripts/publicar-regras.ts --conferir   só mostra o que está publicado hoje
  *   npx tsx scripts/publicar-regras.ts              valida e publica as duas
  *
- * O projeto, o banco (`firestoreDatabaseId`) e o bucket vêm do `firebase-applet-config.json`;
+ * O projeto, o banco (`firestoreDatabaseId`) e o bucket vêm do `firebase-applet-config.json`
+ * (por `src/lib/projetoFirebase.ts`);
  * os arquivos de regras, do `firebase.json`. Antes de publicar, o script confere que a release de
  * cada um já existe no projeto: um nome errado criaria uma release que nada usa, e a regra
  * "publicada" não valeria em lugar nenhum.
@@ -26,9 +27,12 @@ import { createSign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { configDoProjeto } from '../src/lib/projetoFirebase';
 
 const raiz = dirname(dirname(fileURLToPath(import.meta.url)));
-const config = JSON.parse(readFileSync(join(raiz, 'firebase-applet-config.json'), 'utf8'));
+// Script do projeto da La Vie (coleções na raiz): aponta sempre para ele, qualquer que seja o
+// modo em `plataforma.json` — ver `src/lib/projetoFirebase.ts`.
+const config = configDoProjeto('legado');
 const firebaseJson = JSON.parse(readFileSync(join(raiz, 'firebase.json'), 'utf8'));
 
 const projeto: string = config.projectId;
