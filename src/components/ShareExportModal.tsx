@@ -10,6 +10,7 @@ import { PrintableCatalog } from './PrintableCatalog';
 import { PrintableProcedureCard } from './PrintableProcedureCard';
 import { ProcedureMultiSelect } from './ProcedureMultiSelect';
 import { ConfirmDialog, ConfirmRequest, aviso } from './ConfirmDialog';
+import { nomeParaArquivo } from '../utils/marca';
 
 interface ShareExportModalProps {
   isOpen: boolean;
@@ -96,7 +97,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     if (!el) return;
     setIsExporting(true);
     try {
-      await exportElementAsPDF(el, 'Catalogo La Vie.pdf');
+      await exportElementAsPDF(el, `Catalogo ${nomeParaArquivo(clinic)}.pdf`);
       triggerConfetti();
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -111,7 +112,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     if (!el) return;
     setIsExporting(true);
     try {
-      await exportElementAsImage(el, 'Catalogo La Vie.png');
+      await exportElementAsImage(el, `Catalogo ${nomeParaArquivo(clinic)}.png`);
       triggerConfetti();
     } catch (err) {
       console.error('Error generating image:', err);

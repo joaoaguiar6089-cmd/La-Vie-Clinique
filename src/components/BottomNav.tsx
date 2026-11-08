@@ -26,6 +26,7 @@ import { BottomSheet, ItemDaFolha } from './common/BottomSheet';
 import { Avatar } from './common/Tinta';
 import { useTravarRolagem, useVoltarFecha } from '../hooks/useVoltarFecha';
 import { ehAbaDasFichas } from '../utils/abasDasFichas';
+import { ehZulia } from '../lib/projetoFirebase';
 
 /**
  * A navegação do celular.
@@ -227,7 +228,7 @@ const PainelMais: React.FC<{
           }}
           className="flex items-center gap-3 rounded-[18px] bg-cream/8 p-3.5 text-left hover:bg-cream/12 transition-colors"
         >
-          <Avatar nome={profissional?.name || 'La Vie'} tom="ouro" letras={2} />
+          <Avatar nome={profissional?.name || (ehZulia ? 'Clínica' : 'La Vie')} tom="ouro" letras={2} />
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-bold text-white truncate">
               {profissional?.name || 'Configurações da clínica'}

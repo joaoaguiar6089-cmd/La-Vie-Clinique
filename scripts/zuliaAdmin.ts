@@ -14,10 +14,9 @@ import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { normalizarChave } from '../server/firebaseAdmin';
-import { configDoProjeto, type ConfigDoFirebase } from '../src/lib/projetoFirebase';
+import { configDoEmulador, configDoProjeto, type ConfigDoFirebase } from '../src/lib/projetoFirebase';
 
-/** O projeto de mentira dos emuladores. `demo-` faz o Firebase não procurar credencial nem rede. */
-export const PROJETO_DO_EMULADOR = 'demo-zulia';
+export { PROJETO_DO_EMULADOR, configDoEmulador } from '../src/lib/projetoFirebase';
 
 export const EMULADORES = {
   auth: '127.0.0.1:9099',
@@ -35,16 +34,6 @@ export interface AcessoZulia {
   bucket: ReturnType<ReturnType<typeof getStorage>['bucket']>;
   encerrar: () => Promise<void>;
 }
-
-/** A configuração do app web para os emuladores: o mesmo formato, com o projeto `demo-zulia`. */
-export const configDoEmulador = (): ConfigDoFirebase => ({
-  ...configDoProjeto('zulia'),
-  projectId: PROJETO_DO_EMULADOR,
-  apiKey: 'chave-do-emulador',
-  authDomain: `${PROJETO_DO_EMULADOR}.firebaseapp.com`,
-  firestoreDatabaseId: '(default)',
-  storageBucket: `${PROJETO_DO_EMULADOR}.appspot.com`,
-});
 
 /** `--emulador` na linha de comando. */
 export const pediuEmulador = (argv: string[] = process.argv): boolean => argv.includes('--emulador');

@@ -46,6 +46,7 @@ import {
   Printer,
   ScrollText,
 } from 'lucide-react';
+import { PROFISSIONAL_PADRAO, nomeDaClinica } from '../../utils/marca';
 
 interface GenderPhotoSlotProps {
   label: string;
@@ -1431,9 +1432,9 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
           clinicProfile={
             clinicProfile || {
               id: 'clinic-lavie',
-              name: 'La Vie Clinique',
+              name: nomeDaClinica(),
               tagline: 'Excelência Médica e Estética Avançada',
-              professionalName: 'Dra. Karoline Ferreira',
+              professionalName: PROFISSIONAL_PADRAO,
               phone: '(11) 98765-4321',
               cityState: 'São Paulo - SP',
               instagram: '@lavieclinique',

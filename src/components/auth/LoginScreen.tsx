@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Lock, Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { login, sendResetPasswordEmail } from '../../services/authService';
+import { ehZulia } from '../../lib/projetoFirebase';
+import { MARCA_DA_LA_VIE, MARCA_DA_PLATAFORMA } from '../../utils/marca';
 
 const FIREBASE_ERROR_MESSAGES: Record<string, string> = {
   'auth/invalid-email': 'E-mail inválido.',
@@ -54,11 +56,15 @@ export const LoginScreen: React.FC = () => {
     <div className="min-h-screen bg-surface flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
+          {/* Na Zulia a tela de login é da plataforma (várias clínicas entram por ela); no legado,
+              a da La Vie, como sempre. */}
           <div className="w-14 h-14 rounded-2xl bg-ink flex items-center justify-center text-brand-light font-serif-luxury text-2xl font-semibold mx-auto mb-4">
-            LV
+            {ehZulia ? 'Z' : 'LV'}
           </div>
-          <h1 className="font-serif-luxury text-[26px] font-medium text-ink">La Vie Clinique</h1>
-          <p className="text-[13px] text-muted mt-1">Painel administrativo — acesso restrito à equipe</p>
+          <h1 className="font-serif-luxury text-[26px] font-medium text-ink">{ehZulia ? MARCA_DA_PLATAFORMA : MARCA_DA_LA_VIE}</h1>
+          <p className="text-[13px] text-muted mt-1">
+            {ehZulia ? 'Painel da clínica — acesso restrito à equipe' : 'Painel administrativo — acesso restrito à equipe'}
+          </p>
         </div>
 
         <form
@@ -73,7 +79,7 @@ export const LoginScreen: React.FC = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu.email@lavieclinique.com"
+                placeholder={ehZulia ? 'seu.email@suaclinica.com' : 'seu.email@lavieclinique.com'}
                 autoComplete="username"
                 required
                 className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand"

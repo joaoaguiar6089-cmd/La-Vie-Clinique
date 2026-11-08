@@ -1,4 +1,5 @@
 import { dataExtensa } from './agenda';
+import { ehZulia } from '../lib/projetoFirebase';
 
 /**
  * O cartão que o WhatsApp (e o Telegram, o Instagram...) monta sobre um link colado na conversa.
@@ -38,8 +39,11 @@ export interface PreviewDoLink {
   site?: string;
 }
 
-/** O nome a usar: o que veio, aparado, ou `NOME_DA_CLINICA`. */
-const nomeOuPadrao = (nome?: unknown): string => (typeof nome === 'string' && nome.trim()) || NOME_DA_CLINICA;
+/** Sem nome nenhum: a La Vie no legado; a plataforma na Zulia (link de clínica desconhecida). */
+const NOME_PADRAO = ehZulia ? 'Zulia' : NOME_DA_CLINICA;
+
+/** O nome a usar: o que veio, aparado, ou o padrão. */
+const nomeOuPadrao = (nome?: unknown): string => (typeof nome === 'string' && nome.trim()) || NOME_PADRAO;
 
 /**
  * Ids do app são `tpl-<timestamp>`, `atd-<timestamp>` e UUIDs. Qualquer coisa fora disso não vai ao
@@ -212,6 +216,6 @@ export const aplicarPreviewNoHtml = (html: string, preview: PreviewDoLink): stri
     .replace(tagMeta('property', 'og:description'), (_t, ini, fim) => `${ini}${descricao}${fim}`)
     .replace(
       /<meta\s+property="og:type"[^>]*>/i,
-      (tag) => `${tag}\n    <meta property="og:site_name" content="${escaparHtml(preview.site || NOME_DA_CLINICA)}" />`
+      (tag) => `${tag}\n    <meta property="og:site_name" content="${escaparHtml(preview.site || NOME_PADRAO)}" />`
     );
 };

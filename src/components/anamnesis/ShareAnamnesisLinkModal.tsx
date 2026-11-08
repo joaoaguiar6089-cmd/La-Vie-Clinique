@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   QrCode,
 } from 'lucide-react';
+import { PROFISSIONAL_PADRAO, nomeDaClinica } from '../../utils/marca';
 
 interface ShareAnamnesisLinkModalProps {
   isOpen: boolean;
@@ -73,9 +74,9 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
 
   const patientGreeting = selectedPatient ? `Olá, ${selectedPatient.nome.split(' ')[0]}!` : 'Olá!';
   const whatsappMessage = `${patientGreeting} Segue o link da sua Ficha de Anamnese oficial da *${
-    clinicProfile.name || 'La Vie Clinique'
+    nomeDaClinica(clinicProfile)
   }* para o procedimento *${selectedTemplate?.procedimentoNome || 'Avaliação Estética'}*:\n\n🔗 ${shareableUrl}\n\nPor favor, preencha as respostas e, como combinamos, faça o envio de uma foto sua nítida da região para que a ${
-    clinicProfile.professionalName || 'Dra. Karoline Ferreira'
+    clinicProfile.professionalName || PROFISSIONAL_PADRAO || 'profissional'
   } realize o planejamento estético e anotações personalizadas na sua imagem.\n\nQualquer dúvida estamos à disposição!`;
 
   const handleCopyLink = () => {

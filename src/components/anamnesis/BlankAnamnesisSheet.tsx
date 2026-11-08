@@ -19,6 +19,7 @@ import {
   TickBox,
 } from './printableQuestionBlocks';
 import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
+import { marcaDaClinica, nomeDaClinica } from '../../utils/marca';
 
 interface BlankAnamnesisSheetProps {
   template: AnamnesisTemplate;
@@ -302,10 +303,10 @@ export const BlankAnamnesisSheet: React.FC<BlankAnamnesisSheetProps> = ({
                   razão social por extenso, longa demais para um título — ela continua logo
                   abaixo, que é onde identifica a clínica. */}
               <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-ink leading-tight">
-                Anamnese - {template.procedimentoNome} - La Vie Clinique
+                Anamnese - {template.procedimentoNome} - {marcaDaClinica(clinicProfile)}
               </h2>
               <p className="text-xs font-semibold text-ink mt-1.5">
-                {clinicProfile.name || 'La Vie Clinique'}
+                {nomeDaClinica(clinicProfile)}
               </p>
               <p className="text-xs text-gray-500 italic mt-0.5">
                 {clinicProfile.tagline || 'Excelência Médica e Estética Avançada'}

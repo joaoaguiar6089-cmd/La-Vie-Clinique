@@ -4,6 +4,7 @@ import { AppointmentLink, AppointmentLinkResposta } from '../../types';
 import { getLinkDoAgendamento, responderAoLink } from '../../services/databaseService';
 import { respostaParaGravar } from '../../utils/agendamentoLink';
 import { AppointmentCard } from './AppointmentCard';
+import { definirClinicaDoLink } from '../../lib/estadoDaClinica';
 
 /**
  * A página que a cliente abre pelo link `?agendamento=<token>`, sem login.
@@ -20,7 +21,12 @@ const PRAZO_DE_CARREGAMENTO_MS = 20000;
 type Estado = 'carregando' | 'pronto' | 'naoEncontrado' | 'erro';
 
 export const PublicAppointmentEntry: React.FC = () => {
-  const [token] = useState(() => new URLSearchParams(window.location.search).get('agendamento') || '');
+  // Antes de qualquer leitura: a clínica do link (`c=`). No modo legado, sempre vale (raiz). Sem
+  // clínica conhecida, o link é tratado como não encontrado.
+  const [clinicaConhecida] = useState(() => definirClinicaDoLink(window.location.search));
+  const [token] = useState(() =>
+    clinicaConhecida ? new URLSearchParams(window.location.search).get('agendamento') || '' : ''
+  );
   const [estado, setEstado] = useState<Estado>(token ? 'carregando' : 'naoEncontrado');
   const [link, setLink] = useState<AppointmentLink | null>(null);
   const [mensagemDeErro, setMensagemDeErro] = useState('');

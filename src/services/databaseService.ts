@@ -59,6 +59,9 @@ import { formatQuoteNumber, statusAntesDoDesfecho } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
 import { normalizarRecibo } from '../utils/recibos';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
+import { PROCEDIMENTOS_DE_EXEMPLO } from '../data/exemplosZulia';
+import { ehZulia } from '../lib/projetoFirebase';
+import { definirClinicaAtual } from '../lib/estadoDaClinica';
 import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
 import { subirImagem, subirImagemOuManter } from './imageStorage';
 import { isLaserCategory } from '../utils/templateMatching';
@@ -101,6 +104,7 @@ import {
   DEFAULT_EVALUATION_TEMPLATES,
   FICHAS_AVALIACAO_DEMAIS_PROCEDIMENTOS,
 } from '../data/anamnesisInitialData';
+import { gravarLocal, lerLocal } from '../lib/estadoDaClinica';
 
 const PROCEDURES_COLLECTION = 'procedures';
 const CLINIC_SETTINGS_COLLECTION = 'clinic_settings';
@@ -341,6 +345,9 @@ async function colecaoVaziaNoServidor(nomeColecao: string): Promise<boolean | nu
  * Replace all procedures in Firestore with the current official catalog from PDF.
  */
 export async function replaceAllProceduresWithOfficialPdfCatalog(): Promise<void> {
+  // O catálogo e o perfil "oficiais" são os da La Vie: na Zulia nunca são gravados em clínica
+  // nenhuma (nem a própria La Vie, que já tem os dela).
+  if (ehZulia) throw new Error('O catálogo oficial da La Vie não existe na plataforma.');
   try {
     console.log('Synchronizing official PDF catalog to Firebase Firestore...');
     // 1. Delete existing procedures
@@ -389,6 +396,25 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
   // Só uma leitura confirmada pelo servidor autoriza escrever aqui — ver colecaoVaziaNoServidor.
   const colecaoVazia = await colecaoVaziaNoServidor(PROCEDURES_COLLECTION);
   if (colecaoVazia === null) return;
+
+  if (ehZulia) {
+    // Clínica nova da Zulia: só os 2 procedimentos genéricos de exemplo. Nunca o catálogo nem o
+    // perfil da La Vie — o perfil nasce com a clínica (`scripts/criar-clinica.ts`).
+    if (!colecaoVazia) return;
+    try {
+      const lote = writeBatch(db);
+      for (const proc of PROCEDIMENTOS_DE_EXEMPLO) {
+        lote.set(
+          documentoDaClinica(PROCEDURES_COLLECTION, proc.id),
+          cleanForFirestore({ ...proc, updatedAt: new Date().toISOString() })
+        );
+      }
+      await lote.commit();
+    } catch (err) {
+      console.warn('Não foi possível gravar os procedimentos de exemplo:', err);
+    }
+    return;
+  }
 
   try {
     const [proc1, proc2] = colecaoVazia
@@ -565,8 +591,22 @@ export type AcessoAoPainel = 'verificando' | 'liberado' | 'negado' | 'indisponiv
  * login de fora nem consegue ler o perfil — `permission-denied` também é "negado". Qualquer outra
  * falha (sem rede e sem cache, cota esgotada) é "indisponível": não dá para afirmar nada, e a tela
  * oferece tentar de novo em vez de dizer à profissional que ela não tem acesso.
+ *
+ * Na Zulia, quem decide é a claim `clinicaId` do login (`plataforma`, lida pelo
+ * `lerAcessoDaPlataforma`): sem ela, "negado"; com ela, a clínica vira a do painel
+ * (`definirClinicaAtual`) — antes de qualquer leitura — e o acesso é liberado. `plataforma`
+ * ausente (as claims não puderam ser lidas) é "indisponível".
  */
-export async function conferirAcessoAoPainel(uid: string): Promise<AcessoAoPainel> {
+export async function conferirAcessoAoPainel(
+  uid: string,
+  plataforma?: { clinicaId: string | null } | null
+): Promise<AcessoAoPainel> {
+  if (ehZulia) {
+    if (!plataforma) return 'indisponivel';
+    if (!plataforma.clinicaId) return 'negado';
+    definirClinicaAtual(plataforma.clinicaId);
+    return 'liberado';
+  }
   try {
     const snap = await getDoc(documentoDaClinica(CLINIC_SETTINGS_COLLECTION, CLINIC_SETTINGS_DOC_ID));
     // Projeto novo, ainda sem perfil: é a primeira instalação, e o seed vai criá-lo.
@@ -964,7 +1004,7 @@ export async function publicarEspelhoPublicoSeMudou(profile: ClinicProfile): Pro
   const assinatura = assinaturaDoEspelhoPublico(profile);
 
   try {
-    const marca = localStorage.getItem(ESPELHO_PUBLICO_KEY);
+    const marca = lerLocal(ESPELHO_PUBLICO_KEY);
     if (marca) {
       const { assinatura: anterior, em } = JSON.parse(marca) as {
         assinatura?: string;
@@ -980,7 +1020,7 @@ export async function publicarEspelhoPublicoSeMudou(profile: ClinicProfile): Pro
   await publishPublicClinicProfile(profile);
 
   try {
-    localStorage.setItem(ESPELHO_PUBLICO_KEY, JSON.stringify({ assinatura, em: Date.now() }));
+    gravarLocal(ESPELHO_PUBLICO_KEY, JSON.stringify({ assinatura, em: Date.now() }));
   } catch {
     // idem — sem a marca, volta a publicar na próxima abertura.
   }
@@ -1134,7 +1174,7 @@ const LASER_SYNC_DONE_KEY = 'lavie:laser-templates-sync:v4';
 
 function laserSyncJaRodou(): boolean {
   try {
-    return localStorage.getItem(LASER_SYNC_DONE_KEY) === '1';
+    return lerLocal(LASER_SYNC_DONE_KEY) === '1';
   } catch {
     return false;
   }
@@ -1142,7 +1182,7 @@ function laserSyncJaRodou(): boolean {
 
 function marcarLaserSyncComoFeito(): void {
   try {
-    localStorage.setItem(LASER_SYNC_DONE_KEY, '1');
+    gravarLocal(LASER_SYNC_DONE_KEY, '1');
   } catch {
     // Navegador sem localStorage (aba anônima com storage bloqueado): a sincronização volta a
     // rodar, que é o comportamento antigo — correto, só mais caro.
@@ -1224,6 +1264,10 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
     // migração acabou de criar (laser e glúteo, com id `aval-tpl-…`) precisa estar lá para ser
     // visto como cobertura. Antes, as duas fichas padrão de mesmo alvo entrariam junto.
     await instalarFichasDeAvaliacaoPadrao();
+
+    // 3 e 4. Pacientes e fichas de exemplo: só no modo legado. Clínica da Zulia começa sem
+    // cadastro nenhum.
+    if (ehZulia) return;
 
     // 3. Seed Patients if empty
     const pacientesVazios = await colecaoVaziaNoServidor(PATIENTS_COLLECTION);
@@ -3826,7 +3870,7 @@ async function migracoesAplicadasNaClinica(): Promise<string[] | null> {
  */
 async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
   try {
-    if (localStorage.getItem(MIGRACAO_AVALIACAO_LOCAL_KEY)) return;
+    if (lerLocal(MIGRACAO_AVALIACAO_LOCAL_KEY)) return;
   } catch {
     // localStorage indisponível — segue pela leitura no servidor.
   }
@@ -3835,7 +3879,7 @@ async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
   if (jaAplicadas === null) return; // leitura falhou; tenta de novo no próximo boot
   if (jaAplicadas.includes(MIGRACAO_AVALIACAO)) {
     try {
-      localStorage.setItem(MIGRACAO_AVALIACAO_LOCAL_KEY, '1');
+      gravarLocal(MIGRACAO_AVALIACAO_LOCAL_KEY, '1');
     } catch {
       // sem atalho local; a leitura acima continua resolvendo
     }
@@ -3915,7 +3959,7 @@ async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
     }
 
     try {
-      localStorage.setItem(MIGRACAO_AVALIACAO_LOCAL_KEY, '1');
+      gravarLocal(MIGRACAO_AVALIACAO_LOCAL_KEY, '1');
     } catch {
       // sem atalho local; a leitura do marcador continua resolvendo
     }
@@ -3959,7 +4003,7 @@ const FICHAS_PADRAO_LOCAL_KEY = 'lavie:fichas-avaliacao-padrao:v1';
  */
 async function instalarFichasDeAvaliacaoPadrao(): Promise<void> {
   try {
-    if (localStorage.getItem(FICHAS_PADRAO_LOCAL_KEY)) return;
+    if (lerLocal(FICHAS_PADRAO_LOCAL_KEY)) return;
   } catch {
     // localStorage indisponível — segue pela leitura no servidor.
   }
@@ -3968,7 +4012,7 @@ async function instalarFichasDeAvaliacaoPadrao(): Promise<void> {
   if (jaAplicadas === null) return; // leitura falhou; tenta de novo no próximo boot
   if (jaAplicadas.includes(MIGRACAO_FICHAS_PADRAO)) {
     try {
-      localStorage.setItem(FICHAS_PADRAO_LOCAL_KEY, '1');
+      gravarLocal(FICHAS_PADRAO_LOCAL_KEY, '1');
     } catch {
       // sem atalho local; a leitura acima continua resolvendo
     }
@@ -4023,7 +4067,7 @@ async function instalarFichasDeAvaliacaoPadrao(): Promise<void> {
     }
 
     try {
-      localStorage.setItem(FICHAS_PADRAO_LOCAL_KEY, '1');
+      gravarLocal(FICHAS_PADRAO_LOCAL_KEY, '1');
     } catch {
       // sem atalho local; a leitura do marcador continua resolvendo
     }

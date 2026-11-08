@@ -5,6 +5,13 @@ import { AGENDA_DEFAULTS, INTERVALOS_DISPONIVEIS } from '../utils/agenda';
 import { mascararHora } from './common/MaskedDateTimeInput';
 import { GoogleAgendaConexoes } from './agenda/GoogleAgendaConexoes';
 import { createProfessionalLogin } from '../services/authService';
+import {
+  criarLoginNaClinica,
+  desativarLoginNaClinica,
+  mensagemDoErroDaEquipe,
+  mudarPapelNaClinica,
+} from '../services/equipeApi';
+import { ehZulia } from '../lib/projetoFirebase';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
 import { ENDERECO_DO_SITE, motivoEnderecoFechado, normalizarEnderecoPublico } from '../utils/publicLinks';
@@ -47,7 +54,31 @@ interface ClinicSettingsModalProps {
   currentUserUid?: string;
   /** Se a profissional logada tem poderes de admin (excluir contas, conceder/revogar admin). */
   isAdminUser: boolean;
+  /**
+   * Na Zulia: o papel do próprio login acabou de mudar no servidor — o App pede um token novo,
+   * para a claim nova valer já.
+   */
+  onPapelDoLoginMudou?: () => void;
 }
+
+/**
+ * A equipe que o formulário mostra quando o perfil ainda não tem nenhuma. No legado, a
+ * profissional do perfil antigo (a Dra. Karoline, na La Vie). Na Zulia, a clínica nasce com a
+ * admin no perfil (`scripts/criar-clinica.ts`), e nenhum nome da La Vie aparece por padrão.
+ */
+const equipeInicial = (clinic: ClinicProfile): Professional[] => {
+  if (clinic.professionals && clinic.professionals.length > 0) return clinic.professionals;
+  if (ehZulia) return [];
+  return [
+    {
+      id: 'doc-1',
+      name: clinic.professionalName || 'Dra. Karoline Ferreira',
+      registryNumber: clinic.registryNumber || '',
+      title: clinic.professionalTitle || 'Especialista em Estética Avançada & Tecnologias',
+      specialty: clinic.professionalTitle || 'Especialista em Estética Avançada & Tecnologias',
+    },
+  ];
+};
 
 export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   isOpen,
@@ -56,21 +87,9 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   onSave,
   currentUserUid,
   isAdminUser,
+  onPapelDoLoginMudou,
 }) => {
-  const [formData, setFormData] = useState<ClinicProfile>(() => {
-    const initialProfessionals: Professional[] = clinic.professionals && clinic.professionals.length > 0
-      ? clinic.professionals
-      : [
-          {
-            id: 'doc-1',
-            name: clinic.professionalName || 'Dra. Karoline Ferreira',
-            registryNumber: clinic.registryNumber || '',
-            title: clinic.professionalTitle || 'Especialista em Estética Avançada & Tecnologias',
-            specialty: clinic.professionalTitle || 'Especialista em Estética Avançada & Tecnologias'
-          }
-        ];
-    return { ...clinic, professionals: initialProfessionals };
-  });
+  const [formData, setFormData] = useState<ClinicProfile>(() => ({ ...clinic, professionals: equipeInicial(clinic) }));
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
 
   // Sync formData only when the modal transitions from closed to open — NOT on every
@@ -81,18 +100,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   const wasOpenRef = React.useRef(false);
   React.useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
-      const initialProfessionals: Professional[] = clinic.professionals && clinic.professionals.length > 0
-        ? clinic.professionals
-        : [
-            {
-              id: 'doc-1',
-              name: clinic.professionalName || 'Dra. Karoline Ferreira',
-              registryNumber: clinic.registryNumber || '',
-              title: clinic.professionalTitle || 'Especialista em Estética Avançada & Tecnologias',
-              specialty: clinic.professionalTitle || 'Especialista em Estética Avançada & Tecnologias'
-            }
-          ];
-      setFormData({ ...clinic, professionals: initialProfessionals });
+      setFormData({ ...clinic, professionals: equipeInicial(clinic) });
       setEditingDocId(null);
       setShowDoctorForm(false);
       setDeletingDocId(null);
@@ -219,7 +227,15 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 
   const adminCount = formData.professionals.filter((d) => d.isAdmin).length;
 
-  const handleDeleteDoctor = (id: string) => {
+  /** Na Zulia, um pedido à equipe no servidor em andamento (criar, mudar papel, desativar). */
+  const [equipeOcupadaId, setEquipeOcupadaId] = useState<string | null>(null);
+
+  const avisarErro = (texto: string) => {
+    setErrorMessage(texto);
+    setTimeout(() => setErrorMessage(null), 5000);
+  };
+
+  const handleDeleteDoctor = async (id: string) => {
     const target = formData.professionals.find((d) => d.id === id);
     if (formData.professionals.length <= 1) {
       setErrorMessage('A clínica deve ter ao menos uma profissional cadastrada.');
@@ -231,10 +247,25 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
       setTimeout(() => setErrorMessage(null), 3500);
       return;
     }
-    if (target?.isAdmin && adminCount <= 1) {
+    // Na Zulia, quem confere "sobra uma admin" é o servidor, pela claim (o `isAdmin` do perfil é só
+    // o que a tela mostra).
+    if (!ehZulia && target?.isAdmin && adminCount <= 1) {
       setErrorMessage('A clínica deve ter ao menos uma profissional admin. Torne outra pessoa admin antes de excluir esta conta.');
       setTimeout(() => setErrorMessage(null), 3500);
       return;
+    }
+    if (ehZulia && target?.uid) {
+      // O login sai na hora, no servidor: excluir a profissional sem desativar o login deixaria
+      // alguém de fora da equipe entrando no painel.
+      setEquipeOcupadaId(id);
+      try {
+        await desativarLoginNaClinica(target.uid);
+      } catch (err) {
+        avisarErro(mensagemDoErroDaEquipe(err));
+        return;
+      } finally {
+        setEquipeOcupadaId(null);
+      }
     }
     setFormData((prev) => ({
       ...prev,
@@ -252,14 +283,19 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     }
     setCreatingLoginForId(doc.id);
     try {
-      const uid = await createProfessionalLogin(doc.email);
+      // Na Zulia o login nasce no servidor, já com a clínica e o papel; o convite (definir a
+      // senha) sai do mesmo jeito.
+      const uid = ehZulia
+        ? await criarLoginNaClinica(doc.email, doc.isAdmin ? 'admin' : 'profissional')
+        : await createProfessionalLogin(doc.email);
       setFormData((prev) => ({
         ...prev,
         professionals: prev.professionals.map((d) => (d.id === doc.id ? { ...d, uid } : d)),
       }));
     } catch (err: any) {
-      const msg =
-        err?.code === 'auth/email-already-in-use'
+      const msg = ehZulia
+        ? mensagemDoErroDaEquipe(err)
+        : err?.code === 'auth/email-already-in-use'
           ? 'Este e-mail já possui uma conta de login no Firebase.'
           : 'Não foi possível criar o login agora. Tente novamente.';
       setErrorMessage(msg);
@@ -269,11 +305,25 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     }
   };
 
-  const handleToggleAdmin = (doc: Professional) => {
-    if (doc.isAdmin && adminCount <= 1) {
+  const handleToggleAdmin = async (doc: Professional) => {
+    if (!ehZulia && doc.isAdmin && adminCount <= 1) {
       setErrorMessage('A clínica deve ter ao menos uma profissional admin.');
       setTimeout(() => setErrorMessage(null), 3500);
       return;
+    }
+    if (ehZulia && doc.uid) {
+      // Na Zulia o papel é a claim do login, gravada pelo servidor na hora — o "Salvar" do
+      // formulário só guarda o selo que a tela mostra.
+      setEquipeOcupadaId(doc.id);
+      try {
+        await mudarPapelNaClinica(doc.uid, doc.isAdmin ? 'profissional' : 'admin');
+      } catch (err) {
+        avisarErro(mensagemDoErroDaEquipe(err));
+        return;
+      } finally {
+        setEquipeOcupadaId(null);
+      }
+      if (doc.uid === currentUserUid) onPapelDoLoginMudou?.();
     }
     setFormData((prev) => ({
       ...prev,
@@ -618,7 +668,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       type="email"
                       value={docEmail}
                       onChange={(e) => setDocEmail(e.target.value)}
-                      placeholder="profissional@lavieclinique.com"
+                      placeholder={ehZulia ? 'profissional@suaclinica.com' : 'profissional@lavieclinique.com'}
                       className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                     />
                   </div>
@@ -710,13 +760,16 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 
                   {deletingDocId === doc.id ? (
                     <div className="flex items-center gap-1.5 animate-fadeIn shrink-0">
-                      <span className="text-body text-red-600 font-medium mr-1">Excluir?</span>
+                      <span className="text-body text-red-600 font-medium mr-1">
+                        {ehZulia && doc.uid ? 'Excluir e desativar o login?' : 'Excluir?'}
+                      </span>
                       <button
                         type="button"
+                        disabled={equipeOcupadaId === doc.id}
                         onClick={() => handleDeleteDoctor(doc.id)}
-                        className="px-2 py-1 bg-red-600 text-white rounded-xs text-label font-bold uppercase tracking-wider hover:bg-red-700 shadow-xs"
+                        className="px-2 py-1 bg-red-600 text-white rounded-xs text-label font-bold uppercase tracking-wider hover:bg-red-700 shadow-xs disabled:opacity-60"
                       >
-                        Sim
+                        {equipeOcupadaId === doc.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Sim'}
                       </button>
                       <button
                         type="button"
@@ -728,7 +781,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                     </div>
                   ) : (
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {!doc.uid && (
+                      {!doc.uid && (!ehZulia || isAdminUser) && (
                         <button
                           type="button"
                           disabled={creatingLoginForId === doc.id}
@@ -746,6 +799,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                       {isAdminUser && doc.uid && (
                         <button
                           type="button"
+                          disabled={equipeOcupadaId === doc.id}
                           onClick={() => handleToggleAdmin(doc)}
                           className={`p-1.5 rounded-xs transition-colors ${
                             doc.isAdmin
@@ -815,7 +869,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
                   type="text"
                   value={formData.instagram}
                   onChange={(e) => handleChange('instagram', e.target.value)}
-                  placeholder="@lavieclinique.indaiatuba"
+                  placeholder={ehZulia ? '@suaclinica' : '@lavieclinique.indaiatuba'}
                   className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
                 />
               </div>

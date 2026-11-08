@@ -92,5 +92,32 @@ export const modoPlataforma: ModoPlataforma = escolherModo(plataforma.modo, sobr
 /** Atalho para `modoPlataforma === 'zulia'`. */
 export const ehZulia = modoPlataforma === 'zulia';
 
+/** O projeto de mentira dos emuladores locais. `demo-` faz o Firebase não procurar credencial. */
+export const PROJETO_DO_EMULADOR = 'demo-zulia';
+
+/**
+ * Só para teste local, nunca no ar: o painel e o servidor falam com os emuladores do Firebase
+ * (Auth, Firestore e Storage na máquina), e não com projeto nenhum. Liga com `VITE_EMULADORES=1`
+ * no Vite e, no Node, com as variáveis que o `firebase emulators:exec` define
+ * (`FIREBASE_AUTH_EMULATOR_HOST` e `FIRESTORE_EMULATOR_HOST`). Ver docs/zulia-plataforma.md.
+ */
+export const usaEmuladores: boolean = (() => {
+  if ((import.meta as { env?: Record<string, string | undefined> }).env?.VITE_EMULADORES === '1') return true;
+  if (typeof process !== 'undefined' && process?.env) {
+    return !!process.env.FIREBASE_AUTH_EMULATOR_HOST && !!process.env.FIRESTORE_EMULATOR_HOST;
+  }
+  return false;
+})();
+
+/** A configuração do app web para os emuladores: o formato de sempre, com o projeto de mentira. */
+export const configDoEmulador = (): ConfigDoFirebase => ({
+  ...configDoProjeto('zulia'),
+  projectId: PROJETO_DO_EMULADOR,
+  apiKey: 'chave-do-emulador',
+  authDomain: `${PROJETO_DO_EMULADOR}.firebaseapp.com`,
+  firestoreDatabaseId: '(default)',
+  storageBucket: `${PROJETO_DO_EMULADOR}.appspot.com`,
+});
+
 /** A configuração do app web do projeto em uso. */
-export const firebaseConfig: ConfigDoFirebase = configDoProjeto(modoPlataforma);
+export const firebaseConfig: ConfigDoFirebase = usaEmuladores ? configDoEmulador() : configDoProjeto(modoPlataforma);

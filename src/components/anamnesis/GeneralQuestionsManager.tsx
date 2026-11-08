@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { DEFAULT_GENERAL_QUESTIONS } from '../../data/anamnesisInitialData';
+import { ehZulia } from '../../lib/projetoFirebase';
 
 /**
  * Serve às perguntas gerais da **anamnese** e às da **avaliação**, que têm a mesma forma e as
@@ -50,7 +51,7 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
   onSaveAllQuestions,
   onDeleteQuestion,
   titulo = 'Perguntas Gerais Globais',
-  subtitulo = 'Este conjunto de perguntas entra automaticamente no início de toda e qualquer ficha de anamnese da La Vie, independente do procedimento clínico selecionado.',
+  subtitulo = `Este conjunto de perguntas entra automaticamente no início de toda e qualquer ficha de anamnese ${ehZulia ? 'da clínica' : 'da La Vie'}, independente do procedimento clínico selecionado.`,
   selo = 'Herança Automática',
   defaults = DEFAULT_GENERAL_QUESTIONS,
   idPrefixo = 'gen',
@@ -154,7 +155,7 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
     setConfirmacao({
       titulo: 'Restaurar as perguntas padrão?',
       mensagem:
-        'As perguntas gerais atuais são substituídas pelo conjunto padrão da La Vie. Perguntas que você criou aqui se perdem; as fichas já preenchidas não mudam.',
+        `As perguntas gerais atuais são substituídas pelo conjunto padrão${ehZulia ? '' : ' da La Vie'}. Perguntas que você criou aqui se perdem; as fichas já preenchidas não mudam.`,
       textoConfirmar: 'Restaurar',
       onConfirmar: () => {
         onSaveAllQuestions(defaults || []);

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { buildPublicLink } from '../../utils/publicLinks';
+import { definirClinicaDoLink } from '../../lib/estadoDaClinica';
+import { nomeDaClinica } from '../../utils/marca';
 import { AnamnesisTemplate, AnamnesisRecord, Patient, ClinicProfile, AnamnesisQuestion, MapaDeAreasPublico } from '../../types';
 import {
   getAnamnesisTemplateById,
@@ -143,7 +145,7 @@ const IdentityConfirmGate: React.FC<{
 type Screen = 'loading' | 'error' | 'confirmar' | 'form' | 'success';
 
 const DEFAULT_CLINIC: ClinicProfile = {
-  name: 'La Vie Clinique',
+  name: nomeDaClinica(),
   tagline: 'Excelência Médica e Estética Avançada',
   professionals: [],
   phone: '',
@@ -153,6 +155,8 @@ const DEFAULT_CLINIC: ClinicProfile = {
 };
 
 export const PublicAnamnesisEntry: React.FC = () => {
+  // Antes de qualquer leitura: a clínica do link (`c=`). No modo legado, sempre vale (raiz).
+  const [clinicaConhecida] = useState(() => definirClinicaDoLink(window.location.search));
   const [params] = useState(() => new URLSearchParams(window.location.search));
   const anamneseParam = params.get('anamnese') || '';
   const pacienteParam = params.get('paciente') || '';
@@ -303,6 +307,12 @@ export const PublicAnamnesisEntry: React.FC = () => {
     }, 20000);
 
     async function load() {
+      if (!clinicaConhecida) {
+        settled = true;
+        setErrorMsg('Este link está incompleto. Peça um novo link à clínica.');
+        setScreen('error');
+        return;
+      }
       try {
         // A marca da clínica é enfeite: buscada em paralelo e sem poder derrubar o carregamento.
         // Quando ela era o primeiro `await` da sequência, uma leitura negada (a paciente não tem

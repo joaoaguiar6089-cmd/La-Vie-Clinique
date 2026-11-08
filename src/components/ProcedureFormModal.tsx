@@ -34,6 +34,7 @@ import { CampoMaisDeUmaSessao } from './common/CampoMaisDeUmaSessao';
 import { SidePanel } from './common/SidePanel';
 import { ConfirmDialog, ConfirmRequest } from './ConfirmDialog';
 import { CampoDoCard, CampoEmDestaque, PreviaDoCardIndividual } from './PreviaDoCardIndividual';
+import { marcaDaClinica } from '../utils/marca';
 
 const IMAGEM_PADRAO =
   'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80';
@@ -990,7 +991,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
             </div>
 
             <p className="text-body text-gray-600">
-              Selecione quais profissionais realizam este procedimento na La Vie Clinique. No catálogo poderá constar 1 ou 2 médicas responsáveis:
+              Selecione quais profissionais realizam este procedimento na {marcaDaClinica(clinic)}. No catálogo poderá constar 1 ou 2 médicas responsáveis:
             </p>
 
             {/* Doctor Selection Checkboxes / Cards */}

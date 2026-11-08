@@ -15,6 +15,8 @@
  * só as mudanças que chegam cobram — então essa sobrevida é praticamente de graça.
  */
 
+import { clinicaAtual } from '../lib/estadoDaClinica';
+
 type Listener<T> = (data: T) => void;
 type ErrorListener = (err: Error) => void;
 
@@ -41,11 +43,15 @@ const entries = new Map<string, SharedEntry<any>>();
  * Devolve a função para cancelar apenas este interessado.
  */
 export function subscribeShared<T>(
-  key: string,
+  chave: string,
   start: (onData: Listener<T>, onError: ErrorListener) => () => void,
   onData: Listener<T>,
   onError?: ErrorListener
 ): () => void {
+  // Na plataforma, a chave leva a clínica: duas clínicas nunca compartilham uma assinatura (nem o
+  // último valor guardado). No modo legado, a chave de sempre.
+  const clinica = clinicaAtual();
+  const key = clinica ? `${clinica}/${chave}` : chave;
   let entry = entries.get(key) as SharedEntry<T> | undefined;
 
   if (!entry) {

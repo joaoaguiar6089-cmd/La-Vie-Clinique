@@ -27,6 +27,9 @@ import {
 import { quantidadeDoProduto } from '../../utils/estoque';
 import { SNAPSHOT_CLINICA_PADRAO } from '../../utils/quoteFactory';
 import { QuotePreviewModal } from './QuotePreviewModal';
+import { definirClinicaDoLink } from '../../lib/estadoDaClinica';
+import { clinicMonogram } from '../ClinicLogo';
+import { ehZulia } from '../../lib/projetoFirebase';
 
 const dataCurta = (iso?: string): string => {
   if (!iso) return '';
@@ -54,6 +57,8 @@ const linkWhatsApp = (telefone: string | undefined, texto: string): string => {
  * se houver, o comprovante anexado. Recusado não muda nada aqui — é informação interna.
  */
 export const PublicQuoteEntry: React.FC = () => {
+  // Antes de qualquer leitura: a clínica do link (`c=`). No modo legado, sempre vale (raiz).
+  const [clinicaConhecida] = useState(() => definirClinicaDoLink(window.location.search));
   const [quote, setQuote] = useState<Quote | null>(null);
   /**
    * Mapas de áreas do espelho público — esta página não tem login e não pode ler `procedures`.
@@ -61,16 +66,17 @@ export const PublicQuoteEntry: React.FC = () => {
    */
   const [mapasDeAreas, setMapasDeAreas] = useState<MapaDeAreasPublico[]>([]);
   useEffect(() => {
+    if (!clinicaConhecida) return;
     void getMapasDeAreasPublicos().then(setMapasDeAreas).catch(() => {});
-  }, []);
+  }, [clinicaConhecida]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [mostrarPdf, setMostrarPdf] = useState(false);
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('orcamento');
-    if (!id) {
-      setErro('Link inválido.');
+    if (!id || !clinicaConhecida) {
+      setErro(id ? 'Este link está incompleto. Peça um novo link à clínica.' : 'Link inválido.');
       setCarregando(false);
       return;
     }
@@ -118,7 +124,7 @@ export const PublicQuoteEntry: React.FC = () => {
         {/* Cabeçalho */}
         <div className="flex items-start gap-3 mb-6">
           <div className="w-10 h-10 bg-ink text-brand font-serif-luxury text-sm flex items-center justify-center shrink-0">
-            LV
+            {ehZulia ? clinicMonogram(clinica.name) : 'LV'}
           </div>
           <div className="min-w-0">
             <h1 className="font-serif-luxury text-xl leading-tight">{clinica.name}</h1>
