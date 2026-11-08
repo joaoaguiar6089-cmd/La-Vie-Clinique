@@ -1,4 +1,5 @@
 import type { AnamnesisRecord, LaserAreaRef, Patient } from '../types';
+import { clinicaAtual } from '../lib/estadoDaClinica';
 
 /**
  * A página da paciente fala com o servidor para abrir e salvar a ficha — ver `server/fichaPublica.ts`.
@@ -57,7 +58,8 @@ async function chamar<T>(rota: string, corpo: unknown): Promise<T> {
     resposta = await fetch(`/api/ficha-publica/${rota}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corpo),
+      // Na Zulia, a clínica do link (`c`) vai junto: o servidor lê e grava só nela.
+      body: JSON.stringify({ ...(corpo as object), ...(clinicaAtual() ? { c: clinicaAtual() } : {}) }),
       signal: controle.signal,
     });
   } finally {
@@ -97,6 +99,8 @@ export function mensagemDoErroDaFicha(erro: unknown, padrao: string): string {
       return 'Preencha o seu nome para enviar a ficha.';
     case 'servidor-nao-configurado':
       return 'A ficha online está temporariamente indisponível. Avise a clínica, por favor.';
+    case 'clinica-nao-encontrada':
+      return 'Este link está incompleto. Peça um novo link à clínica.';
     default:
       return padrao;
   }

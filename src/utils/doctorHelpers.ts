@@ -1,4 +1,5 @@
 import { Procedure, ClinicProfile, Professional } from '../types';
+import { PROFISSIONAL_PADRAO } from './marca';
 
 export interface DoctorDisplayInfo {
   name: string;
@@ -83,9 +84,10 @@ export function getProcedureDoctors(
         name: cleanDoctorNameOnly(clinic.professionalName),
         specialty: clinic.professionalTitle || undefined,
       });
-    } else {
+    } else if (PROFISSIONAL_PADRAO) {
+      // Só no legado: a profissional padrão da La Vie. Na Zulia, perfil sem equipe fica sem nome.
       result.push({
-        name: 'Dra. Karoline Ferreira',
+        name: PROFISSIONAL_PADRAO,
         specialty: clinic.professionalTitle || 'Estética Avançada',
       });
     }
@@ -116,9 +118,11 @@ export function getClinicDoctors(clinic: ClinicProfile): DoctorDisplayInfo[] {
     ];
   }
 
+  // Só no legado: a profissional padrão da La Vie. Na Zulia, perfil sem equipe fica sem ninguém.
+  if (!PROFISSIONAL_PADRAO) return [];
   return [
     {
-      name: 'Dra. Karoline Ferreira',
+      name: PROFISSIONAL_PADRAO,
       specialty: clinic.professionalTitle || 'Estética Avançada & Tecnologias',
     },
   ];

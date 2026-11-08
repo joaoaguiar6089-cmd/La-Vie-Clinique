@@ -9,7 +9,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { documento } from '../lib/clinicaAtual';
+import { documento, documentoDaPlataforma } from '../lib/clinicaAtual';
 import {
   Attendance,
   ContaGoogleAgenda,
@@ -46,6 +46,24 @@ export function assinarGoogleAgenda(
       console.warn('Google Agenda: não foi possível ler as contas conectadas:', err);
       onError?.(err);
     }
+  );
+}
+
+/**
+ * A clínica pode usar o Google Agenda? No legado (La Vie), sempre. Na Zulia, só com
+ * `clinicas/{c}.recursos.googleAgenda` — por enquanto só a La Vie, até haver domínio próprio e o
+ * app ser verificado no Google. Nas outras, a tela mostra "em breve".
+ */
+export function assinarRecursoGoogleAgenda(onUpdate: (disponivel: boolean) => void): () => void {
+  const ref = documentoDaPlataforma();
+  if (!ref) {
+    onUpdate(true);
+    return () => {};
+  }
+  return onSnapshot(
+    ref,
+    (snap) => onUpdate(snap.data()?.recursos?.googleAgenda === true),
+    () => onUpdate(false)
   );
 }
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { ehZulia } from '../lib/projetoFirebase';
 
 /**
  * Logo que veio no seed inicial do Firestore: uma foto de banco de imagens que nunca foi a marca
@@ -24,7 +25,8 @@ export function clinicMonogram(name?: string): string {
     .slice(0, 2)
     .map((word) => word[0])
     .join('');
-  return (initials || 'LV').toUpperCase();
+  // Sem nome: o "LV" de sempre no legado; na Zulia, nada da La Vie.
+  return (initials || (ehZulia ? '·' : 'LV')).toUpperCase();
 }
 
 interface ClinicLogoProps {

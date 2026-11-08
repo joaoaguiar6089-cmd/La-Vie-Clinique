@@ -207,6 +207,43 @@ poder ler os dados das pacientes depois que eles existirem**.
   **Usuário do Cloud Datastore** e **Administrador do Firebase Authentication** no
   `zulia-plataforma`.
 
+### Painel por clínica
+- **Entrada:** na Zulia, o painel lê as claims do login (`lerAcessoDaPlataforma`) antes de
+  qualquer assinatura e chama `definirClinicaAtual(clinicaId)`. Login sem claim de clínica vê a
+  tela de acesso negado. Quem é admin vem da claim `papel` (no legado, do perfil). Ao sair, a
+  página recarrega, para nada da clínica anterior ficar na memória da aba.
+- **Caches:** as chaves das assinaturas compartilhadas e do `localStorage` (`aura_bronze_*`,
+  `lavie:*`, `lavie.*`) levam a clínica (`chaveLocal`, em `src/lib/estadoDaClinica.ts`). Antes do
+  login nada é lido, para o cache antigo da La Vie no mesmo endereço não aparecer para outra
+  clínica.
+- **Links:** `buildPublicLink` acrescenta `c=<clinicaAtual()>`. As páginas da ficha, do
+  orçamento e do agendamento definem a clínica pelo `c` (ou pela `CLINICA_DOS_LINKS_ANTIGOS`)
+  antes de ler, e a ficha manda o `c` ao servidor.
+- **Equipe:** na Zulia, Configurações → Equipe cria login, muda papel e desativa pelas rotas
+  `/api/equipe`. Mudou o papel do próprio login, o painel pede um token novo na hora.
+- **Sementes:** clínica nova recebe as fichas padrão e os 2 procedimentos de exemplo
+  (`src/data/exemplosZulia.ts`). Nunca o perfil, o catálogo, as pacientes ou as fichas de exemplo
+  da La Vie; "Restaurar demonstração" não aparece; a foto padrão da Dra. Karoline só no legado.
+- **Marca:** `src/utils/marca.ts`. No legado, "La Vie Clinique" como sempre; na Zulia, o nome do
+  perfil da clínica (fichas impressas, recibos, nomes de arquivo, página da paciente, orçamento).
+  A tela de login e o `index.html` (plugin no `vite.config.ts`) mostram a marca Zulia.
+- **Google Agenda:** sem `recursos.googleAgenda`, a seção mostra "em breve".
+
+### Testar sem tocar em projeto nenhum
+Os emuladores do Firebase (precisam de Java) rodam Auth, Firestore e Storage na máquina. Com eles,
+o painel e o servidor falam só com a máquina: `VITE_EMULADORES=1` no build, e no Node as variáveis
+que o `firebase emulators:exec` define. Nunca no ar.
+
+    # regras da Zulia (isolamento entre clínicas)
+    npx -y firebase-tools@15 emulators:exec --config zulia/firebase.json --project demo-zulia "npx tsx scripts/verificar-regras-zulia.ts --emulador"
+    # servidor no modo Zulia
+    PLATAFORMA=zulia npx -y firebase-tools@15 emulators:exec --only auth,firestore --config zulia/firebase.json --project demo-zulia "npx tsx scripts/verificar-servidor-zulia.ts"
+    # painel no legado, num navegador (config com as regras da raiz e o banco (default))
+    VITE_EMULADORES=1 npm run build
+    npx -y firebase-tools@15 emulators:exec --only auth,firestore,storage --config <config do legado> --project demo-zulia "npx tsx scripts/verificar-ponta-a-ponta-legado.ts"
+
+Depois, `npm run build` sem as variáveis.
+
 ### Links das pacientes
 - Os links passam a levar a clínica (`c=<clinicaId>`). Links antigos da La Vie, sem `c`, abrem
   na clínica da La Vie.
@@ -226,7 +263,7 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
 | 1 | `plataforma.json` escolhe o projeto (`legado` ou `zulia`) para o painel, o servidor e os scripts | Feita |
 | 2 | Regras multi-clínica em `zulia/` e o teste de isolamento `scripts/verificar-regras-zulia.ts` | Feita; passa nos emuladores. Falta publicar no `zulia-plataforma` e rodar lá |
 | 3 | Servidor por clínica: login pela claim, caminhos `clinicas/{c}/...`, rotas `/api/equipe` | Feita; testada nos emuladores (`scripts/verificar-servidor-zulia.ts`) |
-| 4 | Painel e páginas das pacientes por clínica: entrada pela claim, links com `c=`, sementes e marca | A fazer |
+| 4 | Painel e páginas das pacientes por clínica: entrada pela claim, links com `c=`, sementes e marca | Feita; testada de ponta a ponta nos emuladores, no modo Zulia e no legado |
 | 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | A fazer |
 | 6 | `scripts/migrar-la-vie.ts`, ensaio, e a migração no dia combinado com o João | A fazer |
 

@@ -175,7 +175,7 @@ async function main() {
     const pb = await resolver('?anamnese=tpl-botox&c=srv-b');
     ok('o mesmo link com o c de B mostra B', pb?.titulo === 'Anamnese - Botox srv-b' && pb?.site === 'Clínica Beta');
     const pSem = await resolver('?anamnese=tpl-botox');
-    ok('link sem clínica conhecida sai genérico', pSem?.titulo === 'Anamnese - La Vie Clinique');
+    ok('link sem clínica conhecida sai genérico, com a marca da plataforma', pSem?.titulo === 'Anamnese - Zulia');
 
     // ==========================================
     console.log('\nLogin pelo Admin SDK');

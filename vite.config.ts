@@ -1,11 +1,32 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, type Plugin} from 'vite';
+import plataforma from './plataforma.json';
+import {escolherModo} from './src/lib/projetoFirebase';
+
+/**
+ * No modo Zulia (`plataforma.json`, ou VITE_PLATAFORMA=zulia), o `index.html` sai com a marca da
+ * plataforma: é a primeira coisa que aparece, antes do JavaScript, e o título padrão dos links que
+ * o servidor não reconhece. No modo legado, o `index.html` da La Vie fica como está.
+ */
+const marcaDaPlataforma = (): Plugin => ({
+  name: 'marca-da-plataforma',
+  transformIndexHtml(html) {
+    if (escolherModo(plataforma.modo, process.env.VITE_PLATAFORMA) !== 'zulia') return html;
+    const titulo = 'Zulia';
+    const descricao = 'Zulia — agenda, fichas, orçamentos e catálogo da sua clínica.';
+    return html
+      .replace(/<title>[\s\S]*?<\/title>/i, `<title>${titulo}</title>`)
+      .replace(/(<meta\s+name="description"\s+content=")[^"]*(")/i, `$1${descricao}$2`)
+      .replace(/(<meta\s+property="og:title"\s+content=")[^"]*(")/i, `$1${titulo}$2`)
+      .replace(/(<meta\s+property="og:description"\s+content=")[^"]*(")/i, `$1${descricao}$2`);
+  },
+});
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), marcaDaPlataforma()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

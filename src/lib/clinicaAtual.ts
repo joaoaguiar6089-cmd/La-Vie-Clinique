@@ -1,5 +1,6 @@
 import { collection, doc, type CollectionReference, type DocumentReference } from 'firebase/firestore';
 import { db } from './firebase';
+import { clinicaAtual } from './estadoDaClinica';
 
 /**
  * Onde moram os dados da clínica do login — a base da Zulia para várias clínicas.
@@ -14,25 +15,18 @@ import { db } from './firebase';
  * grava (ver docs/zulia-plataforma.md).
  */
 
-let clinicaId: string | null = null;
-
-/** Define a clínica do login. `null` volta ao modo legado (raiz). */
-export function definirClinicaAtual(id: string | null): void {
-  clinicaId = id && id.trim() ? id.trim() : null;
-}
-
-/** A clínica do login, ou `null` no modo legado. */
-export function clinicaAtual(): string | null {
-  return clinicaId;
-}
+// O estado (qual clínica) mora num módulo sem o SDK, para quem não precisa do banco.
+export { chaveLocal, clinicaAtual, definirClinicaAtual, definirClinicaDoLink } from './estadoDaClinica';
 
 /** A coleção `nome` da clínica do login (ou da raiz, no modo legado). */
 export function colecao(nome: string): CollectionReference {
+  const clinicaId = clinicaAtual();
   return clinicaId ? collection(db, 'clinicas', clinicaId, nome) : collection(db, nome);
 }
 
 /** O documento `id` da coleção `nome` da clínica do login (ou da raiz, no modo legado). */
 export function documento(nome: string, id: string): DocumentReference {
+  const clinicaId = clinicaAtual();
   return clinicaId ? doc(db, 'clinicas', clinicaId, nome, id) : doc(db, nome, id);
 }
 
@@ -42,5 +36,12 @@ export function documento(nome: string, id: string): DocumentReference {
  */
 export function pastaDaClinica(caminho: string): string {
   const limpo = caminho.replace(/^\/+/, '');
+  const clinicaId = clinicaAtual();
   return clinicaId ? `clinicas/${clinicaId}/${limpo}` : limpo;
+}
+
+/** O documento da própria clínica (`clinicas/{c}`: plano, recursos), ou `null` no modo legado. */
+export function documentoDaPlataforma(): DocumentReference | null {
+  const clinicaId = clinicaAtual();
+  return clinicaId ? doc(db, 'clinicas', clinicaId) : null;
 }

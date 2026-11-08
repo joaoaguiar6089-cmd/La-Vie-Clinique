@@ -31,6 +31,8 @@ import {
   dataCurta,
   estiloDaPagina,
 } from '../documentos/estiloA4';
+import { clinicMonogram } from '../ClinicLogo';
+import { ehZulia } from '../../lib/projetoFirebase';
 
 /** Espaço da folha do comprovante: a página útil menos o cabeçalho compacto e o título. */
 const CAIXA_COMPROVANTE_W = CONTENT_W;
@@ -64,7 +66,7 @@ const CabecalhoCompleto: React.FC<{ quote: Quote; clinic: QuoteClinicSnapshot }>
             flexShrink: 0,
           }}
         >
-          LV
+          {ehZulia ? clinicMonogram(clinic.name) : 'LV'}
         </div>
         <div>
           <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, color: PRETO, lineHeight: 1.1 }}>

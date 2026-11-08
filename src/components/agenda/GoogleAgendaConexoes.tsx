@@ -4,6 +4,7 @@ import { GoogleAgendaConfig, Professional } from '../../types';
 import {
   SituacaoDaIntegracao,
   assinarGoogleAgenda,
+  assinarRecursoGoogleAgenda,
   conectarGoogleAgenda,
   desconectarGoogleAgenda,
   podeConectarDaqui,
@@ -31,7 +32,10 @@ export const GoogleAgendaConexoes: React.FC<GoogleAgendaConexoesProps> = ({ prof
   const [esperandoGoogle, setEsperandoGoogle] = useState(false);
   const [desconectandoId, setDesconectandoId] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<{ tipo: 'erro' | 'ok'; texto: string } | null>(null);
+  /** A clínica tem o recurso? Na Zulia, por enquanto só a La Vie (ver `assinarRecursoGoogleAgenda`). */
+  const [disponivel, setDisponivel] = useState<boolean | null>(null);
 
+  useEffect(() => assinarRecursoGoogleAgenda(setDisponivel), []);
   useEffect(() => assinarGoogleAgenda(setConfig), []);
   useEffect(() => {
     let vivo = true;
@@ -40,6 +44,24 @@ export const GoogleAgendaConexoes: React.FC<GoogleAgendaConexoesProps> = ({ prof
       vivo = false;
     };
   }, []);
+
+  if (disponivel === false) {
+    return (
+      <div className="space-y-2.5 pt-2">
+        <h4 className="text-xs font-semibold text-ink flex items-center gap-1.5">
+          <CalendarCheck className="w-3.5 h-3.5 text-brand" />
+          Google Agenda
+          <span className="text-label px-1.5 py-0.5 rounded-xs bg-brand/15 text-brand font-semibold uppercase tracking-wider">
+            Em breve
+          </span>
+        </h4>
+        <p className="text-body text-gray-500 leading-relaxed">
+          Em breve cada profissional vai poder ver os agendamentos dela no Google Agenda. Por
+          enquanto, a agenda fica só aqui no painel.
+        </p>
+      </div>
+    );
+  }
 
   const daqui = podeConectarDaqui();
   const podeConectar = situacao === 'configurada' && daqui;

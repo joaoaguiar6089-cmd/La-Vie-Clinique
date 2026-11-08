@@ -1,4 +1,5 @@
 import { ClinicProfile } from '../types';
+import { clinicaAtual } from '../lib/estadoDaClinica';
 
 /**
  * Endereço dos links que saem do painel para a paciente: ficha de anamnese, orçamento, link do
@@ -105,13 +106,19 @@ export function resolvePublicBase(clinic?: Pick<ClinicProfile, 'publicBaseUrl'> 
 /**
  * Monta um link público a partir da base resolvida. Parâmetros vazios são descartados, e os
  * valores saem codificados.
+ *
+ * Na Zulia, todo link com parâmetro leva também `c=<clinicaId>`: é por ele que a página da
+ * paciente (e o servidor) sabem de qual clínica é a ficha, o orçamento ou o agendamento. No modo
+ * legado não há clínica, e o link sai como sempre.
  */
 export function buildPublicLink(
   clinic: Pick<ClinicProfile, 'publicBaseUrl'> | null | undefined,
   params: Record<string, string | undefined | null>
 ): string {
   const base = resolvePublicBase(clinic);
-  const query = Object.entries(params)
+  const clinica = clinicaAtual();
+  const comClinica = clinica && Object.values(params).some((v) => v) ? { ...params, c: clinica } : params;
+  const query = Object.entries(comClinica)
     .filter(([, valor]) => valor !== undefined && valor !== null && valor !== '')
     .map(([chave, valor]) => `${chave}=${encodeURIComponent(String(valor))}`)
     .join('&');

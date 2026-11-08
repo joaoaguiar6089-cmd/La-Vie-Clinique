@@ -40,6 +40,7 @@ import { ContextoDaJornada, OrigemDaVisita } from '../../utils/passosDaJornada';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { SkeletonLinhas } from '../common/Skeleton';
+import { gravarLocal, lerLocal } from '../../lib/estadoDaClinica';
 
 interface LinhaDoTempoDaClinicaProps {
   clinic: ClinicProfile;
@@ -71,7 +72,7 @@ const PAGINA = 40;
 
 const periodoInicial = (): number => {
   try {
-    const guardado = Number(localStorage.getItem(CHAVE_DO_PERIODO));
+    const guardado = Number(lerLocal(CHAVE_DO_PERIODO));
     if (PERIODOS_DA_LINHA.some((p) => p.dias === guardado)) return guardado;
   } catch {
     // Armazenamento bloqueado: fica o padrão.
@@ -148,7 +149,7 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
 
   useEffect(() => {
     try {
-      localStorage.setItem(CHAVE_DO_PERIODO, String(dias));
+      gravarLocal(CHAVE_DO_PERIODO, String(dias));
     } catch {
       // Sem armazenamento, a escolha vale só para esta visita.
     }

@@ -12,6 +12,7 @@ import {
   QuotePaymentOption,
 } from "../types";
 import { QUOTE_DEFAULTS } from "./quoteCalc";
+import { nomeDaClinica } from './marca';
 
 const novoId = (prefixo: string) =>
   `${prefixo}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -219,7 +220,7 @@ export const normalizarPagamento = (raw: unknown): QuotePayment => {
 
 /** Último recurso para orçamentos antigos abertos pela página pública, que não lê clinic_settings. */
 export const SNAPSHOT_CLINICA_PADRAO: QuoteClinicSnapshot = {
-  name: "La Vie Clinique",
+  name: nomeDaClinica(),
   legalNotice: QUOTE_DEFAULTS.legalNotice,
 };
 

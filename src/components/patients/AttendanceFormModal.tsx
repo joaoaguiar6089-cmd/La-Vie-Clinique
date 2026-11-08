@@ -79,6 +79,7 @@ import {
   PilulasDeEscolha,
   RotuloTinta,
 } from '../common/Tinta';
+import { gravarLocal, lerLocal } from '../../lib/estadoDaClinica';
 
 /**
  * `novo` nasce em branco; `edicao` corrige um registro; `confirmacao` é o "compareceu" de um
@@ -189,7 +190,7 @@ const CHAVE_DA_CONFIRMACAO = 'lavie:agendar-confirmar-whatsapp';
 
 const lerPreferenciaDeConfirmacao = (): boolean => {
   try {
-    return localStorage.getItem(CHAVE_DA_CONFIRMACAO) === '1';
+    return lerLocal(CHAVE_DA_CONFIRMACAO) === '1';
   } catch {
     return false;
   }
@@ -1334,7 +1335,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
             onMudar={(ligado) => {
               setEnviarConfirmacao(ligado);
               try {
-                localStorage.setItem(CHAVE_DA_CONFIRMACAO, ligado ? '1' : '0');
+                gravarLocal(CHAVE_DA_CONFIRMACAO, ligado ? '1' : '0');
               } catch {
                 // Sem armazenamento, a escolha vale só para este agendamento.
               }

@@ -1,7 +1,7 @@
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { ehZulia, firebaseConfig } from '../src/lib/projetoFirebase';
+import { ehZulia, firebaseConfig, usaEmuladores } from '../src/lib/projetoFirebase';
 
 /**
  * Acesso do servidor ao banco, com uma conta de serviço — o mesmo banco do painel, mas sem passar
@@ -105,6 +105,11 @@ let appDoServidor: App | null | undefined;
 /** O app do Admin SDK com a credencial do servidor, ou `null` se não houver credencial. */
 function appComCredencial(): App | null {
   if (appDoServidor !== undefined) return appDoServidor;
+  if (usaEmuladores) {
+    // Só para teste local: os emuladores não pedem credencial (ver src/lib/projetoFirebase.ts).
+    appDoServidor = initializeApp({ projectId: firebaseConfig.projectId }, 'servidor');
+    return appDoServidor;
+  }
   const credencial = credencialDoAmbiente();
   appDoServidor = credencial
     ? getApps().find((a) => a.name === 'servidor') ||

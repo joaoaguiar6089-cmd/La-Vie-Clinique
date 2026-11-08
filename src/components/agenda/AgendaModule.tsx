@@ -63,6 +63,7 @@ import { FichaFillModal } from '../fichas/FichaFillModal';
 import { perguntaDoAcompanhamento } from '../fichas/perguntaDoAcompanhamento';
 import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { SkeletonAgenda } from '../common/Skeleton';
+import { gravarLocal, lerLocal } from '../../lib/estadoDaClinica';
 
 /**
  * A agenda da clínica.
@@ -109,7 +110,7 @@ interface EstadoDoFormulario {
 
 const visaoInicial = (): AgendaVisao => {
   try {
-    const guardada = localStorage.getItem(AGENDA_VISAO_STORAGE_KEY);
+    const guardada = lerLocal(AGENDA_VISAO_STORAGE_KEY);
     if (guardada === 'dia' || guardada === 'semana' || guardada === 'mes') return guardada;
   } catch {
     // Navegador com armazenamento bloqueado: cai no padrão por tamanho de tela.
@@ -165,7 +166,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
 
   useEffect(() => {
     try {
-      localStorage.setItem(AGENDA_VISAO_STORAGE_KEY, visao);
+      gravarLocal(AGENDA_VISAO_STORAGE_KEY, visao);
     } catch {
       // Sem armazenamento, a preferência vale só para esta sessão. Não é motivo para quebrar nada.
     }

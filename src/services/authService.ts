@@ -9,6 +9,9 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth, firebaseConfig } from '../lib/firebase';
+import { definirClinicaAtual } from '../lib/estadoDaClinica';
+import { ehZulia } from '../lib/projetoFirebase';
+import { idDeClinicaValido } from '../utils/clinicas';
 import { resetSharedSubscriptions } from './sharedSubscription';
 
 export function onAuthChange(callback: (user: User | null) => void): () => void {
@@ -25,6 +28,34 @@ export async function logout(): Promise<void> {
   // instante os pacientes e fichas da sessão anterior.
   resetSharedSubscriptions();
   await signOut(auth);
+  if (ehZulia) {
+    // Na plataforma, quem entra depois nesta aba pode ser de outra clínica. Além das assinaturas,
+    // o painel guarda em memória o catálogo, as pacientes, a agenda... Recarregar a página é o
+    // único jeito de garantir que nada da clínica anterior apareça para ela.
+    definirClinicaAtual(null);
+    window.location.reload();
+  }
+}
+
+/** O que as custom claims do login dizem, na Zulia (ver docs/zulia-plataforma.md). */
+export interface AcessoDaPlataforma {
+  clinicaId: string | null;
+  papel: 'admin' | 'profissional' | null;
+  dono: boolean;
+}
+
+/**
+ * Lê as claims do login (`getIdTokenResult`). Com `forcar`, pede um token novo ao Firebase — é o
+ * que faz valer na hora uma claim que o servidor acabou de mudar (o papel, por exemplo); sem isso
+ * o token antigo vale por até uma hora.
+ */
+export async function lerAcessoDaPlataforma(user: User, forcar = false): Promise<AcessoDaPlataforma> {
+  const { claims } = await user.getIdTokenResult(forcar);
+  return {
+    clinicaId: idDeClinicaValido(claims.clinicaId) || null,
+    papel: claims.papel === 'admin' || claims.papel === 'profissional' ? claims.papel : null,
+    dono: claims.donoDaPlataforma === true,
+  };
 }
 
 export async function sendResetPasswordEmail(email: string): Promise<void> {
@@ -32,6 +63,9 @@ export async function sendResetPasswordEmail(email: string): Promise<void> {
 }
 
 /**
+ * Modo legado (projeto da La Vie). Na Zulia, o login nasce no servidor, com a clínica e o papel
+ * nas claims — ver `services/equipeApi.ts`.
+ *
  * Cria a conta de login (Firebase Auth) de uma nova profissional sem derrubar a sessão de
  * quem está criando. `createUserWithEmailAndPassword` autentica automaticamente o usuário
  * recém-criado na instância de Auth usada — por isso essa chamada roda numa instância

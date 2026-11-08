@@ -2,6 +2,7 @@ import { ClinicProfile, FormaDoRecibo, Quote, Recibo, ReciboClinica, ReciboItem 
 import { formatBRL, formatCpf } from './formatters';
 import { calcularOrcamento, itemEhProduto, itemQuantidade, itemSessoes, itemValorFinal } from './quoteCalc';
 import { quantidadeDoProduto } from './estoque';
+import { nomeDaClinica } from './marca';
 
 /**
  * As regras da nota de recibo que não dependem de tela nem de banco: os nomes das formas de
@@ -374,6 +375,6 @@ export const normalizarRecibo = (bruto: Partial<Recibo> & { id: string }): Recib
         }))
     : undefined,
   desconto: typeof bruto.desconto === 'number' && bruto.desconto > 0 ? bruto.desconto : undefined,
-  clinica: bruto.clinica && typeof bruto.clinica === 'object' ? bruto.clinica : { name: 'La Vie Clinique' },
+  clinica: bruto.clinica && typeof bruto.clinica === 'object' ? bruto.clinica : { name: nomeDaClinica() },
   createdAt: String(bruto.createdAt || ''),
 });

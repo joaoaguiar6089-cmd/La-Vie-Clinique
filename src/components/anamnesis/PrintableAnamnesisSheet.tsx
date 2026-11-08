@@ -28,6 +28,7 @@ import {
   PenTool,
 } from 'lucide-react';
 import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
+import { equipeDaClinica, marcaDaClinica, nomeDaClinica } from '../../utils/marca';
 
 interface PrintableAnamnesisSheetProps {
   record: AnamnesisRecord;
@@ -262,10 +263,10 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                   razão social por extenso, longa demais para um título — ela continua logo
                   abaixo, que é onde identifica a clínica. */}
               <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-ink leading-tight">
-                Anamnese - {record.procedimentoNome} - La Vie Clinique
+                Anamnese - {record.procedimentoNome} - {marcaDaClinica(clinicProfile)}
               </h2>
               <p className="text-xs font-semibold text-ink mt-1.5">
-                {clinicProfile.name || 'La Vie Clinique'}
+                {nomeDaClinica(clinicProfile)}
               </p>
               <p className="text-xs text-gray-500 italic mt-0.5">
                 {clinicProfile.tagline || 'Excelência Médica e Estética Avançada'}
@@ -340,7 +341,7 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
                 Profissional Responsável
               </span>
               <span className="font-semibold text-gray-800 block mt-0.5">
-                {professionalName || clinicProfile.professionalName || 'Equipe La Vie'}
+                {professionalName || clinicProfile.professionalName || equipeDaClinica(clinicProfile)}
               </span>
             </div>
           </div>

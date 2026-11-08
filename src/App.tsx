@@ -47,6 +47,7 @@ import { hojeISO } from './utils/attendances';
 import { AbaDasFichas, ehAbaDasFichas } from './utils/abasDasFichas';
 import type { AlvoDoPasso } from './components/linhaDoTempo/PainelDoEvento';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
+import { PERFIL_EM_BRANCO } from './data/exemplosZulia';
 import { ClinicLogo } from './components/ClinicLogo';
 import { RefreshCw, Check, Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
 import {
@@ -76,9 +77,17 @@ import {
   type AcessoAoPainel,
 } from './services/databaseService';
 import { DEFAULT_PROCEDURE_TEMPLATES } from './data/anamnesisInitialData';
-import { onAuthChange, logout, type User } from './services/authService';
+import {
+  onAuthChange,
+  logout,
+  lerAcessoDaPlataforma,
+  type AcessoDaPlataforma,
+  type User,
+} from './services/authService';
 import { useSincronizacaoGoogleAgenda } from './hooks/useSincronizacaoGoogleAgenda';
 import { firebaseConfig } from './lib/firebase';
+import { ehZulia } from './lib/projetoFirebase';
+import { gravarLocal, lerLocal } from './lib/estadoDaClinica';
 import {
   ENDERECO_DO_SITE,
   motivoEnderecoFechado,
@@ -93,8 +102,54 @@ import {
  */
 const URL_DO_BANCO_NO_CONSOLE = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${firebaseConfig.firestoreDatabaseId || '(default)'}/data`;
 
+// Na Zulia, as duas chaves levam a clínica (`lerLocal`/`gravarLocal`, ver lib/estadoDaClinica.ts):
+// antes do login nada é lido, e o cache de uma clínica nunca aparece para outra.
 const STORAGE_KEY_PROCEDURES = 'aura_bronze_procedures_v1';
 const STORAGE_KEY_CLINIC = 'aura_bronze_clinic_v1';
+
+/**
+ * A foto padrão da Dra. Karoline, para o perfil da La Vie que ficou sem ela. Só no modo legado:
+ * na Zulia, nenhuma profissional de clínica nenhuma ganha a foto dela.
+ */
+const precisaDaFotoDaKaroline = (p: Professional): boolean =>
+  !ehZulia &&
+  (!p.photoUrl || p.photoUrl.trim() === '') &&
+  (p.id === 'doc-karoline' || p.name.toLowerCase().includes('karoline'));
+
+/** O cache local do catálogo, já normalizado, ou `null`. */
+const catalogoGuardado = (): Procedure[] | null => {
+  try {
+    const saved = lerLocal(STORAGE_KEY_PROCEDURES);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return normalizeProcedureList(parsed);
+    }
+  } catch (e) {
+    console.error('Error loading saved procedures:', e);
+  }
+  return null;
+};
+
+/** O cache local do perfil, com os padrões por baixo, ou `null`. */
+const perfilGuardado = (): ClinicProfile | null => {
+  try {
+    const saved = lerLocal(STORAGE_KEY_CLINIC);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const padrao = ehZulia ? PERFIL_EM_BRANCO : DEFAULT_CLINIC_PROFILE;
+      const mergedProfessionals =
+        parsed.professionals && parsed.professionals.length > 0
+          ? parsed.professionals.map((p: Professional) =>
+              precisaDaFotoDaKaroline(p) ? { ...p, photoUrl: '/dra-karoline.jpg' } : p
+            )
+          : padrao.professionals;
+      return { ...padrao, ...parsed, professionals: mergedProfessionals };
+    }
+  } catch (e) {
+    console.error('Error loading saved clinic profile:', e);
+  }
+  return null;
+};
 
 // A ficha de anamnese pública (link enviado ao cliente) é servida por um shell totalmente
 // separado do painel administrativo — sem login, sem catálogo. Esta checagem depende só da
@@ -108,51 +163,16 @@ const isPublicAppointmentRoute = !!publicSearchParams?.get('agendamento');
 
 function MainCatalogApp() {
   // Catálogo exibido enquanto o Firestore não responde. É só uma cópia local da última
-  // sincronização: a assinatura em tempo real substitui esta lista assim que chega.
-  const [procedures, setProcedures] = useState<Procedure[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PROCEDURES);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return normalizeProcedureList(parsed);
-        }
-      }
-    } catch (e) {
-      console.error('Error loading saved procedures:', e);
-    }
-    return SAMPLE_PROCEDURES;
-  });
+  // sincronização: a assinatura em tempo real substitui esta lista assim que chega. Na Zulia, a
+  // clínica só é conhecida depois do login: começa vazio, e o cache entra quando o acesso libera.
+  const [procedures, setProcedures] = useState<Procedure[]>(
+    () => catalogoGuardado() || (ehZulia ? [] : SAMPLE_PROCEDURES)
+  );
 
   // Load clinic profile from localStorage or default initial fallback
-  const [clinic, setClinic] = useState<ClinicProfile>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CLINIC);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const mergedProfessionals = (parsed.professionals && parsed.professionals.length > 0)
-          ? parsed.professionals.map((p: Professional) => {
-              if (
-                (!p.photoUrl || p.photoUrl.trim() === '') &&
-                (p.id === 'doc-karoline' || p.name.toLowerCase().includes('karoline'))
-              ) {
-                return { ...p, photoUrl: '/dra-karoline.jpg' };
-              }
-              return p;
-            })
-          : DEFAULT_CLINIC_PROFILE.professionals;
-
-        return {
-          ...DEFAULT_CLINIC_PROFILE,
-          ...parsed,
-          professionals: mergedProfessionals,
-        };
-      }
-    } catch (e) {
-      console.error('Error loading saved clinic profile:', e);
-    }
-    return DEFAULT_CLINIC_PROFILE;
-  });
+  const [clinic, setClinic] = useState<ClinicProfile>(
+    () => perfilGuardado() || (ehZulia ? PERFIL_EM_BRANCO : DEFAULT_CLINIC_PROFILE)
+  );
 
   // Firebase Authentication — o painel inteiro fica atrás deste gate
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -172,6 +192,8 @@ function MainCatalogApp() {
   // `equipeUids` (ver utils/equipe.ts). Nada é lido nem gravado antes desta resposta.
   const [acessoAoPainel, setAcessoAoPainel] = useState<AcessoAoPainel>('verificando');
   const [tentativaDeAcesso, setTentativaDeAcesso] = useState(0);
+  /** Na Zulia: o papel na clínica, da claim do login. No legado fica `null` (vale o perfil). */
+  const [papelNaClinica, setPapelNaClinica] = useState<AcessoDaPlataforma['papel']>(null);
   useEffect(() => {
     if (!authUser) {
       setAcessoAoPainel('verificando');
@@ -179,13 +201,49 @@ function MainCatalogApp() {
     }
     let cancelado = false;
     setAcessoAoPainel('verificando');
-    conferirAcessoAoPainel(authUser.uid).then((acesso) => {
-      if (!cancelado) setAcessoAoPainel(acesso);
-    });
+    (async () => {
+      // Na Zulia, as claims vêm antes de tudo: é delas que sai a clínica, e nenhuma assinatura
+      // começa antes de `conferirAcessoAoPainel` defini-la.
+      let plataforma: AcessoDaPlataforma | undefined;
+      if (ehZulia) {
+        plataforma = await lerAcessoDaPlataforma(authUser).catch((e) => {
+          console.warn('Não foi possível ler as permissões do login:', e);
+          return undefined;
+        });
+        if (cancelado) return;
+        setPapelNaClinica(plataforma?.papel ?? null);
+      }
+      const acesso = await conferirAcessoAoPainel(authUser.uid, plataforma);
+      if (cancelado) return;
+      if (ehZulia && acesso === 'liberado') {
+        // Agora a clínica é conhecida: o cache local dela pode aparecer enquanto o banco responde.
+        const catalogo = catalogoGuardado();
+        if (catalogo) {
+          setProcedures(catalogo);
+          setProceduresCarregando(false);
+        }
+        const perfil = perfilGuardado();
+        if (perfil) setClinic(perfil);
+      }
+      setAcessoAoPainel(acesso);
+    })();
     return () => {
       cancelado = true;
     };
   }, [authUser, tentativaDeAcesso]);
+
+  /**
+   * Depois de mudar o papel de alguém pela tela da equipe: se foi o do próprio login, pede um
+   * token novo, para a claim nova valer já (sem isso, até uma hora depois).
+   */
+  const atualizarPapelDoLogin = async () => {
+    if (!ehZulia || !authUser) return;
+    try {
+      setPapelNaClinica((await lerAcessoDaPlataforma(authUser, true)).papel);
+    } catch (e) {
+      console.warn('Não foi possível atualizar as permissões do login:', e);
+    }
+  };
   /** O login é de alguém da equipe e o painel pode carregar os dados. */
   const painelLiberado = !!authUser && acessoAoPainel === 'liberado';
 
@@ -255,9 +313,7 @@ function MainCatalogApp() {
    * e mostrar essa cópia é melhor do que mostrar skeleton. Só quem abre o app pela primeira
    * vez (sem cache e sem os exemplos ainda) vê o carregamento.
    */
-  const [proceduresCarregando, setProceduresCarregando] = useState(
-    () => !localStorage.getItem(STORAGE_KEY_PROCEDURES)
-  );
+  const [proceduresCarregando, setProceduresCarregando] = useState(() => !lerLocal(STORAGE_KEY_PROCEDURES));
 
   /**
    * Pedido vindo do catálogo para o módulo de anamnese. O `nonce` existe porque tocar "Anamnese"
@@ -422,7 +478,11 @@ function MainCatalogApp() {
             if (firebaseProcedures && firebaseProcedures.length > 0) {
               const lista = normalizeProcedureList(firebaseProcedures);
               setProcedures(lista);
-              localStorage.setItem(STORAGE_KEY_PROCEDURES, JSON.stringify(lista));
+              try {
+                gravarLocal(STORAGE_KEY_PROCEDURES, JSON.stringify(lista));
+              } catch {
+                // Cópia local é conveniência; o efeito de backup abaixo tenta a versão enxuta.
+              }
             }
             setProceduresCarregando(false);
             setSyncStatus('synced');
@@ -442,16 +502,12 @@ function MainCatalogApp() {
           (firebaseClinic) => {
             if (firebaseClinic) {
               const updatedProfessionals = (firebaseClinic.professionals && firebaseClinic.professionals.length > 0)
-                ? firebaseClinic.professionals.map((p) => {
-                    if (
-                      (!p.photoUrl || p.photoUrl.trim() === '') &&
-                      (p.id === 'doc-karoline' || p.name.toLowerCase().includes('karoline'))
-                    ) {
-                      return { ...p, photoUrl: '/dra-karoline.jpg' };
-                    }
-                    return p;
-                  })
-                : DEFAULT_CLINIC_PROFILE.professionals;
+                ? firebaseClinic.professionals.map((p) =>
+                    precisaDaFotoDaKaroline(p) ? { ...p, photoUrl: '/dra-karoline.jpg' } : p
+                  )
+                : ehZulia
+                  ? []
+                  : DEFAULT_CLINIC_PROFILE.professionals;
 
               const enrichedClinic: ClinicProfile = {
                 ...firebaseClinic,
@@ -459,12 +515,19 @@ function MainCatalogApp() {
               };
 
               setClinic(enrichedClinic);
-              localStorage.setItem(STORAGE_KEY_CLINIC, JSON.stringify(enrichedClinic));
+              try {
+                gravarLocal(STORAGE_KEY_CLINIC, JSON.stringify(enrichedClinic));
+              } catch {
+                // Cópia local é conveniência.
+              }
 
-              // If Firestore was missing Dra. Karoline's photo, persist it to Firestore so it stays permanently synced
-              const hadMissingPhoto = (firebaseClinic.professionals || []).some(
-                (p) => (!p.photoUrl || p.photoUrl.trim() === '') && (p.id === 'doc-karoline' || p.name.toLowerCase().includes('karoline'))
-              ) || !firebaseClinic.professionals || firebaseClinic.professionals.length === 0;
+              // If Firestore was missing Dra. Karoline's photo, persist it to Firestore so it stays
+              // permanently synced. Só no modo legado (perfil da La Vie).
+              const hadMissingPhoto =
+                !ehZulia &&
+                ((firebaseClinic.professionals || []).some(precisaDaFotoDaKaroline) ||
+                  !firebaseClinic.professionals ||
+                  firebaseClinic.professionals.length === 0);
 
               if (hadMissingPhoto && !firebaseClinicSyncedPhotoRef.current) {
                 firebaseClinicSyncedPhotoRef.current = true;
@@ -643,7 +706,7 @@ function MainCatalogApp() {
   // Backup sync to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_PROCEDURES, JSON.stringify(procedures));
+      gravarLocal(STORAGE_KEY_PROCEDURES, JSON.stringify(procedures));
     } catch (e) {
       console.warn('Aviso: cota de localStorage atingida, salvando versão sanitizada:', e);
       try {
@@ -651,7 +714,7 @@ function MainCatalogApp() {
           ...p,
           images: (p.images || []).map((img) => (img && img.startsWith('data:') ? '' : img)),
         }));
-        localStorage.setItem(STORAGE_KEY_PROCEDURES, JSON.stringify(sanitized));
+        gravarLocal(STORAGE_KEY_PROCEDURES, JSON.stringify(sanitized));
       } catch {
         // Ignora caso o storage local esteja totalmente ocupado
       }
@@ -660,7 +723,7 @@ function MainCatalogApp() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_CLINIC, JSON.stringify(clinic));
+      gravarLocal(STORAGE_KEY_CLINIC, JSON.stringify(clinic));
     } catch (e) {
       console.error('Error saving clinic to localStorage:', e);
     }
@@ -900,6 +963,8 @@ function MainCatalogApp() {
   };
 
   const handleResetToDefaultSamples = () => {
+    // O "catálogo oficial" é o da La Vie: na plataforma o botão nem aparece.
+    if (ehZulia) return;
     setConfirmacao({
       titulo: 'Restaurar o catálogo oficial?',
       mensagem:
@@ -927,7 +992,8 @@ function MainCatalogApp() {
   };
 
   const currentProfessional = clinic.professionals?.find((p) => p.uid === authUser?.uid) || null;
-  const isAdminUser = !!currentProfessional?.isAdmin;
+  // Na Zulia, quem é admin diz a claim do login (o servidor é quem grava); no legado, o perfil.
+  const isAdminUser = ehZulia ? papelNaClinica === 'admin' : !!currentProfessional?.isAdmin;
 
   if (authLoading) {
     return (
@@ -1078,6 +1144,7 @@ function MainCatalogApp() {
                 onSave={handleSaveClinic}
                 currentUserUid={authUser?.uid}
                 isAdminUser={isAdminUser}
+                onPapelDoLoginMudou={atualizarPapelDoLogin}
               />
             ) : currentView === 'agenda' ? (
               <AgendaModule
@@ -1254,13 +1321,15 @@ function MainCatalogApp() {
                   <p className="text-xs text-gray-400 mb-1">📱 {clinic.phone}</p>
                   <p className="text-xs text-gray-400 mb-1">📸 {clinic.instagram}</p>
                   <p className="text-xs text-gray-400 mb-3">{clinic.cityState}</p>
-                  <button
-                    onClick={handleResetToDefaultSamples}
-                    className="text-label text-gray-500 hover:text-brand flex items-center gap-1 transition-colors uppercase tracking-wider"
-                    title="Restaurar dados de exemplo"
-                  >
-                    <RefreshCw className="w-3 h-3" /> Restaurar demonstração
-                  </button>
+                  {!ehZulia && (
+                    <button
+                      onClick={handleResetToDefaultSamples}
+                      className="text-label text-gray-500 hover:text-brand flex items-center gap-1 transition-colors uppercase tracking-wider"
+                      title="Restaurar dados de exemplo"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Restaurar demonstração
+                    </button>
+                  )}
                 </div>
               </div>
 

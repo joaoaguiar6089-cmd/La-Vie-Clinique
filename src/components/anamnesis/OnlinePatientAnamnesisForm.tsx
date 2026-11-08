@@ -39,6 +39,7 @@ import {
   IdCard,
 } from 'lucide-react';
 import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
+import { nomeDaClinica } from '../../utils/marca';
 
 const formatCpf = (raw: string): string => {
   const digits = raw.replace(/\D/g, '').slice(0, 11);
@@ -436,7 +437,7 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
               monogramClassName="bg-black/20 border border-[rgba(232,205,172,.35)] text-brand-light font-serif-luxury text-2xl font-semibold"
             />
             <h1 className="font-serif-luxury text-[26px] font-medium text-cream">
-              {clinicProfile.name || 'La Vie Clinique'}
+              {nomeDaClinica(clinicProfile)}
             </h1>
             <p className="text-[14px] text-[rgba(246,239,228,.6)] mt-2">
               Sua ficha de anamnese para o procedimento agendado.
