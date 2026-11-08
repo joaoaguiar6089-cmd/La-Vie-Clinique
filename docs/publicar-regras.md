@@ -42,3 +42,25 @@ A variável vale para as sessões abertas depois de salvar.
 
 Conta de serviço com outro nome: acrescente também `FIREBASE_CLIENT_EMAIL=<e-mail dela>`. Também
 dá para usar `FIREBASE_SERVICE_ACCOUNT` com o JSON inteiro numa linha só.
+
+## Projeto da Zulia (`--projeto zulia`)
+
+O `zulia-plataforma` tem as próprias regras, em `zulia/firestore.rules` e `zulia/storage.rules`
+(cada clínica em `clinicas/{c}/...`, conferida pela claim do login). Os arquivos andam com o
+projeto: as regras da raiz nunca vão para a Zulia, e as de `zulia/` nunca vão para a La Vie.
+
+- `npm run publicar-regras -- --projeto zulia --conferir` mostra o que está publicado na Zulia.
+- `npm run publicar-regras -- --projeto zulia` publica.
+- A credencial vem de `ZULIA_CLIENT_EMAIL` e `ZULIA_PRIVATE_KEY` (ou `ZULIA_SERVICE_ACCOUNT`, com
+  o JSON inteiro).
+- Sem `--projeto`, vale o modo de `plataforma.json` (`legado` até a migração).
+
+Depois de publicar, rode o teste de isolamento entre clínicas, que entra com cada tipo de login e
+tenta ler e gravar o que não devia:
+
+    npx tsx scripts/verificar-regras-zulia.ts
+
+Para testar as regras do disco antes de publicar, nos emuladores locais (precisa de Java; não
+toca em projeto nenhum):
+
+    npx -y firebase-tools@15 emulators:exec --config zulia/firebase.json --project demo-zulia "npx tsx scripts/verificar-regras-zulia.ts --emulador"

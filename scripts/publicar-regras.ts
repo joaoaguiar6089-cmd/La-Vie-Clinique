@@ -1,40 +1,61 @@
 /**
- * Publica `firestore.rules` e `storage.rules` direto pela API de regras do Firebase
+ * Publica as regras do Firestore e do Storage direto pela API de regras do Firebase
  * (firebaserules.googleapis.com) — o mesmo que o `firebase deploy --only firestore:rules,storage`
  * faz, sem instalar o firebase-tools e sem login interativo no navegador.
  *
- * Quem publica é uma **conta de serviço** do projeto com o papel "Administrador de regras do
- * Firebase" (Firebase Rules Admin). A credencial vem de variáveis de ambiente:
+ * DOIS PROJETOS, CADA UM COM AS SUAS REGRAS
+ *   --projeto legado (padrão enquanto `plataforma.json` diz "legado"): o projeto da La Vie
+ *     (`database-dra-karoline`), com `firestore.rules` e `storage.rules` da raiz (os do
+ *     `firebase.json`);
+ *   --projeto zulia: o `zulia-plataforma`, com `zulia/firestore.rules` e `zulia/storage.rules`.
+ * Os arquivos andam sempre com o projeto: as regras da raiz nunca vão para a Zulia, e as de
+ * `zulia/` nunca vão para a La Vie. Sem `--projeto`, vale o modo de `plataforma.json`.
  *
- *   FIREBASE_PRIVATE_KEY      o campo "private_key" do JSON da chave (uma linha, com os "\n")
- *   FIREBASE_CLIENT_EMAIL     o campo "client_email"; ausente, vale
- *                             publicar-regras@<projeto>.iam.gserviceaccount.com
- *   FIREBASE_SERVICE_ACCOUNT  alternativa às duas: o JSON inteiro numa linha só
+ * Quem publica é uma **conta de serviço** com o papel "Administrador de regras do Firebase"
+ * (Firebase Rules Admin) — ou mais — no projeto. A credencial vem de variáveis de ambiente:
+ *
+ *   Projeto da La Vie
+ *     FIREBASE_PRIVATE_KEY      o campo "private_key" do JSON da chave (uma linha, com os "\n")
+ *     FIREBASE_CLIENT_EMAIL     o campo "client_email"; ausente, vale
+ *                               publicar-regras@<projeto>.iam.gserviceaccount.com
+ *     FIREBASE_SERVICE_ACCOUNT  alternativa às duas: o JSON inteiro numa linha só
+ *   Projeto da Zulia
+ *     ZULIA_PRIVATE_KEY e ZULIA_CLIENT_EMAIL (ou ZULIA_SERVICE_ACCOUNT), no mesmo formato
  *
  * Só a chave privada é segredo. As duas primeiras existem separadas porque a tela de variáveis
  * do ambiente aceita uma linha por valor, e o JSON da chave vem em várias.
  *
- *   npx tsx scripts/publicar-regras.ts --conferir   só mostra o que está publicado hoje
- *   npx tsx scripts/publicar-regras.ts              valida e publica as duas
+ *   npx tsx scripts/publicar-regras.ts --conferir                    só mostra o que está publicado
+ *   npx tsx scripts/publicar-regras.ts                               valida e publica as duas
+ *   npx tsx scripts/publicar-regras.ts --projeto zulia [--conferir]  o mesmo, no zulia-plataforma
  *
- * O projeto, o banco (`firestoreDatabaseId`) e o bucket vêm do `firebase-applet-config.json`
- * (por `src/lib/projetoFirebase.ts`);
- * os arquivos de regras, do `firebase.json`. Antes de publicar, o script confere que a release de
- * cada um já existe no projeto: um nome errado criaria uma release que nada usa, e a regra
- * "publicada" não valeria em lugar nenhum.
+ * O projeto, o banco (`firestoreDatabaseId`) e o bucket vêm da configuração do projeto
+ * (`src/lib/projetoFirebase.ts`). Antes de publicar, o script confere que a release de cada um já
+ * existe no projeto: um nome errado criaria uma release que nada usa, e a regra "publicada" não
+ * valeria em lugar nenhum.
  */
 import { createSign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { configDoProjeto } from '../src/lib/projetoFirebase';
+import { configDoProjeto, lerModo, modoPlataforma, type ModoPlataforma } from '../src/lib/projetoFirebase';
 
 const raiz = dirname(dirname(fileURLToPath(import.meta.url)));
-// Script do projeto da La Vie (coleções na raiz): aponta sempre para ele, qualquer que seja o
-// modo em `plataforma.json` — ver `src/lib/projetoFirebase.ts`.
-const config = configDoProjeto('legado');
-const firebaseJson = JSON.parse(readFileSync(join(raiz, 'firebase.json'), 'utf8'));
 
+function argumento(nome: string): string | undefined {
+  const i = process.argv.indexOf(nome);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+const projetoPedido = argumento('--projeto');
+const alvoDoProjeto: ModoPlataforma | null =
+  projetoPedido === undefined ? modoPlataforma : projetoPedido === 'la-vie' ? 'legado' : lerModo(projetoPedido);
+if (!alvoDoProjeto) {
+  console.error(`--projeto "${projetoPedido}" não existe. Use --projeto legado ou --projeto zulia.`);
+  process.exit(1);
+}
+
+const config = configDoProjeto(alvoDoProjeto);
 const projeto: string = config.projectId;
 const banco: string = config.firestoreDatabaseId || '(default)';
 const bucket: string = config.storageBucket;
@@ -49,21 +70,30 @@ interface Alvo {
   release: string;
 }
 
-const arquivoDoFirestore: string =
-  (Array.isArray(firebaseJson.firestore) ? firebaseJson.firestore[0]?.rules : firebaseJson.firestore?.rules) ||
-  'firestore.rules';
-const arquivoDoStorage: string = firebaseJson.storage?.rules || 'storage.rules';
+/** Os arquivos de regras de cada projeto. */
+function arquivosDeRegras(alvo: ModoPlataforma): { firestore: string; storage: string } {
+  if (alvo === 'zulia') return { firestore: 'zulia/firestore.rules', storage: 'zulia/storage.rules' };
+  const firebaseJson = JSON.parse(readFileSync(join(raiz, 'firebase.json'), 'utf8'));
+  return {
+    firestore:
+      (Array.isArray(firebaseJson.firestore) ? firebaseJson.firestore[0]?.rules : firebaseJson.firestore?.rules) ||
+      'firestore.rules',
+    storage: firebaseJson.storage?.rules || 'storage.rules',
+  };
+}
+
+const arquivos = arquivosDeRegras(alvoDoProjeto);
 
 const ALVOS: Alvo[] = [
   {
     rotulo: `Firestore (banco ${banco})`,
-    arquivo: arquivoDoFirestore,
+    arquivo: arquivos.firestore,
     // O banco padrão publica em "cloud.firestore"; um banco com nome, em "cloud.firestore/<nome>".
     release: banco === '(default)' ? 'cloud.firestore' : `cloud.firestore/${banco}`,
   },
   {
     rotulo: `Storage (${bucket})`,
-    arquivo: arquivoDoStorage,
+    arquivo: arquivos.storage,
     release: `firebase.storage/${bucket}`,
   },
 ];
@@ -72,23 +102,27 @@ const ALVOS: Alvo[] = [
 // CREDENCIAL
 // ==========================================
 
+/** O prefixo das variáveis da credencial: FIREBASE_* para a La Vie, ZULIA_* para a Zulia. */
+const PREFIXO = alvoDoProjeto === 'zulia' ? 'ZULIA' : 'FIREBASE';
+
 function lerCredencial(): { email: string; chave: string } {
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT;
+  const json = process.env[`${PREFIXO}_SERVICE_ACCOUNT`];
   if (json?.trim()) {
     const conta = JSON.parse(json);
     return { email: conta.client_email, chave: conta.private_key };
   }
-  const chave = process.env.FIREBASE_PRIVATE_KEY;
+  const chave = process.env[`${PREFIXO}_PRIVATE_KEY`];
   if (!chave?.trim()) {
     throw new Error(
-      'Falta a credencial: defina FIREBASE_PRIVATE_KEY (o campo "private_key" do JSON da conta de ' +
+      `Falta a credencial: defina ${PREFIXO}_PRIVATE_KEY (o campo "private_key" do JSON da conta de ` +
         'serviço) nas variáveis do ambiente.'
     );
   }
-  return {
-    email: process.env.FIREBASE_CLIENT_EMAIL?.trim() || `publicar-regras@${projeto}.iam.gserviceaccount.com`,
-    chave,
-  };
+  const email = process.env[`${PREFIXO}_CLIENT_EMAIL`]?.trim();
+  if (!email && alvoDoProjeto === 'zulia') {
+    throw new Error('Falta ZULIA_CLIENT_EMAIL, o e-mail da conta de serviço do zulia-plataforma.');
+  }
+  return { email: email || `publicar-regras@${projeto}.iam.gserviceaccount.com`, chave };
 }
 
 /**
@@ -103,7 +137,7 @@ function normalizarChave(bruta: string): string {
     .replace('-----BEGIN PRIVATE KEY-----', '')
     .replace('-----END PRIVATE KEY-----', '')
     .replace(/\s+/g, '');
-  if (!corpo) throw new Error('FIREBASE_PRIVATE_KEY está vazia.');
+  if (!corpo) throw new Error(`${PREFIXO}_PRIVATE_KEY está vazia.`);
   chave = `-----BEGIN PRIVATE KEY-----\n${corpo.match(/.{1,64}/g)!.join('\n')}\n-----END PRIVATE KEY-----\n`;
   return chave;
 }
@@ -224,7 +258,7 @@ async function publicar(token: string, alvo: Alvo, rulesetName: string): Promise
 const dataLegivel = (iso?: string) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
 
 async function main() {
-  console.log(`Projeto ${projeto}${soConferir ? ' — só conferindo, nada será alterado' : ''}\n`);
+  console.log(`Projeto ${projeto} (${alvoDoProjeto})${soConferir ? ' — só conferindo, nada será alterado' : ''}\n`);
   const token = await obterToken();
 
   let releases: Release[];
@@ -250,7 +284,7 @@ async function main() {
   if (faltando.length > 0) {
     throw new Error(
       `Não existe release para ${faltando.map((a) => `"${a.release}"`).join(' e ')} neste projeto. ` +
-        'Confira o banco e o bucket no firebase-applet-config.json antes de publicar.'
+        'Confira o banco e o bucket na configuração do projeto antes de publicar.'
     );
   }
   if (soConferir) return;

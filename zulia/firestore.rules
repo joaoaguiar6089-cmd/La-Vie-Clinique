@@ -1,0 +1,198 @@
+rules_version = '2';
+
+// Regras do Firestore da Zulia (projeto `zulia-plataforma`), com cada clínica em
+// `clinicas/{c}/...`. São as regras da La Vie (`/firestore.rules`) coleção por coleção, trocando
+// "é da equipe" por "é desta clínica". As da raiz continuam sendo as do projeto da La Vie até a
+// migração, e NUNCA são publicadas aqui (ver docs/zulia-plataforma.md).
+//
+// QUEM É DE QUAL CLÍNICA
+// O login carrega, em custom claims gravadas pelo servidor (Admin SDK), a clínica (`clinicaId`) e o
+// papel (`admin` ou `profissional`). O dono da plataforma tem `donoDaPlataforma: true`. As regras
+// conferem só a claim — nenhum `get()` de perfil: a claim é a autoridade, e não custa leitura.
+// Um login sem claim de clínica (alguém que criou conta por fora) não alcança nada além do que é
+// público por link.
+//
+// O QUE O DONO VÊ
+// O dono lê o documento de cada clínica (nome, plano, situação, uso), mas NÃO as coleções dentro
+// dele: a clínica é a controladora dos dados das pacientes e a Zulia, a operadora.
+//
+// Publicar com:  npm run publicar-regras -- --projeto zulia   (ver docs/publicar-regras.md)
+// Testar com:    scripts/verificar-regras-zulia.ts
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // `get` em vez de `.clinicaId`: num login sem a claim, o acesso direto vira erro, e o erro
+    // dentro de um `||` é uma armadilha. Com `get`, a resposta é simplesmente "não".
+    function daClinica(c) {
+      return request.auth != null && request.auth.token.get('clinicaId', null) == c;
+    }
+
+    // A admin da clínica (a dona). Hoje as gravações de admin (equipe, plano) passam pelo servidor;
+    // esta função existe para as regras de plano e limites da etapa 3.
+    function adminDa(c) {
+      return daClinica(c) && request.auth.token.get('papel', null) == 'admin';
+    }
+
+    function dono() {
+      return request.auth != null && request.auth.token.get('donoDaPlataforma', false) == true;
+    }
+
+    match /clinicas/{c} {
+      // Os membros leem o próprio documento (plano, recursos); o dono lê o de todas. Ninguém grava
+      // pelo navegador: criar clínica, mudar plano e contadores são do servidor.
+      allow read: if daClinica(c) || dono();
+      allow write: if false;
+
+      // Catálogo de procedimentos: só a equipe.
+      match /procedures/{procedureId} {
+        allow read, write: if daClinica(c);
+      }
+
+      // Espelho público do perfil (nome, contato, endereço, a equipe sem dados de login): é o que a
+      // página da paciente, sem conta, lê para se identificar.
+      match /clinic_settings/public_profile {
+        allow read: if true;
+        allow write: if daClinica(c);
+      }
+
+      // Mapa corporal da depilação a laser, sem preço: a paciente escolhe as áreas pela ficha.
+      match /clinic_settings/laser_body_map {
+        allow read: if true;
+        allow write: if daClinica(c);
+      }
+
+      // Perfil completo (com os vínculos de login), migrações, Google Agenda e o resto.
+      match /clinic_settings/{docId} {
+        allow read, write: if daClinica(c);
+      }
+
+      // Perguntas gerais e fichas-modelo da anamnese: o formulário público (link da paciente)
+      // precisa ler; só a equipe edita. Não têm dado de paciente.
+      match /anamnesis_general_questions/{questionId} {
+        allow read: if true;
+        allow write: if daClinica(c);
+      }
+
+      match /anamnesis_templates/{templateId} {
+        allow read: if true;
+        allow write: if daClinica(c);
+      }
+
+      // Cadastros e fichas preenchidas: só a equipe. A paciente abre e salva a ficha pelo servidor
+      // (`/api/ficha-publica`), que confere o link e não passa por estas regras.
+      match /patients/{patientId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /anamnesis_records/{recordId} {
+        allow read, write: if daClinica(c);
+      }
+
+      // Orçamentos: `get` público (o segredo é o id, um randomUUID), `list` e escrita só da equipe.
+      match /quotes/{quoteId} {
+        allow get: if true;
+        allow list, write: if daClinica(c);
+      }
+
+      // Numeração sequencial de orçamentos e recibos.
+      match /counters/{counterId} {
+        allow read, write: if daClinica(c);
+      }
+
+      // Recibos levam o CPF da cliente e vão para ela em PDF, não por link: fechados.
+      match /receipts/{receiptId} {
+        allow read, write: if daClinica(c);
+      }
+
+      // Agenda e planos de sessão: só a equipe.
+      match /attendances/{attendanceId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /session_plans/{planId} {
+        allow read, write: if daClinica(c);
+      }
+
+      // Link do agendamento (?agendamento=<token>): `get` público por id; quem não tem login só
+      // atualiza os três campos da resposta, enquanto o agendamento está ativo, e com a resposta
+      // validada. Mesma regra de `/firestore.rules`.
+      match /appointment_links/{token} {
+        function respostaValida(r) {
+          return r is map
+            && r.keys().hasOnly(['tipo', 'novaData', 'novaHora', 'mensagem'])
+            && r.tipo in ['confirmar', 'nao_vai', 'remarcar']
+            && (!('mensagem' in r) || (r.mensagem is string && r.mensagem.size() <= 300))
+            && (r.tipo != 'remarcar' || (
+                  'novaData' in r && r.novaData is string
+                  && r.novaData.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+                  && 'novaHora' in r && r.novaHora is string
+                  && r.novaHora.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')))
+            && (r.tipo == 'remarcar' || (!('novaData' in r) && !('novaHora' in r)));
+        }
+
+        allow get: if true;
+        allow list, create, delete: if daClinica(c);
+        allow update: if daClinica(c)
+          || (
+            resource.data.situacao == 'ativo'
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['resposta', 'respostaPendente', 'respondidoEm'])
+            && request.resource.data.respostaPendente == true
+            && request.resource.data.respondidoEm is string
+            && request.resource.data.respondidoEm.size() <= 40
+            && respostaValida(request.resource.data.resposta)
+          );
+      }
+
+      // Avaliação e acompanhamento (modelos, perguntas e registros): documento interno da equipe,
+      // que a paciente nunca vê.
+      match /evaluation_templates/{templateId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /evaluation_general_questions/{questionId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /evaluation_records/{recordId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /followup_templates/{templateId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /followup_general_questions/{questionId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /followup_records/{attendanceId} {
+        allow read, write: if daClinica(c);
+      }
+
+      // Estoque, consumo padrão, materiais por atendimento e custo dos orçamentos: custo e margem
+      // são da equipe.
+      match /stock_products/{productId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /procedure_consumption/{procedureId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /attendance_materials/{attendanceId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /quote_costs/{quoteId} {
+        allow read, write: if daClinica(c);
+      }
+    }
+
+    // Qualquer outro caminho — inclusive uma coleção nova dentro da clínica que ainda não tenha
+    // regra aqui — fica fechado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
