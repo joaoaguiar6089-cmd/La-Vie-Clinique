@@ -2,12 +2,13 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { manterEquipeSincronizada } from './server/equipe';
-import { bancoAdmin } from './server/firebaseAdmin';
+import { criarRotasDaEquipe, manterEquipeSincronizada } from './server/equipe';
+import { bancoAdmin, PREFIXO_DA_CREDENCIAL } from './server/firebaseAdmin';
 import { criarRotasFichaPublica } from './server/fichaPublica';
 import { criarRotasGoogleAgenda } from './server/googleAgenda';
 import { criarResolvedorDePreview, type LeitorDoBanco } from './server/previewDosLinks';
 import { servirPrivacidade } from './server/privacidade';
+import { ehZulia, firebaseConfig } from './src/lib/projetoFirebase';
 import { aplicarPreviewNoHtml } from './src/utils/linkPreview';
 
 /**
@@ -25,6 +26,10 @@ import { aplicarPreviewNoHtml } from './src/utils/linkPreview';
  * O resto do app não muda: o painel e as páginas públicas continuam sendo o mesmo bundle do Vite.
  * Se a busca do título falhar, a resposta é o `index.html` de sempre.
  *
+ * O projeto do Firebase (La Vie ou Zulia) vem de `plataforma.json` — ver
+ * `src/lib/projetoFirebase.ts`. Na Zulia, os dados de cada clínica moram em `clinicas/{c}/...`
+ * (`server/clinicas.ts`), e a equipe de cada clínica é gerenciada por `/api/equipe`.
+ *
  * Rodar: `npm run build && npm start`.
  */
 
@@ -39,7 +44,10 @@ if (!fs.existsSync(arquivoIndex)) {
 
 const indexHtml = fs.readFileSync(arquivoIndex, 'utf-8');
 
-/** Leitura do cartão do link com a credencial do servidor, quando houver (ver previewDosLinks). */
+/**
+ * Leitura do cartão do link com a credencial do servidor, quando houver (ver previewDosLinks).
+ * `colecao` já vem com o caminho da clínica na Zulia (`clinicas/{c}/quotes`, por exemplo).
+ */
 const lerComCredencial = (): LeitorDoBanco | undefined => {
   const db = bancoAdmin();
   if (!db) return undefined;
@@ -80,6 +88,8 @@ app.use((_req, res, next) => {
 app.use('/api/ficha-publica', criarRotasFichaPublica());
 // Conexão das profissionais com o Google Agenda e envio dos eventos (ver server/googleAgenda.ts).
 app.use('/api/google-agenda', criarRotasGoogleAgenda());
+// Logins da equipe de cada clínica, na Zulia: criar, mudar papel, desativar (ver server/equipe.ts).
+app.use('/api/equipe', criarRotasDaEquipe());
 // Política de privacidade pública — o Google exige o link dela na tela de consentimento.
 app.get('/privacidade', servirPrivacidade);
 
@@ -110,13 +120,16 @@ app.get('*', async (req, res) => {
 // A hospedagem informa a porta em PORT; sem ela, 3000 (a do AI Studio).
 const porta = Number(process.env.PORT) || 3000;
 app.listen(porta, '0.0.0.0', () => {
-  console.log(`La Vie Clinique no ar em http://localhost:${porta}`);
+  console.log(
+    `${ehZulia ? 'Zulia' : 'La Vie Clinique'} no ar em http://localhost:${porta} (projeto ${firebaseConfig.projectId})`
+  );
   if (!bancoAdmin()) {
     console.warn(
-      '[admin] Sem credencial do servidor (FIREBASE_ADMIN_EMAIL/FIREBASE_ADMIN_CHAVE): a ficha ' +
+      `[admin] Sem credencial do servidor (${PREFIXO_DA_CREDENCIAL}_EMAIL/${PREFIXO_DA_CREDENCIAL}_CHAVE): a ficha ` +
         'pública não vai abrir. Ver docs/ficha-publica-servidor.md.'
     );
   }
-  // A lista de logins da equipe que as regras do Firestore usam (ver server/equipe.ts).
-  manterEquipeSincronizada(bancoAdmin);
+  // A lista de logins da equipe que as regras do Firestore da La Vie usam (ver server/equipe.ts).
+  // Na Zulia as regras conferem a claim do login, e não há lista a manter.
+  if (!ehZulia) manterEquipeSincronizada(bancoAdmin);
 });

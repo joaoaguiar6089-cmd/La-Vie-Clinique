@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { firebaseConfig } from '../src/lib/projetoFirebase';
+import { caminhoDaColecao, clinicaDoPedido } from './clinicas';
 import { decodificarCampos } from './previewDosLinks';
 
 /**
@@ -14,6 +15,9 @@ import { decodificarCampos } from './previewDosLinks';
  * revisor do Google, um leitor de tela, a paciente com internet ruim. Nome, endereço e telefone
  * vêm do espelho público do perfil (`clinic_settings/public_profile`, de leitura aberta), para a
  * página não envelhecer quando a clínica mudar o contato.
+ *
+ * Na Zulia, o perfil é o da clínica de `/privacidade?c=<clinicaId>`; sem `c`, o da clínica dos
+ * links antigos (a La Vie, que é quem usa o Google Agenda).
  */
 
 export interface PerfilParaPrivacidade {
@@ -151,20 +155,24 @@ const RAIZ_DO_BANCO =
 
 const CAMPOS = ['name', 'phone', 'address', 'cityState'];
 const GUARDA_POR_MS = 10 * 60 * 1000;
-let guardado: { ate: number; perfil: PerfilParaPrivacidade } | null = null;
+const guardados = new Map<string, { ate: number; perfil: PerfilParaPrivacidade }>();
 
 /** Nome e contato da clínica. Banco fora do ar não derruba a página: sai com o texto padrão. */
-const lerPerfil = async (): Promise<PerfilParaPrivacidade> => {
+const lerPerfil = async (clinicaId: string | null): Promise<PerfilParaPrivacidade> => {
+  const chave = clinicaId ?? '';
+  const guardado = guardados.get(chave);
   if (guardado && guardado.ate > Date.now()) return guardado.perfil;
   try {
     const mascara = CAMPOS.map((c) => `mask.fieldPaths=${c}`).join('&');
-    const resposta = await fetch(`${RAIZ_DO_BANCO}/clinic_settings/public_profile?${mascara}`, {
+    const caminho = `${caminhoDaColecao(clinicaId, 'clinic_settings')}/public_profile`;
+    const resposta = await fetch(`${RAIZ_DO_BANCO}/${caminho}?${mascara}`, {
       signal: AbortSignal.timeout(2500),
     });
     if (!resposta.ok) throw new Error(`Firestore respondeu ${resposta.status}`);
     const corpo = (await resposta.json()) as { fields?: Record<string, any> };
     const perfil = decodificarCampos(corpo.fields) as PerfilParaPrivacidade;
-    guardado = { ate: Date.now() + GUARDA_POR_MS, perfil };
+    if (guardados.size > 500) guardados.clear();
+    guardados.set(chave, { ate: Date.now() + GUARDA_POR_MS, perfil });
     return perfil;
   } catch (e) {
     console.warn('[privacidade] sem o perfil da clínica, usando o texto padrão:', e);
@@ -172,6 +180,9 @@ const lerPerfil = async (): Promise<PerfilParaPrivacidade> => {
   }
 };
 
-export const servirPrivacidade = async (_req: Request, res: Response): Promise<void> => {
-  res.set('Cache-Control', 'public, max-age=600').type('html').send(paginaDePrivacidade(await lerPerfil()));
+export const servirPrivacidade = async (req: Request, res: Response): Promise<void> => {
+  // Na Zulia, `undefined` (um `c` que não presta) sai com o texto padrão, sem ler nada.
+  const clinicaId = clinicaDoPedido(req.query.c);
+  const perfil = clinicaId === undefined ? {} : await lerPerfil(clinicaId);
+  res.set('Cache-Control', 'public, max-age=600').type('html').send(paginaDePrivacidade(perfil));
 };
