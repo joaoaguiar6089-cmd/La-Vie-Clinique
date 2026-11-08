@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "publicar-regras": "tsx scripts/publicar-regras.ts"
+    "publicar-regras": "tsx scripts/publicar-regras.ts",
+    "criar-clinica": "tsx scripts/criar-clinica.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
