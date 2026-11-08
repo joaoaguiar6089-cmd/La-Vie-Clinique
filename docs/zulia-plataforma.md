@@ -188,9 +188,23 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
 
 | Fase | O que entra | Situação |
 | --- | --- | --- |
-| 1 | `plataforma.json` escolhe o projeto (`legado` ou `zulia`) para o painel, o servidor e os scripts | A fazer |
+| 1 | `plataforma.json` escolhe o projeto (`legado` ou `zulia`) para o painel, o servidor e os scripts | Feita |
 | 2 | Regras multi-clínica em `zulia/` e o teste de isolamento `scripts/verificar-regras-zulia.ts` | A fazer |
 | 3 | Servidor por clínica: login pela claim, caminhos `clinicas/{c}/...`, rotas `/api/equipe` | A fazer |
 | 4 | Painel e páginas das pacientes por clínica: entrada pela claim, links com `c=`, sementes e marca | A fazer |
 | 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | A fazer |
 | 6 | `scripts/migrar-la-vie.ts`, ensaio, e a migração no dia combinado com o João | A fazer |
+
+### A chave do projeto (`plataforma.json`)
+- `plataforma.json` na raiz diz qual projeto o código usa: `{ "modo": "legado" }` (a La Vie de
+  hoje, `firebase-applet-config.json`) ou `{ "modo": "zulia" }` (`zulia-firebase-config.json`).
+  Fica num arquivo versionado porque não está confirmado que o build do AI Studio enxerga
+  variáveis de ambiente. **Vira para `zulia` só no dia da migração.**
+- Ninguém importa o JSON de um projeto direto: o painel, o servidor e os scripts pedem a
+  configuração a `src/lib/projetoFirebase.ts` (`firebaseConfig`, `modoPlataforma`, `ehZulia`).
+- Para desenvolvimento e scripts: `VITE_PLATAFORMA=zulia` no Vite (configuração `zulia-dev` do
+  `.claude/launch.json`) e `PLATAFORMA=zulia` no Node. **No modo `legado`, o `vite dev` grava no
+  Firestore de produção da La Vie:** teste o painel só no modo `zulia`.
+- Os scripts que só fazem sentido no projeto antigo (`exportar-banco`, `importar-banco`,
+  `migrar-imagens-para-storage`, `bootstrap-first-admin`) apontam sempre para ele.
+- `scripts/verificar-plataforma.ts` confere o arquivo e a escolha.

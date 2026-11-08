@@ -8,6 +8,8 @@ import {
   EvaluationRecord,
   Patient,
   Procedure,
+  Quote,
+  Recibo,
 } from '../../types';
 import type { DocumentosDoArquivo } from '../../services/databaseService';
 import { formatBRL, formatDate, formatDateOnly, formatDateShortYear } from '../../utils/formatters';
@@ -90,6 +92,12 @@ const Secao: React.FC<{ titulo: string; total: number; children: React.ReactNode
  * invisível na agenda de todo mundo menos aqui). Para voltar a atender, tira-se do arquivo; para
  * sumir de vez — a paciente de teste —, exclui-se permanentemente.
  */
+
+/** A lista do mais recente para o mais antigo, pela data em texto (ISO) que `chave` devolve. */
+function porTexto<T>(lista: T[], chave: (x: T) => string): T[] {
+  return [...lista].sort((a, b) => chave(b).localeCompare(chave(a)));
+}
+
 export const PacienteArquivadaView: React.FC<{
   paciente: Patient;
   /** `null` enquanto as coleções não chegaram. */
@@ -125,16 +133,14 @@ export const PacienteArquivadaView: React.FC<{
   /** Cada grupo na ordem de leitura: o mais recente em cima. */
   const doc = useMemo(() => {
     if (!documentos) return null;
-    const porTexto = <T,>(lista: T[], chave: (x: T) => string) =>
-      [...lista].sort((a, b) => chave(b).localeCompare(chave(a)));
     return {
-      fichas: porTexto(documentos.fichas, (f) => f.dataAtendimento || f.createdAt || ''),
-      avaliacoes: porTexto(documentos.avaliacoes, (a) => a.dataAtendimento || a.createdAt || ''),
+      fichas: porTexto(documentos.fichas, (f: AnamnesisRecord) => f.dataAtendimento || f.createdAt || ''),
+      avaliacoes: porTexto(documentos.avaliacoes, (a: EvaluationRecord) => a.dataAtendimento || a.createdAt || ''),
       atendimentos: [...documentos.atendimentos].sort(
         (a, b) => instanteDoAtendimento(b) - instanteDoAtendimento(a)
       ),
-      orcamentos: porTexto(documentos.orcamentos, (q) => q.dataEmissao || q.createdAt || ''),
-      recibos: porTexto(documentos.recibos, (r) => r.dataPagamento + r.createdAt),
+      orcamentos: porTexto(documentos.orcamentos, (q: Quote) => q.dataEmissao || q.createdAt || ''),
+      recibos: porTexto(documentos.recibos, (r: Recibo) => r.dataPagamento + r.createdAt),
     };
   }, [documentos]);
 

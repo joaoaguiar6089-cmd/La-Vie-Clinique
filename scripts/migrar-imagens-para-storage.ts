@@ -26,19 +26,18 @@
  *
  * É seguro rodar mais de uma vez: campos que já são URL são ignorados.
  */
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { obterCredenciais, explicarErro, encerrar } from './credenciais';
+import { configDoProjeto } from '../src/lib/projetoFirebase';
 
 const aplicar = process.argv.includes('--aplicar');
 
-const raiz = dirname(dirname(fileURLToPath(import.meta.url)));
-const config = JSON.parse(readFileSync(join(raiz, 'firebase-applet-config.json'), 'utf8'));
+// Script do projeto da La Vie (coleções na raiz): aponta sempre para ele, qualquer que seja o
+// modo em `plataforma.json` — ver `src/lib/projetoFirebase.ts`.
+const config = configDoProjeto('legado');
 
 /**
  * `--banco <id>` aponta para outro banco sem editar o arquivo de config.

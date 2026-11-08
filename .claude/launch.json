@@ -7,6 +7,14 @@
       "runtimeArgs": ["vite"],
       "autoPort": true,
       "port": 5183
+    },
+    {
+      "name": "zulia-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite"],
+      "env": { "VITE_PLATAFORMA": "zulia" },
+      "autoPort": true,
+      "port": 5184
     }
   ]
 }
