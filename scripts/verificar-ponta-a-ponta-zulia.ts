@@ -1,5 +1,6 @@
 /**
- * Ponta a ponta no modo Zulia, num navegador de verdade, contra os emuladores locais.
+ * Ponta a ponta no modo Zulia, num navegador de verdade, contra os emuladores locais ou contra o
+ * `zulia-plataforma` de verdade (`--projeto-real`).
  *
  *   1. `criarClinica` cria duas clínicas de teste (Alfa e Beta);
  *   2. o painel entra com a admin da Alfa e recebe só as sementes combinadas (fichas padrão e os 2
@@ -13,6 +14,16 @@
  *   VITE_PLATAFORMA=zulia VITE_EMULADORES=1 npm run build
  *   PLATAFORMA=zulia npx -y firebase-tools@15 emulators:exec --only auth,firestore,storage \
  *     --config zulia/firebase.json --project demo-zulia "npx tsx scripts/verificar-ponta-a-ponta-zulia.ts"
+ *
+ * No `zulia-plataforma` de verdade — só antes da migração, enquanto ele não tem dados de pacientes:
+ *
+ *   VITE_PLATAFORMA=zulia npm run build
+ *   PLATAFORMA=zulia npx tsx scripts/verificar-ponta-a-ponta-zulia.ts --projeto-real
+ *
+ *   com ZULIA_CLIENT_EMAIL e ZULIA_PRIVATE_KEY. O servidor local usa a mesma conta (como se fosse
+ *   ZULIA_ADMIN_EMAIL e ZULIA_ADMIN_CHAVE). Os logins de teste usam e-mails `.invalid`, que não
+ *   existem: nenhum e-mail chega a ninguém. As clínicas e os logins de teste são apagados no começo
+ *   (sobras de uma rodada que parou no meio) e no fim.
  *
  * (Depois, `npm run build` de novo, sem as variáveis, antes de publicar qualquer coisa.)
  */
@@ -36,20 +47,53 @@ const ok = (nome: string, condicao: boolean, extra = '') => {
   if (!condicao) falhas++;
 };
 
-if (!process.env.FIRESTORE_EMULATOR_HOST || process.env.PLATAFORMA !== 'zulia') {
-  console.error('Rode dentro dos emuladores, com PLATAFORMA=zulia (ver o topo do arquivo).');
+const noProjetoReal = process.argv.includes('--projeto-real');
+const nosEmuladores = !!process.env.FIRESTORE_EMULATOR_HOST;
+if (process.env.PLATAFORMA !== 'zulia' || nosEmuladores === noProjetoReal) {
+  console.error(
+    noProjetoReal
+      ? 'Com --projeto-real, rode fora dos emuladores, com PLATAFORMA=zulia (ver o topo do arquivo).'
+      : 'Rode dentro dos emuladores, com PLATAFORMA=zulia (ver o topo do arquivo).'
+  );
   process.exit(1);
 }
+const BUILD = noProjetoReal ? 'VITE_PLATAFORMA=zulia npm run build' : 'VITE_PLATAFORMA=zulia VITE_EMULADORES=1 npm run build';
 const indice = readFileSync('dist/index.html', 'utf8');
 if (!indice.includes('<title>Zulia</title>')) {
-  console.error('O dist/ não é do modo Zulia: rode VITE_PLATAFORMA=zulia VITE_EMULADORES=1 npm run build.');
+  console.error(`O dist/ não é do modo Zulia: rode ${BUILD}.`);
   process.exit(1);
 }
 
-const zulia = abrirZulia({ emulador: true });
+const zulia = abrirZulia({ emulador: !noProjetoReal });
 const PORTA = 3917;
 const SITE = `http://127.0.0.1:${PORTA}`;
 const SENHA = `E2e-${crypto.randomUUID()}`;
+
+/** Os logins de teste. Domínio `.invalid`: não existe, então nenhum convite chega a ninguém. */
+const EMAILS_DE_TESTE = ['dona@alfa.invalid', 'dona@beta.invalid', 'carla@alfa.invalid'];
+
+/**
+ * Apaga os logins de teste e as clínicas deles (pela claim do login e pela dona gravada na
+ * clínica). Só toca no que é de um e-mail de `EMAILS_DE_TESTE`. Devolve os ids apagados.
+ */
+const limparTestes = async (): Promise<string[]> => {
+  const clinicas = new Set<string>();
+  for (const email of EMAILS_DE_TESTE) {
+    const login = await zulia.auth.getUserByEmail(email).catch(() => null);
+    if (login) {
+      const c = login.customClaims?.clinicaId;
+      if (typeof c === 'string' && c) clinicas.add(c);
+      await zulia.auth.deleteUser(login.uid);
+    }
+    const donas = await zulia.db.collection('clinicas').where('dona.email', '==', email).get();
+    for (const d of donas.docs) clinicas.add(d.id);
+  }
+  for (const c of clinicas) {
+    await zulia.db.recursiveDelete(zulia.db.doc(`clinicas/${c}`));
+    await zulia.bucket.deleteFiles({ prefix: `clinicas/${c}/` }).catch(() => {});
+  }
+  return [...clinicas];
+};
 
 const esperarServidor = async () => {
   for (let i = 0; i < 60; i++) {
@@ -64,14 +108,27 @@ const esperarServidor = async () => {
 };
 
 async function main() {
-  // O servidor do site, no modo Zulia, falando com os emuladores (as variáveis vêm do emulators:exec).
+  if (noProjetoReal) {
+    const sobras = await limparTestes();
+    if (sobras.length) console.log(`(sobras de uma rodada anterior apagadas: ${sobras.join(', ')})`);
+  }
+  // O servidor do site, no modo Zulia, falando com os emuladores (as variáveis vêm do emulators:exec)
+  // ou com o zulia-plataforma, com a mesma conta do script no lugar da conta do servidor.
+  const credencialDoServidor = noProjetoReal
+    ? {
+        ZULIA_ADMIN_EMAIL: process.env.ZULIA_ADMIN_EMAIL || process.env.ZULIA_CLIENT_EMAIL,
+        ZULIA_ADMIN_CHAVE: process.env.ZULIA_ADMIN_CHAVE || process.env.ZULIA_PRIVATE_KEY,
+      }
+    : {};
   const servidor: ChildProcess = spawn('node', ['server.js'], {
-    env: { ...process.env, PORT: String(PORTA), PLATAFORMA: 'zulia' },
+    env: { ...process.env, ...credencialDoServidor, PORT: String(PORTA), PLATAFORMA: 'zulia' },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   const navegador = await chromium.launch();
   try {
     await esperarServidor();
+    const status = (await (await fetch(`${SITE}/api/ficha-publica/status`)).json()) as Record<string, unknown>;
+    ok('o servidor está no modo Zulia, com credencial', status.modo === 'zulia' && status.configurado === true, JSON.stringify(status));
 
     // ==========================================
     console.log('\n1. Criar as clínicas');
@@ -89,19 +146,32 @@ async function main() {
     const pagina = await painel.newPage();
     const errosDoConsole: string[] = [];
     pagina.on('console', (m: any) => m.type() === 'error' && errosDoConsole.push(m.text()));
+    const hostsDoPainel = new Set<string>();
+    pagina.on('request', (r: any) => hostsDoPainel.add(new URL(r.url()).host));
     await pagina.goto(SITE);
     ok('a tela de login é da Zulia', (await pagina.locator('h1').first().textContent())?.trim() === 'Zulia');
     await pagina.fill('input[type=email]', 'dona@alfa.invalid');
     await pagina.fill('input[type=password]', SENHA);
     await pagina.click('button[type=submit]');
     await pagina.waitForFunction(() => !document.querySelector('input[type=password]'), null, { timeout: 30000 });
+    const falouCom = (host: string) => hostsDoPainel.has(host);
+    ok(
+      noProjetoReal ? 'o painel fala com o zulia-plataforma (e não com os emuladores)' : 'o painel fala com os emuladores',
+      noProjetoReal
+        ? falouCom('identitytoolkit.googleapis.com') && !falouCom('127.0.0.1:9099') && !falouCom('127.0.0.1:8080')
+        : falouCom('127.0.0.1:9099') && !falouCom('identitytoolkit.googleapis.com'),
+      [...hostsDoPainel].filter((h) => !h.startsWith('127.0.0.1:3917')).join(', ')
+    );
     // As sementes rodam no primeiro login; dá um tempo para elas chegarem ao banco.
     const procedimentos = async (c: string) => (await zulia.db.collection(`clinicas/${c}/procedures`).get()).docs;
     for (let i = 0; i < 40 && (await procedimentos(alfa.id)).length < 2; i++) await pagina.waitForTimeout(500);
     const procs = await procedimentos(alfa.id);
     ok('o catálogo da Alfa tem os 2 procedimentos de exemplo', procs.length === 2 && procs.every((d) => d.id.startsWith('exemplo-')), procs.map((d) => d.id).join(', '));
-    for (let i = 0; i < 40 && (await zulia.db.collection(`clinicas/${alfa.id}/anamnesis_templates`).get()).empty; i++) {
-      await pagina.waitForTimeout(500);
+    // As fichas de avaliação são semeadas depois das de anamnese; no projeto real, cada uma demora mais.
+    for (const colecao of ['anamnesis_templates', 'evaluation_templates']) {
+      for (let i = 0; i < 60 && (await zulia.db.collection(`clinicas/${alfa.id}/${colecao}`).get()).empty; i++) {
+        await pagina.waitForTimeout(500);
+      }
     }
     const [gerais, modelos, avaliacoes, pacientes, fichas] = await Promise.all(
       ['anamnesis_general_questions', 'anamnesis_templates', 'evaluation_templates', 'patients', 'anamnesis_records'].map(
@@ -132,10 +202,14 @@ async function main() {
     await pagina.evaluate(() => window.scrollTo(0, 0));
     await pagina.getByRole('button', { name: /configura/i }).first().click();
     await pagina.locator('button[title="Criar login para esta profissional"]').first().click({ timeout: 15000 });
+    // O servidor cria o login, depois grava a claim e só então o índice da equipe: espera os três.
     let carla = null as Awaited<ReturnType<typeof zulia.auth.getUserByEmail>> | null;
-    for (let i = 0; i < 40 && !carla; i++) {
+    let papelNoIndice: unknown;
+    for (let i = 0; i < 80; i++) {
       carla = await zulia.auth.getUserByEmail('carla@alfa.invalid').catch(() => null);
-      if (!carla) await pagina.waitForTimeout(250);
+      papelNoIndice = carla ? (await zulia.db.doc(`clinicas/${alfa.id}`).get()).data()?.equipe?.[carla.uid] : undefined;
+      if (carla?.customClaims?.papel && papelNoIndice) break;
+      await pagina.waitForTimeout(250);
     }
     ok('o login da profissional existe', !!carla);
     ok(
@@ -143,7 +217,7 @@ async function main() {
       carla?.customClaims?.clinicaId === alfa.id && carla?.customClaims?.papel === 'profissional',
       JSON.stringify(carla?.customClaims)
     );
-    ok('e entrou no índice da equipe', (await zulia.db.doc(`clinicas/${alfa.id}`).get()).data()?.equipe?.[carla?.uid || ''] === 'profissional');
+    ok('e entrou no índice da equipe', papelNoIndice === 'profissional', String(papelNoIndice));
 
     // ==========================================
     console.log('\n4. Os links com c= abrem e respondem sem login');
@@ -252,7 +326,8 @@ async function main() {
     await paginaB.fill('input[type=password]', SENHA);
     await paginaB.click('button[type=submit]');
     await paginaB.waitForFunction(() => !document.querySelector('input[type=password]'), null, { timeout: 30000 });
-    await paginaB.waitForTimeout(4000);
+    await paginaB.waitForFunction(() => document.body.innerText.includes('Clínica Beta'), null, { timeout: 30000 }).catch(() => {});
+    await paginaB.waitForTimeout(3000);
     const textoB = await paginaB.locator('body').innerText();
     ok('o painel da Beta mostra a Beta', textoB.includes('Clínica Beta'));
     ok('e nada da Alfa', !textoB.includes('Clínica Alfa') && !textoB.includes('Paciente Teste') && !textoB.includes('Carla Alfa'));
@@ -273,6 +348,14 @@ async function main() {
   } finally {
     await navegador.close();
     servidor.kill();
+    if (noProjetoReal) {
+      const apagadas = await limparTestes().catch((e) => {
+        console.error('A limpeza falhou:', e);
+        return null;
+      });
+      const restam = await Promise.all(EMAILS_DE_TESTE.map((e) => zulia.auth.getUserByEmail(e).catch(() => null)));
+      ok('limpeza: as clínicas e os logins de teste foram apagados', !!apagadas && restam.every((u) => !u), apagadas?.join(', '));
+    }
     await zulia.encerrar();
   }
   console.log(falhas === 0 ? '\nTudo certo.' : `\n${falhas} falha(s).`);

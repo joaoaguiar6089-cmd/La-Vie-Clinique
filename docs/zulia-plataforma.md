@@ -112,9 +112,9 @@ continua apontando para o `database-dra-karoline` até a migração).
 | --- | --- |
 | Plano Blaze | Ativo (conta de faturamento vinculada) |
 | APIs | Firestore, Identity Toolkit, Firebase Storage, Firebase Rules, Cloud Billing e IAM ativas |
-| Firestore `(default)`, `southamerica-east1` | Criado (nativo, Standard), com proteção contra exclusão e regras fechadas (`allow read, write: if false`) |
-| Storage `zulia-plataforma.firebasestorage.app`, `southamerica-east1` | Criado e vinculado ao Firebase, com regras fechadas (`allow read, write: if false`) |
-| Login por e-mail e senha | Ligado, com o Auth já no Identity Platform. Duas etapas (MFA) ainda desligada |
+| Firestore `(default)`, `southamerica-east1` | Criado (nativo, Standard), com proteção contra exclusão. Regras de `zulia/firestore.rules` publicadas e conferidas em 9/11/2026 |
+| Storage `zulia-plataforma.firebasestorage.app`, `southamerica-east1` | Criado e vinculado ao Firebase. Regras de `zulia/storage.rules` publicadas em 9/11/2026; CORS do `cors.json` aplicado |
+| Login por e-mail e senha | Ligado, com o Auth já no Identity Platform. Duas etapas (MFA) ainda desligada. `drakaroline-lavie.ai.studio` autorizado em 9/11/2026 |
 | App web "Zulia Web" | Registrado: `1:1031812147083:web:b164181d211d1d68a4718e` |
 
 - **As regras da Zulia moram em `zulia/`** (`zulia/firestore.rules` e `zulia/storage.rules`) e
@@ -130,8 +130,10 @@ continua apontando para o `database-dra-karoline` até a migração).
 - **O Auth está no Identity Platform** (decisão do João; o upgrade não tem volta). É o que libera
   a verificação em duas etapas exigida para o login do dono e as *blocking functions*. Para
   logins com e-mail e senha, é gratuito até 50 mil usuários ativos por mês.
-- **Domínios autorizados no login:** por enquanto só `zulia-plataforma.firebaseapp.com` e
-  `zulia-plataforma.web.app`. O endereço em que o site for publicado precisa entrar na lista.
+- **Domínios autorizados no login:** `zulia-plataforma.firebaseapp.com`,
+  `zulia-plataforma.web.app` e `drakaroline-lavie.ai.studio` (o endereço do AI Studio, posto em
+  9/11/2026 com `scripts/configurar-login-zulia.ts`). Quando houver domínio próprio, ele entra na
+  lista `DOMINIOS` desse script, e o script roda de novo.
 - **A região do Firestore não muda depois de criado.** Por isso o banco tem de estar em
   `southamerica-east1` antes de receber qualquer dado: as fichas são dados de saúde, e ficar no
   Brasil evita declarar transferência internacional (LGPD), além de deixar o painel mais rápido.
@@ -267,6 +269,13 @@ que o `firebase emulators:exec` define. Nunca no ar.
 
 Depois, `npm run build` sem as variáveis.
 
+O mesmo ponta a ponta roda contra o `zulia-plataforma` de verdade, **só enquanto ele não tem dados
+de pacientes** (depois, contra o projeto de testes). Os logins de teste usam e-mails `.invalid` e
+são apagados com as clínicas deles no começo e no fim:
+
+    VITE_PLATAFORMA=zulia npm run build
+    PLATAFORMA=zulia npx tsx scripts/verificar-ponta-a-ponta-zulia.ts --projeto-real
+
 ### Links das pacientes
 - Os links passam a levar a clínica (`c=<clinicaId>`). Links antigos da La Vie, sem `c`, abrem
   na clínica da La Vie.
@@ -284,10 +293,10 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
 | Fase | O que entra | Situação |
 | --- | --- | --- |
 | 1 | `plataforma.json` escolhe o projeto (`legado` ou `zulia`) para o painel, o servidor e os scripts | Feita |
-| 2 | Regras multi-clínica em `zulia/` e o teste de isolamento `scripts/verificar-regras-zulia.ts` | Feita; passa nos emuladores. Falta publicar no `zulia-plataforma` e rodar lá |
+| 2 | Regras multi-clínica em `zulia/` e o teste de isolamento `scripts/verificar-regras-zulia.ts` | Feita; publicada no `zulia-plataforma` e passando lá e nos emuladores (9/11/2026) |
 | 3 | Servidor por clínica: login pela claim, caminhos `clinicas/{c}/...`, rotas `/api/equipe` | Feita; testada nos emuladores (`scripts/verificar-servidor-zulia.ts`) |
 | 4 | Painel e páginas das pacientes por clínica: entrada pela claim, links com `c=`, sementes e marca | Feita; testada de ponta a ponta nos emuladores, no modo Zulia e no legado |
-| 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | Feita; testada de ponta a ponta nos emuladores. Falta rodar no `zulia-plataforma` |
+| 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | Feita; testada de ponta a ponta nos emuladores e no `zulia-plataforma` (9/11/2026) |
 | 6 | `scripts/migrar-la-vie.ts`, ensaio, e a migração no dia combinado com o João | Script pronto e testado com dados falsos nos emuladores. **O dia da migração é só com o João** (roteiro abaixo) |
 
 ### A chave do projeto (`plataforma.json`)
@@ -324,17 +333,31 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
 - **Id reservado para a La Vie: `u9JYfN`.** Vai em `--id` e em `CLINICA_DOS_LINKS_ANTIGOS`.
 - Índices: todas as consultas do painel e do servidor usam um campo só, e os índices automáticos bastam. Nenhum índice composto a copiar.
 
-### Antes do dia (Claude, quando a credencial `ZULIA_*` estiver no ambiente da sessão)
-1. `npm run publicar-regras -- --projeto zulia` e `npx tsx scripts/verificar-regras-zulia.ts` no `zulia-plataforma`.
-2. `npx tsx scripts/configurar-bucket-zulia.ts` (CORS).
-3. Pôr `drakaroline-lavie.ai.studio` nos domínios autorizados do login da Zulia. Não afeta a La Vie, então pode ser antes.
-4. Ponta a ponta no `zulia-plataforma` de verdade:
-   - `criar-clinica` cria uma clínica de teste;
-   - o painel é construído no modo Zulia e servido localmente;
-   - a equipe e os links são testados.
+### Antes do dia
+A credencial `ZULIA_*` fica no ambiente "Lá Vie Environment" do Claude; as sessões abertas no
+ambiente "Default" não a têm.
 
-   Depois, apagar todas as clínicas e logins de teste.
-5. O João cria o projeto de testes separado e combina a janela.
+1. ~~Regras da Zulia publicadas e `verificar-regras-zulia.ts` no `zulia-plataforma`~~ — feito em 9/11/2026, tudo certo.
+2. ~~CORS do bucket (`configurar-bucket-zulia.ts`)~~ — feito em 9/11/2026.
+3. ~~`drakaroline-lavie.ai.studio` nos domínios autorizados do login da Zulia~~ — feito em 9/11/2026 (`scripts/configurar-login-zulia.ts`).
+4. ~~Ponta a ponta no `zulia-plataforma` de verdade~~ — feito em 9/11/2026:
+   - `verificar-ponta-a-ponta-zulia.ts --projeto-real`: duas clínicas, painel do build no modo Zulia servido localmente, sementes, login de profissional pela tela, links de ficha, orçamento e agendamento, isolamento. Tudo certo;
+   - `criar-clinica` pela linha de comando, com `--sem-convite`;
+   - tudo apagado depois: o `zulia-plataforma` ficou com 0 clínicas, 0 logins e 0 arquivos.
+5. **João:** cria o projeto de testes separado (roteiro abaixo) e combina a janela.
+
+### Projeto de testes
+Para os testes, depois da migração, não rodarem no mesmo projeto das clínicas de verdade. O João cria;
+o Claude liga os scripts a ele (um terceiro arquivo de configuração, como o `zulia-firebase-config.json`)
+quando receber a configuração do app web.
+
+1. Firebase → Adicionar projeto: "Zulia Testes" (id sugerido `zulia-testes`), sem Google Analytics.
+2. Plano Blaze, com a mesma conta de faturamento (o Storage de projeto novo exige). Custo esperado: perto de zero.
+3. Firestore: banco `(default)`, Standard, `southamerica-east1`, modo de produção.
+4. Storage: `southamerica-east1`.
+5. Authentication: ligar e-mail e senha.
+6. Registrar um app web ("Zulia Testes Web") e mandar a configuração (`firebaseConfig`) no chat. Ela não é segredo: é a mesma que vai no site.
+7. IAM do projeto de testes: dar a `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com` o papel **Editor**. É a mesma conta, então não há chave nova para criar nem guardar; e o projeto de testes nunca terá dados de pacientes.
 
 ### Dia da migração (só com o João)
 1. **João:** dá à conta `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com`, no projeto `database-dra-karoline`, os papéis **Leitor do Cloud Datastore**, **Leitor de objetos do Storage** e **Leitor do Firebase Authentication**. Se o script avisar que os logins vieram sem hash de senha, troca o último por **Administrador do Firebase Authentication** durante a janela.
@@ -343,8 +366,8 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
    - ensaio: `--ensaio --id ensaio-<data>`, depois `--conferir --ensaio` e `--apagar-ensaio`;
    - migração: `--aplicar --id u9JYfN --dono <e-mail do João>`;
    - conferência: `--conferir --id u9JYfN`, sem diferenças.
-4. Regras da Zulia publicadas e conferidas (já feito antes; confirmar).
-5. Domínio autorizado (já feito antes; confirmar).
+4. Regras da Zulia publicadas e conferidas (feito em 9/11/2026; confirmar com `npm run publicar-regras -- --projeto zulia --conferir`).
+5. Domínio autorizado (feito em 9/11/2026; confirmar com `npx tsx scripts/configurar-login-zulia.ts --conferir`).
 6. **João:** cria a conta do servidor da Zulia (ex.: `servidor-zulia`) no `zulia-plataforma`.
    - Papéis: **Usuário do Cloud Datastore** e **Administrador do Firebase Authentication**.
    - Gera a chave JSON e põe nos Secrets do AI Studio como `ZULIA_ADMIN_EMAIL` e `ZULIA_ADMIN_CHAVE`. A chave nunca vai para o chat.
