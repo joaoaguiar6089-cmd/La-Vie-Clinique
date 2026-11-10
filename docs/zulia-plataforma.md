@@ -378,6 +378,12 @@ sempre. O build de produção, servido localmente, abriu o painel em 9 abas sem 
 link antigo sem `c=` e as fotos pela URL reescrita. Não havia login do João no projeto da La Vie,
 então nenhum login de dono foi criado (fica para o painel do dono, etapa 5).
 
+Publicado pelo João no mesmo dia. Na primeira publicação, o `/status` respondeu `configurado: false`
+(os Secrets `ZULIA_ADMIN_*` não chegaram ao app); o João acertou os Secrets e publicou de novo. No ar,
+conferido: `/status` com `{ configurado, conectado, modo: 'zulia', linksAntigos: true }`; o login da
+admin entra com a senha de sempre, e o painel abre sem erro; o link antigo de ficha, sem `c=`, abre
+na La Vie com o cartão certo; as fotos abrem pelo bucket novo.
+
 1. **João:** dá à conta `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com`, no projeto `database-dra-karoline`, os papéis **Leitor do Cloud Datastore**, **Leitor de objetos do Storage** e **Leitor do Firebase Authentication**. Se o script avisar que os logins vieram sem hash de senha, troca o último por **Administrador do Firebase Authentication** durante a janela.
 2. Avisar a equipe para não usar o painel.
 3. **Claude:** primeiro contato com os dados reais:
@@ -403,11 +409,23 @@ então nenhum login de dono foi criado (fica para o painel do dono, etapa 5).
 **Se der errado depois de publicar:** virar o `plataforma.json` de volta para `legado` e publicar. O projeto antigo continua com os dados. O que for gravado na Zulia nesse meio-tempo precisaria voltar à mão.
 
 ### Depois
-1. **João** tira os papéis de leitura no projeto da La Vie.
-2. Os papéis do Claude na Zulia trocam Editor e Proprietário do Cloud Datastore por papéis que gerenciam sem ler dados, por exemplo:
-   - **Administrador de regras do Firebase**;
+1. **João** tira os três papéis da conta do Claude no projeto da La Vie (Leitor do Cloud Datastore,
+   Leitor de objetos do Storage e Administrador do Firebase Authentication).
+2. Os papéis do Claude no `zulia-plataforma` trocam Editor e Proprietário do Cloud Datastore por
+   papéis que gerenciam sem ler dados:
+   - **Administrador de regras do Firebase** (publicar `zulia/*.rules`);
    - **Administrador de índices do Cloud Datastore**;
    - **Consumidor do Service Usage**.
 
-   O que precisar ler dados (ou mexer na configuração do login ou do bucket) o João libera por um tempo.
-3. As regras do projeto antigo viram somente leitura, como cópia de segurança. O Claude prepara e publica com a chave de publicar regras da La Vie.
+   O que precisar ler dados (ou mexer na configuração do login ou do bucket, como
+   `configurar-login-zulia.ts` e `configurar-bucket-zulia.ts`) o João libera por um tempo. O Claude
+   confere o resultado com `testIamPermissions` (nenhuma permissão `datastore.entities.*`,
+   `storage.objects.*` ou `firebaseauth.users.*`).
+3. **Tirar do ambiente do Claude o `LAVIE_TESTE_EMAIL` e o `LAVIE_TESTE_SENHA`:** é o login da admin
+   da La Vie (o único da clínica), que dá acesso ao painel com todas as pacientes. Os testes passam a
+   usar logins de clínicas de teste no `venus-jk-testes`.
+4. Depois de uma semana sem precisar voltar atrás, as regras do projeto antigo viram somente
+   leitura, como cópia de segurança. O Claude prepara e publica com a chave de publicar regras da La
+   Vie. Antes disso não: voltar para o `legado` precisa do projeto antigo gravável.
+5. Ligar os scripts de teste ao projeto `venus-jk-testes` (configuração do app web já recebida:
+   `1:634656418024:web:9648e332fc3b388225c15d`; a conta do Claude já é Editor lá).
