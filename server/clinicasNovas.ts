@@ -18,6 +18,7 @@
 import type { Auth } from 'firebase-admin/auth';
 import type { Firestore } from 'firebase-admin/firestore';
 import { gerarIdDeClinica, idDeClinicaValido } from '../src/utils/clinicas';
+import type { AceiteDosTermos } from '../src/utils/documentosLegais';
 
 /** O que a criação precisa do Admin SDK. */
 export interface AcessoDeServidor {
@@ -40,6 +41,8 @@ export interface PedidoDeClinica {
   id?: string;
   /** Quem criou, gravado em `clinicas/{id}.criadaPor`. Ausente: o script. */
   criadaPor?: string;
+  /** O aceite dos Termos (cadastro sozinho), gravado em `clinicas/{id}.aceites.termos`. */
+  aceite?: AceiteDosTermos;
 }
 
 export interface ClinicaCriada {
@@ -110,6 +113,7 @@ export async function criarClinica(zulia: AcessoDeServidor, pedido: PedidoDeClin
     criadaEm: agora,
     atualizadaEm: agora,
     criadaPor: pedido.criadaPor || 'scripts/criar-clinica.ts',
+    ...(pedido.aceite ? { aceites: { termos: pedido.aceite } } : {}),
   });
   lote.set(zulia.db.doc(`${base}/clinic_settings/main_profile`), {
     name: nome,

@@ -7,7 +7,9 @@
  *   4. confirmado o e-mail (pelo link que o emulador guarda), ela cria a clínica e o painel abre,
  *      com as sementes, no plano gratuito, e com ela de admin;
  *   5. o servidor recusa: segunda clínica para o mesmo login, o dono da plataforma, nome inválido,
- *      sem login; e o mesmo e-mail não cria segunda conta.
+ *      sem aceite dos documentos, sem login; e o mesmo e-mail não cria segunda conta;
+ *   6. os documentos legais abrem como páginas, e o aceite fica gravado na clínica;
+ *   7. a admin de uma clínica sem aceite (de antes dos documentos) vê o pedido e aceita.
  *
  *   VITE_PLATAFORMA=zulia VITE_EMULADORES=1 npm run build
  *   PLATAFORMA=zulia npx -y firebase-tools@15 emulators:exec --only auth,firestore,storage \
@@ -18,6 +20,8 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { abrirZulia, EMULADORES } from './zuliaAdmin';
 import { MARCA_DA_PLATAFORMA } from '../src/utils/marca';
+import { VERSAO_DOS_DOCUMENTOS } from '../src/utils/documentosLegais';
+import { criarClinica } from '../server/clinicasNovas';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,10 +109,14 @@ async function main() {
     // ==========================================
     console.log('\n2. Criar a conta');
     await link.click();
-    await pagina.getByLabel('Nome da clínica').fill('Clínica Gama');
+    await pagina.getByLabel('Nome da clínica', { exact: true }).fill('Clínica Gama');
     await pagina.getByLabel('Seu nome').fill('Gabi Gama');
     await pagina.getByLabel('E-mail').fill(EMAIL);
     await pagina.getByLabel('Senha').fill(SENHA);
+    await pagina.getByRole('button', { name: 'Criar conta' }).click();
+    ok('sem marcar o aceite, a conta não é criada', await apareceu(pagina.getByText('marque que você aceita')));
+    ok('e nenhum login nasce', !(await zulia.auth.getUserByEmail(EMAIL).catch(() => null)));
+    await pagina.getByRole('checkbox').check();
     await pagina.getByRole('button', { name: 'Criar conta' }).click();
     const confirmar = pagina.getByRole('heading', { name: 'Confirme seu e-mail' });
     ok('cai na tela "Confirme seu e-mail"', await apareceu(confirmar));
@@ -139,7 +147,8 @@ async function main() {
     await pagina.getByRole('button', { name: 'Já confirmei' }).click();
     const crie = pagina.getByRole('heading', { name: 'Crie sua clínica' });
     ok('cai na tela "Crie sua clínica"', await apareceu(crie));
-    ok('com o nome da clínica já preenchido', (await pagina.getByLabel('Nome da clínica').inputValue()) === 'Clínica Gama');
+    ok('com o nome da clínica já preenchido', (await pagina.getByLabel('Nome da clínica', { exact: true }).inputValue()) === 'Clínica Gama');
+    ok('e o aceite já marcado (foi marcado no formulário)', await pagina.getByRole('checkbox').isChecked());
     await pagina.getByRole('button', { name: 'Criar minha clínica' }).click();
     await pagina
       .waitForFunction(() => !document.body.innerText.includes('Crie sua clínica'), null, { timeout: 30000 })
@@ -154,6 +163,12 @@ async function main() {
     );
     ok('com ela de dona e na equipe', clinica?.dona?.uid === login!.uid && clinica?.equipe?.[login!.uid] === 'admin');
     ok('marcada como criada pelo cadastro', clinica?.criadaPor === 'cadastro' && clinica?.nome === 'Clínica Gama');
+    const aceite = clinica?.aceites?.termos;
+    ok(
+      'o aceite dos documentos fica gravado (versão, data, login, IP)',
+      aceite?.versao === VERSAO_DOS_DOCUMENTOS && aceite?.uid === login!.uid && aceite?.email === EMAIL && !!aceite?.em && !!aceite?.ip,
+      JSON.stringify({ ...aceite, ip: aceite?.ip ? '(tem)' : null })
+    );
     const procedimentos = async () => (await zulia.db.collection(`clinicas/${clinicaId}/procedures`).get()).docs;
     for (let i = 0; i < 60 && (await procedimentos()).length < 2; i++) await pagina.waitForTimeout(500);
     ok('as sementes entraram (os 2 procedimentos de exemplo)', (await procedimentos()).length === 2);
@@ -185,20 +200,78 @@ async function main() {
     const tokenDelta = await tokenDe('delta@cadastro.invalid', senhaExtra);
     const nomeRuim = await pedirClinica(tokenDelta, { nome: ' x ' });
     ok('nome curto demais: 400', nomeRuim.status === 400 && nomeRuim.json.erro === 'nome-invalido', JSON.stringify(nomeRuim));
-    const delta = await pedirClinica(tokenDelta, { nome: '  Clínica   Delta  ' });
+    const semAceite = await pedirClinica(tokenDelta, { nome: 'Clínica Delta' });
+    ok('sem aceite dos documentos: 400', semAceite.status === 400 && semAceite.json.erro === 'aceite-pendente', JSON.stringify(semAceite));
+    const aceiteVelho = await pedirClinica(tokenDelta, { nome: 'Clínica Delta', aceite: '0.1' });
+    ok('aceite de outra versão: 400', aceiteVelho.status === 400 && aceiteVelho.json.erro === 'aceite-pendente');
+    const delta = await pedirClinica(tokenDelta, { nome: '  Clínica   Delta  ', aceite: VERSAO_DOS_DOCUMENTOS });
     ok('nome com espaços sobrando é limpo', delta.status === 200 && (await zulia.db.doc(`clinicas/${delta.json.clinicaId}`).get()).data()?.nome === 'Clínica Delta', JSON.stringify(delta));
 
     const outra = await (await navegador.newContext()).newPage();
     await outra.goto(`${SITE}/?cadastro`);
-    await outra.getByLabel('Nome da clínica').fill('Clínica Repetida');
+    await outra.getByLabel('Nome da clínica', { exact: true }).fill('Clínica Repetida');
     await outra.getByLabel('Seu nome').fill('Alguém');
     await outra.getByLabel('E-mail').fill(EMAIL);
     await outra.getByLabel('Senha').fill(SENHA);
+    await outra.getByRole('checkbox').check();
     await outra.getByRole('button', { name: 'Criar conta' }).click();
     ok('o mesmo e-mail não cria segunda conta', await apareceu(outra.getByText('Este e-mail já tem login')));
 
+    // ==========================================
+    console.log('\n6. Os documentos como páginas');
+    const paginas: Array<[string, string]> = [
+      ['/termos', 'Termos de Uso da Venus JK'],
+      ['/politica-de-privacidade', 'Política de Privacidade da Venus JK'],
+      ['/tratamento-de-dados', 'Acordo de Tratamento de Dados'],
+      [`/privacidade?c=${clinicaId}`, 'Aviso de Privacidade'],
+    ];
+    for (const [caminho, titulo] of paginas) {
+      const r = await fetch(`${SITE}${caminho}`);
+      const html = await r.text();
+      ok(`${caminho} abre`, r.status === 200 && html.includes(`<title>${titulo}</title>`) && !html.includes('{{') && !html.includes('**'), String(r.status));
+    }
+    const aviso = await (await fetch(`${SITE}/privacidade?c=${clinicaId}`)).text();
+    ok('o aviso da clínica leva o nome dela e a Venus JK como operadora', aviso.includes('Clínica Gama') && aviso.includes('operadora'));
+    await pagina.goto(SITE);
+    const login2 = await (await navegador.newContext()).newPage();
+    await login2.goto(SITE);
+    ok('a tela de login tem os links dos Termos e da Política', await apareceu(login2.getByRole('link', { name: 'Termos de Uso' })) && (await login2.getByRole('link', { name: 'Política de Privacidade' }).count()) === 1);
+
+    // ==========================================
+    console.log('\n7. Clínica de antes dos documentos: a admin aceita no painel');
+    const antiga = await criarClinica(zulia, { nome: 'Clínica Antiga', email: 'antiga@cadastro.invalid', admin: 'Ana Antiga' });
+    await zulia.auth.updateUser(antiga.uid, { password: senhaExtra, emailVerified: true });
+    const painelAntiga = await (await navegador.newContext()).newPage();
+    await painelAntiga.goto(SITE);
+    await painelAntiga.fill('input[type=email]', 'antiga@cadastro.invalid');
+    await painelAntiga.fill('input[type=password]', senhaExtra);
+    await painelAntiga.click('button[type=submit]');
+    const pedido = painelAntiga.getByRole('dialog', { name: 'Termos de uso e privacidade' });
+    ok('a admin vê o pedido de aceite', await apareceu(pedido, 30000));
+    const tokenAntiga = await tokenDe('antiga@cadastro.invalid', senhaExtra);
+    const rAntiga = await fetch(`${SITE}/api/cadastro/aceite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenAntiga}` },
+      body: JSON.stringify({ versao: '0.1' }),
+    });
+    ok('aceite de versão antiga: 409', rAntiga.status === 409);
+    const rDono = await fetch(`${SITE}/api/cadastro/aceite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await tokenDe('dono@cadastro.invalid', senhaExtra)}` },
+      body: JSON.stringify({ versao: VERSAO_DOS_DOCUMENTOS }),
+    });
+    ok('quem não é admin de clínica não aceita: 403', rDono.status === 403);
+    await pedido.getByRole('button', { name: 'Li e aceito' }).click();
+    const sumiu = await pedido.waitFor({ state: 'hidden', timeout: 15000 }).then(() => true, () => false);
+    const aceiteAntiga = (await zulia.db.doc(`clinicas/${antiga.id}`).get()).data()?.aceites?.termos;
+    ok('aceitou: fica gravado e o pedido some', sumiu && aceiteAntiga?.versao === VERSAO_DOS_DOCUMENTOS && aceiteAntiga?.uid === antiga.uid);
+
     const clinicas = (await zulia.db.collection('clinicas').get()).docs.map((d) => d.data().nome).sort();
-    ok('só as clínicas esperadas existem', JSON.stringify(clinicas) === JSON.stringify(['Clínica Delta', 'Clínica Gama']), JSON.stringify(clinicas));
+    ok(
+      'só as clínicas esperadas existem',
+      JSON.stringify(clinicas) === JSON.stringify(['Clínica Antiga', 'Clínica Delta', 'Clínica Gama']),
+      JSON.stringify(clinicas)
+    );
   } finally {
     await navegador.close();
     servidor.kill();

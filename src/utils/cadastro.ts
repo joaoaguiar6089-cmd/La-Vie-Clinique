@@ -46,6 +46,12 @@ export function mensagemDoCadastro(codigo: string): string {
       return 'O cadastro de clínicas novas está fechado no momento.';
     case 'muitos-pedidos':
       return 'Muitas tentativas seguidas. Espere alguns minutos e tente de novo.';
+    case 'aceite-pendente':
+      return 'Para continuar, marque que você aceita os Termos de Uso, a Política de Privacidade e o Acordo de Tratamento de Dados.';
+    case 'so-admin':
+      return 'Só a administradora da clínica aceita os documentos em nome dela.';
+    case 'versao-antiga':
+      return 'Os documentos foram atualizados. Recarregue a página e leia a versão nova.';
     case 'em-andamento':
       return 'Sua clínica já está sendo criada. Aguarde um instante.';
     case 'login':

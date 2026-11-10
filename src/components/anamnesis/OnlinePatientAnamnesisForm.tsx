@@ -15,6 +15,8 @@ import { mensagemDoErroDaFicha } from '../../services/fichaPublicaApi';
 import { resolveTemplatePhoto } from '../../utils/genderPhoto';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
+import { clinicaAtual } from '../../lib/estadoDaClinica';
+import { linkDoAvisoDaClinica } from '../../utils/documentosLegais';
 import { isDuplicateIdentQuestion, isPatientQuestion } from '../../utils/anamnesisQuestions';
 import { ClinicLogo } from '../ClinicLogo';
 import { QuestionFieldRenderer } from './QuestionFieldRenderer';
@@ -842,6 +844,18 @@ export const OnlinePatientAnamnesisForm: React.FC<OnlinePatientAnamnesisFormProp
                 tendo omitido nenhum dado relevante sobre histórico de saúde, uso de medicamentos, alergias ou
                 procedimentos anteriores. Autorizo a clínica a utilizar essas informações estritamente para fins de
                 planejamento e execução do meu tratamento estético.
+              </p>
+              <p className="text-[12.5px] text-muted leading-relaxed">
+                Veja como a clínica cuida dos seus dados no{' '}
+                <a
+                  href={linkDoAvisoDaClinica(clinicaAtual())}
+                  target="_blank"
+                  rel="noopener"
+                  className="font-semibold text-brand underline underline-offset-2"
+                >
+                  aviso de privacidade
+                </a>
+                .
               </p>
 
               <label

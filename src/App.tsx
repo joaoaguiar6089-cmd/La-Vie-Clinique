@@ -22,6 +22,8 @@ import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { PublicAppointmentEntry } from './components/agenda/PublicAppointmentEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConcluirCadastroView } from './components/auth/CadastroDaClinica';
+import { AceiteDosDocumentosModal } from './components/auth/AceiteDosDocumentos';
+import { assinarAceiteDosDocumentos } from './services/cadastroApi';
 import { CADASTRO_ABERTO } from './utils/cadastro';
 import { AcessoAoPainelView } from './components/auth/AcessoAoPainelView';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
@@ -1000,6 +1002,18 @@ function MainCatalogApp() {
   // Na Zulia, quem é admin diz a claim do login (o servidor é quem grava); no legado, o perfil.
   const isAdminUser = ehZulia ? papelNaClinica === 'admin' : !!currentProfessional?.isAdmin;
 
+  // Os Termos, a Política e o Acordo de Tratamento de Dados: a admin aceita a versão em vigor em
+  // nome da clínica (ver src/utils/documentosLegais.ts). "Agora não" vale até o painel abrir de novo.
+  const [aceiteEmDia, setAceiteEmDia] = useState(true);
+  const [aceiteAdiado, setAceiteAdiado] = useState(false);
+  useEffect(() => {
+    if (!ehZulia || !painelLiberado || !isAdminUser) {
+      setAceiteEmDia(true);
+      return;
+    }
+    return assinarAceiteDosDocumentos(setAceiteEmDia);
+  }, [painelLiberado, isAdminUser]);
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
@@ -1041,6 +1055,8 @@ function MainCatalogApp() {
     // Notas de recibo: uma assinatura e um formulário para o painel inteiro — ver RecibosContext.
     <RecibosProvider clinic={clinic} pacientes={allPatients} procedimentos={procedures}>
       <div className="min-h-screen bg-surface text-ink sm:flex selection:bg-brand/25 selection:text-ink">
+        {!aceiteEmDia && !aceiteAdiado && <AceiteDosDocumentosModal onFechar={() => setAceiteAdiado(true)} />}
+
         {/* Toast Notification */}
         {toastMessage && (
           /* No celular o aviso sobe acima da barra flutuante de baixo, senão nasce escondido por ela. */

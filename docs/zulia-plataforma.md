@@ -18,7 +18,7 @@ continua nos nomes internos, que trocar só traria risco: o projeto `zulia-plata
 3. Cadastro de clínica nova, planos e limites.
 4. Cobrança pela InfinitePay.
 5. Painel do dono da plataforma.
-6. Termos de uso e site instalável no celular.
+6. Termos de uso e site instalável no celular. (Os documentos legais foram adiantados em 10/11/2026: ver "Documentos legais".)
 7. Apps nas lojas (Android e iPhone).
 
 ## Decisões
@@ -80,6 +80,7 @@ continua nos nomes internos, que trocar só traria risco: o projeto `zulia-plata
   clínica aceita no cadastro.
 - **Saída da plataforma:** a clínica pede pelo suporte; o João entrega uma cópia dos dados (o
   script de exportação adaptado) e a conta é apagada.
+- **Feito em 10/11/2026**, versão 1.0: ver "Documentos legais", abaixo.
 
 ### Celular
 - **Site instalável já no lançamento** (ícone na tela inicial, tela cheia).
@@ -330,8 +331,49 @@ Começada em 10/11/2026, logo depois da migração. Cada fase é um PR mesclado 
 - **Falta (João):** o nome que aparece nos e-mails do login (`%APP_NAME%`) é o "nome voltado ao
   público" do projeto, ainda "Zulia". Console do Firebase → Configurações do projeto → Geral →
   Nome voltado ao público → "Venus JK".
-- **Antes de divulgar o cadastro:** Termos de Uso, Política de Privacidade e contrato de
-  tratamento de dados (etapa 6), com o aceite no formulário.
+- **Aceite no formulário:** feito (ver "Documentos legais").
+
+## Documentos legais
+
+Escritos em 10/11/2026 (versão 1.0) a partir do que o sistema faz, para revisão de um advogado
+antes de vender o plano completo.
+
+| Documento | Página | Texto |
+| --- | --- | --- |
+| Termos de Uso (contrato com a clínica) | `/termos` | `public/legal/termos-de-uso.md` |
+| Política de Privacidade da plataforma (a Venus JK como controladora: conta, equipe, pagamentos, acessos) | `/politica-de-privacidade` | `public/legal/politica-de-privacidade.md` |
+| Acordo de Tratamento de Dados (Anexo I dos Termos; a Venus JK como operadora dos dados das pacientes, arts. 37 a 40 da LGPD) | `/tratamento-de-dados` | `public/legal/acordo-de-tratamento-de-dados.md` |
+| Aviso de Privacidade da clínica para as pacientes (modelo preenchido com o perfil público da clínica; é também a página que o Google exige para o Google Agenda) | `/privacidade?c=<clinicaId>` | `public/legal/aviso-da-clinica.md` |
+
+- **Páginas:** HTML do servidor (`server/documentosLegais.ts`), sem JavaScript. O Markdown aceito é
+  o pouco que os textos usam: títulos, parágrafos, listas com um nível de recuo, tabelas, negrito,
+  código e links. Os `{{marcadores}}` vêm de `src/utils/documentosLegais.ts`.
+- **Dados da empresa** (`PRESTADOR` em `src/utils/documentosLegais.ts`): razão social, CNPJ,
+  endereço, e-mail, encarregado e foro. Vazio aparece como "[a preencher: ...]" destacado.
+  **Falta o João informar.**
+- **Versão e aceite:** `VERSAO_DOS_DOCUMENTOS` e `VIGENCIA_DOS_DOCUMENTOS`. No cadastro, a caixa de
+  aceite é obrigatória e o servidor recusa sem a versão em vigor (`aceite-pendente`). O aceite fica
+  em `clinicas/{c}.aceites.termos` (versão, data, uid, e-mail, IP). A admin de uma clínica sem o
+  aceite da versão em vigor (as de antes dos documentos, como a La Vie, e todas quando a versão
+  mudar) vê o pedido no painel (`AceiteDosDocumentosModal`), com "Agora não" até o painel abrir de
+  novo; aceita por `POST /api/cadastro/aceite`. Mudou o texto de forma relevante: suba a versão.
+- **Links:** rodapé da tela de login (Termos e Política) e, na ficha da paciente, "aviso de
+  privacidade" da clínica do link.
+- **O que os textos prometem e ainda precisa ficar verdadeiro** (antes de vender, ou ajustar o texto):
+  - registros de acesso guardados por **6 meses** (art. 15 do Marco Civil): configurar a retenção
+    dos registros do Cloud Logging do projeto em que o site roda (o padrão é 30 dias);
+  - **verificação em duas etapas** nas contas Google com acesso aos projetos (dito no Anexo de
+    segurança do Acordo);
+  - **cópia dos dados da clínica** em planilha ou JSON mais os arquivos, em até 30 dias: adaptar o
+    `scripts/exportar-banco.ts` para `clinicas/{c}` (o `migrar-la-vie.ts` já sabe ler tudo);
+  - **eliminação** 90 dias depois do encerramento: hoje é à mão (`recursiveDelete` da clínica, os
+    arquivos de `clinicas/{c}/` e os logins);
+  - **cobrança pela InfinitePay**, nota fiscal e avisos de vencimento: etapa 4;
+  - **limites do plano gratuito**: etapa 3, fase 2.
+- **Para o advogado olhar com atenção:** limitação de responsabilidade (14.2) e se o CDC se aplica
+  às clínicas; foro; prazo de 48 horas para avisar incidente ao controlador; transferência
+  internacional (art. 33) com os fornecedores do Google; arrependimento de 7 dias; reembolso
+  proporcional nos casos dos itens 12.2 e 16.2.
 
 ## Etapa 2: várias clínicas e a migração da La Vie
 

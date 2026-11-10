@@ -5,6 +5,7 @@ import { login, sendResetPasswordEmail } from '../../services/authService';
 import { ehZulia } from '../../lib/projetoFirebase';
 import { DESCRICAO_DA_PLATAFORMA, MARCA_DA_LA_VIE, MARCA_DA_PLATAFORMA } from '../../utils/marca';
 import { CADASTRO_ABERTO } from '../../utils/cadastro';
+import { PAGINAS_LEGAIS } from '../../utils/documentosLegais';
 
 /** O cadastro de clínica nova existe só na plataforma, e só com ele aberto. */
 const TEM_CADASTRO = ehZulia && CADASTRO_ABERTO;
@@ -170,6 +171,18 @@ export const LoginScreen: React.FC = () => {
             >
               Criar conta da clínica
             </button>
+          </p>
+        )}
+
+        {ehZulia && (
+          <p className="text-center text-[12px] text-muted mt-4 space-x-3">
+            <a href={PAGINAS_LEGAIS.termos} target="_blank" rel="noopener" className="hover:text-ink underline-offset-2 hover:underline">
+              Termos de Uso
+            </a>
+            <span aria-hidden="true">·</span>
+            <a href={PAGINAS_LEGAIS.politicaDePrivacidade} target="_blank" rel="noopener" className="hover:text-ink underline-offset-2 hover:underline">
+              Política de Privacidade
+            </a>
           </p>
         )}
       </div>

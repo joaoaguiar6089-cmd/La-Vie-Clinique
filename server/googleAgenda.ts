@@ -39,7 +39,7 @@ import { loginDoPedido, type LoginDoPainel } from './login';
 
 const ESCOPOS = ['openid', 'email', 'https://www.googleapis.com/auth/calendar.app.created'];
 const ESCOPO_AGENDA = 'https://www.googleapis.com/auth/calendar.app.created';
-const NOME_DO_CALENDARIO = 'La Vie Clinique';
+export const NOME_DO_CALENDARIO = 'La Vie Clinique';
 const FUSO = 'America/Sao_Paulo';
 const CANAL = 'lavie-google-agenda';
 const API_AGENDA = 'https://www.googleapis.com/calendar/v3';
