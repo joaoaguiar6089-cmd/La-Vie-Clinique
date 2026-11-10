@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Loader2, ScrollText } from 'lucide-react';
 import { aceitarDocumentos, ErroDoCadastro } from '../../services/cadastroApi';
-import { mensagemDoCadastro } from '../../utils/cadastro';
-import { PAGINAS_LEGAIS, VIGENCIA_DOS_DOCUMENTOS, VERSAO_DOS_DOCUMENTOS } from '../../utils/documentosLegais';
+import { mensagemDoAceite } from '../../utils/cadastro';
+import { VIGENCIA_DOS_DOCUMENTOS, VERSAO_DOS_DOCUMENTOS } from '../../utils/documentosLegais';
 import { MARCA_DA_PLATAFORMA } from '../../utils/marca';
 import { LinkDoDocumento } from './CadastroDaClinica';
 
@@ -26,7 +26,7 @@ export const AceiteDosDocumentosModal: React.FC<{ onFechar: () => void }> = ({ o
       onFechar();
     } catch (falha) {
       const codigo = falha instanceof ErroDoCadastro ? falha.codigo : '';
-      setErro(codigo === 'rede' ? 'Sem conexão. Confira a internet e tente de novo.' : mensagemDoCadastro(codigo));
+      setErro(mensagemDoAceite(codigo));
       setEnviando(false);
     }
   };
@@ -49,13 +49,13 @@ export const AceiteDosDocumentosModal: React.FC<{ onFechar: () => void }> = ({ o
         </p>
         <ul className="text-[13.5px] space-y-1.5 pl-1">
           <li>
-            <LinkDoDocumento href={PAGINAS_LEGAIS.termos}>Termos de Uso</LinkDoDocumento>
+            <LinkDoDocumento documento="termos-de-uso">Termos de Uso</LinkDoDocumento>
           </li>
           <li>
-            <LinkDoDocumento href={PAGINAS_LEGAIS.politicaDePrivacidade}>Política de Privacidade</LinkDoDocumento>
+            <LinkDoDocumento documento="politica-de-privacidade">Política de Privacidade</LinkDoDocumento>
           </li>
           <li>
-            <LinkDoDocumento href={PAGINAS_LEGAIS.tratamentoDeDados}>Acordo de Tratamento de Dados</LinkDoDocumento>
+            <LinkDoDocumento documento="acordo-de-tratamento-de-dados">Acordo de Tratamento de Dados</LinkDoDocumento>
           </li>
         </ul>
         {erro && (

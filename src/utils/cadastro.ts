@@ -58,7 +58,20 @@ export function mensagemDoCadastro(codigo: string): string {
       return 'Sua sessão expirou. Saia e entre de novo.';
     case 'servidor-nao-configurado':
       return 'O servidor da plataforma está em manutenção. Tente de novo em alguns minutos.';
+    case 'sem-servidor':
+      // Acontece na prévia do AI Studio, que roda só a parte visual do site, sem o servidor.
+      return 'O servidor da plataforma não respondeu. Abra o painel pelo endereço do site (não pela prévia de edição) e tente de novo.';
+    case 'rede':
+      return 'Sem conexão. Confira a internet e tente de novo.';
     default:
       return 'Não foi possível criar a clínica agora. Tente de novo em alguns minutos.';
   }
+}
+
+/** A frase para a tela quando o aceite dos documentos não deu certo. */
+export function mensagemDoAceite(codigo: string): string {
+  const conhecidas = ['so-admin', 'versao-antiga', 'login', 'servidor-nao-configurado', 'sem-servidor', 'rede'];
+  return conhecidas.includes(codigo)
+    ? mensagemDoCadastro(codigo)
+    : 'Não foi possível registrar o aceite agora. Tente de novo em alguns minutos.';
 }
