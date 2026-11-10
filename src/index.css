@@ -147,6 +147,28 @@
     font-family: var(--font-display);
   }
 
+  /* A letra do nome da plataforma: capitais romanas de inscrição, como entalhadas na pedra. Só o
+     nome usa — é o que dá cara própria à tela de entrada. */
+  .font-marca {
+    font-family: 'Cinzel', var(--font-serif);
+    font-weight: 600;
+    letter-spacing: .14em;
+  }
+
+  /* Texto direto sobre o relevo da tela de login: um halo creme o descola dos ramos sem caixa. */
+  .marca-em-relevo {
+    text-shadow: 0 0 14px #F6EFE4, 0 0 6px #F6EFE4, 0 1px 0 rgba(255, 255, 255, .7);
+  }
+
+  /* O cartão dos campos de login: vidro fosco, para o relevo continuar aparecendo por trás. */
+  .cartao-de-vidro {
+    background: rgba(255, 252, 247, .62);
+    border: 1px solid rgba(255, 255, 255, .8);
+    box-shadow: 0 18px 44px rgba(110, 73, 36, .16), inset 0 1px 0 rgba(255, 255, 255, .7);
+    -webkit-backdrop-filter: blur(10px) saturate(1.1);
+    backdrop-filter: blur(10px) saturate(1.1);
+  }
+
   :focus-visible {
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;
