@@ -19,6 +19,7 @@ import { deleteApp, initializeApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { abrirZulia, EMULADORES } from './zuliaAdmin';
 import { modoPlataforma } from '../src/lib/projetoFirebase';
+import { MARCA_DA_PLATAFORMA } from '../src/utils/marca';
 import { definirAuthAdmin, definirBancoAdmin } from '../server/firebaseAdmin';
 import { criarLimitadores, criarRotasFichaPublica } from '../server/fichaPublica';
 import { criarResolvedorDePreview } from '../server/previewDosLinks';
@@ -175,7 +176,7 @@ async function main() {
     const pb = await resolver('?anamnese=tpl-botox&c=srv-b');
     ok('o mesmo link com o c de B mostra B', pb?.titulo === 'Anamnese - Botox srv-b' && pb?.site === 'Clínica Beta');
     const pSem = await resolver('?anamnese=tpl-botox');
-    ok('link sem clínica conhecida sai genérico, com a marca da plataforma', pSem?.titulo === 'Anamnese - Zulia');
+    ok('link sem clínica conhecida sai genérico, com a marca da plataforma', pSem?.titulo === `Anamnese - ${MARCA_DA_PLATAFORMA}`, pSem?.titulo);
 
     // ==========================================
     console.log('\nLogin pelo Admin SDK');

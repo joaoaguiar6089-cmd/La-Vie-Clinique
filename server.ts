@@ -10,6 +10,7 @@ import { criarResolvedorDePreview, type LeitorDoBanco } from './server/previewDo
 import { servirPrivacidade } from './server/privacidade';
 import { ehZulia, firebaseConfig } from './src/lib/projetoFirebase';
 import { aplicarPreviewNoHtml } from './src/utils/linkPreview';
+import { MARCA_DA_LA_VIE, MARCA_DA_PLATAFORMA } from './src/utils/marca';
 
 /**
  * Serve o site já construído (`dist/`) e, nos links que a clínica manda para as clientes, troca o
@@ -121,7 +122,7 @@ app.get('*', async (req, res) => {
 const porta = Number(process.env.PORT) || 3000;
 app.listen(porta, '0.0.0.0', () => {
   console.log(
-    `${ehZulia ? 'Zulia' : 'La Vie Clinique'} no ar em http://localhost:${porta} (projeto ${firebaseConfig.projectId})`
+    `${ehZulia ? MARCA_DA_PLATAFORMA : MARCA_DA_LA_VIE} no ar em http://localhost:${porta} (projeto ${firebaseConfig.projectId})`
   );
   if (!bancoAdmin()) {
     console.warn(

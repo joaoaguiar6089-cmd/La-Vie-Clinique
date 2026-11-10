@@ -34,6 +34,7 @@ import { abrirZulia } from './zuliaAdmin';
 import { criarClinica } from './criar-clinica';
 import { buildPublicLink } from '../src/utils/publicLinks';
 import { definirClinicaAtual } from '../src/lib/estadoDaClinica';
+import { MARCA_DA_PLATAFORMA } from '../src/utils/marca';
 
 // O Playwright não é dependência do projeto: vem instalado no ambiente (o da nuvem do Claude tem).
 // Sem tipos dele aqui, de propósito — `npm install` do site não precisa baixar navegador.
@@ -59,7 +60,7 @@ if (process.env.PLATAFORMA !== 'zulia' || nosEmuladores === noProjetoReal) {
 }
 const BUILD = noProjetoReal ? 'VITE_PLATAFORMA=zulia npm run build' : 'VITE_PLATAFORMA=zulia VITE_EMULADORES=1 npm run build';
 const indice = readFileSync('dist/index.html', 'utf8');
-if (!indice.includes('<title>Zulia</title>')) {
+if (!indice.includes(`<title>${MARCA_DA_PLATAFORMA}</title>`)) {
   console.error(`O dist/ não é do modo Zulia: rode ${BUILD}.`);
   process.exit(1);
 }
@@ -149,7 +150,7 @@ async function main() {
     const hostsDoPainel = new Set<string>();
     pagina.on('request', (r: any) => hostsDoPainel.add(new URL(r.url()).host));
     await pagina.goto(SITE);
-    ok('a tela de login é da Zulia', (await pagina.locator('h1').first().textContent())?.trim() === 'Zulia');
+    ok(`a tela de login é da plataforma (${MARCA_DA_PLATAFORMA})`, (await pagina.locator('h1').first().textContent())?.trim() === MARCA_DA_PLATAFORMA);
     await pagina.fill('input[type=email]', 'dona@alfa.invalid');
     await pagina.fill('input[type=password]', SENHA);
     await pagina.click('button[type=submit]');

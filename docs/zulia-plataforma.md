@@ -1,8 +1,15 @@
-# Zulia — a plataforma para várias clínicas
+# Venus JK (antes Zulia) — a plataforma para várias clínicas
 
-O sistema da La Vie Clinique vira um produto vendido para outras clínicas, com o nome **Zulia**.
-Este documento guarda o que foi decidido com o João (dono da plataforma) e a arquitetura que sai
-disso. Toda mudança de rumo deve ser registrada aqui.
+O sistema da La Vie Clinique vira um produto vendido para outras clínicas, com o nome **Venus JK —
+Plataforma de atendimentos estéticos**. Este documento guarda o que foi decidido com o João (dono da
+plataforma) e a arquitetura que sai disso. Toda mudança de rumo deve ser registrada aqui.
+
+**Nome (decidido em 10/11/2026):** a plataforma se chamava Zulia e passou a se chamar **Venus JK**.
+O nome muda aos poucos, começando pelo que aparece na tela (tela de login, título da página e links
+sem clínica: `MARCA_DA_PLATAFORMA` e `DESCRICAO_DA_PLATAFORMA` em `src/utils/marca.ts`). "Zulia"
+continua nos nomes internos, que trocar só traria risco: o projeto `zulia-plataforma` no Firebase
+(o id de um projeto não muda), a pasta `zulia/`, o modo `zulia` do `plataforma.json`, as variáveis
+`ZULIA_*` e os nomes dos scripts. Neste documento, "Zulia" é a plataforma.
 
 ## Ordem do trabalho
 
@@ -228,7 +235,8 @@ poder ler os dados das pacientes depois que eles existirem**.
   da La Vie; "Restaurar demonstração" não aparece; a foto padrão da Dra. Karoline só no legado.
 - **Marca:** `src/utils/marca.ts`. No legado, "La Vie Clinique" como sempre; na Zulia, o nome do
   perfil da clínica (fichas impressas, recibos, nomes de arquivo, página da paciente, orçamento).
-  A tela de login e o `index.html` (plugin no `vite.config.ts`) mostram a marca Zulia.
+  A tela de login e o `index.html` (plugin no `vite.config.ts`) mostram a marca da plataforma
+  (`MARCA_DA_PLATAFORMA`, hoje "Venus JK").
 - **Google Agenda:** sem `recursos.googleAgenda`, a seção mostra "em breve".
 
 ### Criar uma clínica (até o cadastro da etapa 3)
