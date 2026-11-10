@@ -160,13 +160,87 @@
     text-shadow: 0 0 14px #F6EFE4, 0 0 6px #F6EFE4, 0 1px 0 rgba(255, 255, 255, .7);
   }
 
-  /* O cartão dos campos de login: vidro fosco, para o relevo continuar aparecendo por trás. */
-  .cartao-de-vidro {
-    background: rgba(255, 252, 247, .62);
-    border: 1px solid rgba(255, 255, 255, .8);
-    box-shadow: 0 18px 44px rgba(110, 73, 36, .16), inset 0 1px 0 rgba(255, 255, 255, .7);
-    -webkit-backdrop-filter: blur(10px) saturate(1.1);
-    backdrop-filter: blur(10px) saturate(1.1);
+  /* ---- Tela de login: os campos fazem parte do relevo, sem cartão ---- */
+
+  /* Uma névoa creme, sem borda, abre uma clareira no relevo atrás dos campos: o desenho do fundo
+     some aos poucos em vez de ser tampado por uma caixa. */
+  .clareira-no-relevo::before {
+    content: '';
+    position: absolute;
+    inset: -34px -44px -96px;
+    z-index: -1;
+    border-radius: 48%;
+    background: radial-gradient(closest-side, rgba(246, 239, 228, .9) 45%, rgba(246, 239, 228, .55) 72%, rgba(246, 239, 228, 0));
+    filter: blur(10px);
+    pointer-events: none;
+  }
+
+  /* Campo entalhado: um sulco cavado no gesso (sombra por dentro em cima, luz embaixo). */
+  .campo-entalhado {
+    background: rgba(238, 228, 212, .55);
+    box-shadow:
+      inset 4px 5px 11px rgba(110, 73, 36, .42),
+      inset -3px -3px 7px rgba(255, 255, 255, .9),
+      0 1px 0 rgba(255, 255, 255, .9);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    transition: box-shadow .25s ease, background .25s ease;
+  }
+
+  .campo-entalhado:focus {
+    background: rgba(255, 251, 244, .82);
+    box-shadow:
+      inset 3px 4px 10px rgba(110, 73, 36, .34),
+      inset -3px -3px 7px rgba(255, 255, 255, .9),
+      0 0 0 2px rgba(166, 124, 82, .55);
+  }
+
+  /* O Chrome pinta o campo preenchido sozinho de azul; aqui ele continua da cor do gesso. */
+  .campo-entalhado:-webkit-autofill {
+    -webkit-text-fill-color: #1A1A1A;
+    transition: background-color 9999s ease-out;
+  }
+
+  /* Botão em alto-relevo: o inverso do campo, uma peça que salta do gesso. */
+  .botao-em-relevo {
+    background: linear-gradient(145deg, #FFFDF8, #EADFCB);
+    box-shadow:
+      6px 8px 18px rgba(110, 73, 36, .32),
+      -4px -4px 10px rgba(255, 255, 255, .9),
+      inset 0 1px 0 rgba(255, 255, 255, .9);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, .9);
+  }
+
+  .botao-em-relevo:hover:not(:disabled) {
+    box-shadow:
+      8px 11px 22px rgba(110, 73, 36, .36),
+      -4px -4px 10px rgba(255, 255, 255, .95),
+      inset 0 1px 0 rgba(255, 255, 255, .9);
+    transform: translateY(-1px);
+  }
+
+  .botao-em-relevo:active:not(:disabled) {
+    box-shadow: inset 3px 4px 9px rgba(110, 73, 36, .30), inset -3px -3px 7px rgba(255, 255, 255, .85);
+  }
+
+  /* As figuras de traço boiam devagar sobre o relevo. `multiply` faz o traço bronze se misturar
+     ao gesso, como desenho a lápis na parede, em vez de parecer uma figura colada por cima. */
+  .figura-flutuante {
+    opacity: .68;
+    mix-blend-mode: multiply;
+    animation-name: flutuar;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    will-change: transform;
+  }
+
+  @keyframes flutuar {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(-1.2deg); }
+    50% { transform: translate3d(10px, -22px, 0) rotate(1.2deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .figura-flutuante { animation: none; }
   }
 
   :focus-visible {
