@@ -38,6 +38,9 @@ export const db = firestoreInstance;
 
 // Firebase Authentication — login das profissionais/admin do painel
 export const auth = getAuth(app);
+// Os e-mails do login (confirmação, convite, "Esqueci minha senha") saem em português. Sem isto, o
+// Firebase usa o idioma padrão do projeto, que vem em inglês.
+auth.languageCode = 'pt-BR';
 
 // Só para teste local (VITE_EMULADORES=1): tudo nos emuladores da máquina, nada em projeto real.
 // O Storage é uma instância só por app, então ligar aqui vale para `imageStorage` e `comprovantes`.

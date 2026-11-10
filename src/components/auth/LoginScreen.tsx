@@ -1,8 +1,22 @@
 import React, { useState } from 'react';
+import { FormularioDeCadastro } from './CadastroDaClinica';
 import { Lock, Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { login, sendResetPasswordEmail } from '../../services/authService';
 import { ehZulia } from '../../lib/projetoFirebase';
 import { DESCRICAO_DA_PLATAFORMA, MARCA_DA_LA_VIE, MARCA_DA_PLATAFORMA } from '../../utils/marca';
+import { CADASTRO_ABERTO } from '../../utils/cadastro';
+
+/** O cadastro de clínica nova existe só na plataforma, e só com ele aberto. */
+const TEM_CADASTRO = ehZulia && CADASTRO_ABERTO;
+
+/** `?cadastro` no endereço abre direto o formulário de criar conta (para mandar por link). */
+const pediuCadastro = (): boolean => {
+  try {
+    return new URLSearchParams(window.location.search).has('cadastro');
+  } catch {
+    return false;
+  }
+};
 
 const FIREBASE_ERROR_MESSAGES: Record<string, string> = {
   'auth/invalid-email': 'E-mail inválido.',
@@ -23,6 +37,7 @@ export const LoginScreen: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
+  const [cadastrando, setCadastrando] = useState(() => TEM_CADASTRO && pediuCadastro());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,11 +78,16 @@ export const LoginScreen: React.FC = () => {
           </div>
           <h1 className="font-serif-luxury text-[26px] font-medium text-ink">{ehZulia ? MARCA_DA_PLATAFORMA : MARCA_DA_LA_VIE}</h1>
           {ehZulia && <p className="text-[13px] text-ink-soft mt-0.5">{DESCRICAO_DA_PLATAFORMA}</p>}
-          <p className="text-[13px] text-muted mt-1">
-            {ehZulia ? 'Painel da clínica — acesso restrito à equipe' : 'Painel administrativo — acesso restrito à equipe'}
-          </p>
+          {!cadastrando && (
+            <p className="text-[13px] text-muted mt-1">
+              {ehZulia ? 'Painel da clínica — acesso restrito à equipe' : 'Painel administrativo — acesso restrito à equipe'}
+            </p>
+          )}
         </div>
 
+        {cadastrando ? (
+          <FormularioDeCadastro onVoltar={() => setCadastrando(false)} />
+        ) : (
         <form
           onSubmit={handleSubmit}
           className="bg-white rounded-3xl shadow-[0_6px_22px_rgba(0,0,0,.06)] p-6 space-y-4"
@@ -135,6 +155,23 @@ export const LoginScreen: React.FC = () => {
             Esqueci minha senha
           </button>
         </form>
+        )}
+
+        {TEM_CADASTRO && !cadastrando && (
+          <p className="text-center text-[13px] text-muted mt-5">
+            Sua clínica ainda não usa a {MARCA_DA_PLATAFORMA}?{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setCadastrando(true);
+              }}
+              className="font-semibold text-brand hover:text-brand-hover underline-offset-2 hover:underline"
+            >
+              Criar conta da clínica
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );

@@ -23,6 +23,8 @@ export interface LoginDoPainel {
   papel: Papel | null;
   /** Dono da plataforma (claim `donoDaPlataforma`). */
   dono: boolean;
+  /** O e-mail do login foi confirmado (claim padrão `email_verified`). Ausente: não. */
+  emailVerificado?: boolean;
 }
 
 /** As claims viram o login. Puro, para conferir sem token (`scripts/verificar-servidor-zulia.ts`). */
@@ -32,6 +34,7 @@ export const loginDasClaims = (claims: Record<string, unknown> & { uid: string; 
   clinicaId: idDeClinicaValido(claims.clinicaId) || null,
   papel: claims.papel === 'admin' || claims.papel === 'profissional' ? claims.papel : null,
   dono: claims.donoDaPlataforma === true,
+  emailVerificado: claims.email_verified === true,
 });
 
 /** Códigos do Admin SDK que querem dizer "este token não vale" — e não "não deu para conferir". */
