@@ -350,7 +350,13 @@ antes de vender o plano completo.
   código e links. Os `{{marcadores}}` vêm de `src/utils/documentosLegais.ts`.
 - **Dados da empresa** (`PRESTADOR` em `src/utils/documentosLegais.ts`): razão social, CNPJ,
   endereço, e-mail, encarregado e foro. Vazio aparece como "[a preencher: ...]" destacado.
-  **Falta o João informar.**
+  Preenchidos em 11/2026: **KAROLINE DA R. FERREIRA**, CNPJ **49.464.212/0001-19** (da notificação
+  da Receita Federal), Rua Araguaia, 208, apto. 42C, Vila Almeida, Indaiatuba/SP, CEP 13330-660,
+  `enfesteta.karoline@gmail.com` (contato e encarregado: Karoline da R. Ferreira), foro de
+  Indaiatuba/SP. **Atenção:** na Receita, o município do CNPJ ainda aparece como Tefé/AM. O endereço
+  dos documentos deve ser o do cadastro do CNPJ: atualizar o CNPJ para Indaiatuba (ou trocar o
+  endereço aqui). Conferir também com o contador se o CNPJ tem a atividade (CNAE) de software por
+  assinatura, para emitir a nota fiscal das assinaturas.
 - **Versão e aceite:** `VERSAO_DOS_DOCUMENTOS` e `VIGENCIA_DOS_DOCUMENTOS`. No cadastro, a caixa de
   aceite é obrigatória e o servidor recusa sem a versão em vigor (`aceite-pendente`). O aceite fica
   em `clinicas/{c}.aceites.termos` (versão, data, uid, e-mail, IP). A admin de uma clínica sem o
