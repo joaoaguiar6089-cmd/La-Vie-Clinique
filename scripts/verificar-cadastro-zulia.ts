@@ -189,6 +189,32 @@ async function main() {
     await pagina.screenshot({ path: `${process.env.PASTA_DAS_IMAGENS || '.'}/cadastro-painel.png` });
 
     // ==========================================
+    console.log('\n4b. Os limites do plano gratuito no painel');
+    const usoDaGama = async () => (await zulia.db.doc(`clinicas/${clinicaId}`).get()).data()?.uso || {};
+    for (let i = 0; i < 20 && (await usoDaGama()).procedimentos !== 2; i++) await pagina.waitForTimeout(250);
+    ok('os 2 procedimentos de exemplo contam no uso', (await usoDaGama()).procedimentos === 2, JSON.stringify(await usoDaGama()));
+    const cadastrarPeloPainel = async (nome: string) => {
+      // Do começo do painel: depois de cadastrar, ele abre a ficha da cliente, sem o botão de nova.
+      await pagina.goto(SITE);
+      await pagina.getByRole('button', { name: 'Pacientes' }).first().waitFor({ timeout: 30000 });
+      await pagina.getByRole('button', { name: 'Pacientes' }).first().click();
+      await pagina.getByRole('button', { name: /^Nova( paciente)?$/ }).first().click();
+      await pagina.locator('form input').first().fill(nome);
+      await pagina.getByRole('button', { name: 'Cadastrar paciente' }).click();
+    };
+    await cadastrarPeloPainel('Cliente Um');
+    for (let i = 0; i < 40 && (await usoDaGama()).clientes !== 1; i++) await pagina.waitForTimeout(250);
+    ok('a cliente cadastrada pelo painel conta no uso', (await usoDaGama()).clientes === 1, JSON.stringify(await usoDaGama()));
+    // Simula a clínica cheia (5 de 5) e tenta mais uma pela tela.
+    await zulia.db.doc(`clinicas/${clinicaId}`).update({ 'uso.clientes': 5 });
+    await cadastrarPeloPainel('Cliente Seis');
+    ok('no limite, a tela explica o plano gratuito', await apareceu(pagina.getByText('O plano gratuito permite até 5 clientes')));
+    const nomes = (await zulia.db.collection(`clinicas/${clinicaId}/patients`).get()).docs.map((d) => d.data().nome);
+    ok('e a cliente além do limite não é gravada', !nomes.includes('Cliente Seis'), JSON.stringify(nomes));
+    await pagina.keyboard.press('Escape');
+    await zulia.db.doc(`clinicas/${clinicaId}`).update({ 'uso.clientes': 1 });
+
+    // ==========================================
     console.log('\n5. O que o servidor recusa');
     const tokenAdmin = await tokenDe(EMAIL, SENHA);
     const segunda = await pedirClinica(tokenAdmin, { nome: 'Outra Gama' });

@@ -303,8 +303,37 @@ Começada em 10/11/2026, logo depois da migração. Cada fase é um PR mesclado 
 | Fase | O que entra | Situação |
 | --- | --- | --- |
 | 1 | Cadastro sozinho: criar conta, confirmar o e-mail e criar a clínica no plano gratuito | Feita; testada nos emuladores (`scripts/verificar-cadastro-zulia.ts`) |
-| 2 | Limites do plano gratuito (2 procedimentos, 5 clientes, 1 login): contadores no documento da clínica, conferidos nas regras; o servidor recusa ficha de cliente nova acima do limite | A fazer |
+| 2 | Limites do plano gratuito (2 procedimentos, 5 clientes, 1 login): contadores no documento da clínica, conferidos nas regras; o servidor recusa ficha de cliente nova acima do limite | Feita (11/2026); testada nos emuladores |
 | 3 | Tela do plano nas Configurações: o uso, o que cada plano inclui e o "Assinar" (que leva à cobrança da etapa 4) | A fazer |
+
+### Limites do plano gratuito (fase 2)
+- **Números:** `LIMITES_DO_GRATUITO` em `src/utils/planos.ts` (5 clientes, 2 procedimentos, 1 login),
+  repetidos em `zulia/firestore.rules` (`criacaoContada(..., 5)` e `(..., 2)`). Plano desconhecido
+  vale como gratuito.
+- **Contadores:** `clinicas/{c}.uso.clientes` e `.uso.procedimentos` contam os cadastros que existem
+  (arquivada conta; só excluir de vez libera). Sobem ou descem em 1 **no mesmo lote** em que o
+  cadastro nasce ou some, com `uso.ultimoCliente`/`uso.ultimoProcedimento` dizendo qual.
+- **Regras:** a equipe só grava no documento da clínica um desses contadores, e só se o cadastro
+  apontado nasceu (+1) ou sumiu (-1) naquela gravação; plano, recursos e o resto continuam só do
+  servidor. No gratuito, criar cliente ou procedimento sem o contador, ou além do limite, é
+  recusado. No completo, o contador é mantido mas não exigido (um caminho esquecido não trava quem
+  paga).
+- **Painel** (`src/services/databaseService.ts`): `gravarCadastroContado` e `excluirCadastroContado`
+  em `savePatient`, `deletePatient`, `saveProcedureToDb` (confere a vaga antes de subir as fotos),
+  `deleteProcedureFromDb`, arquivo (cadastro que nasce no arquivo conta; tirar e excluir descontam)
+  e as sementes (os 2 exemplos contam). Sem vaga, `ErroDeLimiteDoPlano` com a frase de
+  `mensagemDoLimite`. O link de ficha sem paciente escolhida (cliente nova) não é gerado no limite.
+- **Servidor:** a ficha pública de cliente nova confere a vaga e sobe o contador numa transação;
+  sem vaga, `409 limite-de-clientes` ("A clínica não está recebendo fichas de clientes novas no
+  momento..."), e nada é gravado. Quem já é cliente continua preenchendo. `/api/equipe/criar-login`
+  recusa além do limite de logins (`403 limite-do-plano`; no gratuito, o único login é o da admin).
+  `criarClinica` começa com `uso: { clientes: 0, procedimentos: 0 }`.
+- **Recontar:** `npx tsx scripts/recontar-uso.ts [--conferir] [--id <c>]` conta com `count()` (sem ler
+  o conteúdo dos cadastros) e acerta os contadores. Rodar quando uma clínica mudar de plano.
+- **Ordem ao publicar mudanças nos limites:** regras primeiro, recontar, depois o app. O app novo
+  com as regras antigas recusaria o contador.
+- **Falta (fase 3 e etapa 4):** a tela "Meu plano" com o uso, e o somente leitura quando a clínica
+  volta para o gratuito acima dos limites.
 
 ### Cadastro sozinho (fase 1)
 - **Tela de login:** "Sua clínica ainda não usa a Venus JK? Criar conta da clínica". O endereço com

@@ -5,6 +5,8 @@ import {
   getDocsFromServer,
   getDoc,
   getDocFromServer,
+  getDocFromCache,
+  increment,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -18,10 +20,13 @@ import {
   runTransaction,
   arrayUnion,
   QuerySnapshot,
+  type DocumentReference,
+  type WriteBatch,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 // Todo caminho do banco passa por aqui: dentro da clínica do login, ou na raiz no modo legado.
-import { colecao as colecaoDaClinica, documento as documentoDaClinica } from '../lib/clinicaAtual';
+import { colecao as colecaoDaClinica, documento as documentoDaClinica, documentoDaPlataforma } from '../lib/clinicaAtual';
+import { cabeMaisUm, ErroDeLimiteDoPlano, usoDe, type UsoDaClinica } from '../utils/planos';
 import { subscribeShared } from './sharedSubscription';
 import { removerDoGoogleAgenda } from './googleAgenda';
 import {
@@ -245,6 +250,152 @@ const SERVER_ACK_TIMEOUT_MS = 20000;
  * só some quando o listener ressincroniza (ou no próximo F5). Este prazo transforma esse silêncio
  * numa mensagem que diz o que aconteceu e o que fazer.
  */
+// ==========================================
+// CONTADORES DE USO E LIMITES DO PLANO (ver src/utils/planos.ts e zulia/firestore.rules)
+// ==========================================
+
+type ColecaoContada = 'patients' | 'procedures';
+
+const CONTADORES: Record<ColecaoContada, { contador: keyof UsoDaClinica; ultimo: string }> = {
+  patients: { contador: 'clientes', ultimo: 'ultimoCliente' },
+  procedures: { contador: 'procedimentos', ultimo: 'ultimoProcedimento' },
+};
+
+const codigoDoErro = (erro: unknown): string => String((erro as { code?: string })?.code || '');
+
+/**
+ * O cadastro já existe? Primeiro no cache (o painel assina a coleção inteira, então quase sempre
+ * está lá), depois no servidor. `null`: não deu para saber (sem rede e fora do cache).
+ */
+async function cadastroJaExiste(ref: DocumentReference): Promise<boolean | null> {
+  try {
+    if ((await getDocFromCache(ref)).exists()) return true;
+  } catch {
+    // fora do cache
+  }
+  try {
+    return (await getDocFromServer(ref)).exists();
+  } catch {
+    return null;
+  }
+}
+
+/** O plano e o uso da clínica, ou `null` sem documento da clínica (legado) ou sem como ler. */
+async function planoEUsoDaClinica(): Promise<{ plano: unknown; uso: UsoDaClinica } | null> {
+  const ref = documentoDaPlataforma();
+  if (!ref) return null;
+  try {
+    const snap = await getDoc(ref);
+    return { plano: snap.data()?.plano, uso: usoDe(snap.data()) };
+  } catch {
+    return null;
+  }
+}
+
+/** A mudança do contador da clínica, para ir no mesmo lote do cadastro que nasce (+1) ou some (-1). */
+function mudancaDoContador(colecao: ColecaoContada, id: string, delta: 1 | -1): Record<string, unknown> {
+  const { contador, ultimo } = CONTADORES[colecao];
+  return { [`uso.${contador}`]: increment(delta), [`uso.${ultimo}`]: id };
+}
+
+/**
+ * Põe no lote a criação de um cadastro contado (paciente ou procedimento) e o contador da
+ * clínica. Antes, confere o limite do plano: lança `ErroDeLimiteDoPlano` se não couber.
+ * Devolve `false` quando a clínica não conta (modo legado), e aí o lote leva só o cadastro.
+ */
+async function criarContado(
+  lote: WriteBatch,
+  colecao: ColecaoContada,
+  id: string,
+  dados: Record<string, unknown>
+): Promise<boolean> {
+  const ref = documentoDaClinica(colecao, id);
+  const clinica = documentoDaPlataforma();
+  lote.set(ref, dados, { merge: true });
+  if (!clinica) return false;
+  const situacao = await planoEUsoDaClinica();
+  if (situacao && !cabeMaisUm(situacao.plano, CONTADORES[colecao].contador, situacao.uso)) {
+    throw new ErroDeLimiteDoPlano(CONTADORES[colecao].contador);
+  }
+  lote.update(clinica, mudancaDoContador(colecao, id, 1));
+  return true;
+}
+
+/**
+ * Grava um cadastro contado. Se ele já existe, é uma edição comum. Se é novo, o contador da clínica
+ * sobe no mesmo lote — no plano gratuito, as regras recusam a criação sem ele ou além do limite.
+ *
+ * No plano completo o contador não é exigido: se algo nele for recusado, o cadastro é gravado
+ * sozinho, para nunca travar quem paga (o uso é recontado quando o plano muda). Sem saber se o
+ * cadastro existe (sem rede e fora do cache), o completo grava sem contador.
+ */
+async function gravarCadastroContado(
+  colecao: ColecaoContada,
+  id: string,
+  dados: Record<string, unknown>,
+  confirmar: <T>(gravacao: Promise<T>) => Promise<T> = (g) => g
+): Promise<void> {
+  const ref = documentoDaClinica(colecao, id);
+  const gravarSo = () => confirmar(setDoc(ref, dados, { merge: true }));
+  if (!documentoDaPlataforma()) return gravarSo();
+  const existe = await cadastroJaExiste(ref);
+  if (existe) return gravarSo();
+  const situacao = await planoEUsoDaClinica();
+  const completo = situacao?.plano === 'completo';
+  if (existe === null && completo) return gravarSo();
+  const lote = writeBatch(db);
+  await criarContado(lote, colecao, id, dados);
+  try {
+    await confirmar(lote.commit());
+  } catch (erro) {
+    if (codigoDoErro(erro) !== 'permission-denied') throw erro;
+    if (completo) return gravarSo();
+    // No gratuito, a recusa é o limite (outro aparelho criou ao mesmo tempo, por exemplo).
+    throw new ErroDeLimiteDoPlano(CONTADORES[colecao].contador);
+  }
+}
+
+/**
+ * Lança `ErroDeLimiteDoPlano` se o cadastro é novo e não cabe no plano. Só um aviso antecipado
+ * (antes de subir fotos, por exemplo): quem confere de verdade é `gravarCadastroContado` e as regras.
+ */
+async function conferirVagaParaNovo(colecao: ColecaoContada, id: string): Promise<void> {
+  if (!documentoDaPlataforma()) return;
+  if ((await cadastroJaExiste(documentoDaClinica(colecao, id))) !== false) return;
+  const situacao = await planoEUsoDaClinica();
+  if (situacao && !cabeMaisUm(situacao.plano, CONTADORES[colecao].contador, situacao.uso)) {
+    throw new ErroDeLimiteDoPlano(CONTADORES[colecao].contador);
+  }
+}
+
+/** Põe no lote a exclusão de um cadastro contado e a descida do contador da clínica. */
+function excluirContado(lote: WriteBatch, colecao: ColecaoContada, id: string): void {
+  lote.delete(documentoDaClinica(colecao, id));
+  const clinica = documentoDaPlataforma();
+  if (clinica) lote.update(clinica, mudancaDoContador(colecao, id, -1));
+}
+
+/**
+ * Exclui um cadastro contado, com o contador. Se o contador for recusado, exclui sem ele: excluir
+ * nunca pode travar (o uso fica maior do que o real até ser recontado).
+ */
+async function excluirCadastroContado(
+  colecao: ColecaoContada,
+  id: string,
+  confirmar: <T>(gravacao: Promise<T>) => Promise<T> = (g) => g
+): Promise<void> {
+  const ref = documentoDaClinica(colecao, id);
+  if (!documentoDaPlataforma()) return void (await confirmar(deleteDoc(ref)));
+  const lote = writeBatch(db);
+  excluirContado(lote, colecao, id);
+  try {
+    await confirmar(lote.commit());
+  } catch (erro) {
+    if (codigoDoErro(erro) !== 'permission-denied') throw erro;
+    await confirmar(deleteDoc(ref));
+  }
+}
+
 async function comConfirmacaoDoServidor<T>(gravacao: Promise<T>, oQue: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const prazo = new Promise<never>((_, reject) => {
@@ -402,14 +553,14 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
     // perfil da La Vie — o perfil nasce com a clínica (`scripts/criar-clinica.ts`).
     if (!colecaoVazia) return;
     try {
-      const lote = writeBatch(db);
+      // Um de cada vez, cada um com o contador: no plano gratuito, os 2 exemplos ocupam as vagas.
       for (const proc of PROCEDIMENTOS_DE_EXEMPLO) {
-        lote.set(
-          documentoDaClinica(PROCEDURES_COLLECTION, proc.id),
+        await gravarCadastroContado(
+          'procedures',
+          proc.id,
           cleanForFirestore({ ...proc, updatedAt: new Date().toISOString() })
         );
       }
-      await lote.commit();
     } catch (err) {
       console.warn('Não foi possível gravar os procedimentos de exemplo:', err);
     }
@@ -654,6 +805,9 @@ export function subscribeToClinicProfile(
  * que o servidor do Firestore confirmou a gravação antes de dar como salvo.
  */
 export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure> {
+  // Procedimento novo no plano gratuito cheio: avisa antes de subir as fotos (que ficariam soltas).
+  await conferirVagaParaNovo('procedures', procedure.id);
+
   // Se ainda houver alguma imagem em base64, processa e envia para o Firebase Storage
   let imagensFinais = procedure.images || [];
   if (imagensFinais.some((img) => img && img.startsWith('data:'))) {
@@ -687,7 +841,6 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure
     updatedAt: new Date().toISOString(),
   };
 
-  const docRef = documentoDaClinica(PROCEDURES_COLLECTION, procedureAtualizado.id);
   const temMapa = !!procedureAtualizado.exigeSelecaoDeArea;
   const areasGravaveis = temMapa ? serializarAreasDoMapa(procedureAtualizado.areasDoMapa) : undefined;
   // Os campos do mapa ficam fora do `cleanForFirestore` e entram logo abaixo, cada um do seu jeito.
@@ -732,9 +885,8 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure
     );
   }
 
-  await comConfirmacaoDoServidor(
-    setDoc(docRef, dataToSave, { merge: true }),
-    'do procedimento'
+  await gravarCadastroContado('procedures', procedureAtualizado.id, dataToSave, (g) =>
+    comConfirmacaoDoServidor(g, 'do procedimento')
   );
 
   return procedureAtualizado;
@@ -811,10 +963,10 @@ export async function arquivarProcedimentosNoDb(ids: string[], emFavorDe: string
  * Delete a procedure by ID.
  */
 export async function deleteProcedureFromDb(procedureId: string): Promise<void> {
-  const docRef = documentoDaClinica(PROCEDURES_COLLECTION, procedureId);
   // Sem confirmação do servidor a exclusão fica apenas na fila local do SDK e a promise nunca
-  // resolve: a tela diria "removido" para um procedimento que continua no banco.
-  await comConfirmacaoDoServidor(deleteDoc(docRef), 'da exclusão do procedimento');
+  // resolve: a tela diria "removido" para um procedimento que continua no banco. O contador de uso
+  // desce no mesmo lote (libera a vaga no plano gratuito).
+  await excluirCadastroContado('procedures', procedureId, (g) => comConfirmacaoDoServidor(g, 'da exclusão do procedimento'));
 }
 
 /**
@@ -1647,20 +1799,20 @@ export function subscribeToPatients(
  * Save or update a Patient record
  */
 export async function savePatient(patient: Patient): Promise<void> {
-  const docRef = documentoDaClinica(PATIENTS_COLLECTION, patient.id);
   const dataToSave = cleanForFirestore({
     ...patient,
     updatedAt: new Date().toISOString(),
   });
-  await setDoc(docRef, dataToSave, { merge: true });
+  // Cadastro novo sobe o contador de clientes da clínica (limite do plano gratuito): ver
+  // `gravarCadastroContado`. Lança `ErroDeLimiteDoPlano` quando não cabe.
+  await gravarCadastroContado('patients', patient.id, dataToSave);
 }
 
 /**
  * Delete a Patient
  */
 export async function deletePatient(patientId: string): Promise<void> {
-  const docRef = documentoDaClinica(PATIENTS_COLLECTION, patientId);
-  await deleteDoc(docRef);
+  await excluirCadastroContado('patients', patientId);
 }
 
 // ==========================================
@@ -1919,16 +2071,17 @@ export async function gravarArquivamento({
 }): Promise<void> {
   const agora = new Date().toISOString();
   const marca = { arquivadoEm: agora, arquivoDe: paciente.id, updatedAt: agora };
-  const lotes = emLotes(documentos, GRAVACOES_POR_LOTE - 1);
+  const lotes = emLotes(documentos, GRAVACOES_POR_LOTE - 2);
+  const refDoCadastro = documentoDaClinica(PATIENTS_COLLECTION, paciente.id);
+  // Um cadastro que nasce no arquivo conta como cliente (o limite do plano vale para ele também).
+  const cadastroNovo = (await cadastroJaExiste(refDoCadastro)) === false;
 
   for (let i = 0; i < lotes.length; i++) {
     const batch = writeBatch(db);
     if (i === 0) {
-      batch.set(
-        documentoDaClinica(PATIENTS_COLLECTION, paciente.id),
-        cleanForFirestore({ ...paciente, updatedAt: agora }),
-        { merge: true }
-      );
+      const dados = cleanForFirestore({ ...paciente, updatedAt: agora });
+      if (cadastroNovo) await criarContado(batch, 'patients', paciente.id, dados);
+      else batch.set(refDoCadastro, dados, { merge: true });
     }
     lotes[i].forEach((d) =>
       batch.update(
@@ -1954,14 +2107,14 @@ export async function tirarDoArquivo(paciente: Patient): Promise<void> {
   const agora = new Date().toISOString();
   const desmarca = { arquivadoEm: deleteField(), arquivoDe: deleteField(), updatedAt: agora };
   const documentos = documentosDosBrutos(await lerDocumentosDoArquivo(paciente.id));
-  const lotes = emLotes(documentos, GRAVACOES_POR_LOTE - 1);
+  const lotes = emLotes(documentos, GRAVACOES_POR_LOTE - 2);
 
   for (let i = 0; i < lotes.length; i++) {
     const batch = writeBatch(db);
     lotes[i].forEach((d) => batch.update(refDoArquivo(d), desmarca));
     if (i === lotes.length - 1) {
       const ref = documentoDaClinica(PATIENTS_COLLECTION, paciente.id);
-      if (paciente.cadastroCriadoNoArquivo) batch.delete(ref);
+      if (paciente.cadastroCriadoNoArquivo) excluirContado(batch, 'patients', paciente.id);
       else {
         batch.update(ref, {
           arquivadoEm: deleteField(),
@@ -1990,12 +2143,13 @@ export async function excluirDoArquivo(paciente: Patient): Promise<void> {
     refs.push(documentoDaClinica(FOLLOWUP_RECORDS_COLLECTION, id), documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, id));
   });
   const unicos = refs.filter((r, i) => refs.findIndex((o) => o.path === r.path) === i);
-  const lotes = emLotes(unicos, GRAVACOES_POR_LOTE - 1);
+  const lotes = emLotes(unicos, GRAVACOES_POR_LOTE - 2);
 
   for (let i = 0; i < lotes.length; i++) {
     const batch = writeBatch(db);
     lotes[i].forEach((ref) => batch.delete(ref));
-    if (i === lotes.length - 1) batch.delete(documentoDaClinica(PATIENTS_COLLECTION, paciente.id));
+    // Excluir de vez libera a vaga de cliente: o contador desce junto com o cadastro.
+    if (i === lotes.length - 1) excluirContado(batch, 'patients', paciente.id);
     await comConfirmacaoDoServidor(batch.commit(), 'da exclusão');
   }
 

@@ -37,6 +37,8 @@ import {
   setLogLevel,
   terminate,
   updateDoc,
+  writeBatch,
+  increment,
   type Firestore,
 } from 'firebase/firestore';
 import {
@@ -58,7 +60,8 @@ const emulador = pediuEmulador();
 const zulia = abrirZulia({ emulador });
 const { config } = zulia;
 
-const CLINICAS = ['teste-a', 'teste-b'] as const;
+// A e B no plano completo (o isolamento); G no gratuito (os limites do plano).
+const CLINICAS = ['teste-a', 'teste-b', 'teste-g'] as const;
 type Clinica = (typeof CLINICAS)[number];
 /** Os logins de teste usam este domínio, que não existe: nenhum e-mail sai para ninguém. */
 const DOMINIO = 'regras.zulia.invalid';
@@ -154,7 +157,13 @@ const preparar = async () => {
   for (const c of CLINICAS) {
     const base = `clinicas/${c}`;
     const lote = zulia.db.batch();
-    lote.set(zulia.db.doc(base), { nome: `Clínica ${c}`, plano: 'gratuito', situacao: 'ativa', criadaEm: agora });
+    lote.set(zulia.db.doc(base), {
+      nome: `Clínica ${c}`,
+      plano: c === 'teste-g' ? 'gratuito' : 'completo',
+      situacao: 'ativa',
+      criadaEm: agora,
+      uso: { clientes: 1, procedimentos: 0 },
+    });
     lote.set(zulia.db.doc(`${base}/patients/p1`), { nome: `Paciente de ${c}`, cpf: '00000000000' });
     lote.set(zulia.db.doc(`${base}/anamnesis_records/r1`), { pacienteId: 'p1', respostasGerais: {} });
     lote.set(zulia.db.doc(`${base}/clinic_settings/main_profile`), { name: `Clínica ${c}`, professionals: [] });
@@ -304,6 +313,61 @@ async function conferirFirestore(sessoes: Record<string, Sessao>) {
   await espera('admin de A NÃO lê coleção sem regra dentro da clínica', false, ler(adminA, 'clinicas/teste-a/colecao_sem_regra/x'));
 }
 
+/**
+ * Cria (delta 1) ou exclui de vez (delta -1) um cadastro contado, com o contador da clínica no mesmo
+ * lote — como o painel faz (`gravarCadastroContado` em src/services/databaseService.ts).
+ */
+const contado =
+  (s: Sessao, c: string, colecao: 'patients' | 'procedures', id: string, delta: 1 | -1 = 1, extra: Record<string, unknown> = {}) =>
+  () => {
+    const [contador, ultimo] = colecao === 'patients' ? ['clientes', 'ultimoCliente'] : ['procedimentos', 'ultimoProcedimento'];
+    const lote = writeBatch(s.db);
+    const ref = doc(s.db, `clinicas/${c}/${colecao}/${id}`);
+    if (delta > 0) lote.set(ref, { nome: id });
+    else lote.delete(ref);
+    lote.update(doc(s.db, `clinicas/${c}`), { [`uso.${contador}`]: increment(delta), [`uso.${ultimo}`]: id, ...extra });
+    return lote.commit();
+  };
+
+const mexerNoContador = (s: Sessao, c: string, dados: Record<string, unknown>) => () => updateDoc(doc(s.db, `clinicas/${c}`), dados);
+
+async function conferirLimites(sessoes: Record<string, Sessao>) {
+  const adminG = sessoes['admin-teste-g'];
+  const profG = sessoes['prof-teste-g'];
+  const adminA = sessoes['admin-teste-a'];
+
+  console.log('\nPlano gratuito — clientes (G começa com 1)');
+  await espera('gratuito: cliente nova SEM o contador é recusada', false, gravar(adminG, 'clinicas/teste-g/patients/sem-contador'));
+  await espera('gratuito: cliente nova com o contador (2)', true, contado(adminG, 'teste-g', 'patients', 'c2'));
+  await espera('gratuito: a profissional também cadastra, contando (3)', true, contado(profG, 'teste-g', 'patients', 'c3'));
+  await espera('gratuito: 4', true, contado(adminG, 'teste-g', 'patients', 'c4'));
+  await espera('gratuito: 5', true, contado(adminG, 'teste-g', 'patients', 'c5'));
+  await espera('gratuito: a 6ª cliente é recusada', false, contado(adminG, 'teste-g', 'patients', 'c6'));
+  await espera('gratuito: editar uma cliente que existe continua livre', true, gravar(adminG, 'clinicas/teste-g/patients/c2', { nome: 'Outro nome' }));
+  await espera('contador NÃO sobe sem cadastro novo', false, mexerNoContador(adminG, 'teste-g', { 'uso.clientes': increment(1), 'uso.ultimoCliente': 'p1' }));
+  await espera('contador NÃO desce sem excluir', false, mexerNoContador(adminG, 'teste-g', { 'uso.clientes': increment(-1), 'uso.ultimoCliente': 'c2' }));
+  await espera('contador NÃO vai a zero direto', false, mexerNoContador(adminG, 'teste-g', { 'uso.clientes': 0 }));
+  await espera('excluir de vez, com o contador, libera a vaga', true, contado(adminG, 'teste-g', 'patients', 'c5', -1));
+  await espera('NÃO muda o plano junto com o contador', false, contado(adminG, 'teste-g', 'patients', 'c6', 1, { plano: 'completo' }));
+  await espera('com a vaga liberada, cabe mais uma', true, contado(adminG, 'teste-g', 'patients', 'c6'));
+  const usoG = (await zulia.db.doc('clinicas/teste-g').get()).data()?.uso;
+  const clientesG = (await zulia.db.collection('clinicas/teste-g/patients').count().get()).data().count;
+  ok('o contador bate com as clientes que existem', usoG?.clientes === clientesG && clientesG === 5, `${usoG?.clientes} × ${clientesG}`);
+
+  console.log('\nPlano gratuito — procedimentos');
+  await espera('gratuito: procedimento SEM o contador é recusado', false, gravar(adminG, 'clinicas/teste-g/procedures/sem-contador'));
+  await espera('gratuito: 1º procedimento', true, contado(adminG, 'teste-g', 'procedures', 'pr1'));
+  await espera('gratuito: 2º procedimento', true, contado(adminG, 'teste-g', 'procedures', 'pr2'));
+  await espera('gratuito: o 3º procedimento é recusado', false, contado(adminG, 'teste-g', 'procedures', 'pr3'));
+  await espera('editar um procedimento que existe continua livre', true, gravar(adminG, 'clinicas/teste-g/procedures/pr1', { titulo: 'X' }));
+
+  console.log('\nContadores — outras clínicas e o completo');
+  await espera('admin de A NÃO mexe no contador de G', false, mexerNoContador(adminA, 'teste-g', { 'uso.clientes': increment(-1), 'uso.ultimoCliente': 'c2' }));
+  await espera('admin de A NÃO cria cliente em G, nem contando', false, contado(adminA, 'teste-g', 'patients', 'intrusa'));
+  await espera('completo: cliente nova com o contador também passa', true, contado(adminA, 'teste-a', 'patients', 'ca1'));
+  await espera('completo: e sem o contador (não trava quem paga)', true, gravar(adminA, 'clinicas/teste-a/patients/ca2'));
+}
+
 async function conferirStorage(sessoes: Record<string, Sessao>) {
   const adminA = sessoes['admin-teste-a'];
   const profA = sessoes['prof-teste-a'];
@@ -365,6 +429,7 @@ async function main() {
 
   try {
     await conferirFirestore(sessoes);
+    await conferirLimites(sessoes);
     await conferirStorage(sessoes);
   } finally {
     for (const s of Object.values(sessoes)) await fecharSessao(s);

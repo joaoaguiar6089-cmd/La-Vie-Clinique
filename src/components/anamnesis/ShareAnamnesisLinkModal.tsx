@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { buildPublicLink } from '../../utils/publicLinks';
+import { usePlanoDaClinica } from '../../services/planoDaClinica';
+import { cabeMaisUm, mensagemDoLimite } from '../../utils/planos';
 import { AnamnesisTemplate, Patient, ClinicProfile } from '../../types';
 import {
   X,
@@ -58,7 +60,12 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
     selectedTemplate?.fotoModeloMasculinoUrl ||
     selectedTemplate?.fotoModeloUrl;
   const selectedPatient = patients.find((p) => p.id === selectedPatientId);
-  const canShare = !!selectedProfessionalId;
+  // Link sem paciente escolhida cria uma cliente nova quando ela responde: no plano gratuito cheio,
+  // o painel não gera esse link (o servidor também recusaria a ficha).
+  const planoDaClinica = usePlanoDaClinica();
+  const semVagaParaClienteNova =
+    !selectedPatientId && !!planoDaClinica && !cabeMaisUm(planoDaClinica.plano, 'clientes', planoDaClinica.uso);
+  const canShare = !!selectedProfessionalId && !semVagaParaClienteNova;
 
   // Compute public link — base vem do perfil da clínica, não da janela (ver utils/publicLinks.ts)
   const shareableUrl = buildPublicLink(clinicProfile, {
@@ -245,9 +252,14 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
                 </option>
               ))}
             </select>
-            {!canShare && (
+            {!selectedProfessionalId && (
               <p className="text-label text-amber-600 mt-1">
                 Selecione o profissional responsável para gerar e enviar o link.
+              </p>
+            )}
+            {semVagaParaClienteNova && (
+              <p role="alert" className="text-[12.5px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2 leading-relaxed">
+                {mensagemDoLimite('clientes')} Para mandar a ficha a uma cliente que já existe, escolha-a acima.
               </p>
             )}
           </div>

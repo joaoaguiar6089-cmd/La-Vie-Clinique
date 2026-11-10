@@ -146,7 +146,9 @@ async function main() {
     console.log('\n1. Criar as clínicas');
     // Com o aceite dos documentos já registrado: o pedido de aceite é testado em verificar-cadastro-zulia.
     const aceite = { versao: VERSAO_DOS_DOCUMENTOS, em: new Date().toISOString(), uid: 'teste', email: null, ip: null };
-    const alfa = await criarClinica(zulia, { nome: 'Clínica Alfa', email: 'dona@alfa.invalid', admin: 'Ana Alfa', aceite });
+    // A Alfa é do plano completo (a admin cria o login de uma profissional, o que o gratuito não
+    // permite); a Beta, do gratuito. Os limites do gratuito são testados em verificar-cadastro-zulia.
+    const alfa = await criarClinica(zulia, { nome: 'Clínica Alfa', email: 'dona@alfa.invalid', admin: 'Ana Alfa', aceite, plano: 'completo' });
     const beta = await criarClinica(zulia, { nome: 'Clínica Beta', email: 'dona@beta.invalid', admin: 'Bia Beta', aceite });
     ok('ids aleatórios de 6 caracteres', /^[A-Za-z0-9]{6}$/.test(alfa.id) && /^[A-Za-z0-9]{6}$/.test(beta.id), `${alfa.id} ${beta.id}`);
     const claimsAlfa = (await zulia.auth.getUser(alfa.uid)).customClaims;
