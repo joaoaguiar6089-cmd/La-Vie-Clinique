@@ -32,6 +32,21 @@ function friendlyError(err: any): string {
   return (code && FIREBASE_ERROR_MESSAGES[code]) || 'Não foi possível entrar. Verifique seus dados e tente novamente.';
 }
 
+/**
+ * As figuras de traço que flutuam sobre o relevo (`public/login/figura-N.webp`: só linhas, fundo
+ * transparente). Cada uma tem lugar, tamanho e ritmo próprios; no celular ficam só duas, nos
+ * cantos, para não disputar espaço com os campos.
+ */
+const FIGURAS: { arquivo: number; classes: string; duracao: number; atraso: number }[] = [
+  { arquivo: 1, classes: 'left-[-3%] bottom-[-4%] h-[58vh] hidden md:block', duracao: 19, atraso: 0 },
+  { arquivo: 5, classes: 'right-[1%] top-[6%] h-[40vh] hidden md:block', duracao: 23, atraso: -6 },
+  { arquivo: 4, classes: 'right-[5%] bottom-[-6%] h-[52vh] hidden lg:block', duracao: 21, atraso: -11 },
+  { arquivo: 3, classes: 'left-[19%] top-[15%] h-[36vh] hidden xl:block', duracao: 25, atraso: -3 },
+  { arquivo: 2, classes: 'right-[23%] top-[3%] h-[30vh] hidden xl:block', duracao: 27, atraso: -15 },
+  { arquivo: 5, classes: 'right-[-16%] top-[38%] h-[26vh] md:hidden', duracao: 23, atraso: -6 },
+  { arquivo: 1, classes: 'left-[-24%] top-[9%] h-[30vh] md:hidden', duracao: 19, atraso: 0 },
+];
+
 export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -81,6 +96,18 @@ export const LoginScreen: React.FC = () => {
         style={{ backgroundImage: 'url(/login-fundo.webp)' }}
       />
 
+      <div aria-hidden="true" className="fixed inset-0 overflow-hidden pointer-events-none">
+        {FIGURAS.map((f, i) => (
+          <img
+            key={i}
+            src={`/login/figura-${f.arquivo}.webp`}
+            alt=""
+            className={`figura-flutuante absolute w-auto max-w-none ${f.classes}`}
+            style={{ animationDuration: `${f.duracao}s`, animationDelay: `${f.atraso}s` }}
+          />
+        ))}
+      </div>
+
       <div className="relative min-h-dvh flex flex-col">
         {/* Na Zulia a tela de login é da plataforma (várias clínicas entram por ela); no legado,
             a da La Vie, como sempre. */}
@@ -98,45 +125,45 @@ export const LoginScreen: React.FC = () => {
         {/* No celular os campos descem para a metade de baixo, deixando a lua à mostra; do tablet
             em diante ficam no meio, um pouco abaixo do centro (o vão entre as árvores). */}
         <main className="flex-1 flex items-end sm:items-center justify-center px-4 pt-8 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-8 lg:pt-[20vh]">
-          <div className="w-full max-w-[22rem]">
+          <div className="w-full max-w-[21rem]">
         {cadastrando ? (
           <FormularioDeCadastro onVoltar={() => setCadastrando(false)} />
         ) : (
         <form
           onSubmit={handleSubmit}
-          className="cartao-de-vidro rounded-3xl p-5 sm:p-6 space-y-4"
+          className="clareira-no-relevo relative isolate px-2 py-4 space-y-4"
         >
-          <p className="text-center text-[12px] font-semibold uppercase tracking-[.18em] text-brand-deep">
+          <p className="font-marca marca-em-relevo text-center text-[13px] text-brand-deep">
             {ehZulia ? 'Acesso da clínica' : 'Acesso da equipe'}
           </p>
           <div>
-            <label className="block text-[13px] font-semibold text-ink mb-1.5">E-mail</label>
-            <div className="relative">
-              <Mail className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
+                        <div className="relative">
+              <Mail className="w-[18px] h-[18px] absolute z-10 left-5 top-1/2 -translate-y-1/2 text-brand-deep pointer-events-none" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={ehZulia ? 'seu.email@suaclinica.com' : 'seu.email@lavieclinique.com'}
+                placeholder="E-mail"
+                aria-label="E-mail"
                 autoComplete="username"
                 required
-                className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white/85 border border-[rgba(110,73,36,.22)] text-ink placeholder:text-muted-light focus:outline-hidden focus:bg-white focus:border-brand"
+                className="campo-entalhado w-full h-[54px] pl-[3.1rem] pr-5 text-[15px] rounded-full text-ink placeholder:text-ink-soft focus:outline-hidden"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[13px] font-semibold text-ink mb-1.5">Senha</label>
-            <div className="relative">
-              <Lock className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2 text-muted-light" />
+                        <div className="relative">
+              <Lock className="w-[18px] h-[18px] absolute z-10 left-5 top-1/2 -translate-y-1/2 text-brand-deep pointer-events-none" />
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Senha"
+                aria-label="Senha"
                 autoComplete="current-password"
                 required
-                className="w-full h-[50px] pl-11 pr-4 text-[14px] rounded-xl bg-white/85 border border-[rgba(110,73,36,.22)] text-ink placeholder:text-muted-light focus:outline-hidden focus:bg-white focus:border-brand"
+                className="campo-entalhado w-full h-[54px] pl-[3.1rem] pr-5 text-[15px] rounded-full text-ink placeholder:text-ink-soft focus:outline-hidden"
               />
             </div>
           </div>
@@ -158,7 +185,7 @@ export const LoginScreen: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full h-[50px] rounded-xl bg-brand text-white text-[15px] font-semibold flex items-center justify-center gap-2 hover:bg-brand-hover active:scale-97 transition-all disabled:opacity-60"
+            className="botao-em-relevo font-marca w-full h-[54px] rounded-full text-[14px] text-brand-deep flex items-center justify-center gap-2 active:scale-97 transition-all disabled:opacity-60"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {isSubmitting ? 'Entrando...' : 'Entrar'}
@@ -167,18 +194,18 @@ export const LoginScreen: React.FC = () => {
           <button
             type="button"
             onClick={handleForgotPassword}
-            className="w-full text-center text-[13px] text-ink-soft hover:text-ink font-medium transition-colors"
+            className="marca-em-relevo w-full text-center text-[13px] text-ink hover:text-brand-deep font-medium transition-colors"
           >
             Esqueci minha senha
           </button>
         </form>
         )}
 
-            {/* O rodapé vai num vidro próprio: solto sobre o relevo, o texto pequeno se perdia. */}
+            {/* O rodapé fica solto sobre o relevo, com o mesmo halo creme do nome (sem caixa). */}
             {ehZulia && (
-              <div className="cartao-de-vidro rounded-2xl mt-3 px-4 py-3 space-y-1.5">
+              <div className="marca-em-relevo relative mt-1 px-2 space-y-1.5 font-medium">
                 {TEM_CADASTRO && !cadastrando && (
-                  <p className="text-center text-[13px] text-ink-soft">
+                  <p className="text-center text-[13px] text-ink">
                     Sua clínica ainda não usa a {MARCA_DA_PLATAFORMA}?{' '}
                     <button
                       type="button"
@@ -192,7 +219,7 @@ export const LoginScreen: React.FC = () => {
                     </button>
                   </p>
                 )}
-                <p className="text-center text-[12px] text-ink-soft space-x-3">
+                <p className="text-center text-[12px] text-ink space-x-3">
                   <a href={PAGINAS_LEGAIS.termos} target="_blank" rel="noopener" className="hover:text-ink underline-offset-2 hover:underline">
                     Termos de Uso
                   </a>
