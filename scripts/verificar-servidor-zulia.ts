@@ -27,7 +27,7 @@ import { criarRotasDaEquipe } from '../server/equipe';
 import { criarRotasGoogleAgenda, cifrar } from '../server/googleAgenda';
 import { loginDasClaims, verificarLogin } from '../server/login';
 import { clinicaDoPedido, caminhoDaColecao } from '../server/clinicas';
-import { clinicaDoLink, gerarIdDeClinica, idDeClinicaValido } from '../src/utils/clinicas';
+import { CLINICA_DOS_LINKS_ANTIGOS, clinicaDoLink, gerarIdDeClinica, idDeClinicaValido } from '../src/utils/clinicas';
 
 let falhas = 0;
 const ok = (nome: string, condicao: boolean, extra = '') => {
@@ -72,7 +72,8 @@ async function main() {
   ok('id gerado tem 6 caracteres e é válido', /^[A-Za-z0-9]{6}$/.test(gerarIdDeClinica()) && !!idDeClinicaValido(gerarIdDeClinica()));
   ok('ids gerados não se repetem', new Set(Array.from({ length: 200 }, () => gerarIdDeClinica())).size === 200);
   ok('caminho com barra não é id', idDeClinicaValido('a/b') === '' && idDeClinicaValido('../x') === '');
-  ok('link sem c, antes da migração: clínica desconhecida', clinicaDoLink('') === null);
+  // Desde a migração (10/11/2026), link sem c é link antigo da La Vie.
+  ok('link sem c vai para a clínica dos links antigos (a La Vie)', CLINICA_DOS_LINKS_ANTIGOS === 'u9JYfN' && clinicaDoLink('') === 'u9JYfN');
   ok('legado ignora o c (raiz)', clinicaDoPedido('qualquer', false) === null);
   ok('zulia usa o c do link', clinicaDoPedido('k3P9xq', true) === 'k3P9xq');
   ok('zulia recusa c inválido', clinicaDoPedido('a/b', true) === undefined);
@@ -81,8 +82,9 @@ async function main() {
   ok(
     'claims viram o login',
     JSON.stringify(loginDasClaims({ uid: 'u', clinicaId: 'k3P9xq', papel: 'admin', donoDaPlataforma: false })) ===
-      JSON.stringify({ uid: 'u', email: null, clinicaId: 'k3P9xq', papel: 'admin', dono: false })
+      JSON.stringify({ uid: 'u', email: null, clinicaId: 'k3P9xq', papel: 'admin', dono: false, emailVerificado: false })
   );
+  ok('e-mail confirmado vem da claim padrão', loginDasClaims({ uid: 'u', email_verified: true }).emailVerificado === true);
   ok('papel estranho vira nulo', loginDasClaims({ uid: 'u', papel: 'dona' }).papel === null);
 
   // ==========================================
@@ -102,6 +104,15 @@ async function main() {
       createdAt: agora,
     });
   }
+  // A clínica dos links antigos, com uma ficha de mesmo id: o link sem c abre esta.
+  await zulia.db.doc(`clinicas/${CLINICA_DOS_LINKS_ANTIGOS}`).set({ nome: 'La Vie', recursos: { googleAgenda: true }, equipe: {} });
+  await zulia.db.doc(`clinicas/${CLINICA_DOS_LINKS_ANTIGOS}/patients/pat-1`).set({ nome: 'Paciente La Vie' });
+  await zulia.db.doc(`clinicas/${CLINICA_DOS_LINKS_ANTIGOS}/anamnesis_records/rec-1`).set({
+    pacienteId: 'pat-1',
+    templateId: 'tpl-botox',
+    procedimentoNome: 'Botox La Vie',
+    createdAt: agora,
+  });
   const adminA = await loginDeTeste('admin@srv-a.invalid', { clinicaId: 'srv-a', papel: 'admin' });
   const profA = await loginDeTeste('prof@srv-a.invalid', { clinicaId: 'srv-a', papel: 'profissional' });
   const adminB = await loginDeTeste('admin@srv-b.invalid', { clinicaId: 'srv-b', papel: 'admin' });
@@ -132,7 +143,7 @@ async function main() {
     const b = await post('/api/ficha-publica/abrir', { c: 'srv-b', ficha: 'rec-1' });
     ok('mesmo id com o c de outra clínica abre a ficha da outra', b.json.ficha?.procedimentoNome === 'Botox srv-b');
     const semC = await post('/api/ficha-publica/abrir', { ficha: 'rec-1' });
-    ok('link sem c, antes de existir a clínica dos links antigos → 404', semC.status === 404 && semC.json.erro === 'clinica-nao-encontrada');
+    ok('link sem c abre a ficha da clínica dos links antigos', semC.status === 200 && semC.json.ficha?.procedimentoNome === 'Botox La Vie', JSON.stringify(semC.json).slice(0, 120));
     const cRuim = await post('/api/ficha-publica/abrir', { c: '../srv-a', ficha: 'rec-1' });
     ok('c que não é id → 404', cRuim.status === 404);
     const cInexistente = await post('/api/ficha-publica/abrir', { c: 'naoexiste', ficha: 'rec-1' });
@@ -159,7 +170,7 @@ async function main() {
     });
     ok('a ficha de B não é gravada pelo link de A', cruzada.status === 404);
     const status = await (await fetch(`${base}/api/ficha-publica/status`)).json();
-    ok('status no modo Zulia', status.modo === 'zulia' && status.conectado === true && status.linksAntigos === false);
+    ok('status no modo Zulia, com a clínica dos links antigos', status.modo === 'zulia' && status.conectado === true && status.linksAntigos === true, JSON.stringify(status));
 
     // ==========================================
     console.log('\nCartão do link por clínica');

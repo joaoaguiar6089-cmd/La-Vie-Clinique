@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { criarRotasDoCadastro } from './server/cadastro';
 import { criarRotasDaEquipe, manterEquipeSincronizada } from './server/equipe';
 import { bancoAdmin, PREFIXO_DA_CREDENCIAL } from './server/firebaseAdmin';
 import { criarRotasFichaPublica } from './server/fichaPublica';
@@ -91,6 +92,8 @@ app.use('/api/ficha-publica', criarRotasFichaPublica());
 app.use('/api/google-agenda', criarRotasGoogleAgenda());
 // Logins da equipe de cada clínica, na Zulia: criar, mudar papel, desativar (ver server/equipe.ts).
 app.use('/api/equipe', criarRotasDaEquipe());
+// Cadastro sozinho de clínica nova, na Zulia: o login confirmado vira a admin (ver server/cadastro.ts).
+app.use('/api/cadastro', criarRotasDoCadastro());
 // Política de privacidade pública — o Google exige o link dela na tela de consentimento.
 app.get('/privacidade', servirPrivacidade);
 

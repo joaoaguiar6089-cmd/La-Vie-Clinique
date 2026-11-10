@@ -14,7 +14,7 @@ continua nos nomes internos, que trocar só traria risco: o projeto `zulia-plata
 ## Ordem do trabalho
 
 1. ~~Correção urgente de segurança no sistema atual~~ — feita (ver `docs/ficha-publica-servidor.md`).
-2. Projeto novo no Firebase e o sistema para várias clínicas; a La Vie migra como clínica nº 1.
+2. ~~Projeto novo no Firebase e o sistema para várias clínicas; a La Vie migra como clínica nº 1~~ — feita (10/11/2026).
 3. Cadastro de clínica nova, planos e limites.
 4. Cobrança pela InfinitePay.
 5. Painel do dono da plataforma.
@@ -239,7 +239,7 @@ poder ler os dados das pacientes depois que eles existirem**.
   (`MARCA_DA_PLATAFORMA`, hoje "Venus JK").
 - **Google Agenda:** sem `recursos.googleAgenda`, a seção mostra "em breve".
 
-### Criar uma clínica (até o cadastro da etapa 3)
+### Criar uma clínica pelo script (para testes, cortesias e casos especiais)
 
     npm run criar-clinica -- --nome "Clínica Alfa" --email dona@alfa.com.br --admin "Dra. Ana Souza"
 
@@ -274,6 +274,8 @@ que o `firebase emulators:exec` define. Nunca no ar.
     # painel no modo Zulia, num navegador (criar-clinica, sementes, equipe, links, isolamento)
     VITE_PLATAFORMA=zulia VITE_EMULADORES=1 npm run build
     PLATAFORMA=zulia npx -y firebase-tools@15 emulators:exec --only auth,firestore,storage --config zulia/firebase.json --project demo-zulia "npx tsx scripts/verificar-ponta-a-ponta-zulia.ts"
+    # cadastro sozinho de clínica (mesmo build do anterior)
+    PLATAFORMA=zulia npx -y firebase-tools@15 emulators:exec --only auth,firestore,storage --config zulia/firebase.json --project demo-zulia "npx tsx scripts/verificar-cadastro-zulia.ts"
 
 Depois, `npm run build` sem as variáveis.
 
@@ -292,6 +294,44 @@ são apagados com as clínicas deles no começo e no fim:
 - Contadores de uso no documento da clínica, conferidos nas regras do Firestore junto com cada
   criação e exclusão (o contador sobe na mesma gravação em que o documento nasce). Assim o
   limite vale mesmo para quem tentar burlar a tela.
+
+## Etapa 3: cadastro de clínica nova, planos e limites
+
+Começada em 10/11/2026, logo depois da migração. Cada fase é um PR mesclado na `main`.
+
+| Fase | O que entra | Situação |
+| --- | --- | --- |
+| 1 | Cadastro sozinho: criar conta, confirmar o e-mail e criar a clínica no plano gratuito | Feita; testada nos emuladores (`scripts/verificar-cadastro-zulia.ts`) |
+| 2 | Limites do plano gratuito (2 procedimentos, 5 clientes, 1 login): contadores no documento da clínica, conferidos nas regras; o servidor recusa ficha de cliente nova acima do limite | A fazer |
+| 3 | Tela do plano nas Configurações: o uso, o que cada plano inclui e o "Assinar" (que leva à cobrança da etapa 4) | A fazer |
+
+### Cadastro sozinho (fase 1)
+- **Tela de login:** "Sua clínica ainda não usa a Venus JK? Criar conta da clínica". O endereço com
+  `?cadastro` abre direto o formulário, para mandar por link.
+- **Formulário:** nome da clínica, nome da pessoa, e-mail e senha (pelo menos 8 caracteres). O login
+  nasce no navegador (`createUserWithEmailAndPassword`) e recebe o e-mail de confirmação, com o
+  botão de voltar ao site.
+- **Login sem clínica** (`ConcluirCadastroView`, no lugar da tela de acesso negado):
+  1. "Confirme seu e-mail": confere sozinho quando a pessoa volta para a aba, ou pelo "Já confirmei";
+     reenviar no máximo a cada 30 segundos;
+  2. "Crie sua clínica": o nome vem preenchido do formulário (se for o mesmo navegador);
+     `POST /api/cadastro/clinica` cria a clínica e o painel abre. As sementes entram nesse primeiro
+     login.
+  A tela lembra: quem é da equipe de uma clínica não cria outra; pede o acesso à admin.
+- **Servidor** (`server/cadastro.ts`): só com e-mail confirmado (claim `email_verified`), login
+  sem clínica e que não seja o dono; nome de 2 a 80 letras, limpo; 10 pedidos por hora por
+  endereço; um pedido por login de cada vez. A clínica nasce com `plano: 'gratuito'`, sem cortesia,
+  sem Google Agenda, `criadaPor: 'cadastro'`. A criação é a mesma do `criar-clinica`
+  (`server/clinicasNovas.ts`).
+- **Fechar o cadastro:** `CADASTRO_ABERTO = false` em `src/utils/cadastro.ts` tira o link da tela e
+  faz o servidor recusar clínica nova.
+- **E-mails do login em português:** `auth.languageCode = 'pt-BR'` no painel e idioma padrão
+  `pt-BR` no Authentication do `zulia-plataforma` (posto em 10/11/2026).
+- **Falta (João):** o nome que aparece nos e-mails do login (`%APP_NAME%`) é o "nome voltado ao
+  público" do projeto, ainda "Zulia". Console do Firebase → Configurações do projeto → Geral →
+  Nome voltado ao público → "Venus JK".
+- **Antes de divulgar o cadastro:** Termos de Uso, Política de Privacidade e contrato de
+  tratamento de dados (etapa 6), com o aceite no formulário.
 
 ## Etapa 2: várias clínicas e a migração da La Vie
 

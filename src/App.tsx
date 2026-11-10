@@ -21,6 +21,8 @@ import { respostasParaResolver } from './utils/agendamentoLink';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { PublicAppointmentEntry } from './components/agenda/PublicAppointmentEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
+import { ConcluirCadastroView } from './components/auth/CadastroDaClinica';
+import { CADASTRO_ABERTO } from './utils/cadastro';
 import { AcessoAoPainelView } from './components/auth/AcessoAoPainelView';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { CommandPalette, AcaoRapida } from './components/common/CommandPalette';
@@ -194,6 +196,8 @@ function MainCatalogApp() {
   const [tentativaDeAcesso, setTentativaDeAcesso] = useState(0);
   /** Na Zulia: o papel na clínica, da claim do login. No legado fica `null` (vale o perfil). */
   const [papelNaClinica, setPapelNaClinica] = useState<AcessoDaPlataforma['papel']>(null);
+  /** Na Zulia: o login é o do dono da plataforma (que não tem clínica nem cria uma). */
+  const [donoDaPlataforma, setDonoDaPlataforma] = useState(false);
   useEffect(() => {
     if (!authUser) {
       setAcessoAoPainel('verificando');
@@ -212,6 +216,7 @@ function MainCatalogApp() {
         });
         if (cancelado) return;
         setPapelNaClinica(plataforma?.papel ?? null);
+        setDonoDaPlataforma(!!plataforma?.dono);
       }
       const acesso = await conferirAcessoAoPainel(authUser.uid, plataforma);
       if (cancelado) return;
@@ -1005,6 +1010,20 @@ function MainCatalogApp() {
 
   if (!authUser) {
     return <LoginScreen />;
+  }
+
+  // Na plataforma, um login sem clínica é alguém que se cadastrou e ainda não terminou: confirmar o
+  // e-mail e criar a clínica (ver server/cadastro.ts). O dono da plataforma não cria clínica.
+  if (ehZulia && CADASTRO_ABERTO && acessoAoPainel === 'negado' && !donoDaPlataforma) {
+    return (
+      <ConcluirCadastroView
+        email={authUser.email}
+        emailVerificado={authUser.emailVerified}
+        nomeNoLogin={authUser.displayName}
+        onConcluido={() => setTentativaDeAcesso((n) => n + 1)}
+        onSair={() => logout()}
+      />
+    );
   }
 
   if (acessoAoPainel !== 'liberado') {
