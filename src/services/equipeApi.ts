@@ -1,5 +1,6 @@
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { mensagemDoLimite } from '../utils/planos';
 
 /**
  * Os logins da equipe na Zulia, pelo servidor (`/api/equipe`, ver `server/equipe.ts`).
@@ -57,6 +58,8 @@ export function mensagemDoErroDaEquipe(erro: unknown): string {
   switch (codigo) {
     case 'email-em-uso':
       return 'Este e-mail já é o login de outra conta. Use outro e-mail para esta profissional.';
+    case 'limite-do-plano':
+      return mensagemDoLimite('logins');
     case 'email-invalido':
       return 'O e-mail não parece válido. Confira e tente de novo.';
     case 'ultima-admin':

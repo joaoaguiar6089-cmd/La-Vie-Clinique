@@ -93,7 +93,8 @@ async function main() {
   const agora = new Date().toISOString();
   for (const c of ['srv-a', 'srv-b']) {
     const b = `clinicas/${c}`;
-    await zulia.db.doc(b).set({ nome: `Clínica ${c}`, recursos: { googleAgenda: c === 'srv-a' }, equipe: {} });
+    // Plano completo: a equipe e as fichas sem limite (os limites do gratuito têm a seção deles).
+    await zulia.db.doc(b).set({ nome: `Clínica ${c}`, plano: 'completo', recursos: { googleAgenda: c === 'srv-a' }, equipe: {} });
     await zulia.db.doc(`${b}/clinic_settings/public_profile`).set({ name: c === 'srv-a' ? 'Clínica Alfa' : 'Clínica Beta' });
     await zulia.db.doc(`${b}/anamnesis_templates/tpl-botox`).set({ procedimentoNome: `Botox ${c}`, procedimentoId: 'p' });
     await zulia.db.doc(`${b}/patients/pat-1`).set({ nome: `Paciente ${c}` });
@@ -242,6 +243,39 @@ async function main() {
     ok('o token que ela já tinha deixa de valer na hora', (await verificarLogin(tokenDaProf)) === null);
     const volta = await post('/api/equipe/criar-login', { email: 'prof@srv-a.invalid' }, adminA.token);
     ok('criar o login de novo reativa o mesmo', volta.json.uid === profA.uid && (await zulia.auth.getUser(profA.uid)).disabled === false);
+
+    // ==========================================
+    console.log('\nPlano gratuito');
+    const adminG = await loginDeTeste('admin@srv-g.invalid', { clinicaId: 'srv-g', papel: 'admin' });
+    await zulia.db.doc('clinicas/srv-g').set({
+      nome: 'Clínica srv-g',
+      plano: 'gratuito',
+      equipe: { [adminG.uid]: 'admin' },
+      uso: { clientes: 4, procedimentos: 0 },
+    });
+    await zulia.db.doc('clinicas/srv-g/anamnesis_templates/tpl-g').set({ procedimentoNome: 'Limpeza', procedimentoId: 'p' });
+    const loginG = await post('/api/equipe/criar-login', { email: 'prof@srv-g.invalid' }, adminG.token);
+    ok('gratuito: só 1 login (o da admin) → 403', loginG.status === 403 && loginG.json.erro === 'limite-do-plano', JSON.stringify(loginG.json));
+    ok('e nenhum login é criado', !(await zulia.auth.getUserByEmail('prof@srv-g.invalid').catch(() => null)));
+    const fichaNova = (nome: string) =>
+      post('/api/ficha-publica/salvar', { c: 'srv-g', anamnese: 'tpl-g', dadosPaciente: { nome }, dadosFicha: {} });
+    const quinta = await fichaNova('Quinta Cliente');
+    const usoDepois = (await zulia.db.doc('clinicas/srv-g').get()).data()?.uso;
+    ok('ficha de cliente nova, com vaga: grava e conta (5)', quinta.status === 200 && usoDepois?.clientes === 5, JSON.stringify(usoDepois));
+    const sexta = await fichaNova('Sexta Cliente');
+    ok('no limite, a ficha de cliente nova é recusada com gentileza', sexta.status === 409 && sexta.json.erro === 'limite-de-clientes', JSON.stringify(sexta.json));
+    const pacientesG = (await zulia.db.collection('clinicas/srv-g/patients').get()).docs.map((d) => d.data().nome);
+    ok('e nada é gravado', pacientesG.length === 1 && pacientesG[0] === 'Quinta Cliente', JSON.stringify(pacientesG));
+    const fichasG = (await zulia.db.collection('clinicas/srv-g/anamnesis_records').get()).size;
+    ok('nem a ficha', fichasG === 1);
+    const daQuinta = (await zulia.db.collection('clinicas/srv-g/anamnesis_records').get()).docs[0];
+    const deNovoQuinta = await post('/api/ficha-publica/salvar', {
+      c: 'srv-g',
+      ficha: daQuinta.id,
+      dadosPaciente: { nome: 'Quinta Cliente' },
+      dadosFicha: { respostasGerais: { g1: 'sim' } },
+    });
+    ok('cliente que já existe continua preenchendo no limite', deNovoQuinta.status === 200, JSON.stringify(deNovoQuinta.json).slice(0, 120));
 
     // ==========================================
     console.log('\nGoogle Agenda por clínica');

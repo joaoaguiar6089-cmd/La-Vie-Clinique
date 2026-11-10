@@ -37,15 +37,73 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.get('donoDaPlataforma', false) == true;
     }
 
-    match /clinicas/{c} {
-      // Os membros leem o próprio documento (plano, recursos); o dono lê o de todas. Ninguém grava
-      // pelo navegador: criar clínica, mudar plano e contadores são do servidor.
-      allow read: if daClinica(c) || dono();
-      allow write: if false;
+    // ==========================================
+    // PLANOS E LIMITES (ver src/utils/planos.ts — os números são os de LIMITES_DO_GRATUITO)
+    // ==========================================
+    //
+    // `clinicas/{c}.uso.clientes` e `.uso.procedimentos` contam os cadastros que existem (cliente
+    // arquivada conta; só excluir de vez libera). Cada contador sobe ou desce em 1 na MESMA gravação
+    // em que o cadastro nasce ou some, e `uso.ultimoCliente`/`uso.ultimoProcedimento` dizem qual —
+    // é assim que a regra confere que o contador não foi mexido à toa. No plano gratuito, criar sem
+    // o contador, ou passar do limite, é recusado. No completo, o contador é mantido pelo painel,
+    // mas não é exigido (um caminho esquecido não trava quem paga; o servidor recalcula o uso
+    // quando o plano muda, com `scripts/recontar-uso.ts`).
 
-      // Catálogo de procedimentos: só a equipe.
+    function caminhoDaClinica(c) {
+      return /databases/$(database)/documents/clinicas/$(c);
+    }
+
+    function cadastro(c, colecao, id) {
+      return /databases/$(database)/documents/clinicas/$(c)/$(colecao)/$(id);
+    }
+
+    // Plano desconhecido vale como gratuito: na dúvida, o mais restrito.
+    function planoGratuito(c) {
+      return get(caminhoDaClinica(c)).data.get('plano', 'gratuito') != 'completo';
+    }
+
+    // No documento da clínica: o contador mudou em 1, junto com o cadastro `ultimo` nascendo (+1)
+    // ou sumindo (-1) nesta mesma gravação.
+    function contadorAcompanha(c, contador, ultimo, colecao) {
+      let antes = resource.data.get('uso', {}).get(contador, 0);
+      let depois = request.resource.data.get('uso', {}).get(contador, 0);
+      let id = request.resource.data.get('uso', {}).get(ultimo, '');
+      return id is string && id.size() > 0
+        && ((depois == antes + 1 && !exists(cadastro(c, colecao, id)) && existsAfter(cadastro(c, colecao, id)))
+          || (depois == antes - 1 && exists(cadastro(c, colecao, id)) && !existsAfter(cadastro(c, colecao, id))));
+    }
+
+    // A única gravação da equipe no documento da clínica: um dos contadores de uso.
+    function soContadorDeUso(c) {
+      let usoAntes = resource.data.get('uso', {});
+      let usoDepois = request.resource.data.get('uso', {});
+      let noUso = usoDepois.diff(usoAntes).affectedKeys();
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uso'])
+        && ((noUso.hasOnly(['clientes', 'ultimoCliente']) && contadorAcompanha(c, 'clientes', 'ultimoCliente', 'patients'))
+          || (noUso.hasOnly(['procedimentos', 'ultimoProcedimento']) && contadorAcompanha(c, 'procedimentos', 'ultimoProcedimento', 'procedures')));
+    }
+
+    // Na criação de um cadastro (plano gratuito): o contador sobe em 1 nesta gravação, apontando
+    // para este cadastro, e não passa do limite.
+    function criacaoContada(c, contador, ultimo, id, limite) {
+      let antes = get(caminhoDaClinica(c)).data.get('uso', {}).get(contador, 0);
+      let depois = getAfter(caminhoDaClinica(c)).data.get('uso', {});
+      return depois.get(contador, 0) == antes + 1 && depois.get(ultimo, '') == id && depois.get(contador, 0) <= limite;
+    }
+
+    match /clinicas/{c} {
+      // Os membros leem o próprio documento (plano, recursos, uso); o dono lê o de todas. Pelo
+      // navegador, a equipe só mexe nos contadores de uso, e só junto com o cadastro que nasce ou
+      // some (ver "PLANOS E LIMITES"). Criar clínica, mudar plano e recursos são do servidor.
+      allow read: if daClinica(c) || dono();
+      allow update: if daClinica(c) && soContadorDeUso(c);
+      allow create, delete: if false;
+
+      // Catálogo de procedimentos: só a equipe. No plano gratuito, até 2 (criação contada).
       match /procedures/{procedureId} {
-        allow read, write: if daClinica(c);
+        allow read, update, delete: if daClinica(c);
+        allow create: if daClinica(c)
+          && (!planoGratuito(c) || criacaoContada(c, 'procedimentos', 'ultimoProcedimento', procedureId, 2));
       }
 
       // Espelho público do perfil (nome, contato, endereço, a equipe sem dados de login): é o que a
@@ -80,8 +138,11 @@ service cloud.firestore {
 
       // Cadastros e fichas preenchidas: só a equipe. A paciente abre e salva a ficha pelo servidor
       // (`/api/ficha-publica`), que confere o link e não passa por estas regras.
+      // No plano gratuito, até 5 clientes (criação contada; arquivada conta).
       match /patients/{patientId} {
-        allow read, write: if daClinica(c);
+        allow read, update, delete: if daClinica(c);
+        allow create: if daClinica(c)
+          && (!planoGratuito(c) || criacaoContada(c, 'clientes', 'ultimoCliente', patientId, 5));
       }
 
       match /anamnesis_records/{recordId} {

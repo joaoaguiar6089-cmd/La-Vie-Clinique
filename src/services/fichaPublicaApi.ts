@@ -89,6 +89,9 @@ export function mensagemDoErroDaFicha(erro: unknown, padrao: string): string {
       return 'Link inválido — faltam informações para abrir a ficha de anamnese.';
     case 'ficha-fechada':
       return 'Seu atendimento já foi realizado e esta ficha não pode mais ser editada.';
+    case 'limite-de-clientes':
+      // A clínica está no limite do plano gratuito. Para a paciente, sem falar de plano.
+      return 'A clínica não está recebendo fichas de clientes novas no momento. Por favor, fale diretamente com a clínica.';
     case 'identidade':
       return 'CPF ou data de nascimento não confere. Confira os dados e tente novamente.';
     case 'tentativas':

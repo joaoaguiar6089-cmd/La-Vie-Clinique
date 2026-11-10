@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { cabeMaisUm, usoDe } from '../src/utils/planos';
 import express, { type Request, type Response, type Router } from 'express';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { ehZulia } from '../src/lib/projetoFirebase';
@@ -438,14 +439,25 @@ export async function salvarFicha(
   // `fotoUrl` é o espelho antigo de `fotoPacienteUrl` — ver `saveAnamnesisRecord`.
   if (fotoPacienteUrl) dadosDaFicha.fotoUrl = FieldValue.delete();
 
-  const lote = l.db.batch();
-  lote.set(
-    pacienteRef,
-    { ...cadastro, updatedAt: agoraIso, ...(pacienteExiste ? {} : { createdAt: agoraIso }) },
-    { merge: true }
-  );
-  lote.set(fichaRef, dadosDaFicha, { merge: true });
-  await lote.commit();
+  const gravacaoDoCadastro = { ...cadastro, updatedAt: agoraIso, ...(pacienteExiste ? {} : { createdAt: agoraIso }) };
+
+  if (l.clinicaId && !pacienteExiste) {
+    // Cliente nova na plataforma: cabe no plano? Confere e sobe o contador de clientes da clínica
+    // na mesma transação em que o cadastro nasce (ver src/utils/planos.ts). Sem vaga, nada é gravado.
+    const clinicaRef = l.db.doc(`clinicas/${l.clinicaId}`);
+    await l.db.runTransaction(async (tx) => {
+      const clinica = (await tx.get(clinicaRef)).data() || {};
+      if (!cabeMaisUm(clinica.plano, 'clientes', usoDe(clinica))) throw new ErroDaFicha(409, 'limite-de-clientes');
+      tx.set(pacienteRef, gravacaoDoCadastro, { merge: true });
+      tx.set(fichaRef, dadosDaFicha, { merge: true });
+      tx.update(clinicaRef, { 'uso.clientes': FieldValue.increment(1), 'uso.ultimoCliente': pacienteFinal });
+    });
+  } else {
+    const lote = l.db.batch();
+    lote.set(pacienteRef, gravacaoDoCadastro, { merge: true });
+    lote.set(fichaRef, dadosDaFicha, { merge: true });
+    await lote.commit();
+  }
 
   const salva = await fichaRef.get();
   return { ficha: { ...(salva.data() as Record<string, any>), id: salva.id } as Doc };

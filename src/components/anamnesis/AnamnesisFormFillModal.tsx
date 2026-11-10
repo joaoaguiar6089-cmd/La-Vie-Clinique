@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { ErroDeLimiteDoPlano } from '../../utils/planos';
 import {
   Patient,
   PatientGender,
@@ -480,7 +481,11 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
       }
     } catch (err) {
       console.error(err);
-      setConfirmacao(aviso('Não foi possível salvar', 'Erro ao salvar a ficha de anamnese. Tente novamente.', 'perigo'));
+      setConfirmacao(
+        err instanceof ErroDeLimiteDoPlano
+          ? aviso('Limite do plano gratuito', err.message, 'perigo')
+          : aviso('Não foi possível salvar', 'Erro ao salvar a ficha de anamnese. Tente novamente.', 'perigo')
+      );
     } finally {
       setIsSaving(false);
     }

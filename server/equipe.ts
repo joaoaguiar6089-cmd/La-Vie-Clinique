@@ -4,6 +4,7 @@ import type { Auth, UserRecord } from 'firebase-admin/auth';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { ehZulia } from '../src/lib/projetoFirebase';
 import { mesmaEquipe, uidsDaEquipe } from '../src/utils/equipe';
+import { limitesDoPlano } from '../src/utils/planos';
 import { authAdmin, bancoAdmin, servidorGerenciaLogins } from './firebaseAdmin';
 import { loginDoPedido, type LoginDoPainel, type Papel } from './login';
 
@@ -139,6 +140,11 @@ export async function criarLoginDaEquipe(
   if (!EMAIL.test(email)) throw new ErroDaEquipe(400, 'email-invalido');
   const papel = pedido.papel === undefined ? 'profissional' : papelValido(pedido.papel);
   if (!papel) throw new ErroDaEquipe(400, 'papel-invalido');
+
+  // Limite de logins do plano (o gratuito tem 1: o da admin). O índice da equipe só tem os ativos.
+  const clinica = (await db.doc(`clinicas/${clinicaId}`).get()).data() || {};
+  const ativos = Object.keys((clinica.equipe || {}) as Record<string, unknown>).length;
+  if (ativos >= limitesDoPlano(clinica.plano).logins) throw new ErroDaEquipe(403, 'limite-do-plano');
 
   const existente = await auth.getUserByEmail(email).catch(() => null);
   if (existente) {

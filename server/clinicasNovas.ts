@@ -113,6 +113,9 @@ export async function criarClinica(zulia: AcessoDeServidor, pedido: PedidoDeClin
     criadaEm: agora,
     atualizadaEm: agora,
     criadaPor: pedido.criadaPor || 'scripts/criar-clinica.ts',
+    // Os contadores do plano (ver src/utils/planos.ts). As sementes do primeiro login sobem os
+    // procedimentos para 2.
+    uso: { clientes: 0, procedimentos: 0 },
     ...(pedido.aceite ? { aceites: { termos: pedido.aceite } } : {}),
   });
   lote.set(zulia.db.doc(`${base}/clinic_settings/main_profile`), {
