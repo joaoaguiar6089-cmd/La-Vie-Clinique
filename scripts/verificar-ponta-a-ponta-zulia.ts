@@ -15,7 +15,8 @@
  *   PLATAFORMA=zulia npx -y firebase-tools@15 emulators:exec --only auth,firestore,storage \
  *     --config zulia/firebase.json --project demo-zulia "npx tsx scripts/verificar-ponta-a-ponta-zulia.ts"
  *
- * No `zulia-plataforma` de verdade — só antes da migração, enquanto ele não tem dados de pacientes:
+ * No `zulia-plataforma` de verdade — só antes da migração, enquanto ele não tem dados de pacientes
+ * (depois dela, o script se recusa a rodar se encontrar uma clínica que não é de teste):
  *
  *   VITE_PLATAFORMA=zulia npm run build
  *   PLATAFORMA=zulia npx tsx scripts/verificar-ponta-a-ponta-zulia.ts --projeto-real
@@ -110,6 +111,15 @@ const esperarServidor = async () => {
 
 async function main() {
   if (noProjetoReal) {
+    // Desde a migração (10/11/2026) o zulia-plataforma é produção: com uma clínica de verdade lá, não roda.
+    const deVerdade = (await zulia.db.collection('clinicas').get()).docs.filter(
+      (d) => !EMAILS_DE_TESTE.includes(String(d.data().dona?.email || ''))
+    );
+    if (deVerdade.length > 0) {
+      console.error(`O ${zulia.config.projectId} tem clínicas de verdade: o ponta a ponta não roda nele. Use os emuladores.`);
+      await zulia.encerrar();
+      process.exit(1);
+    }
     const sobras = await limparTestes();
     if (sobras.length) console.log(`(sobras de uma rodada anterior apagadas: ${sobras.join(', ')})`);
   }

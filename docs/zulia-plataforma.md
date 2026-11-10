@@ -305,18 +305,19 @@ La Vie no ar (modo legado) não sente nenhuma mudança.**
 | 3 | Servidor por clínica: login pela claim, caminhos `clinicas/{c}/...`, rotas `/api/equipe` | Feita; testada nos emuladores (`scripts/verificar-servidor-zulia.ts`) |
 | 4 | Painel e páginas das pacientes por clínica: entrada pela claim, links com `c=`, sementes e marca | Feita; testada de ponta a ponta nos emuladores, no modo Zulia e no legado |
 | 5 | `scripts/criar-clinica.ts`, até existir o cadastro da etapa 3 | Feita; testada de ponta a ponta nos emuladores e no `zulia-plataforma` (9/11/2026) |
-| 6 | `scripts/migrar-la-vie.ts`, ensaio, e a migração no dia combinado com o João | Script pronto e testado com dados falsos nos emuladores. **O dia da migração é só com o João** (roteiro abaixo) |
+| 6 | `scripts/migrar-la-vie.ts`, ensaio, e a migração no dia combinado com o João | **Feita em 10/11/2026.** A La Vie é a clínica `u9JYfN` do `zulia-plataforma`, e o `plataforma.json` virou para `zulia` |
 
 ### A chave do projeto (`plataforma.json`)
 - `plataforma.json` na raiz diz qual projeto o código usa: `{ "modo": "legado" }` (a La Vie de
   hoje, `firebase-applet-config.json`) ou `{ "modo": "zulia" }` (`zulia-firebase-config.json`).
   Fica num arquivo versionado porque não está confirmado que o build do AI Studio enxerga
-  variáveis de ambiente. **Vira para `zulia` só no dia da migração.**
+  variáveis de ambiente. **Está em `zulia` desde 10/11/2026** (a migração).
 - Ninguém importa o JSON de um projeto direto: o painel, o servidor e os scripts pedem a
   configuração a `src/lib/projetoFirebase.ts` (`firebaseConfig`, `modoPlataforma`, `ehZulia`).
 - Para desenvolvimento e scripts: `VITE_PLATAFORMA=zulia` no Vite (configuração `zulia-dev` do
-  `.claude/launch.json`) e `PLATAFORMA=zulia` no Node. **No modo `legado`, o `vite dev` grava no
-  Firestore de produção da La Vie:** teste o painel só no modo `zulia`.
+  `.claude/launch.json`) e `PLATAFORMA=zulia` no Node. **Desde a migração, o `zulia-plataforma` é
+  produção, com as pacientes da La Vie:** o `vite dev` sem `VITE_EMULADORES=1` grava nele. Teste nos
+  emuladores, ou no projeto de testes `venus-jk-testes` quando os scripts estiverem ligados a ele.
 - Os scripts que só fazem sentido no projeto antigo (`exportar-banco`, `importar-banco`,
   `migrar-imagens-para-storage`, `bootstrap-first-admin`) apontam sempre para ele.
 - `scripts/verificar-plataforma.ts` confere o arquivo e a escolha.
@@ -367,7 +368,16 @@ quando receber a configuração do app web.
 6. Registrar um app web ("Zulia Testes Web") e mandar a configuração (`firebaseConfig`) no chat. Ela não é segredo: é a mesma que vai no site.
 7. IAM do projeto de testes: dar a `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com` o papel **Editor**. É a mesma conta, então não há chave nova para criar nem guardar; e o projeto de testes nunca terá dados de pacientes.
 
-### Dia da migração (só com o João)
+### Dia da migração (só com o João) — feito em 10/11/2026
+Como foi: o João deu o papel de Administrador do Firebase Authentication já de saída (o de leitor não
+traz o hash das senhas). Ensaio `ensaio-1110` sem diferenças e apagado; `--aplicar --id u9JYfN`
+copiou 191 documentos em 20 coleções, 150 arquivos e o único login da equipe (a admin), com a
+senha; `--conferir` sem diferenças, de novo depois do segundo `--aplicar`. O login de teste do
+ambiente do Claude (`LAVIE_TESTE_*`, o mesmo login) entrou no `zulia-plataforma` com a senha de
+sempre. O build de produção, servido localmente, abriu o painel em 9 abas sem erro de permissão, o
+link antigo sem `c=` e as fotos pela URL reescrita. Não havia login do João no projeto da La Vie,
+então nenhum login de dono foi criado (fica para o painel do dono, etapa 5).
+
 1. **João:** dá à conta `claude-configuracao@zulia-plataforma.iam.gserviceaccount.com`, no projeto `database-dra-karoline`, os papéis **Leitor do Cloud Datastore**, **Leitor de objetos do Storage** e **Leitor do Firebase Authentication**. Se o script avisar que os logins vieram sem hash de senha, troca o último por **Administrador do Firebase Authentication** durante a janela.
 2. Avisar a equipe para não usar o painel.
 3. **Claude:** primeiro contato com os dados reais:
