@@ -8,6 +8,8 @@ export interface PlanoDaClinica {
   plano: unknown;
   cortesia: boolean;
   uso: UsoDaClinica;
+  /** Logins ativos da equipe (o índice `clinicas/{c}.equipe`). */
+  logins: number;
 }
 
 /**
@@ -25,7 +27,16 @@ export function assinarPlanoDaClinica(onUpdate: (plano: PlanoDaClinica | null) =
     ref,
     (snap) => {
       const dados = snap.data();
-      onUpdate(dados ? { plano: dados.plano, cortesia: dados.cortesia === true, uso: usoDe(dados) } : null);
+      onUpdate(
+        dados
+          ? {
+              plano: dados.plano,
+              cortesia: dados.cortesia === true,
+              uso: usoDe(dados),
+              logins: Object.keys((dados.equipe || {}) as Record<string, unknown>).length,
+            }
+          : null
+      );
     },
     () => onUpdate(null)
   );

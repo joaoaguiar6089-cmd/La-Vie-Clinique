@@ -214,6 +214,24 @@ async function main() {
     await pagina.keyboard.press('Escape');
     await zulia.db.doc(`clinicas/${clinicaId}`).update({ 'uso.clientes': 1 });
 
+    // A seção "Plano" das Configurações, para a admin.
+    await pagina.goto(SITE);
+    await pagina.getByRole('button', { name: /configura/i }).first().waitFor({ timeout: 30000 });
+    await pagina.getByRole('button', { name: /configura/i }).first().click();
+    const secaoDoPlano = pagina.locator('#cfg-plano');
+    ok('as Configurações mostram o plano gratuito', await apareceu(secaoDoPlano.getByText('Gratuito', { exact: true }).first()));
+    // O painel mostra primeiro o que guardou no aparelho e logo depois o que vem do servidor.
+    ok(
+      'com o uso contra os limites',
+      (await apareceu(secaoDoPlano.getByText('1 de 5'))) &&
+        (await secaoDoPlano.getByText('2 de 2').count()) === 1 &&
+        (await secaoDoPlano.getByText('1 de 1').count()) === 1
+    );
+    const assinar = await secaoDoPlano.getByRole('link', { name: 'Quero assinar o plano completo' }).getAttribute('href');
+    ok('e o caminho para assinar (e-mail pronto, até a cobrança pela InfinitePay)', !!assinar?.startsWith('mailto:') && assinar.includes('Cl%C3%ADnica%20Gama'));
+    await secaoDoPlano.scrollIntoViewIfNeeded();
+    await pagina.screenshot({ path: `${process.env.PASTA_DAS_IMAGENS || '.'}/meu-plano-gratuito.png` });
+
     // ==========================================
     console.log('\n5. O que o servidor recusa');
     const tokenAdmin = await tokenDe(EMAIL, SENHA);

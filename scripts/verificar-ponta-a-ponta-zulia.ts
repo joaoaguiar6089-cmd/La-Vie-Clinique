@@ -234,6 +234,12 @@ async function main() {
       JSON.stringify(carla?.customClaims)
     );
     ok('e entrou no índice da equipe', papelNoIndice === 'profissional', String(papelNoIndice));
+    const planoDaAlfa = pagina.locator('#cfg-plano');
+    ok(
+      'a seção do plano mostra o completo, sem limite',
+      (await planoDaAlfa.getByText('Completo', { exact: true }).first().isVisible().catch(() => false)) &&
+        (await planoDaAlfa.getByText(/sem limite/).count()) === 3
+    );
 
     // ==========================================
     console.log('\n4. Os links com c= abrem e respondem sem login');

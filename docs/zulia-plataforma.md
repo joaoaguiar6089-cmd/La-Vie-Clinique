@@ -304,7 +304,7 @@ Começada em 10/11/2026, logo depois da migração. Cada fase é um PR mesclado 
 | --- | --- | --- |
 | 1 | Cadastro sozinho: criar conta, confirmar o e-mail e criar a clínica no plano gratuito | Feita; testada nos emuladores (`scripts/verificar-cadastro-zulia.ts`) |
 | 2 | Limites do plano gratuito (2 procedimentos, 5 clientes, 1 login): contadores no documento da clínica, conferidos nas regras; o servidor recusa ficha de cliente nova acima do limite | Feita (11/2026); testada nos emuladores |
-| 3 | Tela do plano nas Configurações: o uso, o que cada plano inclui e o "Assinar" (que leva à cobrança da etapa 4) | A fazer |
+| 3 | Tela do plano nas Configurações: o uso, o que cada plano inclui e o "Assinar" (que leva à cobrança da etapa 4) | Feita (11/2026); testada nos emuladores |
 
 ### Limites do plano gratuito (fase 2)
 - **Números:** `LIMITES_DO_GRATUITO` em `src/utils/planos.ts` (5 clientes, 2 procedimentos, 1 login),
@@ -332,8 +332,18 @@ Começada em 10/11/2026, logo depois da migração. Cada fase é um PR mesclado 
   o conteúdo dos cadastros) e acerta os contadores. Rodar quando uma clínica mudar de plano.
 - **Ordem ao publicar mudanças nos limites:** regras primeiro, recontar, depois o app. O app novo
   com as regras antigas recusaria o contador.
-- **Falta (fase 3 e etapa 4):** a tela "Meu plano" com o uso, e o somente leitura quando a clínica
-  volta para o gratuito acima dos limites.
+- **Falta (etapa 4):** o somente leitura quando a clínica volta para o gratuito acima dos limites.
+
+### Meu plano (fase 3)
+- Seção **Plano** no topo das Configurações, só na plataforma e só para a admin
+  (`src/components/plano/MeuPlano.tsx`): o plano atual (e "cortesia"), o uso contra os limites
+  (clientes, procedimentos e logins, com barra âmbar perto e vermelha cheia — menos o login do
+  gratuito, que é sempre 1 de 1), o que cada plano inclui e o link para os Termos.
+- **Assinar:** até a cobrança pela InfinitePay (etapa 4), "Quero assinar o plano completo" abre um
+  e-mail pronto para `PRESTADOR.email`, com o nome da clínica. O plano é liberado à mão: mudar
+  `clinicas/{c}.plano` para `completo` (pelo console ou script) e rodar `recontar-uso`.
+- O uso vem de `usePlanoDaClinica` (`src/services/planoDaClinica.ts`), que acompanha `clinicas/{c}`:
+  plano, cortesia, contadores e o número de logins do índice da equipe.
 
 ### Cadastro sozinho (fase 1)
 - **Tela de login:** "Sua clínica ainda não usa a Venus JK? Criar conta da clínica". O endereço com
