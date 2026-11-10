@@ -36,6 +36,7 @@ import { criarClinica } from './criar-clinica';
 import { buildPublicLink } from '../src/utils/publicLinks';
 import { definirClinicaAtual } from '../src/lib/estadoDaClinica';
 import { MARCA_DA_PLATAFORMA } from '../src/utils/marca';
+import { VERSAO_DOS_DOCUMENTOS } from '../src/utils/documentosLegais';
 
 // O Playwright não é dependência do projeto: vem instalado no ambiente (o da nuvem do Claude tem).
 // Sem tipos dele aqui, de propósito — `npm install` do site não precisa baixar navegador.
@@ -143,8 +144,10 @@ async function main() {
 
     // ==========================================
     console.log('\n1. Criar as clínicas');
-    const alfa = await criarClinica(zulia, { nome: 'Clínica Alfa', email: 'dona@alfa.invalid', admin: 'Ana Alfa' });
-    const beta = await criarClinica(zulia, { nome: 'Clínica Beta', email: 'dona@beta.invalid', admin: 'Bia Beta' });
+    // Com o aceite dos documentos já registrado: o pedido de aceite é testado em verificar-cadastro-zulia.
+    const aceite = { versao: VERSAO_DOS_DOCUMENTOS, em: new Date().toISOString(), uid: 'teste', email: null, ip: null };
+    const alfa = await criarClinica(zulia, { nome: 'Clínica Alfa', email: 'dona@alfa.invalid', admin: 'Ana Alfa', aceite });
+    const beta = await criarClinica(zulia, { nome: 'Clínica Beta', email: 'dona@beta.invalid', admin: 'Bia Beta', aceite });
     ok('ids aleatórios de 6 caracteres', /^[A-Za-z0-9]{6}$/.test(alfa.id) && /^[A-Za-z0-9]{6}$/.test(beta.id), `${alfa.id} ${beta.id}`);
     const claimsAlfa = (await zulia.auth.getUser(alfa.uid)).customClaims;
     ok('a admin da Alfa tem a claim da clínica', claimsAlfa?.clinicaId === alfa.id && claimsAlfa?.papel === 'admin');

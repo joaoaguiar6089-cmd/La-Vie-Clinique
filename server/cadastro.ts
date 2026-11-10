@@ -3,6 +3,7 @@ import type { Auth } from 'firebase-admin/auth';
 import type { Firestore } from 'firebase-admin/firestore';
 import { ehZulia } from '../src/lib/projetoFirebase';
 import { CADASTRO_ABERTO, nomeLimpo } from '../src/utils/cadastro';
+import { VERSAO_DOS_DOCUMENTOS, type AceiteDosTermos } from '../src/utils/documentosLegais';
 import { criarClinica } from './clinicasNovas';
 import { criarLimitador } from './fichaPublica';
 import { authAdmin, bancoAdmin, servidorGerenciaLogins } from './firebaseAdmin';
@@ -22,8 +23,26 @@ import { loginDoPedido, type LoginDoPainel } from './login';
  *
  * Recusas, no campo `erro`: `so-na-plataforma` (404, modo legado), `cadastro-fechado` (403),
  * `servidor-nao-configurado` (503), `muitos-pedidos` (429), `login` (401), `dono` (403),
- * `ja-tem-clinica` (409), `email-nao-confirmado` (403), `nome-invalido` (400), `em-andamento` (409).
+ * `ja-tem-clinica` (409), `email-nao-confirmado` (403), `nome-invalido` (400),
+ * `aceite-pendente` (400), `em-andamento` (409).
+ *
+ * O aceite dos Termos de Uso, da Política de Privacidade e do Acordo de Tratamento de Dados (ver
+ * `src/utils/documentosLegais.ts`) é obrigatório no cadastro: `aceite` com a versão em vigor. Fica
+ * gravado em `clinicas/{c}.aceites.termos` (versão, data, login, e-mail e IP).
+ *
+ * `POST /api/cadastro/aceite { versao }`: a admin de uma clínica que já existe aceita a versão em
+ * vigor (as clínicas de antes dos documentos, e toda vez que a versão muda). Recusas: `login` (401),
+ * `so-admin` (403), `versao-antiga` (409).
  */
+
+/** O registro do aceite, com o que prova quem aceitou e quando. */
+const registroDoAceite = (login: LoginDoPainel, ip: string | undefined): AceiteDosTermos => ({
+  versao: VERSAO_DOS_DOCUMENTOS,
+  em: new Date().toISOString(),
+  uid: login.uid,
+  email: login.email,
+  ip: ip || null,
+});
 
 export interface OpcoesDoCadastro {
   zulia?: boolean;
@@ -77,13 +96,21 @@ export function criarRotasDoCadastro(opcoes: OpcoesDoCadastro = {}): Router {
     const nome = nomeLimpo(req.body?.nome);
     if (!nome) return recusar(400, 'nome-invalido');
     const admin = nomeLimpo(req.body?.admin) || undefined;
+    if (req.body?.aceite !== VERSAO_DOS_DOCUMENTOS) return recusar(400, 'aceite-pendente');
 
     if (emAndamento.has(login.uid)) return recusar(409, 'em-andamento');
     emAndamento.add(login.uid);
     try {
       const criada = await criarClinica(
         { db, auth: auth() },
-        { nome, email: login.email, admin, plano: 'gratuito', criadaPor: 'cadastro' }
+        {
+          nome,
+          email: login.email,
+          admin,
+          plano: 'gratuito',
+          criadaPor: 'cadastro',
+          aceite: registroDoAceite(login, req.ip),
+        }
       );
       if (criada.uid !== login.uid) {
         // Não acontece (o e-mail é único no Authentication), mas uma clínica com a admin errada
@@ -101,6 +128,32 @@ export function criarRotasDoCadastro(opcoes: OpcoesDoCadastro = {}): Router {
       recusar(500, 'interno');
     } finally {
       emAndamento.delete(login.uid);
+    }
+  });
+
+  rotas.post('/aceite', async (req, res) => {
+    const recusar = (status: number, erro: string) => res.status(status).json({ erro });
+    if (!zulia) return recusar(404, 'so-na-plataforma');
+    const db = banco();
+    if (!db) return recusar(503, 'servidor-nao-configurado');
+    let login: LoginDoPainel | null = null;
+    try {
+      login = await verificar(req);
+    } catch (e) {
+      console.warn('[cadastro] não foi possível conferir o login:', e);
+    }
+    if (!login) return recusar(401, 'login');
+    if (!login.clinicaId || login.papel !== 'admin') return recusar(403, 'so-admin');
+    if (req.body?.versao !== VERSAO_DOS_DOCUMENTOS) return recusar(409, 'versao-antiga');
+    try {
+      await db.doc(`clinicas/${login.clinicaId}`).update({
+        'aceites.termos': registroDoAceite(login, req.ip),
+        atualizadaEm: new Date().toISOString(),
+      });
+      res.json({ ok: true, versao: VERSAO_DOS_DOCUMENTOS });
+    } catch (erro) {
+      console.error('[cadastro] não foi possível gravar o aceite:', erro);
+      recusar(500, 'interno');
     }
   });
 

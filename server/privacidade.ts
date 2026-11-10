@@ -1,10 +1,15 @@
 import type { Request, Response } from 'express';
 import { firebaseConfig } from '../src/lib/projetoFirebase';
 import { caminhoDaColecao, clinicaDoPedido } from './clinicas';
+import { CLINICA_DOS_LINKS_ANTIGOS } from '../src/utils/clinicas';
+import { documentoEmHtml, escapar } from './documentosLegais';
+import { bancoAdmin } from './firebaseAdmin';
+import { NOME_DO_CALENDARIO } from './googleAgenda';
 import { decodificarCampos } from './previewDosLinks';
 
 /**
- * A política de privacidade pública do site, em /privacidade.
+ * O aviso de privacidade da clínica para as pacientes, em /privacidade (o texto mora em
+ * `public/legal/aviso-da-clinica.md`; a página, em `server/documentosLegais.ts`).
  *
  * Existe porque o Google só deixa o app do Google Agenda sair do modo "Teste" (em que a
  * autorização das profissionais cai a cada 7 dias) com o link de uma política de privacidade na
@@ -27,126 +32,29 @@ export interface PerfilParaPrivacidade {
   cityState?: string;
 }
 
-const PERFIL_PADRAO: Required<PerfilParaPrivacidade> = {
-  name: 'La Vie Clinique',
-  phone: '',
-  address: '',
-  cityState: 'Indaiatuba - SP',
-};
-
-/** A data desta versão do texto. Mude junto com o texto. */
-const ATUALIZADA_EM = '15 de outubro de 2026';
-
-const escapar = (texto: string): string =>
-  texto
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+/** Sem perfil (banco fora do ar): o nome da clínica dos links antigos, a La Vie. */
+const NOME_PADRAO = 'La Vie Clinique';
 
 const texto = (valor: unknown): string => (typeof valor === 'string' ? valor.trim() : '');
 
-export const paginaDePrivacidade = (perfil: PerfilParaPrivacidade = {}): string => {
-  const nome = escapar(texto(perfil.name) || PERFIL_PADRAO.name);
-  const endereco = [texto(perfil.address), texto(perfil.cityState) || PERFIL_PADRAO.cityState]
-    .filter(Boolean)
-    .map(escapar)
-    .join(' — ');
-  const telefone = escapar(texto(perfil.phone));
-  const contato = telefone
-    ? `pelo telefone/WhatsApp <strong>${telefone}</strong> ou pessoalmente na clínica`
-    : 'pessoalmente na clínica ou pelos canais de atendimento';
-
-  return `<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Política de Privacidade · ${nome}</title>
-<style>
-  :root { color-scheme: light dark; --texto: #2b2420; --fundo: #faf7f4; --suave: #6b5f57; --linha: #e6ddd5; }
-  @media (prefers-color-scheme: dark) { :root { --texto: #eee6df; --fundo: #1d1916; --suave: #b3a79e; --linha: #3a322c; } }
-  body { margin: 0; background: var(--fundo); color: var(--texto); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
-  h1 { font-size: 1.7rem; line-height: 1.25; margin: 0 0 4px; }
-  h2 { font-size: 1.1rem; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--linha); }
-  .data { color: var(--suave); margin: 0 0 24px; }
-  ul { padding-left: 1.2rem; }
-  li { margin: 4px 0; }
-  a { color: inherit; }
-</style>
-</head>
-<body>
-<main>
-<h1>Política de Privacidade</h1>
-<p class="data">${nome} · atualizada em ${ATUALIZADA_EM}</p>
-
-<p>Esta política explica como a <strong>${nome}</strong>${endereco ? ` (${endereco})` : ''} trata os
-dados pessoais no seu sistema de atendimento — o painel da clínica, as fichas de anamnese, os
-orçamentos e os links de agendamento enviados às pacientes —, de acordo com a Lei Geral de Proteção
-de Dados (Lei nº 13.709/2018, LGPD).</p>
-
-<h2>1. Quais dados tratamos</h2>
-<ul>
-  <li><strong>Pacientes:</strong> nome, CPF, data de nascimento, telefone e demais dados de
-  cadastro; respostas da ficha de anamnese e da avaliação, que podem incluir informações de saúde;
-  fotos do acompanhamento dos procedimentos; agendamentos, confirmações e orçamentos.</li>
-  <li><strong>Equipe da clínica:</strong> nome, função e e-mail de acesso ao painel.</li>
-</ul>
-
-<h2>2. Para que usamos</h2>
-<p>Para prestar os atendimentos contratados: agendar e confirmar horários, registrar a ficha
-clínica e o acompanhamento dos procedimentos, preparar orçamentos e manter o histórico de cada
-paciente. Os dados de saúde são tratados para a tutela da saúde, por profissionais da clínica, e
-pelo tempo exigido pelas normas profissionais aplicáveis.</p>
-
-<h2>3. Onde os dados ficam e quem acessa</h2>
-<p>Os dados ficam armazenados nos serviços do Google Cloud (Firebase), com conexão criptografada.
-O painel só abre para a equipe da clínica, com login. A paciente acessa apenas a própria ficha,
-orçamento ou agendamento, pelo link exclusivo que recebe da clínica.</p>
-<p>Não vendemos dados pessoais e não os compartilhamos para publicidade. Eles só são processados
-pelos fornecedores que operam o sistema (como o Google), para essa finalidade.</p>
-
-<h2>4. Integração com o Google Agenda</h2>
-<p>Cada profissional da clínica pode, se quiser, conectar a própria conta Google para ver os
-agendamentos dela no Google Agenda. Nesse caso:</p>
-<ul>
-  <li>O sistema pede apenas a permissão de <strong>criar um calendário chamado "La Vie Clinique" e
-  gerenciar os eventos desse calendário</strong>
-  (<code>https://www.googleapis.com/auth/calendar.app.created</code>), além do e-mail da conta,
-  para mostrar qual conta foi conectada. Ele não lê, não altera e não apaga nenhum outro calendário
-  ou compromisso da profissional.</li>
-  <li>Cada evento contém o nome da paciente, o procedimento, o horário, o endereço da clínica e se a
-  paciente confirmou. Observações internas, telefone e respostas da ficha não vão para o Google.</li>
-  <li>A autorização dada pelo Google é guardada cifrada, e é usada somente para manter esse
-  calendário igual à agenda da clínica.</li>
-  <li>O uso e a transferência para qualquer outro aplicativo das informações recebidas das APIs do
-  Google seguem a
-  <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de Dados do
-  Usuário dos Serviços de API do Google</a>, incluindo os requisitos de Uso Limitado. Esses dados
-  não são usados para publicidade, não são vendidos e não são lidos por pessoas fora da equipe da
-  clínica.</li>
-  <li>A profissional pode desconectar a qualquer momento, em Configurações → Agenda → Google Agenda
-  no painel, ou removendo o acesso em
-  <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. O
-  calendário "La Vie Clinique" permanece na conta dela e pode ser apagado por ela.</li>
-</ul>
-
-<h2>5. Seus direitos</h2>
-<p>Você pode pedir, a qualquer momento: confirmação de que tratamos seus dados, acesso a eles,
-correção, anonimização ou eliminação do que não for necessário, portabilidade, informação sobre
-com quem compartilhamos e revogação de consentimento — direitos previstos no art. 18 da LGPD.
-Informações de saúde que a lei manda guardar podem ser mantidas pelo prazo obrigatório.</p>
-
-<h2>6. Contato</h2>
-<p>Para qualquer pedido sobre seus dados, fale com a ${nome} ${contato}.</p>
-
-<h2>7. Mudanças nesta política</h2>
-<p>Esta política pode ser atualizada. A data no topo indica a versão em vigor.</p>
-</main>
-</body>
-</html>`;
+/**
+ * O aviso de privacidade da clínica (`public/legal/aviso-da-clinica.md`), com o nome, o endereço e o
+ * contato dela. Tudo o que vem do perfil é escapado.
+ */
+export const paginaDePrivacidade = (perfil: PerfilParaPrivacidade = {}, nomePadrao = NOME_PADRAO): string => {
+  const nome = texto(perfil.name) || nomePadrao;
+  const endereco = [texto(perfil.address), texto(perfil.cityState)].filter(Boolean).map(escapar).join(' — ');
+  const telefone = texto(perfil.phone);
+  return documentoEmHtml(
+    'aviso-da-clinica',
+    { clinica: nome, calendario: NOME_DO_CALENDARIO },
+    {
+      enderecoDaClinica: endereco ? ` (${endereco})` : '',
+      contatoDaClinica: telefone
+        ? `pelo telefone/WhatsApp <strong>${escapar(telefone)}</strong> ou pessoalmente na clínica`
+        : 'pessoalmente na clínica ou pelos canais de atendimento dela',
+    }
+  );
 };
 
 const RAIZ_DO_BANCO =
@@ -163,8 +71,18 @@ const lerPerfil = async (clinicaId: string | null): Promise<PerfilParaPrivacidad
   const guardado = guardados.get(chave);
   if (guardado && guardado.ate > Date.now()) return guardado.perfil;
   try {
-    const mascara = CAMPOS.map((c) => `mask.fieldPaths=${c}`).join('&');
     const caminho = `${caminhoDaColecao(clinicaId, 'clinic_settings')}/public_profile`;
+    // Com a credencial do servidor, lê por ela (vale também nos emuladores); sem, pela leitura
+    // pública do perfil, como sempre.
+    const db = bancoAdmin();
+    if (db) {
+      const dados = (await db.doc(caminho).get()).data() || {};
+      const perfil = Object.fromEntries(CAMPOS.map((c) => [c, dados[c]])) as PerfilParaPrivacidade;
+      if (guardados.size > 500) guardados.clear();
+      guardados.set(chave, { ate: Date.now() + GUARDA_POR_MS, perfil });
+      return perfil;
+    }
+    const mascara = CAMPOS.map((c) => `mask.fieldPaths=${c}`).join('&');
     const resposta = await fetch(`${RAIZ_DO_BANCO}/${caminho}?${mascara}`, {
       signal: AbortSignal.timeout(2500),
     });
@@ -184,5 +102,12 @@ export const servirPrivacidade = async (req: Request, res: Response): Promise<vo
   // Na Zulia, `undefined` (um `c` que não presta) sai com o texto padrão, sem ler nada.
   const clinicaId = clinicaDoPedido(req.query.c);
   const perfil = clinicaId === undefined ? {} : await lerPerfil(clinicaId);
-  res.set('Cache-Control', 'public, max-age=600').type('html').send(paginaDePrivacidade(perfil));
+  // Sem perfil, o nome padrão só serve para a La Vie (link sem c); para outra clínica, genérico.
+  const daLaVie = !clinicaId || clinicaId === CLINICA_DOS_LINKS_ANTIGOS;
+  try {
+    res.set('Cache-Control', 'public, max-age=600').type('html').send(paginaDePrivacidade(perfil, daLaVie ? NOME_PADRAO : 'Clínica'));
+  } catch (erro) {
+    console.error('[privacidade]', erro);
+    res.status(500).type('text').send('Aviso indisponível no momento. Tente de novo em alguns minutos.');
+  }
 };

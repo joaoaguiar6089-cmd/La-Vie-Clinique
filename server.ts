@@ -8,6 +8,7 @@ import { bancoAdmin, PREFIXO_DA_CREDENCIAL } from './server/firebaseAdmin';
 import { criarRotasFichaPublica } from './server/fichaPublica';
 import { criarRotasGoogleAgenda } from './server/googleAgenda';
 import { criarResolvedorDePreview, type LeitorDoBanco } from './server/previewDosLinks';
+import { servirDocumento } from './server/documentosLegais';
 import { servirPrivacidade } from './server/privacidade';
 import { ehZulia, firebaseConfig } from './src/lib/projetoFirebase';
 import { aplicarPreviewNoHtml } from './src/utils/linkPreview';
@@ -96,6 +97,11 @@ app.use('/api/equipe', criarRotasDaEquipe());
 app.use('/api/cadastro', criarRotasDoCadastro());
 // Política de privacidade pública — o Google exige o link dela na tela de consentimento.
 app.get('/privacidade', servirPrivacidade);
+// Documentos da plataforma (texto em public/legal/*.md): Termos de Uso, Política de Privacidade e o
+// Acordo de Tratamento de Dados, que a clínica aceita no cadastro.
+app.get('/termos', servirDocumento('termos-de-uso'));
+app.get('/politica-de-privacidade', servirDocumento('politica-de-privacidade'));
+app.get('/tratamento-de-dados', servirDocumento('acordo-de-tratamento-de-dados'));
 
 // Arquivos com hash no nome nunca mudam; o resto (foto da doutora, por exemplo) revalida.
 app.use('/assets', express.static(path.join(dist, 'assets'), { immutable: true, maxAge: '1y', fallthrough: true }));

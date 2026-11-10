@@ -10,6 +10,7 @@ import {
 } from '../../services/cadastroApi';
 import { mensagemDoCadastro, nomeLimpo, NOME_MAXIMO, SENHA_MINIMA } from '../../utils/cadastro';
 import { MARCA_DA_PLATAFORMA } from '../../utils/marca';
+import { PAGINAS_LEGAIS, VERSAO_DOS_DOCUMENTOS } from '../../utils/documentosLegais';
 
 /**
  * As telas do cadastro sozinho de uma clínica (ver `server/cadastro.ts`):
@@ -72,6 +73,36 @@ const Aviso: React.FC<{ tipo: 'erro' | 'ok'; children: React.ReactNode }> = ({ t
 /** O que o plano gratuito inclui (docs/zulia-plataforma.md, "Planos"). */
 const PLANO_GRATUITO = 'todos os módulos, até 2 procedimentos, 5 clientes e 1 login. Dá para assinar o plano completo depois.';
 
+/** Um link para um documento legal, em outra aba (o formulário não se perde). */
+export const LinkDoDocumento: React.FC<{ href: string; children: React.ReactNode }> = ({ href, children }) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener"
+    onClick={(e) => e.stopPropagation()}
+    className="font-semibold text-brand hover:text-brand-hover underline underline-offset-2"
+  >
+    {children}
+  </a>
+);
+
+/** A caixa obrigatória de aceite dos Termos, da Política e do Acordo de Tratamento de Dados. */
+export const CaixaDeAceite: React.FC<{ marcada: boolean; onMudar: (marcada: boolean) => void }> = ({ marcada, onMudar }) => (
+  <label className="flex items-start gap-3 p-3 rounded-xl bg-surface border border-[rgba(26,26,26,.1)] cursor-pointer">
+    <input
+      type="checkbox"
+      checked={marcada}
+      onChange={(e) => onMudar(e.target.checked)}
+      className="mt-0.5 w-[18px] h-[18px] accent-[var(--color-brand)] shrink-0"
+    />
+    <span className="text-[12.5px] text-ink-soft leading-relaxed">
+      Li e aceito, em nome da clínica, os <LinkDoDocumento href={PAGINAS_LEGAIS.termos}>Termos de Uso</LinkDoDocumento>, a{' '}
+      <LinkDoDocumento href={PAGINAS_LEGAIS.politicaDePrivacidade}>Política de Privacidade</LinkDoDocumento> e o{' '}
+      <LinkDoDocumento href={PAGINAS_LEGAIS.tratamentoDeDados}>Acordo de Tratamento de Dados</LinkDoDocumento>.
+    </span>
+  </label>
+);
+
 // ==========================================
 // CRIAR A CONTA (na tela de login)
 // ==========================================
@@ -83,6 +114,7 @@ export const FormularioDeCadastro: React.FC<{ onVoltar: () => void }> = ({ onVol
   const [senha, setSenha] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [aceitou, setAceitou] = useState(false);
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,10 +122,11 @@ export const FormularioDeCadastro: React.FC<{ onVoltar: () => void }> = ({ onVol
     if (!nomeLimpo(clinica)) return setErro(mensagemDoCadastro('nome-invalido'));
     if (!nomeLimpo(nome)) return setErro('Informe o seu nome.');
     if (senha.length < SENHA_MINIMA) return setErro(`A senha precisa de pelo menos ${SENHA_MINIMA} caracteres.`);
+    if (!aceitou) return setErro(mensagemDoCadastro('aceite-pendente'));
     setEnviando(true);
     try {
       // Deu certo: o login abre e o painel troca sozinho para a tela de confirmar o e-mail.
-      await criarContaDaClinica({ clinica, nome, email, senha });
+      await criarContaDaClinica({ clinica, nome, email, senha, aceitou: VERSAO_DOS_DOCUMENTOS });
     } catch (falha) {
       setErro(erroDoLogin(falha));
       setEnviando(false);
@@ -148,6 +181,7 @@ export const FormularioDeCadastro: React.FC<{ onVoltar: () => void }> = ({ onVol
         dica={`Pelo menos ${SENHA_MINIMA} caracteres.`}
         required
       />
+      <CaixaDeAceite marcada={aceitou} onMudar={setAceitou} />
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
       <button type="submit" disabled={enviando} className={classeDoBotao}>
         {enviando && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -179,6 +213,8 @@ export const ConcluirCadastroView: React.FC<{
   const pendente = lerCadastroPendente(email);
   const [clinica, setClinica] = useState(pendente?.clinica || '');
   const [nome, setNome] = useState(pendente?.nome || nomeNoLogin || '');
+  // Marcado no formulário (mesmo navegador, mesma versão): já vem marcado; senão, a pessoa marca aqui.
+  const [aceitou, setAceitou] = useState(pendente?.aceitou === VERSAO_DOS_DOCUMENTOS);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -234,6 +270,7 @@ export const ConcluirCadastroView: React.FC<{
     e.preventDefault();
     setErro(null);
     if (!nomeLimpo(clinica)) return setErro(mensagemDoCadastro('nome-invalido'));
+    if (!aceitou) return setErro(mensagemDoCadastro('aceite-pendente'));
     setOcupado(true);
     try {
       await criarMinhaClinica(clinica, nome);
@@ -313,6 +350,7 @@ export const ConcluirCadastroView: React.FC<{
               autoComplete="name"
             />
             <p className="text-[12.5px] text-muted leading-relaxed">Plano gratuito: {PLANO_GRATUITO}</p>
+            <CaixaDeAceite marcada={aceitou} onMudar={setAceitou} />
             {erro && <Aviso tipo="erro">{erro}</Aviso>}
             <button type="submit" disabled={ocupado} className={classeDoBotao}>
               {ocupado && <Loader2 className="w-4 h-4 animate-spin" />}

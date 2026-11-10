@@ -1,5 +1,8 @@
 import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile, type User } from 'firebase/auth';
+import { onSnapshot } from 'firebase/firestore';
 import { auth } from '../lib/firebase';
+import { documentoDaPlataforma } from '../lib/clinicaAtual';
+import { aceiteEmDia, VERSAO_DOS_DOCUMENTOS } from '../utils/documentosLegais';
 
 /**
  * O cadastro sozinho de uma clínica, do lado do navegador (ver `server/cadastro.ts`):
@@ -11,6 +14,8 @@ export interface CadastroPendente {
   clinica: string;
   nome: string;
   email: string;
+  /** Marcou o aceite dos documentos no formulário (vale para a versão em vigor). */
+  aceitou?: string;
 }
 
 const CHAVE_PENDENTE = 'venus:cadastro-pendente';
@@ -71,7 +76,7 @@ export async function enviarConfirmacaoDeEmail(usuario: User | null = auth.curre
  */
 export async function criarContaDaClinica(dados: CadastroPendente & { senha: string }): Promise<void> {
   const email = dados.email.trim();
-  guardarCadastroPendente({ clinica: dados.clinica.trim(), nome: dados.nome.trim(), email });
+  guardarCadastroPendente({ clinica: dados.clinica.trim(), nome: dados.nome.trim(), email, aceitou: dados.aceitou });
   auth.languageCode = 'pt-BR';
   const { user } = await createUserWithEmailAndPassword(auth, email, dados.senha);
   await updateProfile(user, { displayName: dados.nome.trim() }).catch(() => {});
@@ -110,7 +115,7 @@ export async function criarMinhaClinica(nome: string, admin: string): Promise<st
     resposta = await fetch('/api/cadastro/clinica', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ nome: nome.trim(), admin: admin.trim() }),
+      body: JSON.stringify({ nome: nome.trim(), admin: admin.trim(), aceite: VERSAO_DOS_DOCUMENTOS }),
     });
   } catch {
     throw new ErroDoCadastro('rede');
@@ -120,4 +125,46 @@ export async function criarMinhaClinica(nome: string, admin: string): Promise<st
   await usuario.getIdToken(true);
   esquecerCadastroPendente();
   return json.clinicaId;
+}
+
+// ==========================================
+// ACEITE DOS DOCUMENTOS (clínica que já existe)
+// ==========================================
+
+/**
+ * O aceite da clínica está na versão em vigor? Acompanha `clinicas/{c}.aceites.termos`. No modo
+ * legado não há documento da clínica: sempre em dia.
+ */
+export function assinarAceiteDosDocumentos(onUpdate: (emDia: boolean) => void): () => void {
+  const ref = documentoDaPlataforma();
+  if (!ref) {
+    onUpdate(true);
+    return () => {};
+  }
+  return onSnapshot(
+    ref,
+    (snap) => onUpdate(aceiteEmDia(snap.data()?.aceites?.termos)),
+    // Sem ler, não incomoda: o pedido de aceite volta na próxima leitura.
+    () => onUpdate(true)
+  );
+}
+
+/** A admin aceita a versão em vigor, em nome da clínica (`POST /api/cadastro/aceite`). */
+export async function aceitarDocumentos(): Promise<void> {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new ErroDoCadastro('login');
+  let resposta: Response;
+  try {
+    resposta = await fetch('/api/cadastro/aceite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ versao: VERSAO_DOS_DOCUMENTOS }),
+    });
+  } catch {
+    throw new ErroDoCadastro('rede');
+  }
+  if (!resposta.ok) {
+    const json: { erro?: string } = await resposta.json().catch(() => ({}));
+    throw new ErroDoCadastro(json.erro || `http-${resposta.status}`);
+  }
 }
