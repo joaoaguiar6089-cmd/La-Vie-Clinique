@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ArrowLeft, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, CalendarDays } from 'lucide-react';
+import { X, ArrowLeft, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, CalendarDays, Gem } from 'lucide-react';
 import { AgendaExpedienteDia, ClinicProfile, Professional } from '../types';
 import { AGENDA_DEFAULTS, INTERVALOS_DISPONIVEIS } from '../utils/agenda';
 import { mascararHora } from './common/MaskedDateTimeInput';
@@ -12,6 +12,7 @@ import {
   mudarPapelNaClinica,
 } from '../services/equipeApi';
 import { ehZulia } from '../lib/projetoFirebase';
+import { MeuPlano } from './plano/MeuPlano';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
 import { ENDERECO_DO_SITE, motivoEnderecoFechado, normalizarEnderecoPublico } from '../utils/publicLinks';
@@ -89,6 +90,11 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   isAdminUser,
   onPapelDoLoginMudou,
 }) => {
+  // "Plano" só na plataforma e só para a admin (é ela quem cuida do plano e do pagamento).
+  const mostrarPlano = ehZulia && isAdminUser;
+  const secoes = mostrarPlano
+    ? [{ id: 'cfg-plano', rotulo: 'Plano', icone: Gem } as const, ...SECOES]
+    : SECOES;
   const [formData, setFormData] = useState<ClinicProfile>(() => ({ ...clinic, professionals: equipeInicial(clinic) }));
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
 
@@ -415,7 +421,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         className="sticky top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 py-2 mb-5 bg-surface/95 border-b border-line overflow-x-auto"
       >
         <ul className="flex items-center gap-1.5 w-max">
-          {SECOES.map((s) => (
+          {secoes.map((s) => (
             <li key={s.id}>
               <a
                 href={`#${s.id}`}
@@ -432,6 +438,17 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
       <div className="glass-card">
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-7">
+          {/* O plano da clínica (só na plataforma, só para a admin): uso, limites e como assinar. */}
+          {mostrarPlano && (
+            <div id="cfg-plano" className="space-y-4 scroll-mt-24">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
+                <Gem className="w-3.5 h-3.5" />
+                Plano
+              </h3>
+              <MeuPlano nomeDaClinica={clinic.name || formData.name} />
+            </div>
+          )}
+
           {/* Clinic & Brand */}
           <div id="cfg-identidade" className="space-y-4 scroll-mt-24">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
