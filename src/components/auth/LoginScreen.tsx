@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Lock, Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { login, sendResetPasswordEmail } from '../../services/authService';
 import { ehZulia } from '../../lib/projetoFirebase';
-import { MARCA_DA_LA_VIE, MARCA_DA_PLATAFORMA } from '../../utils/marca';
+import { DESCRICAO_DA_PLATAFORMA, MARCA_DA_LA_VIE, MARCA_DA_PLATAFORMA } from '../../utils/marca';
 
 const FIREBASE_ERROR_MESSAGES: Record<string, string> = {
   'auth/invalid-email': 'E-mail inválido.',
@@ -59,9 +59,10 @@ export const LoginScreen: React.FC = () => {
           {/* Na Zulia a tela de login é da plataforma (várias clínicas entram por ela); no legado,
               a da La Vie, como sempre. */}
           <div className="w-14 h-14 rounded-2xl bg-ink flex items-center justify-center text-brand-light font-serif-luxury text-2xl font-semibold mx-auto mb-4">
-            {ehZulia ? 'Z' : 'LV'}
+            {ehZulia ? 'VJ' : 'LV'}
           </div>
           <h1 className="font-serif-luxury text-[26px] font-medium text-ink">{ehZulia ? MARCA_DA_PLATAFORMA : MARCA_DA_LA_VIE}</h1>
+          {ehZulia && <p className="text-[13px] text-ink-soft mt-0.5">{DESCRICAO_DA_PLATAFORMA}</p>}
           <p className="text-[13px] text-muted mt-1">
             {ehZulia ? 'Painel da clínica — acesso restrito à equipe' : 'Painel administrativo — acesso restrito à equipe'}
           </p>

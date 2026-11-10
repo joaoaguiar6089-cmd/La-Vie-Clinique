@@ -11,8 +11,17 @@ import { ehZulia } from '../lib/projetoFirebase';
 /** A marca da La Vie, como ela aparece nas fichas e no site hoje. */
 export const MARCA_DA_LA_VIE = 'La Vie Clinique';
 
-/** O nome da plataforma (tela de login e página inicial, no modo Zulia). */
-export const MARCA_DA_PLATAFORMA = 'Zulia';
+/**
+ * O nome da plataforma (tela de login, título da página e links sem clínica, no modo Zulia).
+ *
+ * A plataforma passou a se chamar Venus JK em 10/11/2026. "Zulia" continua só nos nomes internos
+ * (o projeto `zulia-plataforma` no Firebase, que não muda de id, a pasta `zulia/`, as variáveis
+ * `ZULIA_*` e o modo `zulia` do `plataforma.json`): trocá-los só traria risco.
+ */
+export const MARCA_DA_PLATAFORMA = 'Venus JK';
+
+/** O que a plataforma é, na frase que acompanha o nome. */
+export const DESCRICAO_DA_PLATAFORMA = 'Plataforma de atendimentos estéticos';
 
 const aparado = (texto?: string | null): string => (typeof texto === 'string' ? texto.trim() : '');
 

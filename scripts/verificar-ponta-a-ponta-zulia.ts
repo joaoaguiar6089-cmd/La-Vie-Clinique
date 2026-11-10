@@ -15,7 +15,8 @@
  *   PLATAFORMA=zulia npx -y firebase-tools@15 emulators:exec --only auth,firestore,storage \
  *     --config zulia/firebase.json --project demo-zulia "npx tsx scripts/verificar-ponta-a-ponta-zulia.ts"
  *
- * No `zulia-plataforma` de verdade — só antes da migração, enquanto ele não tem dados de pacientes:
+ * No `zulia-plataforma` de verdade — só antes da migração, enquanto ele não tem dados de pacientes
+ * (depois dela, o script se recusa a rodar se encontrar uma clínica que não é de teste):
  *
  *   VITE_PLATAFORMA=zulia npm run build
  *   PLATAFORMA=zulia npx tsx scripts/verificar-ponta-a-ponta-zulia.ts --projeto-real
@@ -34,6 +35,7 @@ import { abrirZulia } from './zuliaAdmin';
 import { criarClinica } from './criar-clinica';
 import { buildPublicLink } from '../src/utils/publicLinks';
 import { definirClinicaAtual } from '../src/lib/estadoDaClinica';
+import { MARCA_DA_PLATAFORMA } from '../src/utils/marca';
 
 // O Playwright não é dependência do projeto: vem instalado no ambiente (o da nuvem do Claude tem).
 // Sem tipos dele aqui, de propósito — `npm install` do site não precisa baixar navegador.
@@ -59,7 +61,7 @@ if (process.env.PLATAFORMA !== 'zulia' || nosEmuladores === noProjetoReal) {
 }
 const BUILD = noProjetoReal ? 'VITE_PLATAFORMA=zulia npm run build' : 'VITE_PLATAFORMA=zulia VITE_EMULADORES=1 npm run build';
 const indice = readFileSync('dist/index.html', 'utf8');
-if (!indice.includes('<title>Zulia</title>')) {
+if (!indice.includes(`<title>${MARCA_DA_PLATAFORMA}</title>`)) {
   console.error(`O dist/ não é do modo Zulia: rode ${BUILD}.`);
   process.exit(1);
 }
@@ -109,6 +111,15 @@ const esperarServidor = async () => {
 
 async function main() {
   if (noProjetoReal) {
+    // Desde a migração (10/11/2026) o zulia-plataforma é produção: com uma clínica de verdade lá, não roda.
+    const deVerdade = (await zulia.db.collection('clinicas').get()).docs.filter(
+      (d) => !EMAILS_DE_TESTE.includes(String(d.data().dona?.email || ''))
+    );
+    if (deVerdade.length > 0) {
+      console.error(`O ${zulia.config.projectId} tem clínicas de verdade: o ponta a ponta não roda nele. Use os emuladores.`);
+      await zulia.encerrar();
+      process.exit(1);
+    }
     const sobras = await limparTestes();
     if (sobras.length) console.log(`(sobras de uma rodada anterior apagadas: ${sobras.join(', ')})`);
   }
@@ -149,7 +160,7 @@ async function main() {
     const hostsDoPainel = new Set<string>();
     pagina.on('request', (r: any) => hostsDoPainel.add(new URL(r.url()).host));
     await pagina.goto(SITE);
-    ok('a tela de login é da Zulia', (await pagina.locator('h1').first().textContent())?.trim() === 'Zulia');
+    ok(`a tela de login é da plataforma (${MARCA_DA_PLATAFORMA})`, (await pagina.locator('h1').first().textContent())?.trim() === MARCA_DA_PLATAFORMA);
     await pagina.fill('input[type=email]', 'dona@alfa.invalid');
     await pagina.fill('input[type=password]', SENHA);
     await pagina.click('button[type=submit]');

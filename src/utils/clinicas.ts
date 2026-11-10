@@ -8,10 +8,10 @@
  * A clínica dos links antigos, sem `c=`: os que a La Vie mandou às pacientes antes de virar uma
  * clínica da Zulia. Abrem na clínica da La Vie.
  *
- * Fica vazio até o dia da migração, quando recebe o id da La Vie no mesmo commit que vira o
+ * Recebeu o id da La Vie no dia da migração (10/11/2026), no mesmo commit que virou o
  * `plataforma.json` para `zulia` (ver docs/zulia-plataforma.md). No modo legado não é usado.
  */
-export const CLINICA_DOS_LINKS_ANTIGOS = '';
+export const CLINICA_DOS_LINKS_ANTIGOS = 'u9JYfN';
 
 /** Letras, números, `-` e `_`, de 3 a 40 — o que `gerarIdDeClinica` gera e o que os testes usam. */
 const ID_DE_CLINICA = /^[A-Za-z0-9][A-Za-z0-9_-]{2,39}$/;

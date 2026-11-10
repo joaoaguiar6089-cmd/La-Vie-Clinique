@@ -4,6 +4,7 @@ import path from 'path';
 import {defineConfig, type Plugin} from 'vite';
 import plataforma from './plataforma.json';
 import {escolherModo} from './src/lib/projetoFirebase';
+import {DESCRICAO_DA_PLATAFORMA, MARCA_DA_PLATAFORMA} from './src/utils/marca';
 
 /**
  * No modo Zulia (`plataforma.json`, ou VITE_PLATAFORMA=zulia), o `index.html` sai com a marca da
@@ -14,8 +15,8 @@ const marcaDaPlataforma = (): Plugin => ({
   name: 'marca-da-plataforma',
   transformIndexHtml(html) {
     if (escolherModo(plataforma.modo, process.env.VITE_PLATAFORMA) !== 'zulia') return html;
-    const titulo = 'Zulia';
-    const descricao = 'Zulia — agenda, fichas, orçamentos e catálogo da sua clínica.';
+    const titulo = MARCA_DA_PLATAFORMA;
+    const descricao = `${MARCA_DA_PLATAFORMA} — ${DESCRICAO_DA_PLATAFORMA.toLowerCase()}: agenda, fichas, orçamentos e catálogo da sua clínica.`;
     return html
       .replace(/<title>[\s\S]*?<\/title>/i, `<title>${titulo}</title>`)
       .replace(/(<meta\s+name="description"\s+content=")[^"]*(")/i, `$1${descricao}$2`)

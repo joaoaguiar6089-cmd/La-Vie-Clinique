@@ -1,5 +1,6 @@
 import { dataExtensa } from './agenda';
 import { ehZulia } from '../lib/projetoFirebase';
+import { MARCA_DA_PLATAFORMA } from './marca';
 
 /**
  * O cartão que o WhatsApp (e o Telegram, o Instagram...) monta sobre um link colado na conversa.
@@ -40,7 +41,7 @@ export interface PreviewDoLink {
 }
 
 /** Sem nome nenhum: a La Vie no legado; a plataforma na Zulia (link de clínica desconhecida). */
-const NOME_PADRAO = ehZulia ? 'Zulia' : NOME_DA_CLINICA;
+const NOME_PADRAO = ehZulia ? MARCA_DA_PLATAFORMA : NOME_DA_CLINICA;
 
 /** O nome a usar: o que veio, aparado, ou o padrão. */
 const nomeOuPadrao = (nome?: unknown): string => (typeof nome === 'string' && nome.trim()) || NOME_PADRAO;
