@@ -96,6 +96,13 @@ export async function emailFoiConfirmado(): Promise<boolean> {
   return true;
 }
 
+/**
+ * A resposta veio do servidor da plataforma? Ele sempre responde em JSON. Sem ele (a prévia do AI
+ * Studio roda só a parte visual do site), vem um 404 ou a própria página do painel.
+ */
+const respostaDoServidor = (resposta: Response): boolean =>
+  (resposta.headers.get('content-type') || '').includes('application/json');
+
 export class ErroDoCadastro extends Error {
   constructor(readonly codigo: string) {
     super(codigo);
@@ -120,6 +127,7 @@ export async function criarMinhaClinica(nome: string, admin: string): Promise<st
   } catch {
     throw new ErroDoCadastro('rede');
   }
+  if (!respostaDoServidor(resposta)) throw new ErroDoCadastro('sem-servidor');
   const json: { clinicaId?: string; erro?: string } = await resposta.json().catch(() => ({}));
   if (!resposta.ok || !json.clinicaId) throw new ErroDoCadastro(json.erro || `http-${resposta.status}`);
   await usuario.getIdToken(true);
@@ -163,6 +171,7 @@ export async function aceitarDocumentos(): Promise<void> {
   } catch {
     throw new ErroDoCadastro('rede');
   }
+  if (!respostaDoServidor(resposta)) throw new ErroDoCadastro('sem-servidor');
   if (!resposta.ok) {
     const json: { erro?: string } = await resposta.json().catch(() => ({}));
     throw new ErroDoCadastro(json.erro || `http-${resposta.status}`);

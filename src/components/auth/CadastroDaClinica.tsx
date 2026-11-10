@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { LeitorDeDocumento, PAGINA_DO_DOCUMENTO, type DocumentoDaPlataforma } from './LeitorDeDocumento';
 import { AlertCircle, Building2, CheckCircle2, Loader2, Lock, LogOut, Mail, MailCheck, RefreshCw, User } from 'lucide-react';
 import {
   criarContaDaClinica,
@@ -10,7 +12,7 @@ import {
 } from '../../services/cadastroApi';
 import { mensagemDoCadastro, nomeLimpo, NOME_MAXIMO, SENHA_MINIMA } from '../../utils/cadastro';
 import { MARCA_DA_PLATAFORMA } from '../../utils/marca';
-import { PAGINAS_LEGAIS, VERSAO_DOS_DOCUMENTOS } from '../../utils/documentosLegais';
+import { VERSAO_DOS_DOCUMENTOS } from '../../utils/documentosLegais';
 
 /**
  * As telas do cadastro sozinho de uma clínica (ver `server/cadastro.ts`):
@@ -74,17 +76,33 @@ const Aviso: React.FC<{ tipo: 'erro' | 'ok'; children: React.ReactNode }> = ({ t
 const PLANO_GRATUITO = 'todos os módulos, até 2 procedimentos, 5 clientes e 1 login. Dá para assinar o plano completo depois.';
 
 /** Um link para um documento legal, em outra aba (o formulário não se perde). */
-export const LinkDoDocumento: React.FC<{ href: string; children: React.ReactNode }> = ({ href, children }) => (
-  <a
-    href={href}
-    target="_blank"
-    rel="noopener"
-    onClick={(e) => e.stopPropagation()}
-    className="font-semibold text-brand hover:text-brand-hover underline underline-offset-2"
-  >
-    {children}
-  </a>
-);
+/**
+ * Um link para um documento legal. Abre o texto por cima da tela (`LeitorDeDocumento`), sem sair do
+ * formulário e sem depender de outra aba. O leitor vai para o fim da página (portal): dentro do
+ * `<label>` da caixa de aceite, um clique no texto marcaria a caixa.
+ */
+export const LinkDoDocumento: React.FC<{ documento: DocumentoDaPlataforma; children: React.ReactNode }> = ({
+  documento,
+  children,
+}) => {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <>
+      <a
+        href={PAGINA_DO_DOCUMENTO[documento]}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setAberto(true);
+        }}
+        className="font-semibold text-brand hover:text-brand-hover underline underline-offset-2"
+      >
+        {children}
+      </a>
+      {aberto && createPortal(<LeitorDeDocumento documento={documento} onFechar={() => setAberto(false)} />, document.body)}
+    </>
+  );
+};
 
 /** A caixa obrigatória de aceite dos Termos, da Política e do Acordo de Tratamento de Dados. */
 export const CaixaDeAceite: React.FC<{ marcada: boolean; onMudar: (marcada: boolean) => void }> = ({ marcada, onMudar }) => (
@@ -96,9 +114,9 @@ export const CaixaDeAceite: React.FC<{ marcada: boolean; onMudar: (marcada: bool
       className="mt-0.5 w-[18px] h-[18px] accent-[var(--color-brand)] shrink-0"
     />
     <span className="text-[12.5px] text-ink-soft leading-relaxed">
-      Li e aceito, em nome da clínica, os <LinkDoDocumento href={PAGINAS_LEGAIS.termos}>Termos de Uso</LinkDoDocumento>, a{' '}
-      <LinkDoDocumento href={PAGINAS_LEGAIS.politicaDePrivacidade}>Política de Privacidade</LinkDoDocumento> e o{' '}
-      <LinkDoDocumento href={PAGINAS_LEGAIS.tratamentoDeDados}>Acordo de Tratamento de Dados</LinkDoDocumento>.
+      Li e aceito, em nome da clínica, os <LinkDoDocumento documento="termos-de-uso">Termos de Uso</LinkDoDocumento>, a{' '}
+      <LinkDoDocumento documento="politica-de-privacidade">Política de Privacidade</LinkDoDocumento> e o{' '}
+      <LinkDoDocumento documento="acordo-de-tratamento-de-dados">Acordo de Tratamento de Dados</LinkDoDocumento>.
     </span>
   </label>
 );

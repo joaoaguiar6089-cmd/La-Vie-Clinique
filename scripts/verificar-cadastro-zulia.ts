@@ -116,6 +116,12 @@ async function main() {
     await pagina.getByRole('button', { name: 'Criar conta' }).click();
     ok('sem marcar o aceite, a conta não é criada', await apareceu(pagina.getByText('marque que você aceita')));
     ok('e nenhum login nasce', !(await zulia.auth.getUserByEmail(EMAIL).catch(() => null)));
+    // Ler os Termos abre o texto por cima do formulário, sem marcar a caixa.
+    await pagina.getByRole('link', { name: 'Termos de Uso' }).first().click();
+    const leitor = pagina.getByRole('dialog', { name: 'Termos de Uso', exact: true });
+    ok('o link dos Termos abre o texto dentro da tela', await apareceu(leitor.getByRole('heading', { name: 'Termos de Uso da Venus JK' })));
+    await leitor.getByRole('button', { name: 'Voltar' }).click();
+    ok('e ler não marca o aceite', !(await pagina.getByRole('checkbox').isChecked()));
     await pagina.getByRole('checkbox').check();
     await pagina.getByRole('button', { name: 'Criar conta' }).click();
     const confirmar = pagina.getByRole('heading', { name: 'Confirme seu e-mail' });
@@ -261,6 +267,16 @@ async function main() {
       body: JSON.stringify({ versao: VERSAO_DOS_DOCUMENTOS }),
     });
     ok('quem não é admin de clínica não aceita: 403', rDono.status === 403);
+    await pedido.getByRole('link', { name: 'Termos de Uso' }).click();
+    const leitorDaAdmin = painelAntiga.getByRole('dialog', { name: 'Termos de Uso', exact: true });
+    ok('a admin lê os Termos dentro do painel', await apareceu(leitorDaAdmin.getByRole('heading', { name: 'Termos de Uso da Venus JK' })));
+    await leitorDaAdmin.locator('a', { hasText: 'Acordo de Tratamento de Dados' }).first().click();
+    ok(
+      'o link para o Acordo, dentro do texto, troca o documento',
+      await apareceu(painelAntiga.getByRole('dialog', { name: 'Acordo de Tratamento de Dados', exact: true }).getByRole('heading', { name: 'Acordo de Tratamento de Dados' }))
+    );
+    ok('com os dados da empresa preenchidos', !(await painelAntiga.locator('mark').count()) && (await painelAntiga.getByText('49.464.212/0001-19').count()) > 0);
+    await painelAntiga.getByRole('button', { name: 'Voltar' }).click();
     await pedido.getByRole('button', { name: 'Li e aceito' }).click();
     const sumiu = await pedido.waitFor({ state: 'hidden', timeout: 15000 }).then(() => true, () => false);
     const aceiteAntiga = (await zulia.db.doc(`clinicas/${antiga.id}`).get()).data()?.aceites?.termos;

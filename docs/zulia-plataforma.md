@@ -365,6 +365,12 @@ antes de vender o plano completo.
   novo; aceita por `POST /api/cadastro/aceite`. Mudou o texto de forma relevante: suba a versão.
 - **Links:** rodapé da tela de login (Termos e Política) e, na ficha da paciente, "aviso de
   privacidade" da clínica do link.
+- **Leitura dentro do painel:** no cadastro e no pedido de aceite, os links abrem o texto por cima
+  da tela (`LeitorDeDocumento`), lido de `/legal/*.md` e transformado com o mesmo código das páginas
+  (`src/utils/markdownLegal.ts`). Motivo: na prévia do AI Studio só existe a parte visual do site;
+  `/termos` abria o próprio painel e o aceite (`/api/...`) dava erro. Lá, o aceite agora explica:
+  "Abra o painel pelo endereço do site (não pela prévia de edição)". **Aceite e cadastro só funcionam
+  no endereço publicado.**
 - **O que os textos prometem e ainda precisa ficar verdadeiro** (antes de vender, ou ajustar o texto):
   - registros de acesso guardados por **6 meses** (art. 15 do Marco Civil): configurar a retenção
     dos registros do Cloud Logging do projeto em que o site roda (o padrão é 30 dias);
