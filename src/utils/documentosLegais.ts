@@ -18,18 +18,21 @@ export const VERSAO_DOS_DOCUMENTOS = '1.0';
 export const VIGENCIA_DOS_DOCUMENTOS = '10 de novembro de 2026';
 
 /**
- * Quem oferece a plataforma. Vazio aparece como "[a preencher: ...]" nas páginas: preencha com os
- * dados da empresa do João antes de divulgar.
+ * Quem oferece a plataforma. Vazio aparece como "[a preencher: ...]" nas páginas.
+ *
+ * Informado em 11/2026: o nome empresarial e o CNPJ vêm da notificação da Receita Federal; o
+ * endereço e o e-mail, do João. O município do CNPJ na Receita ainda aparece como Tefé/AM: ver
+ * docs/zulia-plataforma.md ("Documentos legais").
  */
 export const PRESTADOR = {
-  razaoSocial: '',
-  cnpj: '',
-  endereco: '',
-  email: '',
-  encarregadoNome: '',
-  encarregadoEmail: '',
-  /** A cidade e o estado do foro dos Termos (ex.: "Indaiatuba/SP"). */
-  foro: '',
+  razaoSocial: 'KAROLINE DA R. FERREIRA',
+  cnpj: '49.464.212/0001-19',
+  endereco: 'Rua Araguaia, 208, apto. 42C, Vila Almeida, Indaiatuba/SP, CEP 13330-660',
+  email: 'enfesteta.karoline@gmail.com',
+  encarregadoNome: 'Karoline da R. Ferreira',
+  encarregadoEmail: 'enfesteta.karoline@gmail.com',
+  /** A cidade e o estado do foro dos Termos. */
+  foro: 'Indaiatuba/SP',
 };
 
 /** O nome de cada marcador vazio, para o "[a preencher: ...]". */
