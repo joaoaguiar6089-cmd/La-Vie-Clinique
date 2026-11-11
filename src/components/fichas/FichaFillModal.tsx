@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  ArrowLeft,
+  ArrowRight,
   Camera,
   Check,
   ChevronDown,
@@ -19,6 +21,7 @@ import {
   EvaluationTemplate,
   FotoDaSessao,
   GrupoDePerguntasExtra,
+  MateriaisDoAtendimento,
   Patient,
   Procedure,
   Professional,
@@ -60,7 +63,12 @@ import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PrintableFichaSheet } from './PrintableFichaSheet';
 import { SidePanel } from '../common/SidePanel';
 import { SecaoUsoDeMaterial, useUsoDeMaterial } from '../estoque/UsoDeMaterial';
-import { OrcamentoGravado, SecaoOrcamentoDaAvaliacao, useOrcamentoDaAvaliacao } from './OrcamentoDaAvaliacao';
+import {
+  OrcamentoGravado,
+  SecaoDadosDoOrcamentoDaAvaliacao,
+  SecaoOrcamentoDaAvaliacao,
+  useOrcamentoDaAvaliacao,
+} from './OrcamentoDaAvaliacao';
 import { PerguntaCriadaNaHora } from './PerguntaCriadaNaHora';
 
 interface FichaFillModalProps {
@@ -84,10 +92,24 @@ interface FichaFillModalProps {
 const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
 
 /**
+ * As perguntas uma embaixo da outra; no computador largo, em duas colunas — é o que faz a página
+ * de perguntas caber sem rolar. Grade, e não colunas de texto: com colunas de texto, uma resposta
+ * que cresce empurraria as perguntas de uma coluna para a outra enquanto se digita.
+ */
+const COLUNAS_DE_PERGUNTAS = 'space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-x-10 lg:gap-y-5 lg:items-start';
+
+/**
  * Qual foto está no editor de anotação: o mapa, ou a foto da sessão naquela posição da lista.
  * `null` = editor fechado — e é contra `null` que se compara, porque a primeira foto é o 0.
  */
 type AlvoAnotacao = 'modelo' | number | null;
+
+/**
+ * As páginas da ficha no computador, uma por assunto — ver o comentário de `FichaFillModal`.
+ * Só entram as que a ficha tem: sem mapa nem foto, não há página de fotos; materiais só no
+ * relatório de um atendimento; o orçamento só na avaliação, e os dados dele só com ele montado.
+ */
+type Pagina = 'perguntas' | 'fotos' | 'observacoes' | 'materiais' | 'orcamento' | 'dadosDoOrcamento';
 
 /**
  * O formulário das duas fichas clínicas: a **avaliação** (antes do procedimento, emitida pela
@@ -105,6 +127,16 @@ type AlvoAnotacao = 'modelo' | number | null;
  * O acompanhamento carrega também os materiais usados ("Uso de material?"), sem valor nenhum na
  * tela: ele é preenchido ao lado da paciente. Continuam dois documentos — a ficha e os materiais —
  * gravados pelo mesmo botão; o custo aparece só no Financeiro.
+ *
+ * **No computador**, a ficha abre numa janela flutuante no meio da tela, quase do tamanho dela, e
+ * vai em páginas por assunto — perguntas; mapa e fotos; observações; materiais ou o orçamento
+ * (procedimentos e pagamento, depois os dados dele) — para preencher sem rolar. As abas no topo e
+ * os botões do rodapé passam de uma para outra; o Salvar vale em qualquer página. **No celular**
+ * nada disso: tela cheia e tudo numa rolagem só, como sempre foi. As páginas que não estão na tela
+ * só ficam escondidas (`sm:hidden`), montadas, então nada do que foi preenchido se perde ao trocar.
+ *
+ * O **PDF** grava antes de abrir a folha: a folha sai do que está gravado, e quem acabou de
+ * responder uma pergunta espera vê-la ali sem ter que lembrar de salvar antes.
  */
 export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   tipo,
@@ -156,6 +188,12 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   const [anotando, setAnotando] = useState<AlvoAnotacao>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [imprimindo, setImprimindo] = useState(false);
+  /** O PDF está gravando a ficha para depois abrir a folha — o giro fica no botão dele. */
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+  /** Gravações feitas sem fechar o formulário (o PDF): cada uma deixa o painel "sem alterações". */
+  const [gravacoes, setGravacoes] = useState(0);
+  /** A página aberta no computador. No celular não esconde nada — ver `naPagina`. */
+  const [pagina, setPagina] = useState<Pagina>('perguntas');
 
   /**
    * Perguntas de outra ficha-modelo (só no relatório) e as criadas na hora (em toda ficha). Ver
@@ -252,6 +290,9 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
 
     setErro(null);
     setLeituraFalhou(false);
+    setPagina('perguntas');
+    setImprimindo(false);
+    setGerandoPdf(false);
     setAnotando(null);
     setMexeuNasFotos(false);
     setMexeuNosGrupos(false);
@@ -464,15 +505,26 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     setAnotando(null);
   };
 
-  const handleSalvar = async () => {
+  /**
+   * Grava a ficha (e o orçamento, e os materiais). O Salvar fecha o formulário depois.
+   *
+   * `paraImprimir` é o PDF: grava o que está na tela e, em vez de fechar, abre a folha com o que
+   * acabou de ser gravado — a folha sai sempre do gravado, então sem gravar antes ela mostraria
+   * as respostas de antes da última mexida. O formulário continua aberto atrás da folha, e o que
+   * estava mexido passa a contar como salvo.
+   */
+  const handleSalvar = async (paraImprimir = false) => {
     // O orçamento da avaliação é conferido antes de gravar qualquer coisa.
     const problemaNoOrcamento = orcamento.validar();
     if (problemaNoOrcamento) {
-      setErro(problemaNoOrcamento);
+      setErro(problemaNoOrcamento.mensagem);
+      // No computador, leva à página onde está o campo com o aviso.
+      setPagina(problemaNoOrcamento.parte === 'dados' ? 'dadosDoOrcamento' : 'orcamento');
       setErrosAoSalvar((n) => n + 1);
       return;
     }
     setSalvando(true);
+    setGerandoPdf(paraImprimir);
     setErro(null);
     const agora = new Date().toISOString();
     const gruposExtras = gruposParaGravar(grupos, respostas);
@@ -497,6 +549,18 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
         observacoes,
       });
     if (!gravarFicha && materiais.acao === 'manter') {
+      if (paraImprimir) {
+        // Nada gravado e nada para gravar: não há folha preenchida para mostrar.
+        setErro(
+          `Nada preenchido ainda — responda alguma pergunta para gerar o PDF ${
+            rotulos.artigo === 'a' ? 'da' : 'do'
+          } ${rotulos.minusculo}.`
+        );
+        setErrosAoSalvar((n) => n + 1);
+        setSalvando(false);
+        setGerandoPdf(false);
+        return;
+      }
       onClose();
       return;
     }
@@ -545,32 +609,57 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
         };
         await saveRegistroDeFicha(tipo, novo);
         // Se os materiais falharem, a segunda tentativa regrava a ficha com as mesmas datas.
-        setRegistro(novo);
+        // É também o que a folha do PDF mostra, e o "última alteração" do pé da ficha.
+        setRegistro({ ...novo, updatedAt: agora });
       }
 
       etapa = 'materiais';
+      /** O que ficou gravado dos materiais — `undefined` = não mexeu neles. */
+      let materiaisGravados: MateriaisDoAtendimento | null | undefined;
       if (materiais.acao === 'gravar' && alvo.atendimentoId) {
-        await saveMateriaisDoAtendimento(
-          montarMateriaisDoAtendimento(
-            { ...alvo, atendimentoId: alvo.atendimentoId },
-            materiais.itens,
-            uso.registro,
-            agora
-          )
+        materiaisGravados = montarMateriaisDoAtendimento(
+          { ...alvo, atendimentoId: alvo.atendimentoId },
+          materiais.itens,
+          uso.registro,
+          agora
         );
+        await saveMateriaisDoAtendimento(materiaisGravados);
       } else if (materiais.acao === 'apagar' && alvo.atendimentoId) {
         await deleteMateriaisDoAtendimento(alvo.atendimentoId);
+        materiaisGravados = null;
       }
 
       onSalvou?.();
-      // O custo de material do orçamento falhou: a avaliação e o orçamento estão salvos, e o painel
-      // fica aberto para dizer isso — salvar de novo atualiza o mesmo orçamento.
+
+      // O custo de material do orçamento falhou (a avaliação e o orçamento estão salvos), ou é o
+      // PDF: o painel fica aberto, e o que estava na tela passa a ser o gravado. Salvar de novo
+      // atualiza o mesmo orçamento e os mesmos materiais.
+      if (paraImprimir || doOrcamento.aviso) {
+        if (materiaisGravados !== undefined) uso.marcarGravado(materiaisGravados);
+        orcamento.marcarGravado();
+        setMexeuNasFotos(false);
+        setMexeuNosGrupos(false);
+        setGravacoes((n) => n + 1);
+        setSalvando(false);
+        setGerandoPdf(false);
+      }
       if (doOrcamento.aviso) {
         setErro(`A avaliação foi salva. ${doOrcamento.aviso}`);
         setErrosAoSalvar((n) => n + 1);
-        setSalvando(false);
+      }
+      if (paraImprimir) {
+        if (gravarFicha) {
+          setImprimindo(true);
+        } else {
+          // Só os materiais tinham o que gravar: o relatório continua em branco, sem folha.
+          setErro(
+            `Os materiais foram salvos. O PDF sai depois que ${rotulos.artigo} ${rotulos.minusculo} tiver alguma resposta.`
+          );
+          setErrosAoSalvar((n) => n + 1);
+        }
         return;
       }
+      if (doOrcamento.aviso) return;
       onClose();
     } catch (e) {
       console.error(e);
@@ -586,6 +675,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       );
       setErrosAoSalvar((n) => n + 1);
       setSalvando(false);
+      setGerandoPdf(false);
     }
   };
 
@@ -647,9 +737,77 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   const fotoModeloExibida = fotoModeloAnotadaUrl || fotoModeloUrl;
   const fotoEmAnotacao = typeof anotando === 'number' ? fotos[anotando] : undefined;
 
+  // ==========================================
+  // AS PÁGINAS (SÓ NO COMPUTADOR)
+  // ==========================================
+
+  const temMapa = !!fotoModeloUrl;
+  const paginas: { id: Pagina; rotulo: string }[] = [
+    { id: 'perguntas', rotulo: 'Perguntas' },
+    ...(temMapa || pedeFoto
+      ? [
+          {
+            id: 'fotos' as const,
+            rotulo: temMapa && pedeFoto ? 'Mapa e fotos' : temMapa ? 'Mapa anatômico' : 'Fotos',
+          },
+        ]
+      : []),
+    { id: 'observacoes', rotulo: 'Observações' },
+    ...(uso.ativo ? [{ id: 'materiais' as const, rotulo: 'Materiais' }] : []),
+    ...(orcamento.ativo ? [{ id: 'orcamento' as const, rotulo: 'Procedimentos e pagamento' }] : []),
+    ...(orcamento.ativo && orcamento.comDados
+      ? [{ id: 'dadosDoOrcamento' as const, rotulo: 'Dados do orçamento' }]
+      : []),
+  ];
+  // A página escolhida pode sumir (o orçamento desmarcado leva os dados dele): volta à primeira.
+  const indiceDaPagina = Math.max(0, paginas.findIndex((p) => p.id === pagina));
+  const paginaAtiva = paginas[indiceDaPagina].id;
+  const paginaAnterior = paginas[indiceDaPagina - 1];
+  const proximaPagina = paginas[indiceDaPagina + 1];
+  /**
+   * A página que não está aberta some **só no computador** (`sm:hidden`); no celular tudo continua
+   * numa rolagem só. E some escondida, não desmontada: o que foi digitado nela fica.
+   */
+  const naPagina = (id: Pagina) => (paginaAtiva === id ? '' : 'sm:hidden');
+  const comPaginas = !carregando && !leituraFalhou;
+
+  /* As abas, presas sob o título. Tocáveis em qualquer ordem: a ficha não tem etapa obrigatória. */
+  const navegacao = comPaginas ? (
+    <nav
+      aria-label={`Páginas ${rotulos.artigo === 'a' ? 'da' : 'do'} ${rotulos.minusculo}`}
+      className="hidden sm:block px-5 sm:px-8 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      <ol className="flex gap-7 w-max">
+        {paginas.map((p, i) => {
+          const ativa = p.id === paginaAtiva;
+          return (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => setPagina(p.id)}
+                aria-current={ativa ? 'page' : undefined}
+                className={`pt-1 pb-3 border-b-2 text-[14px] font-semibold whitespace-nowrap transition-colors ${
+                  ativa
+                    ? 'text-white border-brand-light'
+                    : 'text-cream/60 border-transparent hover:text-cream'
+                }`}
+              >
+                <span className={`mr-0.5 tabular-nums ${ativa ? 'text-brand-light' : ''}`}>{i + 1}</span>{' '}
+                {p.rotulo}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  ) : null;
+
   /*
-    Imprimir usa o que está **gravado**, não o rascunho na tela: o documento impresso precisa
-    corresponder ao que o prontuário guarda. Por isso só aparece depois do primeiro salvamento.
+    O PDF grava antes de abrir a folha (ver `handleSalvar`): a folha sai do que está **gravado** —
+    o documento precisa corresponder ao que o prontuário guarda —, e assim ela já sai com o que
+    acabou de ser preenchido. Por isso também aparece antes do primeiro salvamento.
+
+    No computador, entre o Excluir e os botões de sempre, o "voltar" e o "próxima" das páginas.
   */
   const rodape = carregando || leituraFalhou ? null : (
     <div className="flex items-center justify-between gap-3">
@@ -665,16 +823,43 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
         <span />
       )}
       <div className="flex items-center gap-2">
-        {registro && (
+        {paginaAnterior && (
           <button
-            onClick={() => setImprimindo(true)}
-            className="w-11 h-11 rounded-xl flex items-center justify-center text-muted hover:text-brand hover:bg-surface-2 transition-colors"
-            title="Imprimir / salvar PDF"
-            aria-label={`Imprimir ${rotulos.artigo} ${rotulos.minusculo}`}
+            type="button"
+            onClick={() => setPagina(paginaAnterior.id)}
+            aria-label={`Voltar para ${paginaAnterior.rotulo}`}
+            title={`Voltar para ${paginaAnterior.rotulo}`}
+            className="hidden sm:inline-flex items-center gap-1.5 min-h-[44px] px-3 md:px-3.5 rounded-xl text-body-lg font-semibold text-ink-soft hover:bg-surface-2 transition-colors"
           >
-            <Printer className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden md:inline">Voltar</span>
           </button>
         )}
+        {proximaPagina && (
+          <button
+            type="button"
+            onClick={() => setPagina(proximaPagina.id)}
+            className="hidden sm:inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl border border-line bg-card text-body-lg font-semibold text-ink hover:border-brand transition-colors"
+          >
+            {/* Na janela estreita, o nome da página não cabe ao lado dos outros botões. */}
+            <span className="md:hidden">Próxima</span>
+            <span className="hidden md:inline">{proximaPagina.rotulo}</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        )}
+        {(paginaAnterior || proximaPagina) && (
+          <span aria-hidden className="hidden sm:block w-px h-7 bg-line mx-1.5" />
+        )}
+        <button
+          onClick={() => handleSalvar(true)}
+          disabled={salvando || enviandoFotos}
+          className="min-w-11 h-11 sm:px-3 rounded-xl inline-flex items-center justify-center gap-1.5 text-muted hover:text-brand hover:bg-surface-2 transition-colors disabled:opacity-40"
+          title="Salvar e ver o PDF"
+          aria-label={`Salvar e ver o PDF ${rotulos.artigo === 'a' ? 'da' : 'do'} ${rotulos.minusculo}`}
+        >
+          {gerandoPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />}
+          <span className="hidden sm:inline text-body-lg font-semibold">PDF</span>
+        </button>
         <button
           onClick={onClose}
           disabled={salvando}
@@ -687,7 +872,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
           disabled={salvando || enviandoFotos}
           className="inline-flex items-center gap-2 min-h-[44px] px-5 rounded-xl bg-ink text-white text-body-lg font-semibold transition-colors disabled:opacity-40"
         >
-          {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {salvando && !gerandoPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Salvar
         </button>
       </div>
@@ -700,18 +885,25 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       onFechar={onClose}
       titulo={rotulos.nome}
       sobretitulo={`${alvo.pacienteNome} · ${alvo.procedimentoNome} · ${formatDateOnly(alvo.data)}`}
-      largura="larga"
-      etapa={errosAoSalvar}
+      formato="central"
+      navegacao={navegacao}
+      // Trocar de página e cada erro novo levam a rolagem ao topo — o aviso mora lá.
+      etapa={`${paginaAtiva}:${errosAoSalvar}`}
+      gravado={gravacoes}
       bloqueado={salvando}
       /* Anotar uma foto, anexar a foto da sessão ou tirar um material da lista não gera
-         `input`/`change` no painel. */
+         `input`/`change` no painel. A anotação do mapa só conta se é diferente da gravada. */
       alterado={
-        mexeuNasFotos || mexeuNosGrupos || !!fotoModeloAnotadaUrl || uso.mexido || orcamento.mexido
+        mexeuNasFotos ||
+        mexeuNosGrupos ||
+        fotoModeloAnotadaUrl !== (registro?.fotoModeloAnotadaUrl || '') ||
+        uso.mexido ||
+        orcamento.mexido
       }
       rodape={rodape}
     >
       <div className="bg-card min-h-full">
-        <div className="px-4 sm:px-6 py-5 space-y-6">
+        <div className="px-4 sm:px-8 lg:px-10 py-5 sm:py-7 space-y-6">
           {carregando ? (
             <div className="flex items-center justify-center py-16 text-gray-400">
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -730,312 +922,335 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                 </div>
               )}
 
-              {/* Personalizada: não há ficha-modelo de propósito — as perguntas nascem aqui. */}
-              {personalizada && (
-                <p className="text-[13px] text-ink-soft bg-surface border border-[rgba(26,26,26,.1)] rounded-xl px-3.5 py-3">
-                  <strong className="text-ink">Avaliação personalizada</strong> — sem ficha-modelo.
-                  Crie abaixo, em "Nova pergunta", as perguntas e os campos desta avaliação.
-                </p>
-              )}
+              {/* ===== Página 1 — as perguntas ===== */}
+              <section className={`space-y-6 ${naPagina('perguntas')}`}>
+                {/* Personalizada: não há ficha-modelo de propósito — as perguntas nascem aqui. */}
+                {personalizada && (
+                  <p className="text-[13px] text-ink-soft bg-surface border border-[rgba(26,26,26,.1)] rounded-xl px-3.5 py-3">
+                    <strong className="text-ink">Avaliação personalizada</strong> — sem ficha-modelo.
+                    Crie abaixo, em "Nova pergunta", as perguntas e os campos desta avaliação.
+                  </p>
+                )}
 
-              {/*
-                Sem ficha cadastrada, a tela não fica vazia: sobram as observações (e a foto, no
-                relatório), as perguntas criadas na hora e o caminho para configurar. Um vazio sem
-                saída faria a profissional concluir que a funcionalidade está quebrada.
-              */}
-              {!ficha && !personalizada && (
-                <div className="text-[13px] text-ink-soft bg-surface border border-[rgba(26,26,26,.1)] rounded-xl px-3.5 py-3 space-y-3">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="flex-1 min-w-[200px]">
-                      Nenhuma ficha-modelo de {rotulos.minusculo} cadastrada para{' '}
-                      <strong className="text-ink">{alvo.procedimentoNome}</strong>.
-                      {montavel
-                        ? ' Dá para usar as perguntas de outra ficha-modelo e criar as suas em "Nova pergunta".'
-                        : ' Dá para criar as perguntas em "Nova pergunta".'}
-                    </span>
-                    {onCadastrarFicha && (
+                {/*
+                  Sem ficha cadastrada, a tela não fica vazia: sobram as observações (e a foto, no
+                  relatório), as perguntas criadas na hora e o caminho para configurar. Um vazio sem
+                  saída faria a profissional concluir que a funcionalidade está quebrada.
+                */}
+                {!ficha && !personalizada && (
+                  <div className="text-[13px] text-ink-soft bg-surface border border-[rgba(26,26,26,.1)] rounded-xl px-3.5 py-3 space-y-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="flex-1 min-w-[200px]">
+                        Nenhuma ficha-modelo de {rotulos.minusculo} cadastrada para{' '}
+                        <strong className="text-ink">{alvo.procedimentoNome}</strong>.
+                        {montavel
+                          ? ' Dá para usar as perguntas de outra ficha-modelo e criar as suas em "Nova pergunta".'
+                          : ' Dá para criar as perguntas em "Nova pergunta".'}
+                      </span>
+                      {onCadastrarFicha && (
+                        <button
+                          onClick={() =>
+                            onCadastrarFicha({
+                              procedureId: alvo.procedureId,
+                              procedimentoNome: alvo.procedimentoNome,
+                            })
+                          }
+                          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand hover:underline"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Cadastrar ficha
+                        </button>
+                      )}
+                    </div>
+
+                    {montavel && (
                       <button
-                        onClick={() =>
-                          onCadastrarFicha({
-                            procedureId: alvo.procedureId,
-                            procedimentoNome: alvo.procedimentoNome,
-                          })
-                        }
-                        className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand hover:underline"
+                        type="button"
+                        onClick={() => setEscolhendoFicha((v) => !v)}
+                        aria-expanded={escolhendoFicha}
+                        className="w-full flex items-center gap-2 min-h-[44px] px-3.5 py-2 rounded-xl border border-[rgba(26,26,26,.15)] bg-card text-left text-[14px] font-semibold text-ink hover:border-brand transition-colors"
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                        Cadastrar ficha
+                        <Layers className="w-4 h-4 text-brand shrink-0" />
+                        <span className="flex-1 min-w-0">
+                          Usar perguntas de uma ficha-modelo
+                        </span>
+                        {escolhendoFicha ? (
+                          <ChevronUp className="w-4 h-4 text-muted shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+                        )}
                       </button>
                     )}
-                  </div>
 
-                  {montavel && (
-                    <button
-                      type="button"
-                      onClick={() => setEscolhendoFicha((v) => !v)}
-                      aria-expanded={escolhendoFicha}
-                      className="w-full flex items-center gap-2 min-h-[44px] px-3.5 py-2 rounded-xl border border-[rgba(26,26,26,.15)] bg-card text-left text-[14px] font-semibold text-ink hover:border-brand transition-colors"
-                    >
-                      <Layers className="w-4 h-4 text-brand shrink-0" />
-                      <span className="flex-1 min-w-0">
-                        Usar perguntas de uma ficha-modelo
-                      </span>
-                      {escolhendoFicha ? (
-                        <ChevronUp className="w-4 h-4 text-muted shrink-0" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4 text-muted shrink-0" />
-                      )}
-                    </button>
-                  )}
-
-                  {montavel && escolhendoFicha && (
-                    <div className="space-y-3">
-                      {fichasDeAvaliacao === null && opcoesDeGrupo.length === 0 ? (
-                        <div className="flex justify-center py-3 text-gray-400">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        </div>
-                      ) : opcoesDeGrupo.length === 0 ? (
-                        <p className="text-[13px] text-muted">
-                          Nenhuma ficha-modelo com perguntas cadastrada ainda. Use "Nova pergunta" para
-                          criar os campos deste relatório.
-                        </p>
-                      ) : (
-                        opcoesDeGrupo.map((opcao) => (
-                          <div key={opcao.tipo} className="space-y-1.5">
-                            <span className={labelClass}>{opcao.rotulo}</span>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {opcao.fichas.map((f) => {
-                                const jaUsada = grupos.some((g) => g.origemFichaId === f.id);
-                                const total = (f.perguntas || []).length;
-                                return (
-                                  <button
-                                    key={f.id}
-                                    type="button"
-                                    disabled={jaUsada}
-                                    onClick={() => adicionarGrupo(f, opcao.tipo)}
-                                    className="text-left rounded-xl border border-[rgba(26,26,26,.12)] bg-card px-3.5 py-2.5 hover:border-brand transition-colors disabled:opacity-50 disabled:hover:border-[rgba(26,26,26,.12)]"
-                                  >
-                                    <span className="block text-[14px] font-semibold text-ink">
-                                      {f.nome}
-                                    </span>
-                                    <span className="block text-[12px] text-muted mt-0.5">
-                                      {jaUsada
-                                        ? 'Já está neste relatório'
-                                        : `${total} pergunta${total === 1 ? '' : 's'}`}
-                                    </span>
-                                    {!jaUsada && (
-                                      <span className="block text-[12px] text-gray-400 mt-1 line-clamp-2">
-                                        {(f.perguntas || [])
-                                          .slice(0, 3)
-                                          .map((q) => q.texto)
-                                          .join(' · ')}
+                    {montavel && escolhendoFicha && (
+                      <div className="space-y-3">
+                        {fichasDeAvaliacao === null && opcoesDeGrupo.length === 0 ? (
+                          <div className="flex justify-center py-3 text-gray-400">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          </div>
+                        ) : opcoesDeGrupo.length === 0 ? (
+                          <p className="text-[13px] text-muted">
+                            Nenhuma ficha-modelo com perguntas cadastrada ainda. Use "Nova pergunta" para
+                            criar os campos deste relatório.
+                          </p>
+                        ) : (
+                          opcoesDeGrupo.map((opcao) => (
+                            <div key={opcao.tipo} className="space-y-1.5">
+                              <span className={labelClass}>{opcao.rotulo}</span>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {opcao.fichas.map((f) => {
+                                  const jaUsada = grupos.some((g) => g.origemFichaId === f.id);
+                                  const total = (f.perguntas || []).length;
+                                  return (
+                                    <button
+                                      key={f.id}
+                                      type="button"
+                                      disabled={jaUsada}
+                                      onClick={() => adicionarGrupo(f, opcao.tipo)}
+                                      className="text-left rounded-xl border border-[rgba(26,26,26,.12)] bg-card px-3.5 py-2.5 hover:border-brand transition-colors disabled:opacity-50 disabled:hover:border-[rgba(26,26,26,.12)]"
+                                    >
+                                      <span className="block text-[14px] font-semibold text-ink">
+                                        {f.nome}
                                       </span>
-                                    )}
-                                  </button>
-                                );
-                              })}
+                                      <span className="block text-[12px] text-muted mt-0.5">
+                                        {jaUsada
+                                          ? 'Já está neste relatório'
+                                          : `${total} pergunta${total === 1 ? '' : 's'}`}
+                                      </span>
+                                      {!jaUsada && (
+                                        <span className="block text-[12px] text-gray-400 mt-1 line-clamp-2">
+                                          {(f.perguntas || [])
+                                            .slice(0, 3)
+                                            .map((q) => q.texto)
+                                            .join(' · ')}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {perguntas.length + perguntasSoDoRegistro.length > 0 && (
-                <div className="space-y-4">
-                  {ficha && (
-                    <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
-                      {ficha.nome}
-                    </h3>
-                  )}
-                  {[...perguntas, ...perguntasSoDoRegistro].map((q) => (
-                    <QuestionFieldRenderer
-                      key={q.id}
-                      question={q}
-                      value={respostas[q.id]}
-                      onChange={(v) => handleResposta(q.id, v)}
-                      // Sem asterisco: a ficha é documento interno e se completa ao longo do
-                      // dia — marcar campo obrigatório aqui só criaria uma trava que a
-                      // profissional teria que contornar para salvar o que já sabe.
-                      hideMandatoryAsterisk
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* Grupos puxados de outras fichas-modelo — cada um com o nome da ficha de origem */}
-              {gruposDeFicha.map((g) => (
-                <div key={g.id} className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
-                      {g.titulo}
-                      {g.origemTipo === 'avaliacao' && (
-                        <span className="normal-case tracking-normal font-normal"> · da avaliação</span>
-                      )}
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => removerGrupo(g)}
-                      className="min-h-[36px] px-1 text-[13px] font-semibold text-muted hover:text-danger transition-colors"
-                    >
-                      Tirar grupo
-                    </button>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {g.perguntas.map((q) => (
-                    <QuestionFieldRenderer
-                      key={q.id}
-                      question={q}
-                      value={respostas[q.id]}
-                      onChange={(v) => handleResposta(q.id, v)}
-                      hideMandatoryAsterisk
-                    />
-                  ))}
-                </div>
-              ))}
-
-              {/* Perguntas criadas na hora — em toda ficha: o atendimento sempre traz alguma
-                  pergunta que a ficha-modelo não previu. */}
-              <div className="space-y-3">
-                {dadosLivres.length > 0 && (
-                  <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
-                    {personalizada ? 'Perguntas desta avaliação' : TITULO_DO_GRUPO_LIVRE}
-                  </h3>
                 )}
-                {dadosLivres.map((q) => (
-                  <PerguntaCriadaNaHora
-                    key={q.id}
-                    pergunta={q}
-                    valor={respostas[q.id]}
-                    focar={q.id === dadoRecemCriado}
-                    onMudarPergunta={mudarDadoLivre}
-                    onTrocarTipo={trocarTipoDoDadoLivre}
-                    onResponder={(v) => handleResposta(q.id, v)}
-                    onRemover={() => removerDadoLivre(q.id)}
-                  />
-                ))}
-                <button
-                  type="button"
-                  onClick={adicionarDadoLivre}
-                  className="inline-flex items-center gap-1.5 min-h-[36px] text-[13px] font-semibold text-brand hover:underline"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Nova pergunta
-                </button>
-              </div>
 
-              {/* Mapa anatômico anotável */}
-              {fotoModeloUrl && (
-                <div className="space-y-2">
-                  <span className={labelClass}>Mapa anatômico</span>
-                  <div className="relative rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-surface">
-                    <img
-                      src={fotoModeloExibida}
-                      alt="Mapa anatômico do procedimento"
-                      className="w-full object-contain max-h-[420px]"
-                    />
-                    <button
-                      onClick={() => setAnotando('modelo')}
-                      className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                      {fotoModeloAnotadaUrl ? 'Editar anotações' : 'Anotar'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Fotos da sessão — quantas forem precisas, cada uma anotável à parte */}
-              {pedeFoto && (
-                <div className="space-y-2">
-                  <span className={labelClass}>
-                    {rotulos.rotuloDasFotos}
-                    {fotos.length > 0 ? ` (${fotos.length})` : ''}
-                  </span>
-                  {fotos.length > 0 && (
-                    <div className={`grid gap-3 ${fotos.length > 1 ? 'sm:grid-cols-2' : ''}`}>
-                      {fotos.map((foto, i) => (
-                        <div
-                          key={`${i}-${foto.url}`}
-                          className="rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-surface"
-                        >
-                          <div className="relative">
-                            <img
-                              src={foto.anotadaUrl || foto.url}
-                              alt={foto.legenda?.trim() || `${rotulos.rotuloDaFoto} ${i + 1}`}
-                              className={`w-full object-contain ${fotos.length > 1 ? 'max-h-[300px]' : 'max-h-[420px]'}`}
-                            />
-                            <div className="absolute bottom-3 right-3 flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => removerFoto(i)}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 text-ink text-[13px] font-semibold shadow-lg hover:bg-white transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                Remover
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setAnotando(i)}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                                {foto.anotadaUrl ? 'Editar anotações' : 'Anotar'}
-                              </button>
-                            </div>
-                          </div>
-                          {/* Legenda: o que identifica a foto entre as outras da sessão */}
-                          <input
-                            value={foto.legenda || ''}
-                            onChange={(e) => mudarLegenda(i, e.target.value)}
-                            maxLength={60}
-                            placeholder="Legenda — ex.: frente, perfil direito"
-                            aria-label={`Legenda da foto ${i + 1}`}
-                            className="w-full px-3.5 py-2.5 bg-card border-t border-[rgba(26,26,26,.1)] text-[14px] text-ink placeholder:text-gray-400 focus:outline-none focus:bg-white transition-colors"
-                          />
-                        </div>
+                {perguntas.length + perguntasSoDoRegistro.length > 0 && (
+                  <div className="space-y-4">
+                    {ficha && (
+                      <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
+                        {ficha.nome}
+                      </h3>
+                    )}
+                    {/* No computador largo, duas colunas: a página de perguntas cabe sem rolar. */}
+                    <div className={COLUNAS_DE_PERGUNTAS}>
+                      {[...perguntas, ...perguntasSoDoRegistro].map((q) => (
+                        <QuestionFieldRenderer
+                          key={q.id}
+                          question={q}
+                          value={respostas[q.id]}
+                          onChange={(v) => handleResposta(q.id, v)}
+                          // Sem asterisco: a ficha é documento interno e se completa ao longo do
+                          // dia — marcar campo obrigatório aqui só criaria uma trava que a
+                          // profissional teria que contornar para salvar o que já sabe.
+                          hideMandatoryAsterisk
+                        />
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Grupos puxados de outras fichas-modelo — cada um com o nome da ficha de origem */}
+                {gruposDeFicha.map((g) => (
+                  <div key={g.id} className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
+                        {g.titulo}
+                        {g.origemTipo === 'avaliacao' && (
+                          <span className="normal-case tracking-normal font-normal"> · da avaliação</span>
+                        )}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => removerGrupo(g)}
+                        className="min-h-[36px] px-1 text-[13px] font-semibold text-muted hover:text-danger transition-colors"
+                      >
+                        Tirar grupo
+                      </button>
+                    </div>
+                    <div className={COLUNAS_DE_PERGUNTAS}>
+                      {g.perguntas.map((q) => (
+                        <QuestionFieldRenderer
+                          key={q.id}
+                          question={q}
+                          value={respostas[q.id]}
+                          onChange={(v) => handleResposta(q.id, v)}
+                          hideMandatoryAsterisk
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Perguntas criadas na hora — em toda ficha: o atendimento sempre traz alguma
+                    pergunta que a ficha-modelo não previu. */}
+                <div className="space-y-3">
+                  {dadosLivres.length > 0 && (
+                    <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
+                      {personalizada ? 'Perguntas desta avaliação' : TITULO_DO_GRUPO_LIVRE}
+                    </h3>
                   )}
-                  {fotos.length < MAX_FOTOS_DA_SESSAO && (
-                    <label
-                      className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[rgba(26,26,26,.2)] bg-surface transition-colors ${
-                        fotos.length === 0 ? 'py-8' : 'py-4'
-                      } ${enviandoFotos ? 'opacity-70' : 'cursor-pointer hover:border-brand'}`}
-                    >
-                      {enviandoFotos ? (
-                        <Loader2 className="w-6 h-6 text-muted animate-spin" />
-                      ) : fotos.length === 0 ? (
-                        <Camera className="w-6 h-6 text-gray-400" />
-                      ) : (
-                        <Plus className="w-5 h-5 text-gray-400" />
-                      )}
-                      <span className="text-[13px] font-semibold text-ink-soft">
-                        {enviandoFotos
-                          ? 'Enviando…'
-                          : fotos.length === 0
-                          ? `Enviar ${rotulos.rotuloDasFotos.toLowerCase()}`
-                          : 'Adicionar mais fotos'}
-                      </span>
-                      {fotos.length === 0 && (
-                        <span className="text-[12px] text-gray-400">{rotulos.dicaDaFoto}</span>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        disabled={enviandoFotos}
-                        className="hidden"
-                        onChange={handleFotosSessao}
-                      />
-                    </label>
-                  )}
+                  {dadosLivres.map((q) => (
+                    <PerguntaCriadaNaHora
+                      key={q.id}
+                      pergunta={q}
+                      valor={respostas[q.id]}
+                      focar={q.id === dadoRecemCriado}
+                      onMudarPergunta={mudarDadoLivre}
+                      onTrocarTipo={trocarTipoDoDadoLivre}
+                      onResponder={(v) => handleResposta(q.id, v)}
+                      onRemover={() => removerDadoLivre(q.id)}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={adicionarDadoLivre}
+                    className="inline-flex items-center gap-1.5 min-h-[36px] text-[13px] font-semibold text-brand hover:underline"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Nova pergunta
+                  </button>
                 </div>
+              </section>
+
+              {/* ===== Página 2 — o mapa anatômico e as fotos ===== */}
+              {(temMapa || pedeFoto) && (
+                <section
+                  // A grade só na página aberta: o `lg:grid` venceria o `sm:hidden` das outras.
+                  className={`space-y-6 ${
+                    paginaAtiva !== 'fotos'
+                      ? naPagina('fotos')
+                      : temMapa && pedeFoto
+                        ? 'lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-10 lg:items-start'
+                        : ''
+                  }`}
+                >
+                  {/* Mapa anatômico anotável */}
+                  {fotoModeloUrl && (
+                    <div className="space-y-2">
+                      <span className={labelClass}>Mapa anatômico</span>
+                      <div className="relative rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-surface">
+                        <img
+                          src={fotoModeloExibida}
+                          alt="Mapa anatômico do procedimento"
+                          className="w-full object-contain max-h-[420px]"
+                        />
+                        <button
+                          onClick={() => setAnotando('modelo')}
+                          className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          {fotoModeloAnotadaUrl ? 'Editar anotações' : 'Anotar'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fotos da sessão — quantas forem precisas, cada uma anotável à parte */}
+                  {pedeFoto && (
+                    <div className="space-y-2">
+                      <span className={labelClass}>
+                        {rotulos.rotuloDasFotos}
+                        {fotos.length > 0 ? ` (${fotos.length})` : ''}
+                      </span>
+                      {fotos.length > 0 && (
+                        <div className={`grid gap-3 ${fotos.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+                          {fotos.map((foto, i) => (
+                            <div
+                              key={`${i}-${foto.url}`}
+                              className="rounded-xl overflow-hidden border border-[rgba(26,26,26,.1)] bg-surface"
+                            >
+                              <div className="relative">
+                                <img
+                                  src={foto.anotadaUrl || foto.url}
+                                  alt={foto.legenda?.trim() || `${rotulos.rotuloDaFoto} ${i + 1}`}
+                                  className={`w-full object-contain ${fotos.length > 1 ? 'max-h-[300px]' : 'max-h-[420px]'}`}
+                                />
+                                <div className="absolute bottom-3 right-3 flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => removerFoto(i)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 text-ink text-[13px] font-semibold shadow-lg hover:bg-white transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Remover
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAnotando(i)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink text-white text-[13px] font-semibold shadow-lg hover:bg-black transition-colors"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    {foto.anotadaUrl ? 'Editar anotações' : 'Anotar'}
+                                  </button>
+                                </div>
+                              </div>
+                              {/* Legenda: o que identifica a foto entre as outras da sessão */}
+                              <input
+                                value={foto.legenda || ''}
+                                onChange={(e) => mudarLegenda(i, e.target.value)}
+                                maxLength={60}
+                                placeholder="Legenda — ex.: frente, perfil direito"
+                                aria-label={`Legenda da foto ${i + 1}`}
+                                className="w-full px-3.5 py-2.5 bg-card border-t border-[rgba(26,26,26,.1)] text-[14px] text-ink placeholder:text-gray-400 focus:outline-none focus:bg-white transition-colors"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {fotos.length < MAX_FOTOS_DA_SESSAO && (
+                        <label
+                          className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[rgba(26,26,26,.2)] bg-surface transition-colors ${
+                            fotos.length === 0 ? 'py-8' : 'py-4'
+                          } ${enviandoFotos ? 'opacity-70' : 'cursor-pointer hover:border-brand'}`}
+                        >
+                          {enviandoFotos ? (
+                            <Loader2 className="w-6 h-6 text-muted animate-spin" />
+                          ) : fotos.length === 0 ? (
+                            <Camera className="w-6 h-6 text-gray-400" />
+                          ) : (
+                            <Plus className="w-5 h-5 text-gray-400" />
+                          )}
+                          <span className="text-[13px] font-semibold text-ink-soft">
+                            {enviandoFotos
+                              ? 'Enviando…'
+                              : fotos.length === 0
+                              ? `Enviar ${rotulos.rotuloDasFotos.toLowerCase()}`
+                              : 'Adicionar mais fotos'}
+                          </span>
+                          {fotos.length === 0 && (
+                            <span className="text-[12px] text-gray-400">{rotulos.dicaDaFoto}</span>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            disabled={enviandoFotos}
+                            className="hidden"
+                            onChange={handleFotosSessao}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
+                </section>
               )}
 
+              {/* ===== Página 3 — observações ===== */}
               {/* Observações — sempre presente, inclusive sem ficha cadastrada */}
-              <div className="space-y-1.5">
+              <section className={`space-y-1.5 ${naPagina('observacoes')}`}>
                 <label className={labelClass} htmlFor="ficha-observacoes">
                   {rotulos.rotuloDasObservacoes}
                 </label>
@@ -1045,15 +1260,33 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                   onChange={(e) => setObservacoes(e.target.value)}
                   rows={4}
                   placeholder={rotulos.dicaDasObservacoes}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[rgba(26,26,26,.15)] text-[14px] text-ink placeholder:text-gray-400 focus:outline-none focus:border-brand transition-colors resize-y"
+                  // No computador a página é dela: a caixa já abre grande.
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[rgba(26,26,26,.15)] text-[14px] text-ink placeholder:text-gray-400 focus:outline-none focus:border-brand transition-colors resize-y sm:min-h-[300px]"
                 />
-              </div>
+              </section>
 
-              {/* Só no acompanhamento: material e quantidade, sem valor — o custo fica no Financeiro. */}
-              <SecaoUsoDeMaterial uso={uso} />
+              {/* ===== Página 4 — os materiais (só no relatório de um atendimento) ===== */}
+              {/* Material e quantidade, sem valor — o custo fica no Financeiro. */}
+              {uso.ativo && (
+                <section className={naPagina('materiais')}>
+                  <SecaoUsoDeMaterial uso={uso} />
+                </section>
+              )}
 
-              {/* Só na avaliação: o consumo estimado e, com ele, o orçamento inteiro. */}
-              <SecaoOrcamentoDaAvaliacao oa={orcamento} catalogo={catalogo} clinic={clinicProfile} />
+              {/* ===== Página 4 — o orçamento (só na avaliação) ===== */}
+              {/* O consumo estimado e, com ele, os procedimentos, os produtos e o pagamento. */}
+              {orcamento.ativo && (
+                <section className={naPagina('orcamento')}>
+                  <SecaoOrcamentoDaAvaliacao oa={orcamento} catalogo={catalogo} clinic={clinicProfile} />
+                </section>
+              )}
+
+              {/* ===== Página 5 — os dados do orçamento: datas e mensagem de abertura ===== */}
+              {orcamento.ativo && orcamento.comDados && (
+                <section className={naPagina('dadosDoOrcamento')}>
+                  <SecaoDadosDoOrcamentoDaAvaliacao oa={orcamento} />
+                </section>
+              )}
 
               {registro?.preenchidoEm && (
                 <p className="text-[12px] text-gray-400">
