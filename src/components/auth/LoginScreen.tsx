@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { FormularioDeCadastro } from './CadastroDaClinica';
-import { Lock, Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
-import { login, sendResetPasswordEmail } from '../../services/authService';
+import { Lock, Mail, AlertCircle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import type { MultiFactorResolver } from 'firebase/auth';
+import {
+  entrarComCodigo,
+  login,
+  mensagemDoSegundoFator,
+  PedeSegundoFator,
+  sendResetPasswordEmail,
+} from '../../services/authService';
 import { ehZulia } from '../../lib/projetoFirebase';
 import { DESCRICAO_DA_PLATAFORMA, MARCA_DA_LA_VIE, MARCA_DA_PLATAFORMA } from '../../utils/marca';
 import { CADASTRO_ABERTO } from '../../utils/cadastro';
@@ -54,15 +61,27 @@ export const LoginScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
   const [cadastrando, setCadastrando] = useState(() => TEM_CADASTRO && pediuCadastro());
+  // Segundo passo do login com verificação em duas etapas (o dono da plataforma).
+  const [segundoFator, setSegundoFator] = useState<MultiFactorResolver | null>(null);
+  const [codigo, setCodigo] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
     try {
-      await login(email, password);
+      if (segundoFator) await entrarComCodigo(segundoFator, codigo);
+      else await login(email, password);
     } catch (err) {
-      setError(friendlyError(err));
+      if (err instanceof PedeSegundoFator) {
+        setSegundoFator(err.resolver);
+        setCodigo('');
+      } else if (segundoFator) {
+        setError(mensagemDoSegundoFator(err));
+        if (/tempo para digitar/.test(mensagemDoSegundoFator(err))) setSegundoFator(null);
+      } else {
+        setError(friendlyError(err));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -134,8 +153,31 @@ export const LoginScreen: React.FC = () => {
           className="clareira-no-relevo relative isolate px-2 py-4 space-y-4"
         >
           <p className="font-marca marca-em-relevo text-center text-[13px] text-brand-deep">
-            {ehZulia ? 'Acesso da clínica' : 'Acesso da equipe'}
+            {segundoFator ? 'Verificação em duas etapas' : ehZulia ? 'Acesso da clínica' : 'Acesso da equipe'}
           </p>
+          {segundoFator ? (
+            <div className="space-y-2">
+              <p className="marca-em-relevo text-center text-[13px] text-ink leading-snug">
+                Digite o código de 6 dígitos que aparece agora no seu aplicativo autenticador.
+              </p>
+              <div className="relative">
+                <ShieldCheck className="w-[18px] h-[18px] absolute z-10 left-5 top-1/2 -translate-y-1/2 text-brand-deep pointer-events-none" />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Código"
+                  aria-label="Código do aplicativo autenticador"
+                  autoFocus
+                  required
+                  className="campo-entalhado w-full h-[54px] pl-[3.1rem] pr-5 text-[18px] tracking-[0.3em] rounded-full text-ink placeholder:text-ink-soft placeholder:tracking-normal focus:outline-hidden"
+                />
+              </div>
+            </div>
+          ) : (
+          <>
           <div>
                         <div className="relative">
               <Mail className="w-[18px] h-[18px] absolute z-10 left-5 top-1/2 -translate-y-1/2 text-brand-deep pointer-events-none" />
@@ -167,6 +209,8 @@ export const LoginScreen: React.FC = () => {
               />
             </div>
           </div>
+          </>
+          )}
 
           {error && (
             <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[13px]">
@@ -188,15 +232,22 @@ export const LoginScreen: React.FC = () => {
             className="botao-em-relevo font-marca w-full h-[54px] rounded-full text-[14px] text-brand-deep flex items-center justify-center gap-2 active:scale-97 transition-all disabled:opacity-60"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            {isSubmitting ? 'Entrando...' : 'Entrar'}
+            {isSubmitting ? 'Entrando...' : segundoFator ? 'Confirmar código' : 'Entrar'}
           </button>
 
           <button
             type="button"
-            onClick={handleForgotPassword}
+            onClick={
+              segundoFator
+                ? () => {
+                    setSegundoFator(null);
+                    setError(null);
+                  }
+                : handleForgotPassword
+            }
             className="marca-em-relevo w-full text-center text-[13px] text-ink hover:text-brand-deep font-medium transition-colors"
           >
-            Esqueci minha senha
+            {segundoFator ? 'Voltar' : 'Esqueci minha senha'}
           </button>
         </form>
         )}

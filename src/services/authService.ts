@@ -6,6 +6,12 @@ import {
   signOut,
   sendPasswordResetEmail,
   createUserWithEmailAndPassword,
+  getMultiFactorResolver,
+  multiFactor,
+  TotpMultiFactorGenerator,
+  type MultiFactorError,
+  type MultiFactorResolver,
+  type TotpSecret,
   type User,
 } from 'firebase/auth';
 import { auth, firebaseConfig } from '../lib/firebase';
@@ -18,8 +24,80 @@ export function onAuthChange(callback: (user: User | null) => void): () => void 
   return onAuthStateChanged(auth, callback);
 }
 
+/**
+ * O login pede o segundo fator (o código do aplicativo autenticador): é o caso do dono da
+ * plataforma. `resolver` completa a entrada com o código (`entrarComCodigo`).
+ */
+export class PedeSegundoFator extends Error {
+  constructor(readonly resolver: MultiFactorResolver) {
+    super('segundo fator');
+    this.name = 'PedeSegundoFator';
+  }
+}
+
 export async function login(email: string, password: string): Promise<void> {
-  await signInWithEmailAndPassword(auth, email.trim(), password);
+  try {
+    await signInWithEmailAndPassword(auth, email.trim(), password);
+  } catch (erro) {
+    if ((erro as { code?: string })?.code === 'auth/multi-factor-auth-required') {
+      throw new PedeSegundoFator(getMultiFactorResolver(auth, erro as MultiFactorError));
+    }
+    throw erro;
+  }
+}
+
+// ==========================================
+// SEGUNDO FATOR (aplicativo autenticador)
+// ==========================================
+
+/** Completa a entrada com o código de 6 dígitos do aplicativo autenticador. */
+export async function entrarComCodigo(resolver: MultiFactorResolver, codigo: string): Promise<void> {
+  const dica = resolver.hints.find((h) => h.factorId === TotpMultiFactorGenerator.FACTOR_ID);
+  if (!dica) throw Object.assign(new Error('Este login não tem aplicativo autenticador.'), { code: 'sem-autenticador' });
+  await resolver.resolveSignIn(TotpMultiFactorGenerator.assertionForSignIn(dica.uid, codigo.replace(/\D/g, '')));
+}
+
+/** O login já tem um segundo fator cadastrado? */
+export const temSegundoFator = (user: User): boolean => multiFactor(user).enrolledFactors.length > 0;
+
+/** A sessão atual entrou com o segundo fator? (o token diz `firebase.sign_in_second_factor`) */
+export async function entrouComSegundoFator(user: User): Promise<boolean> {
+  const { claims } = await user.getIdTokenResult();
+  return !!(claims.firebase as { sign_in_second_factor?: string } | undefined)?.sign_in_second_factor;
+}
+
+/** Começa o cadastro do aplicativo autenticador: o segredo (e o QR) para a pessoa ler no app. */
+export async function gerarSegredoDoAutenticador(user: User): Promise<TotpSecret> {
+  return TotpMultiFactorGenerator.generateSecret(await multiFactor(user).getSession());
+}
+
+/** Termina o cadastro com o primeiro código que o aplicativo mostrou. */
+export async function cadastrarAutenticador(user: User, segredo: TotpSecret, codigo: string): Promise<void> {
+  await multiFactor(user).enroll(
+    TotpMultiFactorGenerator.assertionForEnrollment(segredo, codigo.replace(/\D/g, '')),
+    'Aplicativo autenticador'
+  );
+}
+
+/** A frase para a tela, a partir do erro do segundo fator. */
+export function mensagemDoSegundoFator(erro: unknown): string {
+  switch ((erro as { code?: string })?.code) {
+    case 'auth/invalid-verification-code':
+      return 'Código incorreto. Confira no aplicativo autenticador e digite o código que está aparecendo agora.';
+    case 'auth/code-expired':
+    case 'auth/totp-challenge-timeout':
+    case 'auth/missing-multi-factor-session':
+    case 'auth/invalid-multi-factor-session':
+      return 'O tempo para digitar o código acabou. Entre de novo com a senha.';
+    case 'auth/requires-recent-login':
+      return 'Por segurança, saia e entre de novo com a senha antes de cadastrar o autenticador.';
+    case 'auth/too-many-requests':
+      return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+    case 'auth/network-request-failed':
+      return 'Sem conexão. Confira a internet e tente de novo.';
+    default:
+      return 'Não foi possível conferir o código agora. Tente de novo.';
+  }
 }
 
 export async function logout(): Promise<void> {

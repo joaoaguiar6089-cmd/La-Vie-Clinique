@@ -13,8 +13,10 @@ rules_version = '2';
 // público por link.
 //
 // O QUE O DONO VÊ
-// O dono lê o documento de cada clínica (nome, plano, situação, uso), mas NÃO as coleções dentro
-// dele: a clínica é a controladora dos dados das pacientes e a Zulia, a operadora.
+// Nada pelo navegador. O painel do dono passa pelo servidor (`server/dono.ts`), que exige o login
+// do dono COM o segundo fator e entrega só o que é da conta da clínica (plano, uso em números,
+// logins, último acesso). As coleções de dentro da clínica, nunca: a clínica é a controladora dos
+// dados das pacientes e a plataforma, a operadora.
 //
 // Publicar com:  npm run publicar-regras -- --projeto zulia   (ver docs/publicar-regras.md)
 // Testar com:    scripts/verificar-regras-zulia.ts
@@ -92,10 +94,10 @@ service cloud.firestore {
     }
 
     match /clinicas/{c} {
-      // Os membros leem o próprio documento (plano, recursos, uso); o dono lê o de todas. Pelo
+      // Os membros leem o próprio documento (plano, recursos, uso); o dono, só pelo servidor. Pelo
       // navegador, a equipe só mexe nos contadores de uso, e só junto com o cadastro que nasce ou
       // some (ver "PLANOS E LIMITES"). Criar clínica, mudar plano e recursos são do servidor.
-      allow read: if daClinica(c) || dono();
+      allow read: if daClinica(c);
       allow update: if daClinica(c) && soContadorDeUso(c);
       allow create, delete: if false;
 

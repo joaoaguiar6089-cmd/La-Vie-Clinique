@@ -23,6 +23,7 @@ import { PublicAppointmentEntry } from './components/agenda/PublicAppointmentEnt
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ConcluirCadastroView } from './components/auth/CadastroDaClinica';
 import { AceiteDosDocumentosModal } from './components/auth/AceiteDosDocumentos';
+import { AreaDoDono } from './components/dono/AreaDoDono';
 import { assinarAceiteDosDocumentos } from './services/cadastroApi';
 import { CADASTRO_ABERTO } from './utils/cadastro';
 import { AcessoAoPainelView } from './components/auth/AcessoAoPainelView';
@@ -1024,6 +1025,11 @@ function MainCatalogApp() {
 
   if (!authUser) {
     return <LoginScreen />;
+  }
+
+  // O dono da plataforma (sem clínica): o painel dele, com a verificação em duas etapas.
+  if (ehZulia && donoDaPlataforma && acessoAoPainel === 'negado') {
+    return <AreaDoDono user={authUser} onSair={() => logout()} />;
   }
 
   // Na plataforma, um login sem clínica é alguém que se cadastrou e ainda não terminou: confirmar o

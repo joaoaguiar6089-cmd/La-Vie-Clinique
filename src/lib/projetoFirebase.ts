@@ -1,6 +1,7 @@
 import plataforma from '../../plataforma.json';
 import configDaLaVie from '../../firebase-applet-config.json';
 import configDaZulia from '../../zulia-firebase-config.json';
+import configDeTestes from '../../venus-jk-testes-firebase-config.json';
 
 /**
  * Qual projeto do Firebase este código usa: o da La Vie (`legado`) ou o da Zulia (`zulia`).
@@ -71,8 +72,21 @@ export function escolherModo(doArquivo: unknown, sobrescrita?: unknown): ModoPla
   return 'legado';
 }
 
+/**
+ * Só para testes, nunca no ar: o modo Zulia aponta para o projeto de testes `venus-jk-testes`
+ * (`venus-jk-testes-firebase-config.json`) em vez do `zulia-plataforma`, que tem as pacientes de
+ * verdade. Liga com `VITE_PROJETO_DE_TESTES=1` no Vite e `PROJETO_DE_TESTES=1` no Node (servidor e
+ * scripts, inclusive `publicar-regras -- --projeto zulia`). A conta do Claude é Editor lá.
+ */
+export const usaProjetoDeTestes: boolean = (() => {
+  if ((import.meta as { env?: Record<string, string | undefined> }).env?.VITE_PROJETO_DE_TESTES === '1') return true;
+  if (typeof process !== 'undefined' && process?.env) return process.env.PROJETO_DE_TESTES === '1';
+  return false;
+})();
+
 /** A configuração do app web de um projeto, independente do modo valendo. */
 export function configDoProjeto(modo: ModoPlataforma): ConfigDoFirebase {
+  if (modo === 'zulia' && usaProjetoDeTestes) return configDeTestes;
   return CONFIGS[modo];
 }
 

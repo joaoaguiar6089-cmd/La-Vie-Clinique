@@ -25,6 +25,11 @@ export interface LoginDoPainel {
   dono: boolean;
   /** O e-mail do login foi confirmado (claim padrão `email_verified`). Ausente: não. */
   emailVerificado?: boolean;
+  /**
+   * O segundo fator usado para entrar nesta sessão (`firebase.sign_in_second_factor`: `totp` pelo
+   * aplicativo autenticador, `phone` por SMS), ou `null` se entrou só com a senha.
+   */
+  segundoFator?: string | null;
 }
 
 /** As claims viram o login. Puro, para conferir sem token (`scripts/verificar-servidor-zulia.ts`). */
@@ -35,6 +40,10 @@ export const loginDasClaims = (claims: Record<string, unknown> & { uid: string; 
   papel: claims.papel === 'admin' || claims.papel === 'profissional' ? claims.papel : null,
   dono: claims.donoDaPlataforma === true,
   emailVerificado: claims.email_verified === true,
+  segundoFator:
+    typeof (claims.firebase as { sign_in_second_factor?: unknown } | undefined)?.sign_in_second_factor === 'string'
+      ? String((claims.firebase as { sign_in_second_factor: string }).sign_in_second_factor)
+      : null,
 });
 
 /** Códigos do Admin SDK que querem dizer "este token não vale" — e não "não deu para conferir". */

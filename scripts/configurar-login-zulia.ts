@@ -8,8 +8,13 @@
  * lista, a equipe da La Vie não entraria no dia da migração. Pôr o domínio antes não afeta a La
  * Vie, que usa outro projeto.
  *
- *   npx tsx scripts/configurar-login-zulia.ts --conferir   só mostra a lista de hoje
+ * Também liga a verificação em duas etapas por aplicativo autenticador (TOTP), exigida no login do
+ * dono da plataforma (ver server/dono.ts). Ligar não obriga ninguém: só quem cadastra o aplicativo
+ * passa a precisar do código.
+ *
+ *   npx tsx scripts/configurar-login-zulia.ts --conferir   só mostra como está
  *   npx tsx scripts/configurar-login-zulia.ts              acrescenta o que falta (nunca tira)
+ *   (PROJETO_DE_TESTES=1: no projeto de testes)
  *
  * Os domínios a garantir ficam em DOMINIOS, abaixo. Quando houver domínio próprio, ele entra ali.
  *
@@ -25,7 +30,15 @@ const API = 'https://identitytoolkit.googleapis.com/admin/v2';
 
 interface ConfigDoLogin {
   authorizedDomains?: string[];
+  mfa?: {
+    state?: string;
+    providerConfigs?: Array<{ state?: string; totpProviderConfig?: { adjacentIntervals?: number } }>;
+  };
 }
+
+/** A verificação em duas etapas por aplicativo autenticador está ligada? */
+const totpLigado = (c: ConfigDoLogin): boolean =>
+  c.mfa?.state === 'ENABLED' && !!c.mfa.providerConfigs?.some((p) => p.state === 'ENABLED' && p.totpProviderConfig);
 
 async function main() {
   const zulia = abrirZulia({ emulador: false });
@@ -46,19 +59,32 @@ async function main() {
       return dados as ConfigDoLogin;
     };
 
-    const antes = (await chamar('GET', endereco)).authorizedDomains || [];
+    const configuracao = await chamar('GET', endereco);
+    const antes = configuracao.authorizedDomains || [];
     console.log(`Projeto ${zulia.config.projectId}\nDomínios autorizados hoje: ${antes.join(', ') || '(nenhum)'}`);
+    console.log(`Duas etapas por aplicativo autenticador: ${totpLigado(configuracao) ? 'ligada' : 'desligada'}`);
 
     const faltando = DOMINIOS.filter((d) => !antes.includes(d));
-    if (faltando.length === 0) {
+    const faltaTotp = !totpLigado(configuracao);
+    if (faltando.length === 0 && !faltaTotp) {
       console.log('Nada a acrescentar.');
       return;
     }
     if (process.argv.includes('--conferir')) {
-      console.log(`Faltam: ${faltando.join(', ')}`);
+      if (faltando.length) console.log(`Faltam: ${faltando.join(', ')}`);
+      if (faltaTotp) console.log('Falta ligar as duas etapas por aplicativo autenticador.');
       process.exitCode = 1;
       return;
     }
+
+    if (faltaTotp) {
+      const depoisDoTotp = await chamar('PATCH', `${endereco}?updateMask=mfa`, {
+        mfa: { state: 'ENABLED', providerConfigs: [{ state: 'ENABLED', totpProviderConfig: { adjacentIntervals: 5 } }] },
+      });
+      if (!totpLigado(depoisDoTotp)) throw new Error('As duas etapas não ficaram ligadas.');
+      console.log('Duas etapas por aplicativo autenticador: ligada agora');
+    }
+    if (faltando.length === 0) return;
 
     // A lista é trocada inteira: manda a de hoje com os novos no fim, para não tirar nenhum.
     const depois =

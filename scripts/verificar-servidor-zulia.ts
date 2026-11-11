@@ -24,6 +24,7 @@ import { definirAuthAdmin, definirBancoAdmin } from '../server/firebaseAdmin';
 import { criarLimitadores, criarRotasFichaPublica } from '../server/fichaPublica';
 import { criarResolvedorDePreview } from '../server/previewDosLinks';
 import { criarRotasDaEquipe } from '../server/equipe';
+import { criarRotasDoDono } from '../server/dono';
 import { criarRotasGoogleAgenda, cifrar } from '../server/googleAgenda';
 import { loginDasClaims, verificarLogin } from '../server/login';
 import { clinicaDoPedido, caminhoDaColecao } from '../server/clinicas';
@@ -57,6 +58,39 @@ const loginDeTeste = async (email: string, claims: Record<string, unknown> | nul
   return { uid: usuario.uid, token: await tokenDe(email) };
 };
 
+/**
+ * Um login com segundo fator por SMS (o tipo que o emulador do Authentication conhece) e o token
+ * dele, que leva `firebase.sign_in_second_factor`: a mesma marca que o aplicativo autenticador deixa
+ * no ar. Pela API REST do emulador: senha → início do 2º fator → código do emulador → fim.
+ */
+const tokenComSegundoFator = async (email: string): Promise<string> => {
+  const raiz = `http://${EMULADORES.auth}/identitytoolkit.googleapis.com`;
+  const chave = `key=${zulia.config.apiKey}`;
+  const usuario = await zulia.auth.createUser({
+    email,
+    password: SENHA,
+    emailVerified: true,
+    multiFactor: { enrolledFactors: [{ factorId: 'phone', phoneNumber: '+5511999990000', displayName: 'Celular' }] },
+  });
+  await zulia.auth.setCustomUserClaims(usuario.uid, { donoDaPlataforma: true });
+  const postar = async (url: string, corpo: unknown) =>
+    (await (await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) })).json()) as any;
+  const senha = await postar(`${raiz}/v1/accounts:signInWithPassword?${chave}`, { email, password: SENHA, returnSecureToken: true });
+  const inicio = await postar(`${raiz}/v2/accounts/mfaSignIn:start?${chave}`, {
+    mfaPendingCredential: senha.mfaPendingCredential,
+    mfaEnrollmentId: senha.mfaInfo[0].mfaEnrollmentId,
+    phoneSignInInfo: {},
+  });
+  const sessionInfo = inicio.phoneResponseInfo.sessionInfo;
+  const codigos = (await (await fetch(`http://${EMULADORES.auth}/emulator/v1/projects/${zulia.config.projectId}/verificationCodes`)).json()) as any;
+  const codigo = codigos.verificationCodes.find((c: { sessionInfo: string }) => c.sessionInfo === sessionInfo).code;
+  const fim = await postar(`${raiz}/v2/accounts/mfaSignIn:finalize?${chave}`, {
+    mfaPendingCredential: senha.mfaPendingCredential,
+    phoneVerificationInfo: { sessionInfo, code: codigo },
+  });
+  return fim.idToken;
+};
+
 const tokenDe = async (email: string) => {
   const app = initializeApp(zulia.config, `cliente-${email}-${Date.now()}`);
   const auth = getAuth(app);
@@ -82,7 +116,7 @@ async function main() {
   ok(
     'claims viram o login',
     JSON.stringify(loginDasClaims({ uid: 'u', clinicaId: 'k3P9xq', papel: 'admin', donoDaPlataforma: false })) ===
-      JSON.stringify({ uid: 'u', email: null, clinicaId: 'k3P9xq', papel: 'admin', dono: false, emailVerificado: false })
+      JSON.stringify({ uid: 'u', email: null, clinicaId: 'k3P9xq', papel: 'admin', dono: false, emailVerificado: false, segundoFator: null })
   );
   ok('e-mail confirmado vem da claim padrão', loginDasClaims({ uid: 'u', email_verified: true }).emailVerificado === true);
   ok('papel estranho vira nulo', loginDasClaims({ uid: 'u', papel: 'dona' }).papel === null);
@@ -124,6 +158,8 @@ async function main() {
   app.use('/api/ficha-publica', criarRotasFichaPublica({ zulia: true, banco: () => zulia.db, limites: criarLimitadores() }));
   app.use('/api/equipe', criarRotasDaEquipe({ zulia: true, banco: () => zulia.db, auth: () => zulia.auth, gerencia: () => true }));
   app.use('/api/google-agenda', criarRotasGoogleAgenda({ zulia: true, banco: () => zulia.db }));
+  // O painel do dono exigindo o segundo fator, como no ar (nos emuladores o padrão é não exigir).
+  app.use('/api/dono', criarRotasDoDono({ zulia: true, banco: () => zulia.db, auth: () => zulia.auth, gerencia: () => true, exigirDuasEtapas: true }));
   const servidor = app.listen(0);
   const base = `http://127.0.0.1:${(servidor.address() as AddressInfo).port}`;
   const post = async (rota: string, corpo: unknown, token?: string) => {
@@ -300,9 +336,51 @@ async function main() {
     const semClinica = await loginDeTeste('avulsa2@x.invalid', null);
     const avulso = await post('/api/google-agenda/sincronizar', pedido(tokenA), semClinica.token);
     ok('login sem clínica → 401', avulso.status === 401);
+
+    // ==========================================
+    console.log('\nPainel do dono');
+    const pedirDono = async (metodo: 'GET' | 'POST', rota: string, token: string, corpo?: unknown) => {
+      const r = await fetch(`${base}/api/dono/${rota}`, {
+        method: metodo,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: corpo === undefined ? undefined : JSON.stringify(corpo),
+      });
+      return { status: r.status, json: (await r.json().catch(() => ({}))) as any };
+    };
+    const donoSemFator = await loginDeTeste('dono-sem@x.invalid', { donoDaPlataforma: true });
+    const semFator = await pedirDono('GET', 'clinicas', donoSemFator.token);
+    ok('dono que entrou só com a senha → 403 duas-etapas', semFator.status === 403 && semFator.json.erro === 'duas-etapas');
+    const deClinica = await pedirDono('GET', 'clinicas', adminA.token);
+    ok('admin de clínica → 403 so-dono', deClinica.status === 403 && deClinica.json.erro === 'so-dono');
+    const tokenDoDono = await tokenComSegundoFator('dono@x.invalid');
+    const lista = await pedirDono('GET', 'clinicas', tokenDoDono);
+    const ids = (lista.json.clinicas || []).map((c: { id: string }) => c.id).sort();
+    ok('dono com o segundo fator vê todas as clínicas', lista.status === 200 && ['srv-a', 'srv-b', 'srv-g'].every((c) => ids.includes(c)), JSON.stringify(ids));
+    const srvG = (lista.json.clinicas || []).find((c: { id: string }) => c.id === 'srv-g');
+    ok('com uso, logins e plano', srvG?.plano === 'gratuito' && srvG?.logins === 1 && typeof srvG?.uso?.clientes === 'number', JSON.stringify(srvG));
+    ok('e nenhum dado de paciente na resposta', !JSON.stringify(lista.json).includes('Quinta Cliente') && !JSON.stringify(lista.json).includes('Paciente srv'));
+    ok('com os totais', lista.json.totais?.clinicas === ids.length && lista.json.totais?.gratuito >= 1, JSON.stringify(lista.json.totais));
+    const cortesiaNoGratuito = await pedirDono('POST', 'plano', tokenDoDono, { clinicaId: 'srv-g', plano: 'gratuito', cortesia: true });
+    ok('cortesia só no completo → 400', cortesiaNoGratuito.status === 400);
+    const paraCortesia = await pedirDono('POST', 'plano', tokenDoDono, { clinicaId: 'srv-g', plano: 'completo', cortesia: true });
+    const gDepois = (await zulia.db.doc('clinicas/srv-g').get()).data();
+    const clientesDeG = (await zulia.db.collection('clinicas/srv-g/patients').count().get()).data().count;
+    ok('mudar o plano para cortesia', paraCortesia.status === 200 && gDepois?.plano === 'completo' && gDepois?.cortesia === true);
+    ok('e o uso é recontado', gDepois?.uso?.clientes === clientesDeG, `${gDepois?.uso?.clientes} × ${clientesDeG}`);
+    const naoExiste = await pedirDono('POST', 'plano', tokenDoDono, { clinicaId: 'nao-existe', plano: 'completo', cortesia: false });
+    ok('clínica que não existe → 404', naoExiste.status === 404);
+    const suspende = await pedirDono('POST', 'situacao', tokenDoDono, { clinicaId: 'srv-b', situacao: 'suspensa' });
+    ok('suspender desliga os logins da equipe', suspende.status === 200 && (await zulia.auth.getUser(adminB.uid)).disabled === true);
+    ok('e a clínica fica suspensa', (await zulia.db.doc('clinicas/srv-b').get()).data()?.situacao === 'suspensa');
+    ok('o token da admin suspensa deixa de valer', (await verificarLogin(adminB.token)) === null);
+    const reativa = await pedirDono('POST', 'situacao', tokenDoDono, { clinicaId: 'srv-b', situacao: 'ativa' });
+    ok('reativar liga de volta', reativa.status === 200 && (await zulia.auth.getUser(adminB.uid)).disabled === false);
+    ok('e a clínica volta a ativa', (await zulia.db.doc('clinicas/srv-b').get()).data()?.situacao === 'ativa');
+    const pelaClinica = await pedirDono('POST', 'situacao', adminA.token, { clinicaId: 'srv-b', situacao: 'suspensa' });
+    ok('admin de clínica não suspende ninguém → 403', pelaClinica.status === 403);
   } finally {
     servidor.close();
-    for (const c of ['srv-a', 'srv-b']) await zulia.db.recursiveDelete(zulia.db.doc(`clinicas/${c}`));
+    for (const c of ['srv-a', 'srv-b', 'srv-g', CLINICA_DOS_LINKS_ANTIGOS]) await zulia.db.recursiveDelete(zulia.db.doc(`clinicas/${c}`));
     const { users } = await zulia.auth.listUsers();
     await zulia.auth.deleteUsers(users.map((u) => u.uid));
     await zulia.encerrar();
