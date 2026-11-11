@@ -1,6 +1,7 @@
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import { ehZulia, firebaseConfig, usaEmuladores } from '../src/lib/projetoFirebase';
 
 /**
@@ -177,4 +178,28 @@ export const servidorGerenciaLogins = (): boolean => ehZulia && !!appComCredenci
 /** Para os testes: troca o Authentication (o do emulador, por exemplo). */
 export function definirAuthAdmin(novo: Auth | undefined): void {
   autenticacao = novo;
+}
+
+const medidos = new Map<string, { ate: number; bytes: number }>();
+
+/**
+ * O espaço ocupado pelos arquivos de `clinicas/{c}/` no Storage, em bytes (para o painel do dono),
+ * guardado por 10 minutos. `null` sem credencial, ou se a conta do servidor não puder listar o
+ * bucket (ela precisa do papel "Leitor de objetos do Storage" no projeto).
+ */
+export async function espacoDaClinica(clinicaId: string): Promise<number | null> {
+  const guardado = medidos.get(clinicaId);
+  if (guardado && guardado.ate > Date.now()) return guardado.bytes;
+  const app = appComCredencial();
+  if (!app || !ehZulia) return null;
+  try {
+    const [arquivos] = await getStorage(app).bucket(firebaseConfig.storageBucket).getFiles({ prefix: `clinicas/${clinicaId}/` });
+    const bytes = arquivos.reduce((soma, a) => soma + Number(a.metadata.size || 0), 0);
+    if (medidos.size > 1000) medidos.clear();
+    medidos.set(clinicaId, { ate: Date.now() + 10 * 60 * 1000, bytes });
+    return bytes;
+  } catch (erro) {
+    console.warn(`[dono] não foi possível medir o espaço de ${clinicaId}:`, (erro as Error).message);
+    return null;
+  }
 }

@@ -17,7 +17,7 @@ continua nos nomes internos, que trocar só traria risco: o projeto `zulia-plata
 2. ~~Projeto novo no Firebase e o sistema para várias clínicas; a La Vie migra como clínica nº 1~~ — feita (10/11/2026).
 3. Cadastro de clínica nova, planos e limites.
 4. Cobrança pela InfinitePay.
-5. Painel do dono da plataforma.
+5. Painel do dono da plataforma. (Feito em 11/2026: ver "Etapa 5: painel do dono".)
 6. Termos de uso e site instalável no celular. (Os documentos legais foram adiantados em 10/11/2026: ver "Documentos legais".)
 7. Apps nas lojas (Android e iPhone).
 
@@ -188,9 +188,10 @@ poder ler os dados das pacientes depois que eles existirem**.
   pela claim — sem leitura extra de documento, e funcionando no Storage, que não consulta o banco.
 - O dono da plataforma tem a claim `donoDaPlataforma`.
 - As regras (`zulia/firestore.rules`, `zulia/storage.rules`) conferem só a claim (`daClinica(c)`,
-  `adminDa(c)`, `dono()`), **sem `get()` de perfil**. O documento `clinicas/{c}` é lido pelos
-  membros e pelo dono, e **ninguém grava nele pelo navegador**. O dono **não** lê as coleções de
-  dentro da clínica (a Zulia é operadora dos dados). As leituras públicas e a resposta anônima ao
+  `adminDa(c)`), **sem `get()` de perfil**. O documento `clinicas/{c}` é lido pelos membros; a
+  equipe só grava nele os contadores de uso (ver "Limites do plano gratuito"). **O dono não lê nada
+  pelo navegador** (desde 11/2026): o painel dele passa pelo servidor, com o segundo fator, e nunca
+  alcança as coleções de dentro da clínica (a plataforma é operadora dos dados). As leituras públicas e a resposta anônima ao
   link do agendamento são as mesmas da La Vie. `scripts/verificar-regras-zulia.ts` confere o
   isolamento entrando com cada tipo de login.
 - Criar clínica, criar login de profissional e mudar plano passam pelo servidor (Admin SDK).
@@ -295,6 +296,40 @@ são apagados com as clínicas deles no começo e no fim:
 - Contadores de uso no documento da clínica, conferidos nas regras do Firestore junto com cada
   criação e exclusão (o contador sobe na mesma gravação em que o documento nasce). Assim o
   limite vale mesmo para quem tentar burlar a tela.
+
+## Etapa 5: painel do dono
+
+Adiantada em 11/2026, antes da cobrança (etapa 4).
+
+- **Login do dono:** claim `donoDaPlataforma`, sem clínica. Criado com
+  `npx tsx scripts/criar-dono.ts --email <e-mail>` (recusa e-mail que já é de clínica; marca o
+  e-mail como confirmado; manda o e-mail de definir a senha).
+- **Duas etapas obrigatórias, por aplicativo autenticador (TOTP):** o projeto precisa do login no
+  Identity Platform com o TOTP ligado (`scripts/configurar-login-zulia.ts` liga). No primeiro
+  login, o dono cadastra o aplicativo (QR + chave + código, `src/components/dono/AreaDoDono.tsx`) e
+  entra de novo; dali em diante a tela de login pede o código (`PedeSegundoFator` em
+  `src/services/authService.ts`). Sessão que não entrou com o código não abre o painel.
+- **Servidor** (`server/dono.ts`, `/api/dono`): exige a claim e o segundo fator no token
+  (`firebase.sign_in_second_factor`); nos emuladores, que não têm TOTP, não exige (a trava é testada
+  com um segundo fator por SMS). Rotas: `GET /clinicas` (nome, plano, cortesia, situação, dona,
+  datas, uso, logins, último acesso pelo Authentication, espaço das fotos, aceite dos Termos, e os
+  totais), `POST /plano` (gratuito, completo ou completo de cortesia; reconta o uso) e
+  `POST /situacao` (suspender desliga os logins ativos da equipe e derruba as sessões, guardando
+  quais em `suspensao.loginsDesligados`; reativar liga de volta esses). Nenhum dado de paciente.
+- **Espaço das fotos:** a conta do servidor (`servidor-zulia`) precisa do papel **Leitor de objetos
+  do Storage**; sem ele, o painel mostra "—".
+- **Regras:** o dono não lê `clinicas/{c}` pelo navegador (tudo pelo servidor).
+- **Painel** (`src/components/dono/PainelDoDono.tsx`): totais, um cartão por clínica, troca de plano
+  e suspensão com confirmação. Mudar para o gratuito uma clínica acima dos limites avisa que ela
+  deixa de criar além deles (nada é apagado).
+- **Testes:** `verificar-servidor-zulia` (a trava e as rotas) e `verificar-dono-zulia` (o painel no
+  navegador), nos emuladores. O cadastro do autenticador de verdade precisa de um projeto com
+  Identity Platform: o de testes (abaixo) ainda não tem.
+- **Projeto de testes ligado:** `PROJETO_DE_TESTES=1` (Node) ou `VITE_PROJETO_DE_TESTES=1` (Vite)
+  faz o modo Zulia apontar para o `venus-jk-testes` (`venus-jk-testes-firebase-config.json`),
+  inclusive `publicar-regras -- --projeto zulia` e `configurar-login-zulia`. As regras da Zulia já
+  estão publicadas lá. Falta o João passar o login dele para o Identity Platform (console do
+  Firebase → Authentication → Configurações → fazer o upgrade), para testar o TOTP.
 
 ## Etapa 3: cadastro de clínica nova, planos e limites
 

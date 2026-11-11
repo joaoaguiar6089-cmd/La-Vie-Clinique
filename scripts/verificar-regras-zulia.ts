@@ -10,7 +10,7 @@
  *      profissional; um dono da plataforma; e um login sem clínica (alguém que criou conta por fora).
  *   2. Entra com cada um pelo SDK do cliente (senhas geradas aqui, que não saem da memória).
  *   3. Firestore: A não lê nem grava B; o anônimo só alcança as formas públicas; ninguém grava
- *      `clinicas/{c}` pelo navegador; o dono lê `clinicas/{c}`, mas não as coleções de dentro.
+ *      `clinicas/{c}` pelo navegador; o dono não lê nada pelo navegador (só pelo servidor).
  *   4. Storage: o mesmo.
  *   5. Apaga tudo o que criou (também no começo, se uma rodada anterior ficou pela metade).
  *
@@ -298,8 +298,9 @@ async function conferirFirestore(sessoes: Record<string, Sessao>) {
   await espera('sem clínica lê o perfil público (como qualquer um)', true, ler(semClinica, 'clinicas/teste-a/clinic_settings/public_profile'));
 
   console.log('\nFirestore — dono da plataforma');
-  await espera('dono lê o documento da clínica A', true, ler(dono, 'clinicas/teste-a'));
-  await espera('dono lista as clínicas', true, listar(dono, 'clinicas'));
+  // O dono vê as clínicas só pelo servidor, com o segundo fator (server/dono.ts): nada pelo navegador.
+  await espera('dono NÃO lê o documento da clínica pelo navegador', false, ler(dono, 'clinicas/teste-a'));
+  await espera('dono NÃO lista as clínicas pelo navegador', false, listar(dono, 'clinicas'));
   await espera('dono NÃO grava o documento da clínica', false, gravar(dono, 'clinicas/teste-a', { plano: 'completo' }));
   await espera('dono NÃO lê paciente de A', false, ler(dono, 'clinicas/teste-a/patients/p1'));
   await espera('dono NÃO lista pacientes de A', false, listar(dono, 'clinicas/teste-a/patients'));
