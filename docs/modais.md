@@ -15,6 +15,12 @@ Tela cheia no celular, painel de 560px encostado à direita no desktop (760px na
 `larga`). Cabeçalho fixo, rodapé de ações fixo, corpo rolando entre os dois. Fecha por Esc, X,
 véu e botão voltar do Android — e, se o formulário foi mexido, **pergunta antes**.
 
+A exceção são as fichas clínicas (`formato="central"`, novembro de 2026): no computador abrem numa
+janela flutuante no meio da tela, quase do tamanho dela, e vão **em páginas por assunto** —
+perguntas; mapa e fotos; observações; materiais ou o orçamento (procedimentos e pagamento, depois
+os dados dele) — para preencher sem rolar. Ali a lista de trás não importa: a ficha é a tarefa
+inteira. No celular continuam a tela cheia de sempre, tudo numa rolagem só.
+
 | Componente | Largura | Por que é painel |
 | --- | --- | --- |
 | `ProcedureFormModal` | `mapa` (1180px) com "Exige seleção de área", padrão fora dele | ~1.700 linhas; com mapa, tem a foto e o painel da área lado a lado |
@@ -22,7 +28,7 @@ véu e botão voltar do Android — e, se o formulário foi mexido, **pergunta a
 | `AttendanceFormModal` | padrão | data, hora, procedimento, plano, profissional, observações |
 | `QuoteFormModal` | larga | cada procedimento é uma linha com valor, desconto e sessões |
 | `ReciboFormPanel` | padrão | nota de recibo: cliente e CPF, data, valor, forma, referente a e comprovante |
-| `FichaFillModal` | larga | avaliação e acompanhamento: perguntas da ficha mais duas imagens anotáveis; no acompanhamento, os materiais usados (sem valor) |
+| `FichaFillModal` | `central` (janela de até 1440px) | avaliação e acompanhamento: perguntas da ficha mais duas imagens anotáveis; no acompanhamento, os materiais usados (sem valor); na avaliação, o orçamento |
 | `EmissaoDeAvaliacao` | padrão | paciente, procedimento, data e profissional da avaliação emitida |
 | `MateriaisDoAtendimentoPanel` | padrão | materiais de um atendimento com quantidade, valores e total — aberto só pelo Financeiro |
 | `ProdutoFormPanel` | padrão | cadastro de produto do estoque, com a conta do preço por unidade |

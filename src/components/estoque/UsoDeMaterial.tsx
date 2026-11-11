@@ -42,6 +42,12 @@ export interface UsoDeMaterial {
   /** Mexeu por botão — o painel só percebe digitação, não clique. */
   mexido: boolean;
   plano: () => PlanoDosMateriais;
+  /**
+   * O formulário gravou e continua aberto (o PDF grava antes de abrir a folha): o que foi gravado
+   * passa a ser o registro — `null` se os materiais foram apagados. Sem isso, tirar os materiais
+   * depois não os apagaria, porque o formulário ainda acharia que não havia nada gravado.
+   */
+  marcarGravado: (gravado: MateriaisDoAtendimento | null) => void;
 }
 
 /**
@@ -161,6 +167,10 @@ export const useUsoDeMaterial = (
       : procedimentoDoAtendimento(alvo, catalogo)?.title || alvo.procedimentoNome,
     mexido,
     plano: () => planoDosMateriais({ usou, linhas, existia: !!registro, pronto: lido }),
+    marcarGravado: (gravado) => {
+      setRegistro(gravado);
+      setMexido(false);
+    },
   };
 };
 

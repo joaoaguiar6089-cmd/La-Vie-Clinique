@@ -14,6 +14,9 @@ import { ConfirmDialog, ConfirmRequest, pedidoDeDescarte } from '../ConfirmDialo
  * Aqui: **tela cheia no celular** (é um formulário, ele merece a tela toda) e **painel lateral
  * de 560px no desktop**, encostado à direita, com a lista continuando visível ao lado.
  *
+ * As fichas clínicas são a exceção (`formato="central"`): no computador elas abrem numa janela
+ * flutuante no meio da tela, quase do tamanho dela, preenchida em páginas — ver `FichaFillModal`.
+ *
  * No redesign ("Tinta") o cabeçalho é preto, com o título grande em serifa e, logo abaixo, o que
  * dá contexto ao formulário — a paciente escolhida, a margem calculada, as etapas. A barra do X
  * fica presa no topo; o título rola junto com o formulário, para não roubar a tela quando o
@@ -52,6 +55,24 @@ interface SidePanelProps {
    */
   largura?: 'padrao' | 'larga' | 'mapa';
   /**
+   * `central`: no computador, em vez do painel encostado à direita, uma janela flutuante no meio
+   * da tela, cobrindo quase toda ela — é o lugar das fichas, que no computador se preenchem em
+   * páginas e precisam de largura para não rolar. O título sobe para a barra presa no topo, ao
+   * lado do X, para a página ficar inteira para o formulário. No celular não muda nada: continua
+   * a tela cheia de sempre. Com `central`, a `largura` não vale.
+   */
+  formato?: 'lateral' | 'central';
+  /**
+   * Uma barra presa sob o cabeçalho, fora da rolagem — as páginas da ficha. Quem passa decide em
+   * que telas ela aparece (a ficha a esconde no celular, onde tudo continua numa rolagem só).
+   */
+  navegacao?: React.ReactNode;
+  /**
+   * Muda a cada gravação feita **sem fechar** o painel (o PDF da ficha grava antes de abrir a
+   * folha): o que estava mexido foi salvo, e fechar depois disso não pergunta mais nada.
+   */
+  gravado?: number;
+  /**
    * Alteração que o painel não consegue enxergar sozinho — um item adicionado por botão, uma
    * foto anexada. O painel já detecta digitação e troca de campo; isto é para o resto.
    */
@@ -80,6 +101,9 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   rodape,
   rodapeTom = 'claro',
   largura = 'padrao',
+  formato = 'lateral',
+  navegacao,
+  gravado,
   alterado,
   bloqueado,
   etapa,
@@ -109,6 +133,11 @@ export const SidePanel: React.FC<SidePanelProps> = ({
       setConfirmacao(null);
     }
   }, [aberto]);
+
+  // Gravou sem fechar: o que foi mexido até aqui já está salvo.
+  useEffect(() => {
+    if (gravado) setMexido(false);
+  }, [gravado]);
 
   function tentarFechar() {
     if (bloqueado) return;
@@ -146,10 +175,17 @@ export const SidePanel: React.FC<SidePanelProps> = ({
 
   if (!aberto) return null;
 
+  const central = formato === 'central';
+  /* Na janela central o título mora na barra do topo; o bloco preto que rola só sobra no
+     computador se tiver mais o que mostrar além dele. */
+  const blocoSoComTitulo = !subtitulo && !cabecalho;
+
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex justify-end sm:bg-black/45 sm:animate-fadeIn"
+        className={`fixed inset-0 z-50 flex justify-end sm:bg-black/45 sm:animate-fadeIn ${
+          central ? 'sm:justify-center sm:items-center sm:p-5 lg:p-8' : ''
+        }`}
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
@@ -171,17 +207,25 @@ export const SidePanel: React.FC<SidePanelProps> = ({
         <div
           ref={painelRef}
           tabIndex={-1}
-          className={`bg-surface w-full h-full flex flex-col shadow-2xl focus:outline-none sm:animate-slideInRight shrink-0 ${
-            largura === 'mapa'
-              ? 'sm:max-w-[1180px]'
-              : largura === 'larga'
-                ? 'sm:max-w-[760px]'
-                : 'sm:max-w-[560px]'
+          className={`bg-surface w-full h-full flex flex-col shadow-2xl focus:outline-none shrink-0 ${
+            central
+              ? 'sm:max-w-[1440px] sm:rounded-[28px] sm:overflow-hidden sm:animate-surgirNoCentro'
+              : `sm:animate-slideInRight ${
+                  largura === 'mapa'
+                    ? 'sm:max-w-[1180px]'
+                    : largura === 'larga'
+                      ? 'sm:max-w-[760px]'
+                      : 'sm:max-w-[560px]'
+                }`
           }`}
         >
           {/* A barra do X: presa no topo, preta como o cabeçalho que rola por baixo dela. */}
           <header className="shrink-0 bg-ink text-cream pt-[env(safe-area-inset-top)]">
-            <div className="h-14 px-2.5 sm:px-3.5 flex items-center justify-between gap-3">
+            <div
+              className={`h-14 px-2.5 sm:px-3.5 flex items-center justify-between gap-3 ${
+                central ? 'sm:h-[68px] sm:px-5' : ''
+              }`}
+            >
               <button
                 type="button"
                 onClick={onVoltar || tentarFechar}
@@ -192,12 +236,19 @@ export const SidePanel: React.FC<SidePanelProps> = ({
               >
                 {onVoltar ? <ArrowLeft className="w-[22px] h-[22px]" /> : <X className="w-[22px] h-[22px]" />}
               </button>
+              {central && (
+                <h2 className="hidden sm:block shrink-0 max-w-[60%] truncate font-serif-luxury text-[28px] font-semibold leading-none text-white">
+                  {titulo}
+                </h2>
+              )}
               {sobretitulo && (
-                <p className="min-w-0 truncate pr-2.5 text-[13px] font-semibold text-brand-light">
+                // `ml-auto`: com o título ao lado do X, o sobretítulo continua encostado à direita.
+                <p className="ml-auto min-w-0 truncate pr-2.5 text-[13px] font-semibold text-brand-light">
                   {sobretitulo}
                 </p>
               )}
             </div>
+            {navegacao}
           </header>
 
           {/* `overscroll-contain`: chegar ao fim do formulário não passa o arrasto para a página
@@ -208,8 +259,16 @@ export const SidePanel: React.FC<SidePanelProps> = ({
             onInput={() => setMexido(true)}
             onChange={() => setMexido(true)}
           >
-            <div className="bg-ink text-cream px-5 sm:px-6 pb-5">
-              <h2 className="font-serif-luxury text-[32px] font-semibold leading-[1.1] text-white break-words">
+            <div
+              className={`bg-ink text-cream px-5 sm:px-6 pb-5 ${
+                central ? (blocoSoComTitulo ? 'sm:hidden' : 'sm:px-8') : ''
+              }`}
+            >
+              <h2
+                className={`font-serif-luxury text-[32px] font-semibold leading-[1.1] text-white break-words ${
+                  central ? 'sm:hidden' : ''
+                }`}
+              >
                 {titulo}
               </h2>
               {subtitulo && <p className="mt-1 text-[14px] leading-normal text-cream/80">{subtitulo}</p>}
@@ -221,6 +280,8 @@ export const SidePanel: React.FC<SidePanelProps> = ({
           {rodape && (
             <footer
               className={`shrink-0 px-5 sm:px-6 pt-3 pb-[max(14px,env(safe-area-inset-bottom))] ${
+                central ? 'sm:px-8 sm:py-3.5' : ''
+              } ${
                 rodapeTom === 'escuro'
                   ? 'bg-ink text-cream rounded-t-[24px] pt-3.5'
                   : 'bg-surface border-t border-ink/6'

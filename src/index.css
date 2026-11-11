@@ -477,6 +477,12 @@
   to { transform: translateY(0); }
 }
 
+/* A janela central das fichas, no computador: chega crescendo um pouco, sem atravessar a tela. */
+@keyframes surgirNoCentro {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @keyframes pulsoSkeleton {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
@@ -496,6 +502,17 @@
 
 .animate-slideUpSheet {
   animation: slideUpSheet 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* `@utility`, e não uma classe solta: é usada com `sm:` (só a janela do computador anima). */
+@utility animate-surgirNoCentro {
+  /* Sem `forwards` de propósito: um `transform` que sobrasse na janela viraria a referência das
+     camadas fixas de dentro dela (a folha do PDF, o editor de anotação), presas e cortadas na
+     janela em vez de cobrirem a tela. */
+  animation: surgirNoCentro 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 /* O pulso do skeleton. Quem pediu movimento reduzido no sistema recebe o

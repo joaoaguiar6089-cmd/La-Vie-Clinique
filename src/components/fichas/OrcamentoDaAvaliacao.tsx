@@ -25,6 +25,13 @@ import {
 } from '../quotes/SecoesDoOrcamento';
 import { QUOTE_STATUS_LABEL } from '../quotes/QuoteDesfecho';
 
+/** O orçamento não deixa salvar: a frase do aviso e a parte da ficha onde está o campo. */
+export interface ProblemaNoOrcamento {
+  mensagem: string;
+  /** `itens`: procedimentos, produtos e pagamento. `dados`: datas e mensagem de abertura. */
+  parte: 'itens' | 'dados';
+}
+
 /** O que a avaliação grava depois que o orçamento dela foi salvo. */
 export interface OrcamentoGravado {
   orcamentoId?: string;
@@ -81,6 +88,12 @@ export const useOrcamentoDaAvaliacao = ({
    * este — e não cria um segundo número.
    */
   const gravadoAgora = useRef<Quote | null>(null);
+  /**
+   * O mesmo orçamento, depois que a avaliação inteira foi salva sem fechar o formulário (o PDF
+   * grava antes de abrir a folha). Na tela vale como o ligado: o aviso mostra o número dele, e o
+   * que já foi gravado não conta mais como alteração.
+   */
+  const [gravado, setGravado] = useState<Quote | null>(null);
 
   const orc = useOrcamentoEmEdicao({
     aberto: ativo,
@@ -110,6 +123,7 @@ export const useOrcamentoDaAvaliacao = ({
     setGerar(!(!orcamentoId && consumo.length > 0));
     setMexido(false);
     gravadoAgora.current = null;
+    setGravado(null);
 
     if (orcamentoId) {
       setCarregandoLigado(true);
@@ -189,14 +203,28 @@ export const useOrcamentoDaAvaliacao = ({
 
   const montando = estimou && !travado && (carregandoLigado || !semeado);
 
-  /** O que impede salvar, numa frase — `null` = pode salvar. Roda antes de gravar qualquer coisa. */
-  const validar = (): string | null => {
+  /**
+   * O que impede salvar, numa frase, e em que parte do orçamento o aviso do campo aparece — no
+   * computador a ficha vai em páginas, e o formulário leva a profissional até lá. `null` = pode
+   * salvar. Roda antes de gravar qualquer coisa.
+   */
+  const validar = (): ProblemaNoOrcamento | null => {
     if (!ativo || !estimou || travado) return null;
-    if (montando) return 'O orçamento ainda está carregando. Espere um instante e salve de novo.';
+    if (montando) {
+      return {
+        mensagem: 'O orçamento ainda está carregando. Espere um instante e salve de novo.',
+        parte: 'itens',
+      };
+    }
     if (!gerar) return null;
     const erros = orc.validar();
     const motivos = Object.values(erros);
-    return motivos.length > 0 ? `Confira o orçamento: ${motivos.join('; ')}.` : null;
+    if (motivos.length === 0) return null;
+    return {
+      mensagem: `Confira o orçamento: ${motivos.join('; ')}.`,
+      // A paciente vem da ficha; datas e "já teve avaliação" moram nos dados do orçamento.
+      parte: erros.itens ? 'itens' : 'dados',
+    };
   };
 
   /** Grava o orçamento (quando é o caso) e devolve o que a ficha guarda dele. */
@@ -244,13 +272,24 @@ export const useOrcamentoDaAvaliacao = ({
       setGerar(valor);
       setMexido(true);
     },
+    gravado,
     nomeDoProcedimento: personalizada
       ? 'o tratamento'
       : procedimentoDoAtendimento(alvo, catalogo)?.title || alvo.procedimentoNome,
     /** Marcar, desmarcar ou mexer em botões — o painel só percebe digitação, não clique. */
-    mexido: mexido || (estimou && !ligado && !travado && orc.itens.length > 0),
+    mexido: mexido || (estimou && !ligado && !gravado && !travado && orc.itens.length > 0),
+    /** Os dados do orçamento estão na tela — a página deles só existe com isto. */
+    comDados: estimou && !montando && !travado,
     validar,
     gravar,
+    /**
+     * A avaliação inteira foi salva e o formulário continua aberto (o PDF): o que estava mexido
+     * já está gravado. Chamado só depois de a ficha também ter sido salva.
+     */
+    marcarGravado: () => {
+      setMexido(false);
+      setGravado(gravadoAgora.current);
+    },
   };
 };
 
@@ -258,7 +297,14 @@ export type OrcamentoDaAvaliacao = ReturnType<typeof useOrcamentoDaAvaliacao>;
 
 const subtitulo = 'text-label font-semibold uppercase tracking-wider text-gray-400';
 
-/** O checkbox "Consumo estimado de produto" e, marcado, o orçamento inteiro, dentro da ficha. */
+/**
+ * O checkbox "Consumo estimado de produto" e, marcado, o orçamento dentro da ficha: os
+ * procedimentos e produtos e as formas de pagamento. Os dados do orçamento (datas e mensagem de
+ * abertura) ficam em `SecaoDadosDoOrcamentoDaAvaliacao` — no computador são a página seguinte; no
+ * celular vêm logo abaixo, como sempre.
+ *
+ * No computador largo, os itens e o pagamento ficam lado a lado: a página cabe sem rolar.
+ */
 export const SecaoOrcamentoDaAvaliacao: React.FC<{
   oa: OrcamentoDaAvaliacao;
   catalogo: Procedure[];
@@ -266,7 +312,8 @@ export const SecaoOrcamentoDaAvaliacao: React.FC<{
 }> = ({ oa, catalogo, clinic }) => {
   if (!oa.ativo) return null;
   const { orc } = oa;
-  const orcamentoExistente = oa.ligado || oa.travado;
+  const orcamentoExistente = oa.ligado || oa.gravado || oa.travado;
+  const rascunho = oa.ligado || oa.gravado;
 
   return (
     <div className="space-y-4">
@@ -321,11 +368,11 @@ export const SecaoOrcamentoDaAvaliacao: React.FC<{
         <>
           {orc.avisoDoEstoque && <p className="text-body text-danger">{orc.avisoDoEstoque}</p>}
 
-          {oa.ligado ? (
+          {rascunho ? (
             <p className="flex items-start gap-2 text-body text-ink-soft bg-surface border border-line rounded-xl px-3 py-2.5">
               <Receipt className="w-4 h-4 shrink-0 mt-px text-brand" />
               <span>
-                Orçamento {oa.ligado.numero} (rascunho) — o que mudar aqui atualiza o mesmo orçamento
+                Orçamento {rascunho.numero} (rascunho) — o que mudar aqui atualiza o mesmo orçamento
                 ao salvar.
               </span>
             </p>
@@ -356,18 +403,34 @@ export const SecaoOrcamentoDaAvaliacao: React.FC<{
             </p>
           )}
 
-          <SecaoItensDoOrcamento orc={orc} procedures={catalogo} clinic={clinic} />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] xl:gap-10 xl:items-start">
+            <div className="space-y-4">
+              <SecaoItensDoOrcamento orc={orc} procedures={catalogo} clinic={clinic} />
+            </div>
 
-          <SecaoPagamentoDoOrcamento orc={orc} />
-
-          <div className="space-y-3.5">
-            <h3 className={subtitulo}>Dados do orçamento</h3>
-            <SecaoDadosDoOrcamento orc={orc} idBase="avaliacao-orcamento" />
+            <SecaoPagamentoDoOrcamento orc={orc} />
           </div>
 
           <ModaisDoOrcamento orc={orc} procedures={catalogo} clinic={clinic} />
         </>
       )}
+    </div>
+  );
+};
+
+/**
+ * Os dados do orçamento da avaliação — o WhatsApp, as datas, o "já teve avaliação" e a mensagem
+ * de abertura. Só existe com o orçamento montado na tela (`oa.comDados`).
+ */
+export const SecaoDadosDoOrcamentoDaAvaliacao: React.FC<{ oa: OrcamentoDaAvaliacao }> = ({ oa }) => {
+  if (!oa.ativo || !oa.comDados) return null;
+  return (
+    <div className="space-y-3.5">
+      <h3 className={subtitulo}>Dados do orçamento</h3>
+      {/* No computador, os campos e a mensagem de abertura lado a lado. */}
+      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 lg:gap-10 lg:items-start">
+        <SecaoDadosDoOrcamento orc={oa.orc} idBase="avaliacao-orcamento" />
+      </div>
     </div>
   );
 };
