@@ -323,13 +323,19 @@ Adiantada em 11/2026, antes da cobrança (etapa 4).
   e suspensão com confirmação. Mudar para o gratuito uma clínica acima dos limites avisa que ela
   deixa de criar além deles (nada é apagado).
 - **Testes:** `verificar-servidor-zulia` (a trava e as rotas) e `verificar-dono-zulia` (o painel no
-  navegador), nos emuladores. O cadastro do autenticador de verdade precisa de um projeto com
-  Identity Platform: o de testes (abaixo) ainda não tem.
+  navegador), nos emuladores; e `verificar-dono-autenticador` no projeto de testes, com o TOTP de
+  verdade: cadastrar o autenticador, código errado recusado, entrar de novo com senha e código, o
+  painel abrir e o servidor aceitar o token com o segundo fator (apaga tudo no fim):
+
+      VITE_PLATAFORMA=zulia VITE_PROJETO_DE_TESTES=1 npm run build
+      PLATAFORMA=zulia PROJETO_DE_TESTES=1 npx tsx scripts/verificar-dono-autenticador.ts
+- **No ar desde 11/11/2026:** TOTP ligado no `zulia-plataforma`, regras publicadas, login do dono
+  criado (`joaoaguiar6089@gmail.com`, com o e-mail de definir a senha). O João deu à
+  `servidor-zulia` o papel Leitor de objetos do Storage (espaço das fotos).
 - **Projeto de testes ligado:** `PROJETO_DE_TESTES=1` (Node) ou `VITE_PROJETO_DE_TESTES=1` (Vite)
   faz o modo Zulia apontar para o `venus-jk-testes` (`venus-jk-testes-firebase-config.json`),
   inclusive `publicar-regras -- --projeto zulia` e `configurar-login-zulia`. As regras da Zulia já
-  estão publicadas lá. Falta o João passar o login dele para o Identity Platform (console do
-  Firebase → Authentication → Configurações → fazer o upgrade), para testar o TOTP.
+  estão publicadas lá, e o login está no Identity Platform, com o TOTP ligado (11/2026).
 
 ## Etapa 3: cadastro de clínica nova, planos e limites
 
