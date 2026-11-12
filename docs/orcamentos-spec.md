@@ -100,6 +100,19 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
 `ClinicSettingsModal` (`glass-card`, `glass-input`). **Tudo reativo — sem botão
 "calcular".**
 
+**Janela central no computador e hierarquia nova** (2026-11-12)
+- No computador o orçamento abre como os relatórios: janela no meio da tela
+  (`SidePanel formato="central"`), as quatro etapas em abas presas sob o título e,
+  no rodapé preto, o total, o voltar e o seguir. Cada etapa em colunas: paciente ao
+  lado da mensagem de abertura; procedimentos ao lado de "Desconto e total" (preso
+  enquanto a lista rola); formas de pagamento ao lado da negociação e observações;
+  a revisão centralizada. No celular continua a tela cheia, etapas no cabeçalho preto.
+- Títulos de seção em serifa grande (`TituloDeSecao`, em `PecasDoOrcamento`); campos
+  no padrão `CampoTinta` (rótulo dentro, 16px); as opções do item (desconto, mais de
+  1 sessão, calcular por consumo) e do pagamento em pílulas que ficam pretas quando
+  ligadas; cada item numerado e com o valor que soma no orçamento em destaque. Nada
+  de rótulo em caixa alta bronze: bronze só sobre o preto.
+
 **Identificação**
 - Número: automático, somente leitura.
 - Emissão: hoje. Validade: emissão + prazo padrão configurável (30 dias), editável.

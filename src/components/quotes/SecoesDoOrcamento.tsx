@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, Calculator, CreditCard, Eye, EyeOff, MessageSquare, Plus, Sparkles } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Plus } from 'lucide-react';
 import { ClinicProfile, Patient, Procedure } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { sugerirDescontoCombinado } from '../../utils/quoteCalc';
@@ -13,22 +13,13 @@ import { LaserQuoteMapModal } from '../laser/LaserQuoteMapModal';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { AvisoTinta, CampoTinta, INPUT_TINTA, Interruptor } from '../common/Tinta';
 import { OrcamentoEmEdicao, fromDateInput, toDateInput } from './useOrcamentoEmEdicao';
+import { TituloDeSecao } from './PecasDoOrcamento';
 
 /*
   As partes do formulário de orçamento — a paciente e as datas, os itens com o desconto, e o
   pagamento. O formulário de orçamento as mostra em etapas; a ficha de avaliação, uma embaixo da
   outra. O estado mora em `useOrcamentoEmEdicao`.
 */
-
-export const SectionHeader: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({
-  icon,
-  children,
-}) => (
-  <h3 className="font-sans text-[15px] font-bold text-ink flex items-center gap-2">
-    {icon}
-    {children}
-  </h3>
-);
 
 /**
  * A paciente, o WhatsApp, as datas, o "já teve avaliação" e a mensagem de abertura.
@@ -39,9 +30,12 @@ export const SecaoDadosDoOrcamento: React.FC<{
   orc: OrcamentoEmEdicao;
   patients?: Patient[];
   idBase?: string;
-}> = ({ orc, patients, idBase = 'orcamento' }) => (
+  /** O título acima dos campos — no formulário de orçamento; a ficha já tem o dela. */
+  titulo?: React.ReactNode;
+}> = ({ orc, patients, idBase = 'orcamento', titulo }) => (
   <>
     <div className="space-y-3.5">
+      {titulo}
       {patients && (
         <div>
           <PatientSearchSelect
@@ -120,8 +114,11 @@ export const SecaoDadosDoOrcamento: React.FC<{
       </div>
     </div>
 
-    <div className="space-y-2">
-      <SectionHeader icon={<MessageSquare className="w-4 h-4" />}>Mensagem de abertura</SectionHeader>
+    <div className="space-y-3">
+      <TituloDeSecao
+        titulo="Mensagem de abertura"
+        descricao="O texto que abre o orçamento, logo abaixo do nome da paciente."
+      />
       <CampoTinta rotulo="O texto que abre o orçamento" htmlFor={`${idBase}-apresentacao`}>
         <textarea
           id={`${idBase}-apresentacao`}
@@ -154,113 +151,136 @@ export const SecaoItensDoOrcamento: React.FC<{
   orc: OrcamentoEmEdicao;
   procedures: Procedure[];
   clinic: ClinicProfile;
-}> = ({ orc, procedures, clinic }) => {
-  const { itens, totais } = orc;
+}> = ({ orc, procedures, clinic }) => (
+  <>
+    <ListaDeItensDoOrcamento orc={orc} procedures={procedures} />
+    <TotaisDoOrcamento orc={orc} clinic={clinic} />
+  </>
+);
+
+/**
+ * Os procedimentos e produtos do orçamento, com os botões de acrescentar. No formulário de
+ * orçamento do computador é a coluna larga; os totais vão na estreita, ao lado.
+ */
+export const ListaDeItensDoOrcamento: React.FC<{
+  orc: OrcamentoEmEdicao;
+  procedures: Procedure[];
+}> = ({ orc, procedures }) => {
+  const { itens } = orc;
   return (
-    <>
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <SectionHeader icon={<Sparkles className="w-4 h-4" />}>
-            Procedimentos e produtos ({itens.length})
-          </SectionHeader>
+    <div className="space-y-4">
+      <TituloDeSecao
+        titulo="Procedimentos e produtos"
+        contagem={itens.length}
+        acao={
           <button
             type="button"
             onClick={() => orc.setMostrarCustos(!orc.mostrarCustos)}
             aria-pressed={orc.mostrarCustos}
             aria-label={orc.mostrarCustos ? 'Esconder custos e margem' : 'Mostrar custos e margem'}
             title={orc.mostrarCustos ? 'Esconder custos e margem' : 'Mostrar custos e margem'}
-            className={`shrink-0 w-8 h-8 -mr-1.5 rounded-full flex items-center justify-center transition-colors hover:bg-ink/5 ${
-              orc.mostrarCustos ? 'text-ink-soft' : 'text-ink/25 hover:text-ink-soft'
+            className={`w-9 h-9 -mr-1.5 rounded-full flex items-center justify-center transition-colors hover:bg-line-soft ${
+              orc.mostrarCustos ? 'text-ink' : 'text-ink/30 hover:text-ink-soft'
             }`}
           >
-            {orc.mostrarCustos ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {orc.mostrarCustos ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
-        </div>
+        }
+      />
 
-        {orc.errors.itens && (
-          <AvisoTinta tom="erro" icone={AlertCircle}>
-            {orc.errors.itens}
-          </AvisoTinta>
-        )}
-
-        <div className="space-y-3">
-          {itens.map((item, index) => (
-            <QuoteItemEditor
-              key={item.id}
-              item={item}
-              index={index}
-              total={itens.length}
-              professionals={orc.professionals}
-              onChange={orc.updateItem}
-              onRemove={() => orc.removeItem(item.id)}
-              onMove={(direction) => orc.moveItem(index, direction)}
-              produtos={orc.produtos}
-              linhasDoConsumo={orc.custos[item.id] || []}
-              onAlternarConsumo={(marcado) => orc.alternarConsumoDoItem(item, marcado)}
-              onMudarConsumo={(linhas) => orc.mudarConsumoDoItem(item.id, linhas)}
-              onRecalcularConsumo={() => orc.recalcularConsumoDoItem(item.id)}
-              mostrarCustos={orc.mostrarCustos}
-            />
-          ))}
-        </div>
-
-        <div className="space-y-2">
-          {/* Procedimento é a ação principal (preto); produto, do mesmo tamanho, em branco. */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <ProcedureSearchAdd
-              grande
-              procedures={procedures}
-              onAdd={orc.addProcedure}
-              onAddArea={orc.addArea}
-              onAbrirMapa={(procedimento) => orc.setMapaAberto(procedimento.id)}
-              areasNoOrcamento={orc.areasNoOrcamento}
-            />
-            <ProdutoSearchAdd grande produtos={orc.produtos} onAdd={orc.addProduto} />
-          </div>
-          <button
-            type="button"
-            onClick={orc.addItemAvulso}
-            className="h-8 px-3 rounded-full border border-ink/15 text-ink-soft text-[13px] font-semibold hover:border-ink/40 hover:text-ink transition-colors flex w-fit items-center gap-1"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Procedimento fora do catálogo
-          </button>
-          {orc.areasNoOrcamento.size > 0 && (
-            <label className="w-full flex items-center gap-2 text-body text-ink cursor-pointer">
-              <input
-                type="checkbox"
-                checked={orc.mostrarMapaCorporal}
-                onChange={(e) => orc.setMostrarMapaCorporal(e.target.checked)}
-                className="w-4 h-4 accent-ink"
-              />
-              Incluir o mapa com as áreas contratadas no PDF
-            </label>
-          )}
-
-          {orc.avisoDaAnamnese && (
-            <p className="w-full text-body text-ok bg-ok-bg rounded-xl px-3 py-2 leading-snug flex items-start justify-between gap-2">
-              <span>
-                {orc.avisoDaAnamnese.quantidade}{' '}
-                {orc.avisoDaAnamnese.quantidade === 1 ? 'área veio' : 'áreas vieram'} da ficha de{' '}
-                {new Date(orc.avisoDaAnamnese.data).toLocaleDateString('pt-BR')}. Desmarque no mapa
-                o que não entrar.
-              </span>
-              <button
-                type="button"
-                onClick={() => orc.setAvisoDaAnamnese(null)}
-                className="shrink-0 underline underline-offset-2 hover:no-underline"
-              >
-                ok
-              </button>
-            </p>
-          )}
-        </div>
-      </div>
+      {orc.errors.itens && (
+        <AvisoTinta tom="erro" icone={AlertCircle}>
+          {orc.errors.itens}
+        </AvisoTinta>
+      )}
 
       <div className="space-y-3">
-        <SectionHeader icon={<Calculator className="w-4 h-4" />}>Desconto</SectionHeader>
+        {itens.map((item, index) => (
+          <QuoteItemEditor
+            key={item.id}
+            item={item}
+            index={index}
+            total={itens.length}
+            professionals={orc.professionals}
+            onChange={orc.updateItem}
+            onRemove={() => orc.removeItem(item.id)}
+            onMove={(direction) => orc.moveItem(index, direction)}
+            produtos={orc.produtos}
+            linhasDoConsumo={orc.custos[item.id] || []}
+            onAlternarConsumo={(marcado) => orc.alternarConsumoDoItem(item, marcado)}
+            onMudarConsumo={(linhas) => orc.mudarConsumoDoItem(item.id, linhas)}
+            onRecalcularConsumo={() => orc.recalcularConsumoDoItem(item.id)}
+            mostrarCustos={orc.mostrarCustos}
+          />
+        ))}
+      </div>
 
-        <div className="rounded-2xl bg-card border border-ink/10 px-4 py-3.5 flex flex-col gap-3">
+      <div className="space-y-2">
+        {/* Procedimento é a ação principal (preto); produto, do mesmo tamanho, em branco. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <ProcedureSearchAdd
+            grande
+            procedures={procedures}
+            onAdd={orc.addProcedure}
+            onAddArea={orc.addArea}
+            onAbrirMapa={(procedimento) => orc.setMapaAberto(procedimento.id)}
+            areasNoOrcamento={orc.areasNoOrcamento}
+          />
+          <ProdutoSearchAdd grande produtos={orc.produtos} onAdd={orc.addProduto} />
+        </div>
+        <button
+          type="button"
+          onClick={orc.addItemAvulso}
+          className="min-h-[40px] px-1 text-ink text-[14px] font-semibold underline underline-offset-2 hover:no-underline flex w-fit items-center gap-1.5"
+        >
+          <Plus className="w-4 h-4" />
+          Procedimento fora do catálogo
+        </button>
+        {orc.areasNoOrcamento.size > 0 && (
+          <div className="rounded-[20px] bg-card border border-ink/10 px-4 py-3.5 sm:px-5">
+            <Interruptor
+              ligado={orc.mostrarMapaCorporal}
+              onMudar={orc.setMostrarMapaCorporal}
+              rotulo="Mapa das áreas no PDF"
+              descricao="Uma página com o manequim e as áreas contratadas marcadas."
+            />
+          </div>
+        )}
+
+        {orc.avisoDaAnamnese && (
+          <p className="w-full text-body text-ok bg-ok-bg rounded-xl px-3 py-2 leading-snug flex items-start justify-between gap-2">
+            <span>
+              {orc.avisoDaAnamnese.quantidade}{' '}
+              {orc.avisoDaAnamnese.quantidade === 1 ? 'área veio' : 'áreas vieram'} da ficha de{' '}
+              {new Date(orc.avisoDaAnamnese.data).toLocaleDateString('pt-BR')}. Desmarque no mapa
+              o que não entrar.
+            </span>
+            <button
+              type="button"
+              onClick={() => orc.setAvisoDaAnamnese(null)}
+              className="shrink-0 underline underline-offset-2 hover:no-underline"
+            >
+              ok
+            </button>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * O desconto do plano combinado, o total e o custo de material (interno). No computador, a coluna
+ * estreita ao lado dos procedimentos, presa enquanto a lista rola.
+ */
+export const TotaisDoOrcamento: React.FC<{ orc: OrcamentoEmEdicao; clinic: ClinicProfile }> = ({ orc, clinic }) => {
+  const { itens, totais } = orc;
+  return (
+    <>
+      <div className="space-y-3">
+        <TituloDeSecao titulo="Desconto e total" />
+
+        <div className="rounded-[20px] bg-card border border-ink/10 px-4 py-3.5 sm:px-5 flex flex-col gap-3">
           <Interruptor
             ligado={orc.temDescontoCombinado}
             onMudar={orc.alternarDescontoCombinado}
@@ -293,20 +313,20 @@ export const SecaoItensDoOrcamento: React.FC<{
           )}
         </div>
 
-        <div className="rounded-2xl bg-card border border-ink/10 p-4 space-y-1.5 text-[14px] tabular-nums">
-          <div className="flex justify-between text-ink-soft">
+        <div className="rounded-[20px] bg-card border border-ink/10 p-4 sm:p-5 space-y-2 text-[15px] tabular-nums">
+          <div className="flex justify-between gap-3 text-ink-soft">
             <span>Subtotal</span>
-            <span>{formatBRL(totais.subtotal)}</span>
+            <span className="font-semibold text-ink">{formatBRL(totais.subtotal)}</span>
           </div>
           {orc.temDescontoCombinado && totais.descontoCombinadoValor > 0 && (
-            <div className="flex justify-between text-ink-soft">
-              <span>Desconto plano combinado ({orc.descontoCombinadoPercentual}%)</span>
-              <span>− {formatBRL(totais.descontoCombinadoValor)}</span>
+            <div className="flex justify-between gap-3 text-ink-soft">
+              <span>Plano combinado ({orc.descontoCombinadoPercentual}%)</span>
+              <span className="font-semibold text-ink">− {formatBRL(totais.descontoCombinadoValor)}</span>
             </div>
           )}
-          <div className="flex justify-between pt-2 mt-1 border-t border-ink/8 text-ink font-bold">
-            <span>Total</span>
-            <span className="text-[17px]">{formatBRL(totais.total)}</span>
+          <div className="flex items-baseline justify-between gap-3 pt-3 mt-1 border-t border-ink/10 text-ink">
+            <span className="text-[17px] font-bold">Total</span>
+            <span className="text-[24px] font-bold leading-none">{formatBRL(totais.total)}</span>
           </div>
           {totais.descontoEfetivoPercentual > 0 && (
             <p className="text-[13px] text-ink-soft pt-1">
@@ -334,15 +354,20 @@ export const SecaoItensDoOrcamento: React.FC<{
 
 /** As formas de pagamento, a negociação e as observações. */
 export const SecaoPagamentoDoOrcamento: React.FC<{ orc: OrcamentoEmEdicao }> = ({ orc }) => (
-  <div className="space-y-4">
-    <SectionHeader icon={<CreditCard className="w-4 h-4" />}>
-      Formas de pagamento ({orc.opcoesPagamento.length})
-    </SectionHeader>
+  <div className="space-y-6">
+    <FormasDePagamentoDoOrcamento orc={orc} />
+    <NotasDoPagamento orc={orc} />
+  </div>
+);
 
-    <p className="text-[13px] text-ink-soft -mt-2">
-      A primeira forma é a principal — dá o valor do bloco preto no PDF. As demais aparecem como
-      alternativas, ex.: cartão parcelado com Pix à vista com desconto ao lado.
-    </p>
+/** As formas de pagamento aceitas — no computador, a coluna larga da etapa de pagamento. */
+export const FormasDePagamentoDoOrcamento: React.FC<{ orc: OrcamentoEmEdicao }> = ({ orc }) => (
+  <div className="space-y-4">
+    <TituloDeSecao
+      titulo="Formas de pagamento"
+      contagem={orc.opcoesPagamento.length}
+      descricao="A primeira é a principal — dá o valor do bloco preto no PDF. As outras aparecem como alternativas, por exemplo o Pix à vista com desconto ao lado do cartão parcelado."
+    />
 
     <div className="space-y-3">
       {orc.opcoesPagamento.map((opcao, index) => {
@@ -370,8 +395,14 @@ export const SecaoPagamentoDoOrcamento: React.FC<{ orc: OrcamentoEmEdicao }> = (
       <Plus className="w-4 h-4" />
       Adicionar forma de pagamento
     </button>
+  </div>
+);
 
-    <CampoTinta rotulo="Negociação (opcional)" htmlFor="orcamento-negociacao">
+/** A negociação e as observações — notas do orçamento inteiro, abaixo das formas no PDF. */
+export const NotasDoPagamento: React.FC<{ orc: OrcamentoEmEdicao }> = ({ orc }) => (
+  <div className="space-y-3">
+    <TituloDeSecao titulo="Negociação e observações" descricao="Opcionais. Saem no PDF abaixo das formas de pagamento." />
+    <CampoTinta rotulo="Negociação" htmlFor="orcamento-negociacao">
       <textarea
         id="orcamento-negociacao"
         value={orc.negociacao}
@@ -382,7 +413,7 @@ export const SecaoPagamentoDoOrcamento: React.FC<{ orc: OrcamentoEmEdicao }> = (
       />
     </CampoTinta>
 
-    <CampoTinta rotulo="Observações (opcional)" htmlFor="orcamento-observacoes">
+    <CampoTinta rotulo="Observações" htmlFor="orcamento-observacoes">
       <textarea
         id="orcamento-observacoes"
         value={orc.observacoes}

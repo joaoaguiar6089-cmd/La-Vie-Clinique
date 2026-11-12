@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, AlertCircle } from 'lucide-react';
 import { ClinicProfile, Patient, Procedure, Quote, QuoteDraft } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import {
@@ -14,11 +14,14 @@ import { AvisoTinta } from '../common/Tinta';
 import { CustoEmEdicao, quantidadeDoProduto } from '../../utils/estoque';
 import { useOrcamentoEmEdicao } from './useOrcamentoEmEdicao';
 import {
+  FormasDePagamentoDoOrcamento,
+  ListaDeItensDoOrcamento,
   ModaisDoOrcamento,
+  NotasDoPagamento,
   SecaoDadosDoOrcamento,
-  SecaoItensDoOrcamento,
-  SecaoPagamentoDoOrcamento,
+  TotaisDoOrcamento,
 } from './SecoesDoOrcamento';
+import { TituloDeSecao } from './PecasDoOrcamento';
 
 interface QuoteFormModalProps {
   isOpen: boolean;
@@ -55,6 +58,11 @@ const ETAPAS: { numero: Etapa; rotulo: string }[] = [
  * O orçamento sozinho, em quatro etapas. O estado e a conta moram em `useOrcamentoEmEdicao`, e
  * as partes da tela em `SecoesDoOrcamento` — a ficha de avaliação monta o mesmo orçamento dentro
  * dela.
+ *
+ * No computador abre como os relatórios: uma janela no meio da tela, com as etapas em abas presas
+ * no topo e cada etapa em colunas — os procedimentos ao lado do desconto e do total, as formas de
+ * pagamento ao lado das notas, a paciente ao lado da mensagem. No celular, a tela cheia de sempre,
+ * com as etapas no cabeçalho preto.
  */
 export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   isOpen,
@@ -125,8 +133,8 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
 
   const proximaEtapa = ETAPAS.find((e) => e.numero === etapa + 1);
 
-  /* As etapas no cabeçalho preto. Tocáveis: nada obriga a seguir a ordem, e voltar para mudar a
-     paciente depois de montar os procedimentos não perde nada. */
+  /* As etapas no cabeçalho preto do celular. Tocáveis: nada obriga a seguir a ordem, e voltar
+     para mudar a paciente depois de montar os procedimentos não perde nada. */
   const cabecalho = (
     <nav aria-label="Etapas do orçamento" className="-mx-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <ol className="flex gap-4 px-1 w-max">
@@ -153,6 +161,38 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     </nav>
   );
 
+  /* No computador, as mesmas etapas viram as abas presas sob o título — como as páginas dos
+     relatórios. */
+  const navegacao = (
+    <nav
+      aria-label="Etapas do orçamento"
+      className="hidden sm:block px-8 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      <ol className="flex gap-8 w-max">
+        {ETAPAS.map((e) => {
+          const ativa = e.numero === etapa;
+          return (
+            <li key={e.numero}>
+              <button
+                type="button"
+                onClick={() => setEtapa(e.numero)}
+                aria-current={ativa ? 'step' : undefined}
+                className={`pt-1 pb-3 border-b-2 text-[15px] font-semibold whitespace-nowrap transition-colors ${
+                  ativa ? 'text-white border-brand-light' : 'text-cream/60 border-transparent hover:text-cream'
+                }`}
+              >
+                <span className={`mr-1 tabular-nums ${ativa ? 'text-brand-light' : ''}`}>{e.numero}</span>
+                {e.rotulo}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+
+  const etapaAnterior = ETAPAS.find((e) => e.numero === etapa - 1);
+
   /* A barra preta de baixo: o total, que se atualiza enquanto se monta, e o próximo passo. */
   const rodape = (
     <div className="flex items-center gap-3.5">
@@ -168,6 +208,18 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
           ramos, o clique em "Revisar" trocava a etapa, o React re-renderizava no meio do clique, e
           o navegador terminava o clique num botão que já era o de salvar — o orçamento era gravado
           sem ninguém ter revisado. */}
+      {/* No computador, o voltar fica também aqui embaixo, ao lado do seguir. */}
+      {etapaAnterior && (
+        <button
+          key="anterior"
+          type="button"
+          onClick={() => setEtapa(etapaAnterior.numero)}
+          className="hidden sm:flex shrink-0 h-[52px] px-5 rounded-full border border-cream/25 text-cream text-[15px] font-semibold items-center gap-2 hover:border-cream/50 transition-colors"
+        >
+          <ArrowLeft className="w-[18px] h-[18px]" />
+          {etapaAnterior.rotulo}
+        </button>
+      )}
       {etapa < 4 && proximaEtapa ? (
         <button
           key="proxima"
@@ -202,9 +254,10 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       titulo={tituloModal}
       sobretitulo={pacienteNome.trim() || 'Orçamento'}
       cabecalho={cabecalho}
+      navegacao={navegacao}
+      formato="central"
       onVoltar={etapa > 1 ? () => setEtapa((etapa - 1) as Etapa) : undefined}
       etapa={etapa}
-      largura="larga"
       bloqueado={isSaving}
       /* Adicionar ou remover um procedimento não passa por `input`/`change`, então o painel
          não enxergaria a alteração sozinho. */
@@ -220,105 +273,131 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
           if (etapa < 4) setEtapa((etapa + 1) as Etapa);
           else handleSubmit();
         }}
-        className="px-5 sm:px-6 py-5 space-y-6"
+        className="px-5 sm:px-10 py-5 sm:py-8"
       >
-        {erroAoSalvar && (
-          <AvisoTinta tom="erro" icone={AlertCircle}>
-            {erroAoSalvar}
-          </AvisoTinta>
-        )}
+        <div className="max-w-[1180px] mx-auto space-y-6">
+          {erroAoSalvar && (
+            <AvisoTinta tom="erro" icone={AlertCircle}>
+              {erroAoSalvar}
+            </AvisoTinta>
+          )}
 
-        {/* ETAPA 1 — A PACIENTE */}
-        {etapa === 1 && (
-          <>
-            {!quoteToEdit && (
-              <p className="text-[13px] text-ink-soft -mt-1">
-                O número é gerado ao salvar — abrir e desistir não gasta numeração.
-              </p>
-            )}
-            <SecaoDadosDoOrcamento orc={orc} patients={patients} />
-          </>
-        )}
+          {/* ETAPA 1 — A PACIENTE: os dados à esquerda, a mensagem de abertura à direita. */}
+          {etapa === 1 && (
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12 lg:items-start">
+              <SecaoDadosDoOrcamento
+                orc={orc}
+                patients={patients}
+                titulo={
+                  <TituloDeSecao
+                    titulo="Paciente"
+                    descricao={
+                      quoteToEdit
+                        ? undefined
+                        : 'O número do orçamento é gerado ao salvar — abrir e desistir não gasta numeração.'
+                    }
+                  />
+                }
+              />
+            </div>
+          )}
 
-        {/* ETAPA 2 — OS PROCEDIMENTOS */}
-        {etapa === 2 && <SecaoItensDoOrcamento orc={orc} procedures={procedures} clinic={clinic} />}
-
-        {/* ETAPA 3 — O PAGAMENTO */}
-        {etapa === 3 && <SecaoPagamentoDoOrcamento orc={orc} />}
-
-        {/* ETAPA 4 — REVISAR: o que vai sair, antes de salvar. */}
-        {etapa === 4 && (
-          <div className="space-y-3">
-            <div className="rounded-[20px] bg-card border border-ink/8 p-4 flex flex-col gap-3.5">
-              <div className="flex items-start justify-between gap-3">
-                <button type="button" onClick={() => setEtapa(1)} className="min-w-0 text-left group">
-                  <span className="block text-[12px] font-semibold text-ink-soft">Para</span>
-                  <span className="block text-[17px] font-bold text-ink truncate group-hover:underline underline-offset-2">
-                    {pacienteNome.trim() || 'Falta escolher a paciente'}
-                  </span>
-                </button>
-                <div className="text-right shrink-0">
-                  <span className="block text-[12px] font-semibold text-ink-soft">Válido até</span>
-                  <span className="block text-[15px] font-bold text-ink tabular-nums">
-                    {dataValidade ? new Date(dataValidade).toLocaleDateString('pt-BR') : '—'}
-                  </span>
-                </div>
-              </div>
-
-              <ul className="border-t border-ink/8 divide-y divide-ink/8">
-                {itens.length === 0 ? (
-                  <li className="py-3 text-[14px] text-ink-soft">
-                    Nenhum procedimento ainda.{' '}
-                    <button type="button" onClick={() => setEtapa(2)} className="font-semibold text-ink underline underline-offset-2">
-                      Adicionar
-                    </button>
-                  </li>
-                ) : (
-                  itens.map((item) => (
-                    <li key={item.id} className="py-2.5 flex items-start justify-between gap-3">
-                      <span className="min-w-0">
-                        <span className="block text-[15px] font-semibold text-ink">{item.titulo || 'Sem título'}</span>
-                        <span className="block text-[13px] text-ink-soft truncate">
-                          {itemEhProduto(item)
-                            ? `Produto · ${quantidadeDoProduto(itemQuantidade(item), item.unidade || 'un')}`
-                            : [
-                                item.profissionalNome,
-                                itemSessoes(item) > 1 ? `${itemSessoes(item)} sessões` : null,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ') || 'Sem profissional'}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-[15px] font-bold text-ink tabular-nums">
-                        {formatBRL(itemValorFinal(item))}
-                      </span>
-                    </li>
-                  ))
-                )}
-              </ul>
-
-              <div className="border-t border-ink/8 pt-3 flex items-end justify-between gap-3">
-                <div className="min-w-0">
-                  <span className="block text-[12px] font-semibold text-ink-soft">Investimento</span>
-                  {opcaoPrincipal && principal && (
-                    <span className="block text-[13px] text-ink-soft">
-                      {NOME_FORMA_PAGAMENTO[opcaoPrincipal.forma]}
-                      {principal.parcela ? ` · ${principal.parcelas}× de ${formatBRL(principal.parcela)}` : ''}
-                    </span>
-                  )}
-                </div>
-                <span className="shrink-0 text-[22px] font-bold text-ink tabular-nums">
-                  {formatBRL(principal ? principal.valorFinal : totais.total)}
-                </span>
+          {/* ETAPA 2 — OS PROCEDIMENTOS: a lista na coluna larga; desconto, total e custo ao lado. */}
+          {etapa === 2 && (
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-10 lg:items-start">
+              <ListaDeItensDoOrcamento orc={orc} procedures={procedures} />
+              {/* Presa enquanto a lista rola: o desconto e o total ficam à vista ao lado de qualquer
+                  item. Mais alta que a tela (o custo de material aberto), o fim dela aparece no fim
+                  da rolagem. */}
+              <div className="space-y-6 lg:sticky lg:top-6">
+                <TotaisDoOrcamento orc={orc} clinic={clinic} />
               </div>
             </div>
+          )}
 
-            <p className="text-[13px] text-ink-soft px-1">
-              Toque numa etapa lá em cima para corrigir qualquer coisa — nada do que já foi preenchido
-              se perde.
-            </p>
-          </div>
-        )}
+          {/* ETAPA 3 — O PAGAMENTO: as formas à esquerda, a negociação e as observações à direita. */}
+          {etapa === 3 && (
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:gap-10 lg:items-start">
+              <FormasDePagamentoDoOrcamento orc={orc} />
+              <NotasDoPagamento orc={orc} />
+            </div>
+          )}
+
+          {/* ETAPA 4 — REVISAR: o que vai sair, antes de salvar. */}
+          {etapa === 4 && (
+            <div className="max-w-[720px] mx-auto space-y-4">
+              <TituloDeSecao titulo="Revisar" descricao="O que vai sair no orçamento. Confira antes de salvar." />
+              <div className="rounded-[20px] bg-card border border-ink/10 p-4 sm:p-6 flex flex-col gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <button type="button" onClick={() => setEtapa(1)} className="min-w-0 text-left group">
+                    <span className="block text-[12px] font-semibold text-ink-soft">Para</span>
+                    <span className="block text-[17px] font-bold text-ink truncate group-hover:underline underline-offset-2">
+                      {pacienteNome.trim() || 'Falta escolher a paciente'}
+                    </span>
+                  </button>
+                  <div className="text-right shrink-0">
+                    <span className="block text-[12px] font-semibold text-ink-soft">Válido até</span>
+                    <span className="block text-[15px] font-bold text-ink tabular-nums">
+                      {dataValidade ? new Date(dataValidade).toLocaleDateString('pt-BR') : '—'}
+                    </span>
+                  </div>
+                </div>
+
+                <ul className="border-t border-ink/8 divide-y divide-ink/8">
+                  {itens.length === 0 ? (
+                    <li className="py-3 text-[14px] text-ink-soft">
+                      Nenhum procedimento ainda.{' '}
+                      <button type="button" onClick={() => setEtapa(2)} className="font-semibold text-ink underline underline-offset-2">
+                        Adicionar
+                      </button>
+                    </li>
+                  ) : (
+                    itens.map((item) => (
+                      <li key={item.id} className="py-2.5 flex items-start justify-between gap-3">
+                        <span className="min-w-0">
+                          <span className="block text-[15px] font-semibold text-ink">{item.titulo || 'Sem título'}</span>
+                          <span className="block text-[13px] text-ink-soft truncate">
+                            {itemEhProduto(item)
+                              ? `Produto · ${quantidadeDoProduto(itemQuantidade(item), item.unidade || 'un')}`
+                              : [
+                                  item.profissionalNome,
+                                  itemSessoes(item) > 1 ? `${itemSessoes(item)} sessões` : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ') || 'Sem profissional'}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[15px] font-bold text-ink tabular-nums">
+                          {formatBRL(itemValorFinal(item))}
+                        </span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+
+                <div className="border-t border-ink/8 pt-3 flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="block text-[12px] font-semibold text-ink-soft">Investimento</span>
+                    {opcaoPrincipal && principal && (
+                      <span className="block text-[13px] text-ink-soft">
+                        {NOME_FORMA_PAGAMENTO[opcaoPrincipal.forma]}
+                        {principal.parcela ? ` · ${principal.parcelas}× de ${formatBRL(principal.parcela)}` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-[22px] font-bold text-ink tabular-nums">
+                    {formatBRL(principal ? principal.valorFinal : totais.total)}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[14px] text-ink-soft px-1">
+                Toque numa etapa lá em cima para corrigir qualquer coisa — nada do que já foi preenchido
+                se perde.
+              </p>
+            </div>
+          )}
+        </div>
       </form>
 
       {/* Fora do <form>: um clique no mapa não pode disparar o submit do orçamento. */}

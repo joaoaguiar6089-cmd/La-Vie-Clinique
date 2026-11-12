@@ -1,12 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Trash2,
-  ChevronUp,
-  ChevronDown,
-  AlertCircle,
-  PackageOpen,
-  RotateCcw,
-} from 'lucide-react';
+import { Trash2, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 import { ProdutoDeEstoque, Professional, QuoteItem } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import {
@@ -26,6 +19,8 @@ import {
   totaisDosMateriais,
 } from '../../utils/estoque';
 import { EditorDeMateriais } from '../estoque/EditorDeMateriais';
+import { CampoTinta, INPUT_TINTA, SetaDoSelect } from '../common/Tinta';
+import { OpcaoLigavel, PrefixoReais } from './PecasDoOrcamento';
 
 interface QuoteItemEditorProps {
   item: QuoteItem;
@@ -103,314 +98,330 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
 
   const patch = (changes: Partial<QuoteItem>) => onChange({ ...item, ...changes });
 
+  const botaoDeControle =
+    'w-9 h-9 rounded-full flex items-center justify-center text-ink-soft hover:bg-line-soft hover:text-ink disabled:opacity-25 disabled:hover:bg-transparent transition-colors';
+  const ajuda = 'mt-1 px-1 text-[13px] leading-snug text-ink-soft';
+
   return (
-    <div className="glass-card rounded-sm p-4 space-y-3">
-      {/* Cabeçalho: categoria, título e controles de ordem */}
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="text-label font-semibold uppercase tracking-widest text-brand mb-1 truncate">
-            {item.categoria || 'Sem categoria'}
-          </p>
+    <div className="rounded-[20px] bg-card border border-ink/10 p-4 sm:p-5 flex flex-col gap-4">
+      {/* Cabeçalho: o número, o nome (com a categoria no rótulo) e os controles de ordem. No
+          celular o nome desce para uma linha só dele — entre o número e os três botões, sobrava
+          meio nome. */}
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+        <span
+          aria-hidden
+          className="w-8 h-8 mt-0.5 sm:mt-3 shrink-0 rounded-full bg-ink text-brand-pale text-[14px] font-bold flex items-center justify-center tabular-nums"
+        >
+          {index + 1}
+        </span>
+        <CampoTinta
+          rotulo={`${produto ? 'Produto' : 'Procedimento'}${item.categoria && !produto ? ` · ${item.categoria}` : ''}`}
+          htmlFor={`item-titulo-${item.id}`}
+          className="order-last w-full sm:order-none sm:w-auto sm:flex-1 min-w-0"
+        >
           <input
+            id={`item-titulo-${item.id}`}
             type="text"
             value={item.titulo}
             onChange={(e) => patch({ titulo: e.target.value })}
             placeholder={produto ? 'Nome do produto' : 'Nome do procedimento'}
-            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
+            className={INPUT_TINTA}
           />
-          {/* O orçamento personalizado: o valor sai do que o procedimento vai gastar nesta cliente. */}
-          {!produto && (
-            <label className="mt-2 inline-flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={porConsumo}
-                onChange={(e) => onAlternarConsumo(e.target.checked)}
-                className="w-3.5 h-3.5 accent-brand"
-              />
-              <span className="text-xs font-medium text-ink">Calcular por consumo de produto</span>
-            </label>
-          )}
-        </div>
-
-        <div className="flex items-center gap-0.5 pt-4 shrink-0">
+        </CampoTinta>
+        <div className="flex items-center gap-0.5 ml-auto sm:ml-0 sm:mt-2.5 shrink-0">
           <button
             type="button"
             onClick={() => onMove(-1)}
             disabled={index === 0}
             aria-label="Mover para cima"
-            className="p-1 text-gray-400 hover:text-brand disabled:opacity-25 disabled:hover:text-gray-400 transition-colors"
+            title="Mover para cima"
+            className={botaoDeControle}
           >
-            <ChevronUp className="w-4 h-4" />
+            <ChevronUp className="w-[18px] h-[18px]" />
           </button>
           <button
             type="button"
             onClick={() => onMove(1)}
             disabled={index === total - 1}
             aria-label="Mover para baixo"
-            className="p-1 text-gray-400 hover:text-brand disabled:opacity-25 disabled:hover:text-gray-400 transition-colors"
+            title="Mover para baixo"
+            className={botaoDeControle}
           >
-            <ChevronDown className="w-4 h-4" />
+            <ChevronDown className="w-[18px] h-[18px]" />
           </button>
           <button
             type="button"
             onClick={onRemove}
             aria-label={`Remover ${item.titulo || 'procedimento'}`}
-            className="p-1 text-red-500 hover:text-red-700 transition-colors"
+            title="Remover"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-ink-soft hover:bg-danger-bg hover:text-danger transition-colors"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-[18px] h-[18px]" />
           </button>
         </div>
       </div>
 
-      {/* Produto: quantidade × valor de uma unidade. Sem profissional — ninguém "realiza" um produto. */}
-      {produto ? (
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-body font-medium text-ink mb-1" htmlFor={`item-qtd-${item.id}`}>
-              Quantidade ({item.unidade || 'un'})
-            </label>
-            <input
-              id={`item-qtd-${item.id}`}
-              type="number"
-              min="0"
-              step="0.01"
-              inputMode="decimal"
-              value={quantidadeStr}
-              onChange={(e) => {
-                setQuantidadeStr(e.target.value);
-                const n = numeroValido(e.target.value);
-                if (n > 0) onChange(ajustarItemDoProduto(item, { quantidade: n }));
-              }}
-              onBlur={() => setQuantidadeStr(numeroDigitado(itemQuantidade(item)))}
-              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
-            />
-            {embalagem && <p className="mt-1 text-body text-muted">{embalagem}</p>}
-          </div>
-          <div>
-            <label className="block text-body font-medium text-ink mb-1" htmlFor={`item-unitario-${item.id}`}>
-              Valor por {item.unidade || 'un'}
-            </label>
-            <input
-              id={`item-unitario-${item.id}`}
-              type="number"
-              min="0"
-              step="0.01"
-              inputMode="decimal"
-              value={unitarioStr}
-              onChange={(e) => {
-                setUnitarioStr(e.target.value);
-                onChange(ajustarItemDoProduto(item, { valorUnitario: numeroValido(e.target.value) }));
-              }}
-              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
-            />
-          </div>
-          <p className="col-span-2 -mt-1 text-body text-muted tabular-nums">
-            Total da linha: <strong className="text-ink">{formatBRL(item.valorTabela)}</strong>
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-body font-medium text-ink mb-1">
-              Profissional deste procedimento
-            </label>
-            <select
-              value={item.professionalId || ''}
-              onChange={(e) => {
-                const id = e.target.value || undefined;
-                patch({
-                  professionalId: id,
-                  profissionalNome: professionals.find((p) => p.id === id)?.name,
-                });
-              }}
-              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
+      <div className="flex flex-col gap-4 sm:pl-11">
+        {/* Produto: quantidade × valor de uma unidade. Sem profissional — ninguém "realiza" um produto. */}
+        {produto ? (
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <CampoTinta rotulo={`Quantidade (${item.unidade || 'un'})`} htmlFor={`item-qtd-${item.id}`}>
+                <input
+                  id={`item-qtd-${item.id}`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={quantidadeStr}
+                  onChange={(e) => {
+                    setQuantidadeStr(e.target.value);
+                    const n = numeroValido(e.target.value);
+                    if (n > 0) onChange(ajustarItemDoProduto(item, { quantidade: n }));
+                  }}
+                  onBlur={() => setQuantidadeStr(numeroDigitado(itemQuantidade(item)))}
+                  className={`${INPUT_TINTA} tabular-nums`}
+                />
+              </CampoTinta>
+              {embalagem && <p className={ajuda}>{embalagem}</p>}
+            </div>
+            <CampoTinta
+              rotulo={`Valor por ${item.unidade || 'un'}`}
+              htmlFor={`item-unitario-${item.id}`}
+              prefixo={<PrefixoReais />}
             >
-              <option value="">Sem profissional definida</option>
-              {professionals.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {porConsumo ? (
-            <div>
-              <span className="block text-body font-medium text-ink mb-1">Valor pelo consumo</span>
-              <p className="w-full px-3 py-1.5 rounded-sm border border-line bg-surface-2 text-sm font-semibold text-ink tabular-nums">
-                {formatBRL(item.valorTabela)}
-              </p>
-            </div>
-          ) : (
-            <div>
-              <label className="block text-body font-medium text-ink mb-1">Valor de tabela</label>
               <input
+                id={`item-unitario-${item.id}`}
                 type="number"
                 min="0"
                 step="0.01"
-                value={valorTabelaStr}
+                inputMode="decimal"
+                value={unitarioStr}
                 onChange={(e) => {
-                  setValorTabelaStr(e.target.value);
-                  patch({ valorTabela: e.target.value === '' ? 0 : Number(e.target.value) });
+                  setUnitarioStr(e.target.value);
+                  onChange(ajustarItemDoProduto(item, { valorUnitario: numeroValido(e.target.value) }));
                 }}
-                className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
+                className={`${INPUT_TINTA} tabular-nums`}
               />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Desconto e sessões */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={item.temDesconto}
-              onChange={(e) =>
-                patch({
-                  temDesconto: e.target.checked,
-                  valorComDesconto: e.target.checked ? item.valorComDesconto : undefined,
-                })
-              }
-              className="w-3.5 h-3.5 accent-brand"
-            />
-            <span className="text-xs font-medium text-ink">Desconto</span>
-          </label>
-
-          {item.temDesconto && (
-            <div>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={valorDescontoStr}
+            </CampoTinta>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <CampoTinta
+              rotulo="Profissional deste procedimento"
+              htmlFor={`item-profissional-${item.id}`}
+              sufixo={<SetaDoSelect />}
+            >
+              <select
+                id={`item-profissional-${item.id}`}
+                value={item.professionalId || ''}
                 onChange={(e) => {
-                  setValorDescontoStr(e.target.value);
+                  const id = e.target.value || undefined;
                   patch({
-                    valorComDesconto: e.target.value === '' ? undefined : Number(e.target.value),
+                    professionalId: id,
+                    profissionalNome: professionals.find((p) => p.id === id)?.name,
                   });
                 }}
-                placeholder="Novo valor"
-                className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
-              />
-              {descontoInvalido ? (
-                <p className="mt-1 text-body text-amber-600 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3 shrink-0" />
-                  Precisa ser menor que o valor de tabela — o desconto não será aplicado
-                </p>
-              ) : percentual > 0 ? (
-                <p className="mt-1 text-body text-brand tabular-nums">
-                  desconto de {Math.round(percentual)}% · sai de {formatBRL(item.valorTabela)} por{' '}
-                  {formatBRL(valorFinal)}
-                </p>
-              ) : null}
-            </div>
+                className={`${INPUT_TINTA} appearance-none cursor-pointer truncate`}
+              >
+                <option value="">Sem profissional definida</option>
+                {professionals.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </CampoTinta>
+
+            {porConsumo ? (
+              <div className="rounded-[14px] px-4 pt-2 pb-2.5 min-h-[56px] bg-surface-2 border border-ink/8">
+                <span className="block text-[12px] font-semibold text-ink-soft leading-tight mb-0.5">
+                  Valor pelo consumo
+                </span>
+                <span className="block text-[16px] font-semibold text-ink tabular-nums">
+                  {formatBRL(item.valorTabela)}
+                </span>
+              </div>
+            ) : (
+              <CampoTinta rotulo="Valor de tabela" htmlFor={`item-valor-${item.id}`} prefixo={<PrefixoReais />}>
+                <input
+                  id={`item-valor-${item.id}`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={valorTabelaStr}
+                  onChange={(e) => {
+                    setValorTabelaStr(e.target.value);
+                    patch({ valorTabela: e.target.value === '' ? 0 : Number(e.target.value) });
+                  }}
+                  className={`${INPUT_TINTA} tabular-nums`}
+                />
+              </CampoTinta>
+            )}
+          </div>
+        )}
+
+        {/* As opções do item, ligadas e desligadas à vista. O campo de cada uma aparece embaixo. */}
+        <div className="flex flex-wrap gap-2">
+          <OpcaoLigavel
+            ligada={item.temDesconto}
+            onMudar={(ligada) =>
+              patch({ temDesconto: ligada, valorComDesconto: ligada ? item.valorComDesconto : undefined })
+            }
+          >
+            Desconto
+          </OpcaoLigavel>
+          {!produto && (
+            <OpcaoLigavel
+              ligada={item.maisDeUmaSessao}
+              onMudar={(ligada) => {
+                const sessoes = ligada ? Math.max(2, item.sessoes || 2) : 1;
+                setSessoesStr(numeroDigitado(sessoes));
+                patch({ maisDeUmaSessao: ligada, sessoes });
+              }}
+            >
+              Mais de 1 sessão
+            </OpcaoLigavel>
+          )}
+          {/* O orçamento personalizado: o valor sai do que o procedimento vai gastar nesta cliente. */}
+          {!produto && (
+            <OpcaoLigavel ligada={porConsumo} onMudar={onAlternarConsumo}>
+              Calcular por consumo de produto
+            </OpcaoLigavel>
           )}
         </div>
 
-        {!produto && (
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={item.maisDeUmaSessao}
-                onChange={(e) => {
-                  const sessoes = e.target.checked ? Math.max(2, item.sessoes || 2) : 1;
-                  setSessoesStr(numeroDigitado(sessoes));
-                  patch({ maisDeUmaSessao: e.target.checked, sessoes });
-                }}
-                className="w-3.5 h-3.5 accent-brand"
-              />
-              <span className="text-xs font-medium text-ink">Mais de 1 sessão</span>
-            </label>
-
-            {item.maisDeUmaSessao && (
+        {(item.temDesconto || (!produto && item.maisDeUmaSessao)) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {item.temDesconto && (
               <div>
-                <input
-                  type="number"
-                  min="2"
-                  step="1"
-                  value={sessoesStr}
-                  onChange={(e) => {
-                    setSessoesStr(e.target.value);
-                    // Só grava o que já é um número válido; o resto espera a saída do campo.
-                    const n = Math.floor(Number(e.target.value));
-                    if (n >= 2) patch({ sessoes: n });
-                  }}
-                  onBlur={() => setSessoesStr(numeroDigitado(item.sessoes))}
-                  className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
-                />
-                <p className="mt-1 text-body text-gray-400">
-                  Informativo no PDF — não multiplica o valor
-                </p>
+                <CampoTinta
+                  rotulo="Novo valor, com desconto"
+                  htmlFor={`item-desconto-${item.id}`}
+                  prefixo={<PrefixoReais />}
+                  erro={descontoInvalido ? 'Precisa ser menor que o valor de tabela — o desconto não será aplicado.' : undefined}
+                >
+                  <input
+                    id={`item-desconto-${item.id}`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={valorDescontoStr}
+                    onChange={(e) => {
+                      setValorDescontoStr(e.target.value);
+                      patch({
+                        valorComDesconto: e.target.value === '' ? undefined : Number(e.target.value),
+                      });
+                    }}
+                    placeholder="0,00"
+                    className={`${INPUT_TINTA} tabular-nums`}
+                  />
+                </CampoTinta>
+                {!descontoInvalido && percentual > 0 && (
+                  <p className={`${ajuda} tabular-nums`}>
+                    Desconto de <strong className="text-ink">{Math.round(percentual)}%</strong> — sai de{' '}
+                    {formatBRL(item.valorTabela)} por {formatBRL(valorFinal)}.
+                  </p>
+                )}
+              </div>
+            )}
+            {!produto && item.maisDeUmaSessao && (
+              <div>
+                <CampoTinta rotulo="Sessões" htmlFor={`item-sessoes-${item.id}`}>
+                  <input
+                    id={`item-sessoes-${item.id}`}
+                    type="number"
+                    min="2"
+                    step="1"
+                    inputMode="numeric"
+                    value={sessoesStr}
+                    onChange={(e) => {
+                      setSessoesStr(e.target.value);
+                      // Só grava o que já é um número válido; o resto espera a saída do campo.
+                      const n = Math.floor(Number(e.target.value));
+                      if (n >= 2) patch({ sessoes: n });
+                    }}
+                    onBlur={() => setSessoesStr(numeroDigitado(item.sessoes))}
+                    className={`${INPUT_TINTA} tabular-nums`}
+                  />
+                </CampoTinta>
+                <p className={ajuda}>Informativo no PDF — não multiplica o valor.</p>
               </div>
             )}
           </div>
         )}
-      </div>
 
-      {/*
-        Consumo de produto. O valor do item é a soma do repassado à cliente, e cada linha mostra o
-        valor dela para a cliente. Custo por unidade, compra, repassado e margem só aparecem com o
-        olho do topo da seção ligado — o orçamento costuma ser montado com a cliente por perto. No
-        documento da cliente saem só os nomes dos produtos.
-      */}
-      {porConsumo && (
-        <div className="rounded-xl border border-line bg-surface p-3 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-label font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
-              <PackageOpen className="w-3.5 h-3.5" />
-              Consumo de produto
-            </p>
-            <button
-              type="button"
-              onClick={onRecalcularConsumo}
-              className="inline-flex items-center gap-1.5 text-body font-semibold text-brand hover:underline"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Usar consumo padrão{sessoes > 1 ? ` × ${sessoes} sessões` : ''}
-            </button>
-          </div>
-
-          <EditorDeMateriais
-            idBase={`consumo-${item.id}`}
-            itens={linhasDoConsumo}
-            onChange={onMudarConsumo}
-            produtos={produtos}
-            mostrarCusto={mostrarCustos}
-            totalDaLinha="cliente"
-            mostrarTotais={false}
-          />
-
-          {mostrarCustos && (
-            <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-line tabular-nums">
-              <div>
-                <span className="block text-label text-muted">Valor de compra</span>
-                <span className="text-body-lg font-semibold text-ink">{formatBRL(consumo.custo)}</span>
-              </div>
-              <div>
-                <span className="block text-label text-muted">Repassado à cliente</span>
-                <span className="text-body-lg font-semibold text-ink">
-                  {formatBRL(consumo.valorCliente)}
-                </span>
-              </div>
-              <div>
-                <span className="block text-label text-muted">Margem</span>
-                <span
-                  className={`text-body-lg font-semibold ${margemDoConsumo < 0 ? 'text-danger' : 'text-ok'}`}
-                >
-                  {formatBRL(margemDoConsumo)}
-                </span>
-              </div>
+        {/*
+          Consumo de produto. O valor do item é a soma do repassado à cliente, e cada linha mostra o
+          valor dela para a cliente. Custo por unidade, compra, repassado e margem só aparecem com o
+          olho do topo da seção ligado — o orçamento costuma ser montado com a cliente por perto. No
+          documento da cliente saem só os nomes dos produtos.
+        */}
+        {porConsumo && (
+          <div className="rounded-2xl bg-surface border border-ink/8 p-3.5 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <p className="text-[15px] font-bold text-ink">Consumo de produto</p>
+              <button
+                type="button"
+                onClick={onRecalcularConsumo}
+                className="inline-flex items-center gap-1.5 min-h-[36px] text-[14px] font-semibold text-ink underline underline-offset-2 hover:no-underline"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Usar consumo padrão{sessoes > 1 ? ` × ${sessoes} sessões` : ''}
+              </button>
             </div>
-          )}
 
-          <p className="text-body text-muted">
-            Na proposta da cliente saem só os nomes dos produtos — sem quantidade e sem valores.
-          </p>
+            <EditorDeMateriais
+              idBase={`consumo-${item.id}`}
+              itens={linhasDoConsumo}
+              onChange={onMudarConsumo}
+              produtos={produtos}
+              mostrarCusto={mostrarCustos}
+              totalDaLinha="cliente"
+              mostrarTotais={false}
+            />
+
+            {mostrarCustos && (
+              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-ink/8 tabular-nums">
+                <div>
+                  <span className="block text-[12px] font-semibold text-ink-soft">Valor de compra</span>
+                  <span className="text-[16px] font-bold text-ink">{formatBRL(consumo.custo)}</span>
+                </div>
+                <div>
+                  <span className="block text-[12px] font-semibold text-ink-soft">Repassado à cliente</span>
+                  <span className="text-[16px] font-bold text-ink">{formatBRL(consumo.valorCliente)}</span>
+                </div>
+                <div>
+                  <span className="block text-[12px] font-semibold text-ink-soft">Margem</span>
+                  <span className={`text-[16px] font-bold ${margemDoConsumo < 0 ? 'text-danger' : 'text-ok'}`}>
+                    {formatBRL(margemDoConsumo)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <p className="text-[13px] leading-snug text-ink-soft">
+              Na proposta da cliente saem só os nomes dos produtos — sem quantidade e sem valores.
+            </p>
+          </div>
+        )}
+
+        {/* O que este item soma no orçamento — o número que se procura no cartão. */}
+        <div className="flex items-baseline justify-between gap-3 pt-3 border-t border-ink/8">
+          <span className="text-[14px] font-semibold text-ink-soft">
+            {produto ? 'Total da linha' : 'Valor no orçamento'}
+            {!produto && sessoes > 1 ? ` · ${sessoes} sessões` : ''}
+          </span>
+          <span className="flex items-baseline gap-2 tabular-nums">
+            {percentual > 0 && (
+              <span className="text-[14px] text-ink-soft line-through">{formatBRL(item.valorTabela)}</span>
+            )}
+            <span className="text-[19px] font-bold text-ink">{formatBRL(valorFinal)}</span>
+          </span>
         </div>
-      )}
+      </div>
     </div>
   );
 };
