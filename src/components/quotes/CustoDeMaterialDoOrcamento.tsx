@@ -67,35 +67,37 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
     });
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3 pb-1 border-b border-white/60">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
-          <PackageOpen className="w-3.5 h-3.5" />
-          Custo de material
-        </h3>
+    <div className="rounded-[20px] border border-dashed border-ink/20 p-4 sm:p-5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-sans text-[16px] font-bold text-ink flex items-center gap-2">
+            <PackageOpen className="w-[18px] h-[18px] shrink-0" />
+            Custo de material
+          </h3>
+          <p className="mt-1 text-[13px] leading-snug text-ink-soft">
+            Só para a equipe — não sai no PDF nem no link da cliente. Só soma no total no item
+            calculado por consumo de produto.
+          </p>
+        </div>
         <button
           type="button"
           onClick={onAlternarVisivel}
           aria-expanded={visivel}
-          className="inline-flex items-center gap-1.5 min-h-[36px] px-2 -mr-2 rounded-lg text-body font-semibold text-brand hover:bg-surface-2 transition-colors"
+          className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-ink/15 text-[13px] font-semibold text-ink hover:border-ink/40 transition-colors"
         >
-          {visivel ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-          {visivel ? 'Esconder' : 'Ver custo e margem'}
+          {visivel ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          {visivel ? 'Esconder' : 'Ver'}
         </button>
       </div>
-      <p className="text-body text-muted -mt-1">
-        Só para a equipe — não sai no PDF nem no link da cliente. Só soma no total no item
-        calculado por consumo de produto.
-      </p>
 
       {!visivel ? null : semEstoque ? (
-        <p className="text-body text-muted">
-          Cadastre os produtos e o consumo por procedimento em <strong>Estoque</strong> para o custo
+        <p className="text-[14px] text-ink-soft">
+          Cadastre os produtos e o consumo por procedimento em <strong className="text-ink">Estoque</strong> para o custo
           vir preenchido aqui.
         </p>
       ) : (
         <>
-          <div className="rounded-xl border border-line bg-card divide-y divide-line overflow-hidden">
+          <div className="rounded-2xl border border-ink/10 bg-card divide-y divide-ink/8 overflow-hidden">
             {itens.map((item) => {
               const linhas = custos[item.id] || [];
               const doItem = totaisDosMateriais(linhas);
@@ -115,10 +117,10 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
                       <ChevronRight className="w-4 h-4 text-muted shrink-0" />
                     )}
                     <span className="min-w-0 flex-1">
-                      <span className="block text-body-lg text-ink truncate">
+                      <span className="block text-[15px] font-semibold text-ink truncate">
                         {item.titulo || 'Procedimento sem nome'}
                       </span>
-                      <span className="block text-body text-muted">
+                      <span className="block text-[13px] text-ink-soft">
                         {linhas.length === 0
                           ? 'Sem material'
                           : `${linhas.length} ${linhas.length === 1 ? 'material' : 'materiais'}`}
@@ -127,11 +129,11 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
                       </span>
                     </span>
                     <span className="text-right tabular-nums shrink-0">
-                      <span className="block text-body-lg font-semibold text-ink">
+                      <span className="block text-[15px] font-bold text-ink">
                         {formatBRL(doItem.custo)}
                       </span>
                       {doItem.valorCliente > 0 && (
-                        <span className="block text-label text-muted">
+                        <span className="block text-[12px] text-ink-soft">
                           cliente {formatBRL(doItem.valorCliente)}
                         </span>
                       )}
@@ -150,7 +152,7 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
                       <button
                         type="button"
                         onClick={() => onRecalcular(item.id)}
-                        className="inline-flex items-center gap-1.5 text-body font-semibold text-brand hover:underline"
+                        className="inline-flex items-center gap-1.5 min-h-[36px] text-[14px] font-semibold text-ink underline underline-offset-2 hover:no-underline"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         Recalcular pelo consumo padrão
@@ -163,21 +165,21 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
             })}
           </div>
 
-          <div className="glass-card rounded-sm p-4 space-y-1.5 text-sm tabular-nums">
-            <div className="flex justify-between text-gray-600">
+          <div className="rounded-2xl bg-card border border-ink/10 p-4 space-y-1.5 text-[14px] tabular-nums">
+            <div className="flex justify-between gap-3 text-ink-soft">
               <span>Custo estimado de material</span>
-              <span>{formatBRL(totais.custo)}</span>
+              <span className="font-semibold text-ink">{formatBRL(totais.custo)}</span>
             </div>
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between gap-3 text-ink-soft">
               <span>Valor de material para a cliente</span>
-              <span>{formatBRL(totais.valorCliente)}</span>
+              <span className="font-semibold text-ink">{formatBRL(totais.valorCliente)}</span>
             </div>
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between gap-3 text-ink-soft">
               <span>Total do orçamento</span>
-              <span>{formatBRL(totalDoOrcamento)}</span>
+              <span className="font-semibold text-ink">{formatBRL(totalDoOrcamento)}</span>
             </div>
             <div
-              className={`flex justify-between pt-2 mt-1 border-t border-line font-semibold ${
+              className={`flex justify-between gap-3 pt-2 mt-1 border-t border-ink/10 text-[16px] font-bold ${
                 margem.valor < 0 ? 'text-danger' : 'text-ink'
               }`}
             >
@@ -185,7 +187,7 @@ export const CustoDeMaterialDoOrcamento: React.FC<CustoDeMaterialDoOrcamentoProp
               <span>
                 {formatBRL(margem.valor)}
                 {margem.percentual !== null && (
-                  <span className="text-body font-medium text-muted"> ({margem.percentual}%)</span>
+                  <span className="text-[13px] font-semibold text-ink-soft"> ({margem.percentual}%)</span>
                 )}
               </span>
             </div>

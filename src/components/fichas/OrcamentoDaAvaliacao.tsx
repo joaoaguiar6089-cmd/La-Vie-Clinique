@@ -23,6 +23,7 @@ import {
   SecaoItensDoOrcamento,
   SecaoPagamentoDoOrcamento,
 } from '../quotes/SecoesDoOrcamento';
+import { TituloDeSecao } from '../quotes/PecasDoOrcamento';
 import { QUOTE_STATUS_LABEL } from '../quotes/QuoteDesfecho';
 
 /** O orçamento não deixa salvar: a frase do aviso e a parte da ficha onde está o campo. */
@@ -295,8 +296,6 @@ export const useOrcamentoDaAvaliacao = ({
 
 export type OrcamentoDaAvaliacao = ReturnType<typeof useOrcamentoDaAvaliacao>;
 
-const subtitulo = 'text-label font-semibold uppercase tracking-wider text-gray-400';
-
 /**
  * O checkbox "Consumo estimado de produto" e, marcado, o orçamento dentro da ficha: os
  * procedimentos e produtos e as formas de pagamento. Os dados do orçamento (datas e mensagem de
@@ -426,7 +425,7 @@ export const SecaoDadosDoOrcamentoDaAvaliacao: React.FC<{ oa: OrcamentoDaAvaliac
   if (!oa.ativo || !oa.comDados) return null;
   return (
     <div className="space-y-3.5">
-      <h3 className={subtitulo}>Dados do orçamento</h3>
+      <TituloDeSecao titulo="Dados do orçamento" />
       {/* No computador, os campos e a mensagem de abertura lado a lado. */}
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 lg:gap-10 lg:items-start">
         <SecaoDadosDoOrcamento orc={oa.orc} idBase="avaliacao-orcamento" />

@@ -14,8 +14,9 @@ import { ConfirmDialog, ConfirmRequest, pedidoDeDescarte } from '../ConfirmDialo
  * Aqui: **tela cheia no celular** (é um formulário, ele merece a tela toda) e **painel lateral
  * de 560px no desktop**, encostado à direita, com a lista continuando visível ao lado.
  *
- * As fichas clínicas são a exceção (`formato="central"`): no computador elas abrem numa janela
- * flutuante no meio da tela, quase do tamanho dela, preenchida em páginas — ver `FichaFillModal`.
+ * As fichas clínicas e o orçamento são a exceção (`formato="central"`): no computador abrem numa
+ * janela flutuante no meio da tela, quase do tamanho dela, preenchida em páginas — ver
+ * `FichaFillModal` e `QuoteFormModal`.
  *
  * No redesign ("Tinta") o cabeçalho é preto, com o título grande em serifa e, logo abaixo, o que
  * dá contexto ao formulário — a paciente escolhida, a margem calculada, as etapas. A barra do X
@@ -56,10 +57,11 @@ interface SidePanelProps {
   largura?: 'padrao' | 'larga' | 'mapa';
   /**
    * `central`: no computador, em vez do painel encostado à direita, uma janela flutuante no meio
-   * da tela, cobrindo quase toda ela — é o lugar das fichas, que no computador se preenchem em
-   * páginas e precisam de largura para não rolar. O título sobe para a barra presa no topo, ao
-   * lado do X, para a página ficar inteira para o formulário. No celular não muda nada: continua
-   * a tela cheia de sempre. Com `central`, a `largura` não vale.
+   * da tela, cobrindo quase toda ela — é o lugar das fichas e do orçamento, que no computador se
+   * preenchem em páginas e precisam de largura para não rolar. O título sobe para a barra presa no
+   * topo, ao lado do X, para a página ficar inteira para o formulário; `subtitulo` e `cabecalho`
+   * ficam só no celular (no computador, o que precisar ficar à vista vai na `navegacao`). No
+   * celular não muda nada: continua a tela cheia de sempre. Com `central`, a `largura` não vale.
    */
   formato?: 'lateral' | 'central';
   /**
@@ -176,9 +178,6 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   if (!aberto) return null;
 
   const central = formato === 'central';
-  /* Na janela central o título mora na barra do topo; o bloco preto que rola só sobra no
-     computador se tiver mais o que mostrar além dele. */
-  const blocoSoComTitulo = !subtitulo && !cabecalho;
 
   return (
     <>
@@ -259,11 +258,10 @@ export const SidePanel: React.FC<SidePanelProps> = ({
             onInput={() => setMexido(true)}
             onChange={() => setMexido(true)}
           >
-            <div
-              className={`bg-ink text-cream px-5 sm:px-6 pb-5 ${
-                central ? (blocoSoComTitulo ? 'sm:hidden' : 'sm:px-8') : ''
-              }`}
-            >
+            {/* Na janela central, o bloco preto que rola é só do celular: no computador o título
+                sobe para a barra do topo, e o que seria o `cabecalho` (as etapas do orçamento) é a
+                `navegacao`, presa sob ela. */}
+            <div className={`bg-ink text-cream px-5 sm:px-6 pb-5 ${central ? 'sm:hidden' : ''}`}>
               <h2
                 className={`font-serif-luxury text-[32px] font-semibold leading-[1.1] text-white break-words ${
                   central ? 'sm:hidden' : ''

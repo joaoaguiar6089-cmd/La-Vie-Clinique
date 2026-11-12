@@ -1,8 +1,10 @@
 import React from 'react';
-import { Trash2, AlertCircle } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { PaymentMethod, QuotePaymentOption } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { NOME_FORMA_PAGAMENTO } from '../../utils/quoteCalc';
+import { CampoTinta, INPUT_TINTA, PilulasDeEscolha, SetaDoSelect } from '../common/Tinta';
+import { OpcaoLigavel } from './PecasDoOrcamento';
 
 interface QuotePaymentOptionEditorProps {
   opcao: QuotePaymentOption;
@@ -31,51 +33,54 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
   const temParcelaComJuros = ehCartao && parcelas > semJuros;
 
   return (
-    <div className="glass-card rounded-sm p-4 space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-label font-semibold uppercase tracking-widest text-brand pt-2">
-          {principal ? 'Forma principal' : 'Forma alternativa'}
+    <div className="rounded-[20px] bg-card border border-ink/10 p-4 sm:p-5 flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2">
+          <span className="text-[16px] font-bold text-ink">{principal ? 'Forma principal' : 'Forma alternativa'}</span>
+          {principal && (
+            <span className="text-[12px] font-semibold text-ink-soft bg-line-soft rounded-full px-2 py-0.5">
+              valor do bloco preto
+            </span>
+          )}
         </span>
         {podeRemover && (
           <button
             type="button"
             onClick={onRemove}
             aria-label="Remover esta forma de pagamento"
-            className="p-1 text-red-500 hover:text-red-700 transition-colors"
+            title="Remover"
+            className="w-9 h-9 -mr-1 rounded-full flex items-center justify-center text-ink-soft hover:bg-danger-bg hover:text-danger transition-colors"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-[18px] h-[18px]" />
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-body font-medium text-ink mb-1">Forma</label>
-          <select
-            value={opcao.forma}
-            onChange={(e) => {
-              const forma = e.target.value as PaymentMethod;
-              patch({
-                forma,
-                parcelas: forma === 'cartao' ? opcao.parcelas || 1 : undefined,
-                parcelasSemJuros: forma === 'cartao' ? opcao.parcelasSemJuros || 12 : undefined,
-              });
-            }}
-            className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
-          >
-            <option value="pix">{NOME_FORMA_PAGAMENTO.pix}</option>
-            <option value="cartao">{NOME_FORMA_PAGAMENTO.cartao}</option>
-            <option value="dinheiro">{NOME_FORMA_PAGAMENTO.dinheiro}</option>
-          </select>
-        </div>
+      {/* A forma em pílulas: três escolhas curtas, todas à vista, em vez de uma lista suspensa. */}
+      <PilulasDeEscolha
+        rotulo="Forma de pagamento"
+        compacta
+        opcoes={(['pix', 'cartao', 'dinheiro'] as PaymentMethod[]).map((f) => ({ id: f, rotulo: NOME_FORMA_PAGAMENTO[f] }))}
+        valor={opcao.forma}
+        onMudar={(valor) => {
+          if (!valor) return;
+          const forma = valor as PaymentMethod;
+          patch({
+            forma,
+            parcelas: forma === 'cartao' ? opcao.parcelas || 1 : undefined,
+            parcelasSemJuros: forma === 'cartao' ? opcao.parcelasSemJuros || 12 : undefined,
+          });
+        }}
+      />
 
-        {ehCartao && (
-          <div>
-            <label className="block text-body font-medium text-ink mb-1">Parcelas</label>
+      {ehCartao && (
+        <div className="grid grid-cols-2 gap-2.5">
+          <CampoTinta rotulo="Parcelas" htmlFor={`pagamento-parcelas-${opcao.id}`} sufixo={<SetaDoSelect />}>
             <select
+              id={`pagamento-parcelas-${opcao.id}`}
               value={parcelas}
               onChange={(e) => patch({ parcelas: Number(e.target.value) })}
-              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
+              className={`${INPUT_TINTA} appearance-none cursor-pointer`}
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>
@@ -83,78 +88,72 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
                 </option>
               ))}
             </select>
-          </div>
-        )}
-      </div>
-
-      {ehCartao && (
-        <div>
-          <label className="block text-body font-medium text-ink mb-1">
-            Sem juros até quantas parcelas
-          </label>
-          <select
-            value={semJuros}
-            onChange={(e) => patch({ parcelasSemJuros: Number(e.target.value) })}
-            className="w-full sm:w-48 glass-input px-3 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden"
+          </CampoTinta>
+          <CampoTinta rotulo="Sem juros até" htmlFor={`pagamento-sem-juros-${opcao.id}`} sufixo={<SetaDoSelect />}>
+            <select
+              id={`pagamento-sem-juros-${opcao.id}`}
+              value={semJuros}
+              onChange={(e) => patch({ parcelasSemJuros: Number(e.target.value) })}
+              className={`${INPUT_TINTA} appearance-none cursor-pointer`}
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n}×
+                </option>
+              ))}
+            </select>
+          </CampoTinta>
+          <p
+            className={`col-span-2 -mt-1 px-1 text-[13px] leading-snug ${
+              temParcelaComJuros ? 'text-warn font-semibold' : 'text-ink-soft'
+            }`}
           >
-            {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                até {n}×
-              </option>
-            ))}
-          </select>
-          {temParcelaComJuros ? (
-            <p className="mt-1 text-body text-amber-600 flex items-center gap-1">
-              <AlertCircle className="w-3 h-3 shrink-0" />
-              Da {semJuros + 1}ª parcela em diante pode haver juros da operadora — confirme na
-              maquininha.
-            </p>
-          ) : (
-            <p className="mt-1 text-body text-gray-400">
-              {parcelas}× cabe dentro do limite sem juros
-            </p>
-          )}
+            {temParcelaComJuros
+              ? `Da ${semJuros + 1}ª parcela em diante pode haver juros da operadora — confirme na maquininha.`
+              : `${parcelas}× cabe dentro do limite sem juros.`}
+          </p>
         </div>
       )}
 
-      <div className="space-y-2">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={opcao.temDesconto}
-            onChange={(e) =>
-              patch({
-                temDesconto: e.target.checked,
-                descontoPercentual: e.target.checked ? opcao.descontoPercentual : undefined,
-              })
-            }
-            className="w-3.5 h-3.5 accent-brand"
-          />
-          <span className="text-xs font-medium text-ink">Desconto nesta forma</span>
-        </label>
-
+      <div className="flex flex-wrap items-center gap-2.5">
+        <OpcaoLigavel
+          ligada={opcao.temDesconto}
+          onMudar={(ligada) =>
+            patch({ temDesconto: ligada, descontoPercentual: ligada ? opcao.descontoPercentual : undefined })
+          }
+        >
+          Desconto nesta forma
+        </OpcaoLigavel>
         {opcao.temDesconto && (
-          <div className="w-32">
+          <CampoTinta
+            rotulo="Desconto"
+            htmlFor={`pagamento-desconto-${opcao.id}`}
+            sufixo={<span className="text-[16px] font-semibold text-ink-soft">%</span>}
+            className="w-32"
+          >
             <input
+              id={`pagamento-desconto-${opcao.id}`}
               type="number"
               min="0"
               max="100"
               step="0.5"
+              inputMode="decimal"
               value={opcao.descontoPercentual ?? ''}
               onChange={(e) => patch({ descontoPercentual: Number(e.target.value) || 0 })}
-              placeholder="%"
-              className="w-full glass-input px-3 py-1.5 rounded-sm text-sm text-ink tabular-nums focus:outline-hidden"
+              placeholder="0"
+              className={`${INPUT_TINTA} tabular-nums`}
             />
-          </div>
+          </CampoTinta>
         )}
       </div>
 
-      <div className="pt-2 border-t border-white/60 flex items-center justify-between text-sm">
-        <span className="text-gray-500">
+      {/* O que a cliente vê nesta forma — o número do cartão. */}
+      <div className="pt-3 border-t border-ink/8 flex items-baseline justify-between gap-3">
+        <span className="text-[14px] font-semibold text-ink-soft">
           {NOME_FORMA_PAGAMENTO[opcao.forma]}
-          {ehCartao && parcelas > 1 ? `, ${parcelas}×` : ''}
+          {ehCartao && parcelas > 1 ? ` em ${parcelas}×` : ''}
         </span>
-        <span className="font-semibold text-ink tabular-nums">
+        <span className="text-[19px] font-bold text-ink tabular-nums">
           {parcela !== null ? `${parcelas} × ${formatBRL(parcela)}` : formatBRL(valorFinal)}
         </span>
       </div>

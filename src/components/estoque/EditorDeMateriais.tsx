@@ -45,9 +45,10 @@ interface EditorDeMateriaisProps {
   idBase: string;
 }
 
+/** O campo de cada linha: o preenchido do redesign, compacto — várias linhas cabem na tela. */
 const inputClass =
-  'w-full glass-input px-2.5 py-1.5 rounded-sm text-sm text-ink focus:outline-hidden tabular-nums';
-const miniLabel = 'block text-label text-gray-400 mb-0.5';
+  'w-full h-11 px-3 rounded-xl border-0 bg-line-soft text-[15px] font-semibold text-ink tabular-nums transition-colors focus:outline-none focus:bg-card focus:ring-2 focus:ring-ink';
+const miniLabel = 'block text-[12px] font-semibold text-ink-soft mb-1';
 
 const OUTRO = '__outro__';
 
@@ -100,14 +101,14 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
   return (
     <div className="space-y-2.5">
       {itens.length === 0 && (
-        <p className="text-body text-gray-400 py-2">Nenhum material nesta lista.</p>
+        <p className="text-[14px] text-ink-soft py-2">Nenhum material nesta lista.</p>
       )}
 
       {itens.map((m, i) => {
         const produto = m.produtoId ? produtos.find((p) => p.id === m.produtoId) : undefined;
         const id = `${idBase}-${i}`;
         return (
-          <div key={i} className="p-3 rounded-xl border border-line bg-card space-y-2.5">
+          <div key={i} className="p-3 rounded-2xl border border-ink/10 bg-card space-y-2.5">
             <div className="flex items-start gap-2">
               <div className="flex-1 min-w-0">
                 {m.produtoId ? (
@@ -169,7 +170,7 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
                 type="button"
                 onClick={() => remover(i)}
                 aria-label={`Remover ${m.nome || 'material'}`}
-                className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg text-gray-400 hover:text-danger hover:bg-danger-bg transition-colors"
+                className="w-11 h-11 shrink-0 flex items-center justify-center rounded-full text-ink-soft hover:text-danger hover:bg-danger-bg transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -237,7 +238,7 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
                     <span className={miniLabel}>
                       {totalDaLinha === 'cliente' ? 'Valor da linha' : 'Custo da linha'}
                     </span>
-                    <span className="text-body-lg font-semibold text-ink tabular-nums py-1">
+                    <span className="text-[16px] font-bold text-ink tabular-nums h-11 flex items-center">
                       {formatBRL(totalDaLinha === 'cliente' ? valorClienteDaLinha(m) : custoDaLinha(m))}
                     </span>
                   </div>
@@ -248,18 +249,18 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
             {/* No acompanhamento não há campo de valor: o material de fora do estoque entra sem
                 preço, e o Financeiro avisa que falta completar. */}
             {!m.produtoId && permitirAvulso && !mostrarValores && (
-              <p className="text-body text-muted">
+              <p className="text-[13px] text-ink-soft">
                 O valor deste material é completado depois, no Financeiro.
               </p>
             )}
 
             {!m.produtoId && permitirAvulso && oferecerCadastro && (
-              <label className="flex items-center gap-2 text-body text-ink-soft cursor-pointer">
+              <label className="flex items-center gap-2 min-h-[32px] text-[14px] font-medium text-ink cursor-pointer">
                 <input
                   type="checkbox"
                   checked={!!m.cadastrarNoEstoque}
                   onChange={(e) => trocar(i, { cadastrarNoEstoque: e.target.checked })}
-                  className="w-3.5 h-3.5 accent-brand"
+                  className="w-[18px] h-[18px] accent-ink"
                 />
                 Cadastrar este material no estoque ao salvar
               </label>
@@ -276,7 +277,7 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
           id={`${idBase}-adicionar`}
           value=""
           onChange={(e) => adicionar(e.target.value)}
-          className="w-full sm:w-auto min-h-[40px] px-3 rounded-lg border border-dashed border-brand/50 bg-card text-body font-semibold text-brand-hover focus:outline-hidden cursor-pointer"
+          className="w-full sm:w-auto min-h-[44px] px-3.5 rounded-xl border border-dashed border-ink/25 bg-card text-[14px] font-semibold text-ink hover:border-ink/50 focus:outline-none focus:ring-2 focus:ring-ink cursor-pointer"
         >
           <option value="">+ Adicionar material…</option>
           {ativos.map((p) => (
@@ -288,7 +289,7 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
           {permitirAvulso && <option value={OUTRO}>Outro material (fora do estoque)…</option>}
         </select>
         {ativos.length === 0 && (
-          <p className="mt-1 text-body text-gray-400">
+          <p className="mt-1 text-[13px] text-ink-soft">
             Nenhum produto cadastrado no Estoque ainda
             {permitirAvulso ? ' — dá para lançar como "outro material".' : '.'}
           </p>
@@ -296,8 +297,8 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
       </div>
 
       {mostrarTotais && itens.length > 0 && (
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-2 border-t border-line">
-          <span className="text-body text-muted">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-2 border-t border-ink/10">
+          <span className="text-[14px] text-ink-soft">
             Valor para a cliente:{' '}
             <strong className="text-ink tabular-nums">{formatBRL(totais.valorCliente)}</strong>
           </span>
