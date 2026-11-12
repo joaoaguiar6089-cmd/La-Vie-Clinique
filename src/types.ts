@@ -1410,6 +1410,45 @@ export interface CustoDoOrcamento {
 }
 
 /**
+ * Um procedimento dentro da simulação de custo: o nome, quantas sessões e os materiais que ele
+ * gasta, com o preço congelado no momento em que a linha entrou.
+ */
+export interface ProcedimentoDaSimulacao {
+  id: string;
+  /** Origem no catálogo; ausente quando o procedimento foi digitado à mão. */
+  procedureId?: string;
+  titulo: string;
+  /** 1 ou mais. Multiplica o consumo padrão ao recalcular — os materiais já são do total. */
+  sessoes: number;
+  materiais: MaterialUsado[];
+}
+
+/**
+ * A simulação de custo de material de um ou mais procedimentos — para saber quanto do valor
+ * cobrado vai embora em produto. Fica no Financeiro, e é toda interna: ao contrário do orçamento,
+ * não tem link nem vai para a cliente, e o PDF dela mostra o custo de cada material.
+ *
+ * Cada profissional vê só as que ela criou; a administradora vê todas. Sem número: é conta da
+ * equipe, identificada pela data, pela cliente e pelos procedimentos.
+ */
+export interface SimulacaoDeCusto {
+  id: string;
+  /** Opcional — a simulação pode ser de um procedimento, sem cliente nenhuma. */
+  pacienteId?: string;
+  pacienteNome?: string;
+  procedimentos: ProcedimentoDaSimulacao[];
+  /** Soma do custo de todos os materiais — gravado para a lista não precisar recalcular. */
+  custoTotal: number;
+  valorClienteTotal: number;
+  /** De quem é: o login que criou. É por ele que a lista e as regras decidem quem vê. */
+  criadoPorUid: string;
+  /** O nome de quem criou, espelhado para a lista e o PDF. */
+  criadoPorNome: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/**
  * Os materiais usados num atendimento.
  *
  * Coleção própria, e não dentro do `Attendance`, pelo mesmo motivo do acompanhamento: a coleção

@@ -1096,7 +1096,6 @@ function MainCatalogApp() {
           clinic={clinic}
           proceduresCount={procedures.length}
           agendamentosPendentesCount={agendamentosPendentes}
-          ehAdmin={isAdminUser}
           currentProfessionalName={currentProfessional?.name}
           onOpenBusca={() => setBuscaAberta(true)}
           onLogout={logout}
@@ -1116,7 +1115,6 @@ function MainCatalogApp() {
           }}
           onLogout={logout}
           agendamentosPendentesCount={agendamentosPendentes}
-          ehAdmin={isAdminUser}
           profissional={currentProfessional}
         />
 
@@ -1171,9 +1169,22 @@ function MainCatalogApp() {
                 atendimentos={attendances}
                 catalogProcedures={procedures}
                 professionals={clinic.professionals || []}
+                pacientes={allPatients}
+                clinic={clinic}
+                autor={
+                  authUser
+                    ? {
+                        uid: authUser.uid,
+                        nome:
+                          currentProfessional?.name ||
+                          authUser.displayName ||
+                          authUser.email ||
+                          'Profissional',
+                      }
+                    : null
+                }
                 ehAdmin={isAdminUser}
                 carregando={atendimentosCarregando}
-                onVoltar={() => setCurrentView(viewAnteriorRef.current)}
               />
             ) : currentView === 'settings' ? (
               <ClinicSettingsModal

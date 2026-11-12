@@ -59,10 +59,12 @@ import {
   ConsumoPadrao,
   MateriaisDoAtendimento,
   CustoDoOrcamento,
+  SimulacaoDeCusto,
 } from '../types';
 import { formatQuoteNumber, statusAntesDoDesfecho } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
 import { normalizarRecibo } from '../utils/recibos';
+import { normalizarSimulacao } from '../utils/simulacaoDeCusto';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
 import { PROCEDIMENTOS_DE_EXEMPLO } from '../data/exemplosZulia';
 import { ehZulia } from '../lib/projetoFirebase';
@@ -166,6 +168,9 @@ const ATTENDANCE_MATERIALS_COLLECTION = 'attendance_materials';
 // Custo estimado de material de cada orçamento, com o id dele. Fica fora de `quotes` de
 // propósito: aquela coleção é pública pelo link da cliente, e custo e margem não podem ir junto.
 const QUOTE_COSTS_COLLECTION = 'quote_costs';
+// Simulações de custo de material, do Financeiro. Cada uma guarda quem a criou (`criadoPorUid`):
+// a profissional lê só as dela, a administradora todas — na Zulia, as regras conferem isso.
+const COST_SIMULATIONS_COLLECTION = 'cost_simulations';
 
 /** As coleções de cada tipo de ficha clínica. Ver `utils/fichasClinicas.ts`. */
 const COLECOES_DA_FICHA: Record<
@@ -3949,6 +3954,58 @@ export async function deleteMateriaisDoAtendimento(atendimentoId: string): Promi
     updatedAt: new Date().toISOString(),
   });
   await comConfirmacaoDoServidor(batch.commit(), 'dos materiais');
+}
+
+// ==========================================
+// SIMULAÇÃO DE CUSTO
+// ==========================================
+
+/**
+ * As simulações de custo que esta pessoa pode ver: a administradora, todas; a profissional, só as
+ * que ela criou.
+ *
+ * A profissional pede só as dela já na consulta, e não todas para filtrar na tela: na Zulia as
+ * regras recusam a consulta que pudesse trazer a simulação de outra pessoa — é o que faz o
+ * "cada uma vê só as suas" valer também fora do painel.
+ */
+export function subscribeToSimulacoesDeCusto(
+  filtro: { uid: string; todas: boolean },
+  onUpdate: (data: SimulacaoDeCusto[]) => void,
+  onError?: (err: Error) => void
+) {
+  const base = colecaoDaClinica(COST_SIMULATIONS_COLLECTION);
+  const consulta = filtro.todas ? base : query(base, where('criadoPorUid', '==', filtro.uid));
+  return onSnapshot(
+    consulta,
+    (snapshot) => {
+      const items: SimulacaoDeCusto[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push(normalizarSimulacao({ ...(docSnap.data() as Record<string, unknown>), id: docSnap.id }));
+      });
+      items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      onUpdate(items);
+    },
+    (error) => {
+      if (isQuotaOrOfflineError(error)) {
+        console.warn('Simulações de custo offline/cota diária atingida.');
+      } else {
+        console.error('Cost simulations subscription error:', error);
+      }
+      if (onError) onError(error);
+    }
+  );
+}
+
+/** Grava a simulação inteira — ela é pequena, e a tela sempre tem a versão completa. */
+export async function saveSimulacaoDeCusto(simulacao: SimulacaoDeCusto): Promise<void> {
+  await comConfirmacaoDoServidor(
+    setDoc(documentoDaClinica(COST_SIMULATIONS_COLLECTION, simulacao.id), cleanForFirestore({ ...simulacao })),
+    'da simulação'
+  );
+}
+
+export async function deleteSimulacaoDeCusto(simulacaoId: string): Promise<void> {
+  await deleteDoc(documentoDaClinica(COST_SIMULATIONS_COLLECTION, simulacaoId));
 }
 
 /**

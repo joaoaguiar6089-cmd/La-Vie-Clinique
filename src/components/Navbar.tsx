@@ -34,8 +34,6 @@ interface NavbarProps {
    * Avaliação e acompanhamento não têm contador: as duas fichas são opcionais.
    */
   agendamentosPendentesCount?: number;
-  /** O Financeiro só aparece no menu para administradoras. */
-  ehAdmin?: boolean;
   currentProfessionalName?: string;
   /** Abre a busca global. No desktop o atalho é Cmd/Ctrl+K; aqui é o caminho para o mouse. */
   onOpenBusca: () => void;
@@ -110,7 +108,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   clinic,
   proceduresCount,
   agendamentosPendentesCount,
-  ehAdmin,
   currentProfessionalName,
   onOpenBusca,
   onLogout,
@@ -214,18 +211,15 @@ export const Navbar: React.FC<NavbarProps> = ({
       ativo: currentView === 'estoque',
       onClick: ir('estoque'),
     },
-    ...(ehAdmin
-      ? [
-          {
-            id: 'financeiro',
-            rotulo: 'Financeiro',
-            titulo: 'Financeiro',
-            icone: Wallet,
-            ativo: currentView === 'financeiro',
-            onClick: ir('financeiro'),
-          },
-        ]
-      : []),
+    // Para todas: a administradora vê o painel; a profissional, só a simulação de custo.
+    {
+      id: 'financeiro',
+      rotulo: 'Financeiro',
+      titulo: 'Financeiro',
+      icone: Wallet,
+      ativo: currentView === 'financeiro',
+      onClick: ir('financeiro'),
+    },
     {
       id: 'export',
       rotulo: 'Catálogo',
