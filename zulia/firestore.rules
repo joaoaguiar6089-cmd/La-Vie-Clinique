@@ -250,6 +250,20 @@ service cloud.firestore {
       match /quote_costs/{quoteId} {
         allow read, write: if daClinica(c);
       }
+
+      // Simulações de custo, do Financeiro: custo de material, interno. Cada uma é de quem a criou
+      // (`criadoPorUid`) — a profissional lê, edita e apaga só as dela; a admin, todas. Cria-se só
+      // no próprio nome, e ninguém troca a dona de uma simulação. A profissional lista as suas
+      // com `where('criadoPorUid', '==', uid)`: é o filtro que a regra consegue conferir.
+      match /cost_simulations/{simulacaoId} {
+        allow read, delete: if daClinica(c)
+          && (adminDa(c) || resource.data.criadoPorUid == request.auth.uid);
+        allow create: if daClinica(c)
+          && request.resource.data.criadoPorUid == request.auth.uid;
+        allow update: if daClinica(c)
+          && (adminDa(c) || resource.data.criadoPorUid == request.auth.uid)
+          && request.resource.data.criadoPorUid == resource.data.criadoPorUid;
+      }
     }
 
     // Qualquer outro caminho — inclusive uma coleção nova dentro da clínica que ainda não tenha

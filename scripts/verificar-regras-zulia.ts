@@ -33,10 +33,12 @@ import {
   getDocFromServer,
   getDocsFromServer,
   initializeFirestore,
+  query,
   setDoc,
   setLogLevel,
   terminate,
   updateDoc,
+  where,
   writeBatch,
   increment,
   type Firestore,
@@ -315,6 +317,47 @@ async function conferirFirestore(sessoes: Record<string, Sessao>) {
 }
 
 /**
+ * A simulação de custo do Financeiro: cada uma é de quem a criou. A profissional lê, edita e apaga
+ * só as dela, e lista só com o filtro pelo próprio login; a admin lê, edita e apaga todas.
+ */
+async function conferirSimulacoes(sessoes: Record<string, Sessao>) {
+  const adminA = sessoes['admin-teste-a'];
+  const profA = sessoes['prof-teste-a'];
+  const adminB = sessoes['admin-teste-b'];
+  const uidDe = (s: Sessao) => getAuth(s.app).currentUser?.uid || '';
+  const base = 'clinicas/teste-a/cost_simulations';
+  const simulacao = (dona: Sessao) => ({ criadoPorUid: uidDe(dona), criadoPorNome: dona.nome, procedimentos: [] });
+  const criar = (s: Sessao, id: string, dados: Record<string, unknown>) => () => setDoc(doc(s.db, `${base}/${id}`), dados);
+  const listarAsDe = (s: Sessao, uid: string) => () =>
+    getDocsFromServer(query(collection(s.db, base), where('criadoPorUid', '==', uid)));
+
+  console.log('\nFirestore — simulação de custo');
+  await espera('profissional de A cria simulação no próprio nome', true, criar(profA, 'da-prof', simulacao(profA)));
+  await espera('admin de A cria simulação no próprio nome', true, criar(adminA, 'da-admin', simulacao(adminA)));
+  await espera('profissional de A NÃO cria simulação no nome de outra', false, criar(profA, 'falsa', simulacao(adminA)));
+  await espera('profissional de A lê a dela', true, ler(profA, `${base}/da-prof`));
+  await espera('profissional de A NÃO lê a da admin', false, ler(profA, `${base}/da-admin`));
+  await espera('profissional de A lista as dela, filtrando pelo login', true, listarAsDe(profA, uidDe(profA)));
+  await espera('profissional de A NÃO lista as da admin', false, listarAsDe(profA, uidDe(adminA)));
+  await espera('profissional de A NÃO lista todas', false, listar(profA, base));
+  await espera('admin de A lê a da profissional', true, ler(adminA, `${base}/da-prof`));
+  await espera('admin de A lista todas', true, listar(adminA, base));
+  await espera('profissional de A edita a dela', true, gravar(profA, `${base}/da-prof`, { procedimentos: [{ titulo: 'X' }] }));
+  await espera('profissional de A NÃO edita a da admin', false, gravar(profA, `${base}/da-admin`, { procedimentos: [] }));
+  await espera('admin de A edita a da profissional', true, gravar(adminA, `${base}/da-prof`, { procedimentos: [] }));
+  await espera('admin de A NÃO troca a dona', false, gravar(adminA, `${base}/da-prof`, { criadoPorUid: uidDe(adminA) }));
+  await espera('profissional de A NÃO toma a da admin', false, gravar(profA, `${base}/da-admin`, { criadoPorUid: uidDe(profA) }));
+  await espera('admin de B NÃO lê simulação de A', false, ler(adminB, `${base}/da-prof`));
+  await espera('admin de B NÃO lista simulações de A', false, listar(adminB, base));
+  await espera('profissional de A NÃO apaga a da admin', false, apagar(profA, `${base}/da-admin`));
+  await espera('admin de A apaga a da profissional', true, apagar(adminA, `${base}/da-prof`));
+  await espera('profissional de A apaga a dela', true, async () => {
+    await criar(profA, 'outra-da-prof', simulacao(profA))();
+    await apagar(profA, `${base}/outra-da-prof`)();
+  });
+}
+
+/**
  * Cria (delta 1) ou exclui de vez (delta -1) um cadastro contado, com o contador da clínica no mesmo
  * lote — como o painel faz (`gravarCadastroContado` em src/services/databaseService.ts).
  */
@@ -430,6 +473,7 @@ async function main() {
 
   try {
     await conferirFirestore(sessoes);
+    await conferirSimulacoes(sessoes);
     await conferirLimites(sessoes);
     await conferirStorage(sessoes);
   } finally {

@@ -62,8 +62,6 @@ interface BottomNavProps {
   onLogout: () => void;
   /** Agendamentos vencidos sem desfecho — o selo da Agenda. */
   agendamentosPendentesCount?: number;
-  /** O Financeiro só entra no painel para administradoras. */
-  ehAdmin?: boolean;
   /** A profissional logada — o cartão do topo do "Mais". */
   profissional?: { name: string; specialty?: string; title?: string } | null;
 }
@@ -165,7 +163,6 @@ const PainelMais: React.FC<{
   currentView: AppView;
   ir: (view: AppView) => void;
   abrirFichas: () => void;
-  ehAdmin?: boolean;
   profissional?: BottomNavProps['profissional'];
   onOpenSettings: () => void;
   onOpenExport: () => void;
@@ -176,7 +173,6 @@ const PainelMais: React.FC<{
   currentView,
   ir,
   abrirFichas,
-  ehAdmin,
   profissional,
   onOpenSettings,
   onOpenExport,
@@ -264,7 +260,7 @@ const PainelMais: React.FC<{
 
         <div>
           <p className="text-[13px] font-semibold text-brand-light mb-2.5">Clínica</p>
-          <div className={`grid gap-2.5 ${ehAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <div className="grid gap-2.5 grid-cols-3">
             <QuadroDoMais
               icone={Syringe}
               titulo="Procedimentos"
@@ -277,14 +273,13 @@ const PainelMais: React.FC<{
               ativo={currentView === 'estoque'}
               onClick={() => ir('estoque')}
             />
-            {ehAdmin && (
-              <QuadroDoMais
-                icone={Wallet}
-                titulo="Financeiro"
-                ativo={currentView === 'financeiro'}
-                onClick={() => ir('financeiro')}
-              />
-            )}
+            {/* Para todas: a administradora vê o painel; a profissional, só a simulação de custo. */}
+            <QuadroDoMais
+              icone={Wallet}
+              titulo="Financeiro"
+              ativo={currentView === 'financeiro'}
+              onClick={() => ir('financeiro')}
+            />
           </div>
         </div>
 
@@ -326,7 +321,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onOpenExport,
   onLogout,
   agendamentosPendentesCount,
-  ehAdmin,
   profissional,
 }) => {
   const [criarAberto, setCriarAberto] = useState(false);
@@ -455,7 +449,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         currentView={currentView}
         ir={ir}
         abrirFichas={abrirFichas}
-        ehAdmin={ehAdmin}
         profissional={profissional}
         onOpenSettings={onOpenSettings}
         onOpenExport={onOpenExport}

@@ -220,6 +220,13 @@ service cloud.firestore {
       allow read, write: if ehDaEquipe();
     }
 
+    // Simulações de custo, do Financeiro: custo de material, só da equipe. Aqui, no projeto da
+    // La Vie, quem é administradora mora no perfil da clínica e não no login — o "cada uma vê só
+    // as suas" é da tela. Na Zulia as regras conferem (ver zulia/firestore.rules).
+    match /cost_simulations/{simulacaoId} {
+      allow read, write: if ehDaEquipe();
+    }
+
     // Qualquer coleção não prevista acima fica fechada por padrão (nega tudo), em vez do
     // catch-all aberto anterior — reduz a superfície de dados expostos sem querer.
     match /{document=**} {

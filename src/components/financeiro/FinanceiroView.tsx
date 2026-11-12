@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronRight, Lock } from 'lucide-react';
-import { Attendance, Procedure, Professional, Quote } from '../../types';
+import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronRight } from 'lucide-react';
+import { Attendance, ClinicProfile, Patient, Procedure, Professional, Quote } from '../../types';
 import { formatBRL, formatDateOnly } from '../../utils/formatters';
 import { hojeISO, nomeDosProcedimentos } from '../../utils/attendances';
 import { MateriaisDoAtendimentoPanel } from '../estoque/MateriaisDoAtendimentoPanel';
-import { Chip, ValorEmReais } from '../common/Tinta';
+import { AbasSublinhadas, Chip, ValorEmReais } from '../common/Tinta';
+import { SimulacoesDeCusto } from './SimulacoesDeCusto';
 import {
   Periodo,
   atendimentosComMateriaisNoPeriodo,
@@ -37,19 +38,30 @@ import {
  *
  * Nenhuma leitura nova no Firestore: os orçamentos já vivem em memória, e é por isso que trocar
  * o período não custa nada.
+ *
+ * O painel é a aba "Painel" do Financeiro, e só a administradora a vê. A outra aba, "Simulação
+ * de custo", é de toda a equipe — ver `FinanceiroView`, no fim do arquivo.
  */
 
-interface FinanceiroViewProps {
+interface PainelFinanceiroProps {
   quotes: Quote[];
   /** Atendimentos — o custo de material do período sai do total gravado em cada um. */
   atendimentos: Attendance[];
   /** O catálogo, para o detalhe dos materiais achar o procedimento de cada atendimento. */
   catalogProcedures: Procedure[];
   professionals: Professional[];
-  /** Só administradoras entram. Ver o gate no App. */
-  ehAdmin: boolean;
-  onVoltar: () => void;
   carregando?: boolean;
+}
+
+interface FinanceiroViewProps extends PainelFinanceiroProps {
+  /** Para a cliente da simulação de custo, escolhida do cadastro. */
+  pacientes: Patient[];
+  /** O cabeçalho do PDF da simulação. */
+  clinic: ClinicProfile;
+  /** Quem está logada — a dona das simulações que criar. */
+  autor: { uid: string; nome: string } | null;
+  /** O painel é só das administradoras; a simulação de custo, de todas. */
+  ehAdmin: boolean;
 }
 
 type FiltroDePeriodo = 'mes' | 'mes-anterior' | '90-dias' | 'ano';
@@ -267,13 +279,11 @@ const MateriaisPorAtendimento: React.FC<{
   );
 };
 
-export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
+const PainelFinanceiro: React.FC<PainelFinanceiroProps> = ({
   quotes,
   atendimentos,
   catalogProcedures,
   professionals,
-  ehAdmin,
-  onVoltar,
   carregando,
 }) => {
   const hoje = hojeISO();
@@ -297,31 +307,6 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
     [atendimentos, periodo, professionalId]
   );
 
-  /**
-   * O painel é o único lugar do sistema onde a receita da casa aparece inteira. Numa clínica com
-   * equipe, isso não é informação de todo mundo — e a trava é de tela, não de banco: quem abrir
-   * o console continua lendo os orçamentos, que é o que as regras do Firestore permitem.
-   */
-  if (!ehAdmin) {
-    return (
-      <div className="max-w-md mx-auto px-5 py-16 text-center">
-        <Lock className="w-8 h-8 text-ink-soft mx-auto mb-3" />
-        <h1 className="font-serif-luxury text-[30px] font-semibold text-ink">Painel restrito</h1>
-        <p className="text-body-lg text-ink-soft mt-2">
-          O financeiro fica visível só para administradoras. Fale com quem administra a conta da
-          clínica se você precisa deste acesso.
-        </p>
-        <button
-          type="button"
-          onClick={onVoltar}
-          className="mt-5 min-h-[44px] px-5 rounded-full bg-ink text-white text-body font-semibold"
-        >
-          Voltar
-        </button>
-      </div>
-    );
-  }
-
   const variacao = resumo.variacao;
   const faturamentoZero = resumo.faturamento <= 0;
   /** Quanto da barra é margem — o resto, em bronze, é o custo de material. */
@@ -331,7 +316,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
   const materialIncompleto = material.realizados > 0 && material.comMateriais < material.realizados;
 
   return (
-    <div className="max-w-4xl mx-auto sm:px-8 sm:pt-8 pb-6 flex flex-col gap-3 sm:gap-4">
+    <div className="flex flex-col gap-3 sm:gap-4">
       {/* O bloco preto: o faturamento, grande, e o que muda a conta (período e profissional). */}
       <header className="bg-ink text-cream px-5 pt-5 pb-6 sm:rounded-[24px] sm:p-7 flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
@@ -534,6 +519,57 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
         onFechar={() => setMateriaisDe(null)}
         catalogo={catalogProcedures}
       />
+    </div>
+  );
+};
+
+type AbaDoFinanceiro = 'painel' | 'simulacao';
+
+/**
+ * A tela do Financeiro: o painel e a simulação de custo.
+ *
+ * **O painel continua só das administradoras.** É o único lugar do sistema onde a receita da casa
+ * aparece inteira, e numa clínica com equipe isso não é informação de todo mundo — a trava é de
+ * tela, não de banco: quem abrir o console continua lendo os orçamentos, que é o que as regras do
+ * Firestore permitem.
+ *
+ * **A simulação de custo é de toda a equipe.** É a profissional que precisa saber quanto do
+ * procedimento vai embora em material. Por isso o item "Financeiro" do menu aparece para todas: a
+ * administradora entra no painel e troca de aba; a profissional entra direto na simulação, sem
+ * abas, e não vê faturamento nem margem.
+ */
+export const FinanceiroView: React.FC<FinanceiroViewProps> = ({ pacientes, clinic, autor, ehAdmin, ...painel }) => {
+  const [aba, setAba] = useState<AbaDoFinanceiro>('painel');
+
+  const simulacao = (
+    <SimulacoesDeCusto
+      catalogProcedures={painel.catalogProcedures}
+      pacientes={pacientes}
+      clinic={clinic}
+      autor={autor}
+      ehAdmin={ehAdmin}
+    />
+  );
+
+  if (!ehAdmin) {
+    return <div className="max-w-4xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6">{simulacao}</div>;
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto sm:px-8 pt-3 sm:pt-8 pb-6 flex flex-col gap-3 sm:gap-4">
+      <AbasSublinhadas
+        className="mx-5 sm:mx-0"
+        abas={[
+          { id: 'painel' as const, rotulo: 'Painel' },
+          { id: 'simulacao' as const, rotulo: 'Simulação de custo' },
+        ]}
+        ativa={aba}
+        onSelecionar={(id) => {
+          setAba(id);
+          window.scrollTo({ top: 0 });
+        }}
+      />
+      {aba === 'painel' ? <PainelFinanceiro {...painel} /> : <div className="px-5 sm:px-0">{simulacao}</div>}
     </div>
   );
 };
