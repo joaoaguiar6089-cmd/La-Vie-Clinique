@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Attendance, ClinicProfile, Procedure, Professional } from '../../types';
 import { DataISO } from '../../utils/attendances';
 import {
@@ -23,8 +23,20 @@ import { AgendaCard } from './AgendaCard';
  * que faz o buraco livre na agenda ser visível sem ninguém precisar ler horário nenhum.
  */
 
-/** Pixels por minuto. 1,4 põe um expediente de 10h em ~840px — rola uma tela e meia, não dez. */
-const PX_POR_MIN = 1.4;
+/**
+ * Pixels por minuto no celular. 1,4 põe um expediente de 10h em ~840px — rola uma tela e meia,
+ * não dez. No computador a escala é calculada para o quadro caber na tela — ver `pxPorMin`.
+ */
+const PX_POR_MIN_CELULAR = 1.4;
+/**
+ * Os limites da escala calculada. Abaixo de 0,8 um atendimento de 30 min vira um risco ilegível —
+ * um expediente muito longo numa tela baixa passa um pouco da tela, e a página rola. Acima de 2,4
+ * um dia curto num monitor alto viraria blocos gigantes.
+ */
+const PX_POR_MIN_MINIMO = 0.8;
+const PX_POR_MIN_MAXIMO = 2.4;
+/** Folga entre o quadro e as bordas da janela, para a borda dele não encostar no topo e no pé. */
+const MARGEM_DA_TELA = 24;
 const LARGURA_CALHA = 52;
 
 interface AgendaGradeViewProps {
@@ -43,10 +55,49 @@ interface AgendaGradeViewProps {
   arrastando: Attendance | null;
   onArrastarInicio: (a: Attendance) => void;
   onArrastarFim: () => void;
+  /**
+   * No computador: as horas se ajustam para o quadro inteiro — cabeçalho dos dias e todo o
+   * expediente — caber na altura da janela. Rola-se a página até ele, e ele ocupa a tela toda,
+   * sem rolagem própria. No celular fica a escala fixa, e a semana rola na horizontal.
+   */
+  ajustarATela?: boolean;
 }
 
+/** A altura da janela, acompanhando o redimensionamento. */
+const useAlturaDaJanela = (): number => {
+  const [altura, setAltura] = useState(() =>
+    typeof window !== 'undefined' ? window.innerHeight : 800
+  );
+  useEffect(() => {
+    const aoMudar = () => setAltura(window.innerHeight);
+    window.addEventListener('resize', aoMudar);
+    return () => window.removeEventListener('resize', aoMudar);
+  }, []);
+  return altura;
+};
+
+/** A altura de um elemento, acompanhando o que muda dentro dele. 0 enquanto não existe. */
+const useAlturaDe = (ref: React.RefObject<HTMLElement | null>, ativo: boolean): number => {
+  const [altura, setAltura] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!ativo || !el) {
+      setAltura(0);
+      return;
+    }
+    setAltura(el.offsetHeight);
+    const observador = new ResizeObserver(() => setAltura(el.offsetHeight));
+    observador.observe(el);
+    return () => observador.disconnect();
+  }, [ref, ativo]);
+  return altura;
+};
+
 /** O risco de "agora". Só no dia de hoje, e só quando cai dentro da faixa desenhada. */
-const MarcaDeAgora: React.FC<{ faixa: { inicioMin: number; fimMin: number } }> = ({ faixa }) => {
+const MarcaDeAgora: React.FC<{ faixa: { inicioMin: number; fimMin: number }; pxPorMin: number }> = ({
+  faixa,
+  pxPorMin,
+}) => {
   const agora = new Date();
   const minutos = agora.getHours() * 60 + agora.getMinutes();
   if (minutos < faixa.inicioMin || minutos > faixa.fimMin) return null;
@@ -54,7 +105,7 @@ const MarcaDeAgora: React.FC<{ faixa: { inicioMin: number; fimMin: number } }> =
   return (
     <div
       className="absolute left-0 right-0 z-30 pointer-events-none"
-      style={{ top: (minutos - faixa.inicioMin) * PX_POR_MIN }}
+      style={{ top: (minutos - faixa.inicioMin) * pxPorMin }}
     >
       <div className="h-px bg-danger/70" />
       <div className="absolute -left-[3px] -top-[3px] w-[7px] h-[7px] rounded-full bg-danger/70" />
@@ -76,14 +127,47 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
   arrastando,
   onArrastarInicio,
   onArrastarFim,
+  ajustarATela = false,
 }) => {
   const colunasRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const cabecalhoRef = useRef<HTMLDivElement>(null);
+  const semHorarioRef = useRef<HTMLDivElement>(null);
   const passo = intervaloDaGrade(clinic);
   const faixa = useMemo(
     () => faixaDaGrade(dias, atendimentos, clinic, catalogo),
     [dias, atendimentos, clinic, catalogo]
   );
-  const alturaTotal = (faixa.fimMin - faixa.inicioMin) * PX_POR_MIN;
+
+  const porDia = useMemo(() => {
+    const mapa = new Map<DataISO, Attendance[]>();
+    dias.forEach((d) => mapa.set(d, []));
+    atendimentos.forEach((a) => {
+      const lista = mapa.get(a.data);
+      if (lista) lista.push(a);
+    });
+    return mapa;
+  }, [dias, atendimentos]);
+
+  const temSemHorario = dias.some((d) => (porDia.get(d) || []).some(semHorario));
+
+  const alturaDaJanela = useAlturaDaJanela();
+  const alturaDoCabecalho = useAlturaDe(cabecalhoRef, ajustarATela);
+  const alturaSemHorario = useAlturaDe(semHorarioRef, ajustarATela && temSemHorario);
+
+  /**
+   * A escala. No computador, o que sobra da janela depois do cabeçalho dos dias, da linha
+   * "s/ hora" e da folga, dividido pelos minutos do expediente: o quadro inteiro cabe na tela.
+   * Antes de medir o cabeçalho (o primeiro desenho) usa a do celular, só por um instante.
+   */
+  const pxPorMin = useMemo(() => {
+    if (!ajustarATela || alturaDoCabecalho === 0) return PX_POR_MIN_CELULAR;
+    const disponivel =
+      alturaDaJanela - MARGEM_DA_TELA - alturaDoCabecalho - alturaSemHorario - 2; // 2: a borda do cartão
+    const calculada = disponivel / (faixa.fimMin - faixa.inicioMin);
+    return Math.min(PX_POR_MIN_MAXIMO, Math.max(PX_POR_MIN_MINIMO, calculada));
+  }, [ajustarATela, alturaDaJanela, alturaDoCabecalho, alturaSemHorario, faixa]);
+
+  const alturaTotal = (faixa.fimMin - faixa.inicioMin) * pxPorMin;
 
   /** As horas cheias da calha. Rotular cada faixa de 15 min viraria uma parede de números. */
   const horas = useMemo(() => {
@@ -99,18 +183,6 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
     return lista;
   }, [faixa, passo]);
 
-  const porDia = useMemo(() => {
-    const mapa = new Map<DataISO, Attendance[]>();
-    dias.forEach((d) => mapa.set(d, []));
-    atendimentos.forEach((a) => {
-      const lista = mapa.get(a.data);
-      if (lista) lista.push(a);
-    });
-    return mapa;
-  }, [dias, atendimentos]);
-
-  const temSemHorario = dias.some((d) => (porDia.get(d) || []).some(semHorario));
-
   /**
    * De onde o ponteiro caiu para que horário ele quer. Arredonda **para baixo**: quem clica no meio
    * do bloco das 14h quer as 14h, não as 14h07.
@@ -119,17 +191,23 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
     const el = colunasRef.current[data];
     if (!el) return null;
     const caixa = el.getBoundingClientRect();
-    const minutos = faixa.inicioMin + (clientY - caixa.top) / PX_POR_MIN;
+    const minutos = faixa.inicioMin + (clientY - caixa.top) / pxPorMin;
     const preso = Math.max(faixa.inicioMin, Math.min(faixa.fimMin - passo, minutos));
     return hhmmDeMinutos(Math.floor(preso / passo) * passo);
   };
 
   return (
     <div className="glass-card rounded-sm overflow-hidden">
-      {/* min-w faz a semana rolar na horizontal no celular em vez de espremer sete colunas. */}
-      <div className="overflow-x-auto">
+      {/* min-w faz a semana rolar na horizontal no celular em vez de espremer sete colunas.
+          `overflow-y-hidden`: só `overflow-x-auto` faria o navegador tornar a vertical `auto`
+          também, e os poucos px do rótulo da última hora e da marca de "agora" que passam da
+          borda viravam uma segunda rolagem, dentro do quadro, além da da página. */}
+      <div className="overflow-x-auto overflow-y-hidden">
         <div style={{ minWidth: dias.length > 2 ? LARGURA_CALHA + dias.length * 118 : undefined }}>
-          <div className="flex border-b border-[rgba(26,26,28,.07)] bg-white/70 sticky top-0 z-20">
+          <div
+            ref={cabecalhoRef}
+            className="flex border-b border-[rgba(26,26,28,.07)] bg-white/70 sticky top-0 z-20"
+          >
             <div className="shrink-0" style={{ width: LARGURA_CALHA }} />
             {dias.map((dia) => {
               const ehHoje = dia === hoje;
@@ -163,7 +241,7 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
           {/* Visitas sem horário: lançamento retroativo não tem hora obrigatória, e inventar uma
               para encaixá-la na grade seria criar dado que ninguém informou. */}
           {temSemHorario && (
-            <div className="flex border-b border-[rgba(26,26,28,.07)] bg-surface">
+            <div ref={semHorarioRef} className="flex border-b border-[rgba(26,26,28,.07)] bg-surface">
               <div
                 className="shrink-0 px-2 py-1.5 text-label uppercase tracking-wider text-gray-400 text-right"
                 style={{ width: LARGURA_CALHA }}
@@ -198,10 +276,15 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
                   key={m}
                   className="absolute right-2 text-label tabular-nums text-gray-400"
                   style={{
-                    top: (m - faixa.inicioMin) * PX_POR_MIN,
-                    // Centrado na linha, menos o primeiro: o cartão esconde o que transborda e
-                    // metade dele ficaria cortada na borda de cima.
-                    transform: m === faixa.inicioMin ? 'none' : 'translateY(-50%)',
+                    top: (m - faixa.inicioMin) * pxPorMin,
+                    // Centrado na linha, menos nas pontas: o quadro esconde o que transborda, e
+                    // metade do primeiro ficaria cortada em cima e metade do último embaixo.
+                    transform:
+                      m === faixa.inicioMin
+                        ? 'none'
+                        : m === faixa.fimMin
+                          ? 'translateY(-100%)'
+                          : 'translateY(-50%)',
                   }}
                 >
                   {hhmmDeMinutos(m)}
@@ -255,7 +338,7 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
                           className="absolute left-0 right-0 bg-line/70"
                           style={{
                             top: 0,
-                            height: (expediente.abreMin - faixa.inicioMin) * PX_POR_MIN,
+                            height: (expediente.abreMin - faixa.inicioMin) * pxPorMin,
                           }}
                         />
                       )}
@@ -263,8 +346,8 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
                         <div
                           className="absolute left-0 right-0 bg-line/70"
                           style={{
-                            top: (expediente.fechaMin - faixa.inicioMin) * PX_POR_MIN,
-                            height: (faixa.fimMin - expediente.fechaMin) * PX_POR_MIN,
+                            top: (expediente.fechaMin - faixa.inicioMin) * pxPorMin,
+                            height: (faixa.fimMin - expediente.fechaMin) * pxPorMin,
                           }}
                         />
                       )}
@@ -277,17 +360,17 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
                       className={`absolute left-0 right-0 border-t ${
                         m % 60 === 0 ? 'border-[rgba(26,26,28,.09)]' : 'border-[rgba(26,26,28,.04)]'
                       }`}
-                      style={{ top: (m - faixa.inicioMin) * PX_POR_MIN }}
+                      style={{ top: (m - faixa.inicioMin) * pxPorMin }}
                     />
                   ))}
 
-                  {dia === hoje && <MarcaDeAgora faixa={faixa} />}
+                  {dia === hoje && <MarcaDeAgora faixa={faixa} pxPorMin={pxPorMin} />}
 
                   {doDia.map((a) => {
                     const intervalo = intervaloDoAtendimento(a, catalogo);
                     if (!intervalo) return null;
                     const pos = posicoes.get(a.id) || { coluna: 0, colunas: 1 };
-                    const altura = (intervalo.fimMin - intervalo.inicioMin) * PX_POR_MIN;
+                    const altura = (intervalo.fimMin - intervalo.inicioMin) * pxPorMin;
                     const largura = 100 / pos.colunas;
 
                     return (
@@ -304,7 +387,7 @@ export const AgendaGradeView: React.FC<AgendaGradeViewProps> = ({
                         onAbrir={onAbrirAtendimento}
                         style={{
                           position: 'absolute',
-                          top: (intervalo.inicioMin - faixa.inicioMin) * PX_POR_MIN,
+                          top: (intervalo.inicioMin - faixa.inicioMin) * pxPorMin,
                           height: Math.max(20, altura - 2),
                           left: `calc(${pos.coluna * largura}% + 3px)`,
                           width: `calc(${largura}% - 5px)`,

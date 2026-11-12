@@ -737,6 +737,8 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
           arrastando={arrastando}
           onArrastarInicio={setArrastando}
           onArrastarFim={() => setArrastando(null)}
+          // No computador o quadro cabe inteiro na tela; no celular, a escala fixa de sempre.
+          ajustarATela={!ehCelular}
         />
       )}
 
