@@ -11,6 +11,7 @@ import { PrintableProcedureCard } from './PrintableProcedureCard';
 import { ProcedureMultiSelect } from './ProcedureMultiSelect';
 import { ConfirmDialog, ConfirmRequest, aviso } from './ConfirmDialog';
 import { nomeParaArquivo } from '../utils/marca';
+import { ListaSuspensa } from './common/ListaSuspensa';
 
 interface ShareExportModalProps {
   isOpen: boolean;
@@ -341,17 +342,14 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   <label className="block text-label font-semibold uppercase tracking-widest text-gray-400 mb-1">
                     Filtrar por Categoria
                   </label>
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
+                  <ListaSuspensa
+                    className="w-full sm:w-64"
+                    rotuloAcessivel="Categoria"
+                    valor={selectedCategory}
+                    onMudar={setSelectedCategory}
                     disabled={selectedProcedureIds.length > 0}
-                    title={selectedProcedureIds.length > 0 ? 'Desative a seleção específica de procedimentos para usar o filtro por categoria' : undefined}
-                    className="w-full sm:w-auto px-3 py-2 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-ink disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {categories.map((cat, idx) => (
-                      <option key={idx} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                    opcoes={categories.map((cat) => ({ valor: cat, rotulo: cat }))}
+                  />
                 </div>
 
                 <ProcedureMultiSelect
@@ -430,15 +428,13 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 <label className="block text-label font-semibold uppercase tracking-widest text-gray-400 mb-1">
                   Procedimento do Card
                 </label>
-                <select
-                  value={selectedSingleProcedureId}
-                  onChange={(e) => setSelectedSingleProcedureId(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-sm bg-white/70 border border-white/80 text-xs font-medium text-ink"
-                >
-                  {procedures.map((p) => (
-                    <option key={p.id} value={p.id}>{p.title}</option>
-                  ))}
-                </select>
+                <ListaSuspensa
+                  rotuloAcessivel="Procedimento"
+                  valor={selectedSingleProcedureId}
+                  onMudar={setSelectedSingleProcedureId}
+                  placeholderDaBusca="Buscar procedimento…"
+                  opcoes={procedures.map((p) => ({ valor: p.id, rotulo: p.title, grupo: p.category || undefined }))}
+                />
               </div>
 
               {/* Sem valores, o desconto não tem onde aparecer no card — o campo some junto. */}

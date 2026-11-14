@@ -27,7 +27,8 @@ import { SidePanel } from '../common/SidePanel';
 import { AvisoTinta, BotaoPrincipal, CampoTinta, INPUT_TINTA } from '../common/Tinta';
 import { PatientSearchSelect } from '../quotes/PatientSearchSelect';
 import { ProcedureSearchAdd } from '../quotes/ProcedureSearchAdd';
-import { EditorDeMateriais } from '../estoque/EditorDeMateriais';
+import { COR_DA_CLIENTE, COR_DO_CUSTO, EditorDeMateriais } from '../estoque/EditorDeMateriais';
+import { TituloDeSecao } from '../quotes/PecasDoOrcamento';
 
 /** O que abre o formulário: uma simulação para editar, ou o começo de uma nova (vazia ou cópia). */
 export interface PedidoDeSimulacao {
@@ -187,6 +188,40 @@ export const SimulacaoFormPanel: React.FC<SimulacaoFormPanelProps> = ({
       </div>
     ) : undefined;
 
+  /** O resumo da direita (no celular, o fim do formulário): o custo de cada procedimento e os dois totais. */
+  const resumo =
+    procedimentos.length > 0 ? (
+      <section className="flex flex-col gap-3">
+        <TituloDeSecao titulo="Resumo" />
+        <div className="rounded-[20px] bg-card border border-ink/10 p-4 sm:p-5 flex flex-col gap-3 tabular-nums">
+          {procedimentos.map((p, n) => {
+            const t = totaisDoProcedimento(p);
+            return (
+              <div key={p.id} className="flex items-baseline justify-between gap-3 text-[14px]">
+                <span className="min-w-0 truncate text-ink">
+                  <span className="text-ink-soft">{n + 1}.</span> {p.titulo.trim() || 'Procedimento sem nome'}
+                </span>
+                <span className="shrink-0 flex gap-3">
+                  <span className={`font-semibold ${COR_DO_CUSTO.valor}`}>{formatBRL(t.custo)}</span>
+                  <span className={`font-semibold ${COR_DA_CLIENTE.valor}`}>{formatBRL(t.valorCliente)}</span>
+                </span>
+              </div>
+            );
+          })}
+          <div className="grid grid-cols-2 gap-2 pt-3 border-t border-ink/8">
+            <div className={`rounded-xl px-3 py-2.5 ${COR_DO_CUSTO.caixa}`}>
+              <span className="block text-[12px] font-semibold">Custo total dos produtos</span>
+              <span className="block text-[20px] font-bold leading-tight">{formatBRL(totais.custo)}</span>
+            </div>
+            <div className={`rounded-xl px-3 py-2.5 ${COR_DA_CLIENTE.caixa}`}>
+              <span className="block text-[12px] font-semibold">Total para a cliente</span>
+              <span className="block text-[20px] font-bold leading-tight">{formatBRL(totais.valorCliente)}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    ) : null;
+
   return (
     <SidePanel
       aberto={aberto}
@@ -195,6 +230,9 @@ export const SimulacaoFormPanel: React.FC<SimulacaoFormPanelProps> = ({
       sobretitulo="Financeiro"
       subtitulo="O custo dos materiais de cada procedimento. O PDF mostra tudo, inclusive o custo."
       cabecalho={cabecalho}
+      /* No computador, o resumo ao lado faz o papel do total no cabeçalho preto. */
+      cabecalhoSoNoCelular
+      largura="tela"
       bloqueado={salvando}
       alterado={mexeu}
       rodape={
@@ -209,171 +247,154 @@ export const SimulacaoFormPanel: React.FC<SimulacaoFormPanelProps> = ({
       }
     >
       <form
-        className="px-5 sm:px-6 py-5 flex flex-col gap-6"
+        className="px-5 sm:px-10 py-5 sm:py-8"
         onSubmit={(e) => {
           e.preventDefault();
           salvar();
         }}
       >
-        {erro && (
-          <AvisoTinta tom="erro" icone={AlertCircle}>
-            {erro}
-          </AvisoTinta>
-        )}
+        <div className="max-w-[1180px] mx-auto grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-10 lg:items-start">
+          <div className="flex flex-col gap-7 min-w-0">
+            {erro && (
+              <AvisoTinta tom="erro" icone={AlertCircle}>
+                {erro}
+              </AvisoTinta>
+            )}
 
-        <section className="flex flex-col gap-3">
-          <div>
-            <h3 className="font-serif-luxury text-[22px] font-semibold text-ink">Cliente</h3>
-            <p className="text-[13px] text-ink-soft leading-snug">
-              Opcional — do cadastro ou digitada. Sai só no cabeçalho do PDF.
-            </p>
-          </div>
-          <PatientSearchSelect
-            patients={pacientes}
-            pacienteId={pacienteId}
-            pacienteNome={pacienteNome}
-            onSelect={(p) => {
-              setPacienteId(p.id);
-              setPacienteNome(p.nome);
-            }}
-          />
-        </section>
+            <section className="flex flex-col gap-3">
+              <TituloDeSecao titulo="Cliente" descricao="Opcional — do cadastro ou digitada. Sai só no cabeçalho do PDF." />
+              <PatientSearchSelect
+                patients={pacientes}
+                pacienteId={pacienteId}
+                pacienteNome={pacienteNome}
+                onSelect={(p) => {
+                  setPacienteId(p.id);
+                  setPacienteNome(p.nome);
+                }}
+              />
+            </section>
 
-        <section className="flex flex-col gap-3">
-          <div>
-            <h3 className="font-serif-luxury text-[22px] font-semibold text-ink">Procedimentos</h3>
-            <p className="text-[13px] text-ink-soft leading-snug">
-              Do catálogo, os materiais já vêm pelo consumo padrão cadastrado no Estoque, vezes as
-              sessões. Tudo pode ser mudado.
-            </p>
-          </div>
+            <section className="flex flex-col gap-4">
+              <TituloDeSecao
+                titulo="Procedimentos"
+                contagem={procedimentos.length}
+                descricao="Do catálogo, os materiais já vêm pelo consumo padrão do Estoque, vezes as sessões. Tudo pode ser mudado."
+              />
 
-          {procedimentos.map((p, n) => {
-            const doProcedimento = totaisDoProcedimento(p);
-            return (
-              <div key={p.id} className="rounded-2xl bg-card border border-ink/10 p-3 flex flex-col gap-3">
-                <div className="flex items-start gap-2.5">
-                  <span
-                    aria-hidden
-                    className="w-8 h-8 mt-3 shrink-0 rounded-full bg-ink text-brand-pale text-[14px] font-bold flex items-center justify-center tabular-nums"
-                  >
-                    {n + 1}
-                  </span>
-                  <CampoTinta rotulo="Procedimento" htmlFor={`sim-proc-${p.id}`} className="flex-1 min-w-0">
-                    <input
-                      id={`sim-proc-${p.id}`}
-                      type="text"
-                      value={p.titulo}
-                      maxLength={120}
-                      onChange={(e) => {
-                        mudar(p.id, { titulo: e.target.value });
-                        setErro(null);
-                      }}
-                      placeholder="Nome do procedimento"
-                      className={INPUT_TINTA}
-                    />
-                  </CampoTinta>
-                  <button
-                    type="button"
-                    onClick={() => remover(p.id)}
-                    aria-label={`Remover o procedimento ${n + 1}`}
-                    title="Remover"
-                    className="w-10 h-10 mt-2 shrink-0 rounded-full flex items-center justify-center text-ink-soft hover:text-danger hover:bg-danger-bg transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+              {procedimentos.map((p, n) => {
+                const doProcedimento = totaisDoProcedimento(p);
+                return (
+                  <div key={p.id} className="rounded-[20px] bg-card border border-ink/10 p-4 sm:p-5 flex flex-col gap-4">
+                    <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+                      <span
+                        aria-hidden
+                        className="w-8 h-8 mt-0.5 sm:mt-3 shrink-0 rounded-full bg-ink text-brand-pale text-[14px] font-bold flex items-center justify-center tabular-nums"
+                      >
+                        {n + 1}
+                      </span>
+                      <CampoTinta
+                        rotulo="Procedimento"
+                        htmlFor={`sim-proc-${p.id}`}
+                        className="order-last w-full sm:order-none sm:w-auto sm:flex-1 min-w-0"
+                      >
+                        <input
+                          id={`sim-proc-${p.id}`}
+                          type="text"
+                          value={p.titulo}
+                          maxLength={120}
+                          onChange={(e) => {
+                            mudar(p.id, { titulo: e.target.value });
+                            setErro(null);
+                          }}
+                          placeholder="Nome do procedimento"
+                          className={INPUT_TINTA}
+                        />
+                      </CampoTinta>
+                      <button
+                        type="button"
+                        onClick={() => remover(p.id)}
+                        aria-label={`Remover o procedimento ${n + 1}`}
+                        title="Remover"
+                        className="ml-auto sm:ml-0 sm:mt-2 w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-ink-soft hover:text-danger hover:bg-danger-bg transition-colors"
+                      >
+                        <X className="w-[18px] h-[18px]" />
+                      </button>
+                    </div>
 
-                <div className="flex flex-wrap items-end gap-x-4 gap-y-2 sm:pl-[42px]">
-                  <CampoTinta rotulo="Sessões" htmlFor={`sim-sessoes-${p.id}`} className="w-[120px]">
-                    <input
-                      id={`sim-sessoes-${p.id}`}
-                      type="number"
-                      min="1"
-                      step="1"
-                      inputMode="numeric"
-                      value={p.sessoes || ''}
-                      onChange={(e) => mudar(p.id, { sessoes: Math.floor(numeroValido(e.target.value)) })}
-                      className={`${INPUT_TINTA} tabular-nums`}
-                    />
-                  </CampoTinta>
-                  <button
-                    type="button"
-                    onClick={() => recalcular(p)}
-                    className="inline-flex items-center gap-1.5 min-h-[44px] text-[14px] font-semibold text-ink underline underline-offset-2 hover:no-underline"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    Recalcular pelo consumo padrão
-                    {(p.sessoes || 1) > 1 ? ` × ${p.sessoes} sessões` : ''}
-                  </button>
-                </div>
+                    <div className="flex flex-col gap-4 sm:pl-11">
+                      <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+                        <CampoTinta rotulo="Sessões" htmlFor={`sim-sessoes-${p.id}`} className="w-[120px]">
+                          <input
+                            id={`sim-sessoes-${p.id}`}
+                            type="number"
+                            min="1"
+                            step="1"
+                            inputMode="numeric"
+                            value={p.sessoes || ''}
+                            onChange={(e) => mudar(p.id, { sessoes: Math.floor(numeroValido(e.target.value)) })}
+                            className={`${INPUT_TINTA} tabular-nums`}
+                          />
+                        </CampoTinta>
+                        <button
+                          type="button"
+                          onClick={() => recalcular(p)}
+                          className="inline-flex items-center gap-1.5 min-h-[44px] text-[14px] font-semibold text-ink underline underline-offset-2 hover:no-underline"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          Recalcular pelo consumo padrão
+                          {(p.sessoes || 1) > 1 ? ` × ${p.sessoes} sessões` : ''}
+                        </button>
+                      </div>
 
-                <div className="sm:pl-[42px]">
-                  <p className="text-[13px] font-semibold text-ink mb-1.5">Materiais</p>
-                  <EditorDeMateriais
-                    idBase={`sim-${p.id}`}
-                    itens={p.materiais}
-                    onChange={(materiais) => {
-                      mudar(p.id, { materiais });
-                      setMexeu(true);
-                    }}
-                    produtos={produtos}
-                    oferecerCadastro
-                    mostrarTotais={false}
-                  />
-                </div>
+                      <div>
+                        <p className="text-[15px] font-bold text-ink mb-2">Materiais</p>
+                        <EditorDeMateriais
+                          idBase={`sim-${p.id}`}
+                          itens={p.materiais}
+                          onChange={(materiais) => {
+                            mudar(p.id, { materiais });
+                            setMexeu(true);
+                          }}
+                          produtos={produtos}
+                          oferecerCadastro
+                          mostrarTotais={false}
+                        />
+                      </div>
 
-                <div className="sm:pl-[42px] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-2 border-t border-ink/8 tabular-nums">
-                  <span className="text-[13px] text-ink-soft">
-                    Repassado à cliente:{' '}
-                    <strong className="text-ink">{formatBRL(doProcedimento.valorCliente)}</strong>
-                  </span>
-                  <span className="text-[14px] text-ink">
-                    Custo do procedimento: <strong>{formatBRL(doProcedimento.custo)}</strong>
-                  </span>
-                </div>
+                      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-ink/8 tabular-nums">
+                        <div className={`rounded-xl px-3 py-2 ${COR_DO_CUSTO.caixa}`}>
+                          <span className="block text-[12px] font-semibold">Custo dos produtos</span>
+                          <span className="block text-[17px] font-bold">{formatBRL(doProcedimento.custo)}</span>
+                        </div>
+                        <div className={`rounded-xl px-3 py-2 ${COR_DA_CLIENTE.caixa}`}>
+                          <span className="block text-[12px] font-semibold">Para a cliente</span>
+                          <span className="block text-[17px] font-bold">{formatBRL(doProcedimento.valorCliente)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {procedimentos.length === 0 && <p className="text-[14px] text-ink-soft">Nenhum procedimento ainda.</p>}
+
+              <div className="flex flex-col gap-2">
+                <ProcedureSearchAdd grande procedures={catalogo} onAdd={adicionarDoCatalogo} />
+                <button
+                  type="button"
+                  onClick={adicionarEmBranco}
+                  className="min-h-[40px] px-1 text-ink text-[14px] font-semibold underline underline-offset-2 hover:no-underline flex w-fit items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Procedimento fora do catálogo
+                </button>
               </div>
-            );
-          })}
-
-          {procedimentos.length === 0 && (
-            <p className="text-[14px] text-ink-soft">Nenhum procedimento ainda.</p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <ProcedureSearchAdd procedures={catalogo} onAdd={adicionarDoCatalogo} />
-            <button
-              type="button"
-              onClick={adicionarEmBranco}
-              className="h-10 px-4 rounded-full border border-ink/15 text-ink text-[14px] font-semibold hover:border-ink/40 transition-colors flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              Procedimento fora do catálogo
-            </button>
+            </section>
           </div>
-        </section>
 
-        {procedimentos.length > 0 && (
-          <section className="rounded-2xl bg-card border border-ink/10 p-4 space-y-1.5 text-[14px] tabular-nums">
-            {procedimentos.length > 1 &&
-              procedimentos.map((p, n) => (
-                <div key={p.id} className="flex justify-between gap-4 text-ink-soft">
-                  <span className="truncate">
-                    {n + 1}. {p.titulo.trim() || 'Procedimento sem nome'}
-                  </span>
-                  <span className="shrink-0">{formatBRL(totaisDoProcedimento(p).custo)}</span>
-                </div>
-              ))}
-            <div className="flex justify-between text-ink-soft">
-              <span>Valor repassado à cliente</span>
-              <span>{formatBRL(totais.valorCliente)}</span>
-            </div>
-            <div className="flex justify-between pt-2 mt-1 border-t border-ink/8 text-ink font-bold">
-              <span>Custo total dos materiais</span>
-              <span className="text-[17px]">{formatBRL(totais.custo)}</span>
-            </div>
-          </section>
-        )}
+          {/* Preso enquanto a lista rola: o custo e o repasse sempre à vista ao lado dos materiais. */}
+          {resumo && <div className="lg:sticky lg:top-6">{resumo}</div>}
+        </div>
       </form>
     </SidePanel>
   );

@@ -17,6 +17,7 @@ import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
 import { ENDERECO_DO_SITE, motivoEnderecoFechado, normalizarEnderecoPublico } from '../utils/publicLinks';
 import { formatCnpj } from '../utils/recibos';
+import { ListaSuspensa } from './common/ListaSuspensa';
 
 /**
  * A foto da profissional entra em dois lugares com recortes diferentes: o bloco 92×104 da capa do
@@ -1212,17 +1213,14 @@ const SecaoAgendaDaClinica: React.FC<{
         <label className="block text-xs font-medium text-ink mb-1">
           Divisão da grade
         </label>
-        <select
-          value={formData.agendaIntervaloMin || AGENDA_DEFAULTS.intervaloMin}
-          onChange={(e) => onChange('agendaIntervaloMin', Number(e.target.value))}
-          className="glass-input px-3 py-2 rounded-sm text-xs text-ink focus:outline-hidden"
-        >
-          {INTERVALOS_DISPONIVEIS.map((m) => (
-            <option key={m} value={m}>
-              {m} minutos
-            </option>
-          ))}
-        </select>
+        <ListaSuspensa
+          className="max-w-[220px]"
+          rotuloAcessivel="Divisão da grade"
+          valor={String(formData.agendaIntervaloMin || AGENDA_DEFAULTS.intervaloMin)}
+          onMudar={(v) => onChange('agendaIntervaloMin', Number(v))}
+          opcoes={INTERVALOS_DISPONIVEIS.map((m) => ({ valor: String(m), rotulo: `${m} minutos` }))}
+          buscavel={false}
+        />
       </div>
 
       {/* Salas e equipamentos.

@@ -256,6 +256,8 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       cabecalho={cabecalho}
       navegacao={navegacao}
       formato="central"
+      largura="tela"
+      cabecalhoSoNoCelular
       onVoltar={etapa > 1 ? () => setEtapa((etapa - 1) as Etapa) : undefined}
       etapa={etapa}
       bloqueado={isSaving}

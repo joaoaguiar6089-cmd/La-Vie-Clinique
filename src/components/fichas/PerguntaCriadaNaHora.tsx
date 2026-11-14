@@ -8,6 +8,7 @@ import {
   opcoesDoCampo,
   trocarTipoDoCampo,
 } from '../../utils/gruposExtras';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 /**
  * Uma pergunta criada na hora do preenchimento: a profissional escreve a pergunta, escolhe o
@@ -59,17 +60,14 @@ export const PerguntaCriadaNaHora: React.FC<{
 
       <label className="flex items-center gap-2 text-[13px] text-ink-soft">
         <span className="shrink-0">Tipo de resposta</span>
-        <select
-          value={pergunta.tipo_campo}
-          onChange={(e) => onTrocarTipo(trocarTipoDoCampo(pergunta, e.target.value as QuestionFieldType))}
-          className="min-w-0 flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg border border-[rgba(26,26,26,.15)] bg-card text-[13px] font-semibold text-ink focus:outline-none focus:border-brand"
-        >
-          {TIPOS_DO_CAMPO_LIVRE.map((t) => (
-            <option key={t.tipo} value={t.tipo}>
-              {t.rotulo}
-            </option>
-          ))}
-        </select>
+        <ListaSuspensa
+          className="min-w-0 flex-1 sm:flex-none sm:w-56"
+          rotuloAcessivel="Tipo de resposta"
+          valor={pergunta.tipo_campo}
+          onMudar={(v) => onTrocarTipo(trocarTipoDoCampo(pergunta, v as QuestionFieldType))}
+          buscavel={false}
+          opcoes={TIPOS_DO_CAMPO_LIVRE.map((t) => ({ valor: t.tipo, rotulo: t.rotulo }))}
+        />
       </label>
 
       {comOpcoes && (

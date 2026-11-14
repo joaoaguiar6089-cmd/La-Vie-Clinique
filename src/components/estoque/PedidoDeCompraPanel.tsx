@@ -35,7 +35,9 @@ import {
 import { registrarPedidoDeCompra } from '../../services/databaseService';
 import { lerPedidoComIa } from '../../services/leituraDePedidoApi';
 import { SidePanel } from '../common/SidePanel';
-import { AvisoTinta, BotaoPrincipal, CampoTinta, INPUT_TINTA, SetaDoSelect } from '../common/Tinta';
+import { opcaoDoProduto } from './EditorDeMateriais';
+import { AvisoTinta, BotaoPrincipal, CampoTinta, INPUT_TINTA } from '../common/Tinta';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 const NOVO = '__novo__';
 
@@ -380,6 +382,7 @@ export const PedidoDeCompraPanel: React.FC<PedidoDeCompraPanelProps> = ({
       }
       cabecalho={cabecalho}
       formato="central"
+      largura="tela"
       bloqueado={salvando}
       alterado={linhas.some((l) => l.produtoId || l.quantidade) || !!arquivo}
       rodape={
@@ -588,30 +591,25 @@ const LinhaDoPedidoCard: React.FC<{
           {numero}
         </span>
         <div className="order-last w-full sm:order-none sm:w-auto sm:flex-1 min-w-0">
-          <CampoTinta rotulo="Produto" htmlFor={`${id}-produto`} sufixo={<SetaDoSelect />}>
-            <select
-              id={`${id}-produto`}
-              value={l.produtoId}
-              onChange={(e) => {
-                const escolhido = ativos.find((p) => p.id === e.target.value);
-                onMudar({
-                  produtoId: e.target.value,
-                  porEmbalagem: escolhido ? pareceEmbalagem(l.lido?.unidade, escolhido) : l.porEmbalagem,
-                  lido: l.lido ? { ...l.lido, sugerido: false } : undefined,
-                });
-              }}
-              className={`${INPUT_TINTA} appearance-none cursor-pointer truncate`}
-            >
-              <option value="">Escolha o produto…</option>
-              {ativos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome}
-                  {p.marca ? ` · ${p.marca}` : ''}
-                </option>
-              ))}
-              <option value={NOVO}>+ Cadastrar um produto novo</option>
-            </select>
-          </CampoTinta>
+          <ListaSuspensa
+            id={`${id}-produto`}
+            rotulo="Produto"
+            placeholder="Escolha o produto…"
+            placeholderDaBusca="Buscar produto, marca ou tipo…"
+            valor={l.produtoId}
+            onMudar={(v) => {
+              const escolhido = ativos.find((p) => p.id === v);
+              onMudar({
+                produtoId: v,
+                porEmbalagem: escolhido ? pareceEmbalagem(l.lido?.unidade, escolhido) : l.porEmbalagem,
+                lido: l.lido ? { ...l.lido, sugerido: false } : undefined,
+              });
+            }}
+            opcoes={[
+              ...ativos.map(opcaoDoProduto),
+              { valor: NOVO, rotulo: 'Cadastrar um produto novo', acao: true },
+            ]}
+          />
           {l.lido && (
             <p className={ajuda}>
               Lido no pedido: <strong className="text-ink">“{l.lido.produto}”</strong>

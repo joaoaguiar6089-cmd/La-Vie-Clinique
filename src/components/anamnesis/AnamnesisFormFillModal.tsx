@@ -44,6 +44,7 @@ import {
   Share2,
   Scan,
 } from 'lucide-react';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 const formatCpf = (raw: string): string => {
   const digits = raw.replace(/\D/g, '').slice(0, 11);
@@ -610,20 +611,14 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                   <label className="block text-[13px] font-semibold text-ink mb-1.5">
                     Selecione o paciente
                   </label>
-                  <select
-                    value={selectedPatientId}
-                    onChange={(e) => setSelectedPatientId(e.target.value)}
-                    className={`w-full h-11 px-3 text-[14px] rounded-xl bg-surface border ${
-                      errors['patient_select'] ? 'border-danger' : 'border-[rgba(26,26,26,.12)]'
-                    } text-ink focus:outline-hidden focus:border-brand font-medium`}
-                  >
-                    <option value="">-- Escolha um paciente da clínica --</option>
-                    {patients.map((pat) => (
-                      <option key={pat.id} value={pat.id}>
-                        {pat.nome} {pat.contato ? `(${pat.contato})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <ListaSuspensa
+                    rotuloAcessivel="Paciente"
+                    placeholder="Escolha uma paciente da clínica…"
+                    placeholderDaBusca="Buscar pelo nome ou telefone…"
+                    valor={selectedPatientId}
+                    onMudar={setSelectedPatientId}
+                    opcoes={patients.map((pat) => ({ valor: pat.id, rotulo: pat.nome, detalhe: pat.contato || undefined }))}
+                  />
                   {errors['patient_select'] && (
                     <p className="text-[13px] text-danger mt-1">{errors['patient_select']}</p>
                   )}
@@ -772,17 +767,13 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                 <label className="block text-[13px] font-semibold text-ink mb-1.5">
                   Procedimento / ficha
                 </label>
-                <select
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  className="w-full h-11 px-3 text-[14px] rounded-xl bg-surface border border-[rgba(26,26,26,.12)] text-ink focus:outline-hidden focus:border-brand font-semibold"
-                >
-                  {templates.map((tpl) => (
-                    <option key={tpl.id} value={tpl.id}>
-                      {tpl.procedimentoNome}
-                    </option>
-                  ))}
-                </select>
+                <ListaSuspensa
+                  rotuloAcessivel="Procedimento / ficha"
+                  valor={selectedTemplateId}
+                  onMudar={setSelectedTemplateId}
+                  placeholderDaBusca="Buscar procedimento…"
+                  opcoes={templates.map((tpl) => ({ valor: tpl.id, rotulo: tpl.procedimentoNome, grupo: tpl.categoria || undefined }))}
+                />
               </div>
 
               <div>
@@ -801,10 +792,12 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                 <label className="block text-[13px] font-semibold text-ink mb-1.5">
                   Profissional responsável
                 </label>
-                <select
-                  value={professionalId}
-                  onChange={(e) => {
-                    setProfessionalId(e.target.value);
+                <ListaSuspensa
+                  rotuloAcessivel="Profissional responsável"
+                  placeholder="Selecione o profissional…"
+                  valor={professionalId}
+                  onMudar={(v) => {
+                    setProfessionalId(v);
                     if (errors['professional']) {
                       setErrors((prev) => {
                         const next = { ...prev };
@@ -813,17 +806,8 @@ export const AnamnesisFormFillModal: React.FC<AnamnesisFormFillModalProps> = ({
                       });
                     }
                   }}
-                  className={`w-full h-11 px-3 text-[14px] rounded-xl bg-surface border ${
-                    errors['professional'] ? 'border-danger' : 'border-[rgba(26,26,26,.12)]'
-                  } text-ink focus:outline-hidden focus:border-brand`}
-                >
-                  <option value="">-- Selecione o profissional --</option>
-                  {clinicProfile.professionals?.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                  opcoes={(clinicProfile.professionals || []).map((p) => ({ valor: p.id, rotulo: p.name, detalhe: p.specialty || p.title }))}
+                />
                 {errors['professional'] && (
                   <p className="text-[13px] text-danger mt-1">{errors['professional']}</p>
                 )}

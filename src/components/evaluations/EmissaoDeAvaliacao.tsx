@@ -26,6 +26,7 @@ import { PatientSearchSelect } from '../quotes/PatientSearchSelect';
 import { NewPatientModal } from '../patients/NewPatientModal';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { PrintableFichaSheet } from '../fichas/PrintableFichaSheet';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 interface EmissaoDeAvaliacaoProps {
   aberto: boolean;
@@ -285,19 +286,16 @@ export const EmissaoDeAvaliacao: React.FC<EmissaoDeAvaliacaoProps> = ({
               <label className={labelClass} htmlFor="avaliacao-profissional">
                 Profissional
               </label>
-              <select
+              <ListaSuspensa
                 id="avaliacao-profissional"
-                value={professionalId}
-                onChange={(e) => setProfessionalId(e.target.value)}
-                className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
-              >
-                <option value="">Sem profissional definida</option>
-                {professionals.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                rotuloAcessivel="Profissional"
+                valor={professionalId}
+                onMudar={setProfessionalId}
+                opcoes={[
+                  { valor: '', rotulo: 'Sem profissional definida' },
+                  ...professionals.map((p) => ({ valor: p.id, rotulo: p.name, detalhe: p.specialty || p.title })),
+                ]}
+              />
             </div>
           </div>
         </div>

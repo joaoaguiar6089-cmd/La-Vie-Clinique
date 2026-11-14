@@ -19,8 +19,9 @@ import {
   totaisDosMateriais,
 } from '../../utils/estoque';
 import { EditorDeMateriais } from '../estoque/EditorDeMateriais';
-import { CampoTinta, INPUT_TINTA, SetaDoSelect } from '../common/Tinta';
+import { CampoTinta, INPUT_TINTA } from '../common/Tinta';
 import { OpcaoLigavel, PrefixoReais } from './PecasDoOrcamento';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 interface QuoteItemEditorProps {
   item: QuoteItem;
@@ -207,31 +208,19 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <CampoTinta
+            <ListaSuspensa
+              id={`item-profissional-${item.id}`}
               rotulo="Profissional deste procedimento"
-              htmlFor={`item-profissional-${item.id}`}
-              sufixo={<SetaDoSelect />}
-            >
-              <select
-                id={`item-profissional-${item.id}`}
-                value={item.professionalId || ''}
-                onChange={(e) => {
-                  const id = e.target.value || undefined;
-                  patch({
-                    professionalId: id,
-                    profissionalNome: professionals.find((p) => p.id === id)?.name,
-                  });
-                }}
-                className={`${INPUT_TINTA} appearance-none cursor-pointer truncate`}
-              >
-                <option value="">Sem profissional definida</option>
-                {professionals.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </CampoTinta>
+              valor={item.professionalId || ''}
+              onMudar={(v) => {
+                const id = v || undefined;
+                patch({ professionalId: id, profissionalNome: professionals.find((p) => p.id === id)?.name });
+              }}
+              opcoes={[
+                { valor: '', rotulo: 'Sem profissional definida' },
+                ...professionals.map((p) => ({ valor: p.id, rotulo: p.name, detalhe: p.specialty || p.title })),
+              ]}
+            />
 
             {porConsumo ? (
               <div className="rounded-[14px] px-4 pt-2 pb-2.5 min-h-[56px] bg-surface-2 border border-ink/8">
