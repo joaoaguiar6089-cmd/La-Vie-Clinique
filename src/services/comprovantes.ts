@@ -48,7 +48,7 @@ export function problemaNoArquivoDeComprovante(arquivo: File): string | null {
  * limite. Se o navegador não conseguir abrir a imagem (HEIC fora do Safari, por exemplo), sobe o
  * arquivo original.
  */
-async function prepararArquivo(arquivo: File): Promise<{ corpo: Blob; tipo: string }> {
+export async function prepararArquivo(arquivo: File): Promise<{ corpo: Blob; tipo: string }> {
   if (!arquivo.type.startsWith('image/') || arquivo.size <= REDUZIR_FOTO_ACIMA_DE) {
     return { corpo: arquivo, tipo: arquivo.type };
   }
