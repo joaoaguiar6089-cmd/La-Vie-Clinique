@@ -39,8 +39,8 @@ import {
  * Nenhuma leitura nova no Firestore: os orçamentos já vivem em memória, e é por isso que trocar
  * o período não custa nada.
  *
- * O painel é a aba "Painel" do Financeiro, e só a administradora a vê. A outra aba, "Simulação
- * de custo", é de toda a equipe — ver `FinanceiroView`, no fim do arquivo.
+ * O painel é a aba "Painel" do Financeiro, e só a administradora a vê. As outras, "Orçamentos" e
+ * "Simulação de custo", são de toda a equipe — ver `FinanceiroView`, no fim do arquivo.
  */
 
 interface PainelFinanceiroProps {
@@ -60,8 +60,14 @@ interface FinanceiroViewProps extends PainelFinanceiroProps {
   clinic: ClinicProfile;
   /** Quem está logada — a dona das simulações que criar. */
   autor: { uid: string; nome: string } | null;
-  /** O painel é só das administradoras; a simulação de custo, de todas. */
+  /** O painel é só das administradoras; os orçamentos e a simulação de custo, de todas. */
   ehAdmin: boolean;
+  /** A aba de orçamentos está aberta — é a view `quotes` do App. */
+  naAbaDeOrcamentos: boolean;
+  onAbrirOrcamentos: () => void;
+  onSairDosOrcamentos: () => void;
+  /** O painel de orçamentos, montado pelo App: é ele que recebe os pedidos de navegação. */
+  orcamentos: React.ReactNode;
 }
 
 type FiltroDePeriodo = 'mes' | 'mes-anterior' | '90-dias' | 'ano';
@@ -523,10 +529,15 @@ const PainelFinanceiro: React.FC<PainelFinanceiroProps> = ({
   );
 };
 
-type AbaDoFinanceiro = 'painel' | 'simulacao';
+type AbaDoFinanceiro = 'orcamentos' | 'painel' | 'simulacao';
 
 /**
- * A tela do Financeiro: o painel e a simulação de custo.
+ * A tela do Financeiro: os orçamentos, o painel e a simulação de custo.
+ *
+ * **Os orçamentos são a primeira aba, para todas.** É o que se abre todo dia; moraram no menu
+ * lateral até a equipe pedir o menu mais curto. A aba é a view `quotes` do App — é por ela que
+ * chegam os pedidos de navegação ("Criar → Orçamento", o orçamento da página da paciente) —, e o
+ * painel de orçamentos chega montado em `orcamentos`.
  *
  * **O painel continua só das administradoras.** É o único lugar do sistema onde a receita da casa
  * aparece inteira, e numa clínica com equipe isso não é informação de todo mundo — a trava é de
@@ -534,42 +545,58 @@ type AbaDoFinanceiro = 'painel' | 'simulacao';
  * Firestore permitem.
  *
  * **A simulação de custo é de toda a equipe.** É a profissional que precisa saber quanto do
- * procedimento vai embora em material. Por isso o item "Financeiro" do menu aparece para todas: a
- * administradora entra no painel e troca de aba; a profissional entra direto na simulação, sem
- * abas, e não vê faturamento nem margem.
+ * procedimento vai embora em material.
  */
-export const FinanceiroView: React.FC<FinanceiroViewProps> = ({ pacientes, clinic, autor, ehAdmin, ...painel }) => {
-  const [aba, setAba] = useState<AbaDoFinanceiro>('painel');
+export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
+  pacientes,
+  clinic,
+  autor,
+  ehAdmin,
+  naAbaDeOrcamentos,
+  onAbrirOrcamentos,
+  onSairDosOrcamentos,
+  orcamentos,
+  ...painel
+}) => {
+  /** A aba fora dos orçamentos — a que volta ao trocar de aba dentro do Financeiro. */
+  const [outraAba, setOutraAba] = useState<Exclude<AbaDoFinanceiro, 'orcamentos'>>(ehAdmin ? 'painel' : 'simulacao');
+  const abaFora = !ehAdmin && outraAba === 'painel' ? 'simulacao' : outraAba;
+  const ativa: AbaDoFinanceiro = naAbaDeOrcamentos ? 'orcamentos' : abaFora;
 
-  const simulacao = (
-    <SimulacoesDeCusto
-      catalogProcedures={painel.catalogProcedures}
-      pacientes={pacientes}
-      clinic={clinic}
-      autor={autor}
-      ehAdmin={ehAdmin}
-    />
-  );
+  const abas = [
+    { id: 'orcamentos' as const, rotulo: 'Orçamentos' },
+    ...(ehAdmin ? [{ id: 'painel' as const, rotulo: 'Painel' }] : []),
+    { id: 'simulacao' as const, rotulo: 'Simulação de custo' },
+  ];
 
-  if (!ehAdmin) {
-    return <div className="max-w-4xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6">{simulacao}</div>;
-  }
+  const selecionar = (id: AbaDoFinanceiro) => {
+    window.scrollTo({ top: 0 });
+    if (id === 'orcamentos') {
+      onAbrirOrcamentos();
+      return;
+    }
+    setOutraAba(id);
+    if (naAbaDeOrcamentos) onSairDosOrcamentos();
+  };
 
   return (
     <div className="max-w-4xl mx-auto sm:px-8 pt-3 sm:pt-8 pb-6 flex flex-col gap-3 sm:gap-4">
-      <AbasSublinhadas
-        className="mx-5 sm:mx-0"
-        abas={[
-          { id: 'painel' as const, rotulo: 'Painel' },
-          { id: 'simulacao' as const, rotulo: 'Simulação de custo' },
-        ]}
-        ativa={aba}
-        onSelecionar={(id) => {
-          setAba(id);
-          window.scrollTo({ top: 0 });
-        }}
-      />
-      {aba === 'painel' ? <PainelFinanceiro {...painel} /> : <div className="px-5 sm:px-0">{simulacao}</div>}
+      <AbasSublinhadas className="mx-5 sm:mx-0" abas={abas} ativa={ativa} onSelecionar={selecionar} />
+      {ativa === 'orcamentos' ? (
+        <div className="px-5 sm:px-0">{orcamentos}</div>
+      ) : ativa === 'painel' ? (
+        <PainelFinanceiro {...painel} />
+      ) : (
+        <div className="px-5 sm:px-0">
+          <SimulacoesDeCusto
+            catalogProcedures={painel.catalogProcedures}
+            pacientes={pacientes}
+            clinic={clinic}
+            autor={autor}
+            ehAdmin={ehAdmin}
+          />
+        </div>
+      )}
     </div>
   );
 };

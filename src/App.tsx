@@ -334,9 +334,9 @@ function MainCatalogApp() {
   const [criandoRelatorio, setCriandoRelatorio] = useState(false);
 
   /**
-   * A tela anterior a Configurações e ao Financeiro. São as duas em que se entra "de passagem",
-   * de qualquer outra, e voltar sempre para a Hoje tiraria da agenda quem só foi ajustar o
-   * expediente ou conferir o mês.
+   * A tela anterior a Configurações, em que se entra "de passagem", de qualquer outra: voltar
+   * sempre para a Hoje tiraria da agenda quem só foi ajustar o expediente. (O Financeiro também
+   * era assim, até receber os orçamentos e virar tela de todo dia.)
    */
   const viewAnteriorRef = useRef<AppView>('hoje');
   /**
@@ -346,9 +346,7 @@ function MainCatalogApp() {
    */
   const abaDasFichasRef = useRef<AbaDasFichas>('anamnesis');
   useEffect(() => {
-    if (currentView !== 'settings' && currentView !== 'financeiro') {
-      viewAnteriorRef.current = currentView;
-    }
+    if (currentView !== 'settings') viewAnteriorRef.current = currentView;
     if (ehAbaDasFichas(currentView)) abaDasFichasRef.current = currentView;
   }, [currentView]);
 
@@ -1163,7 +1161,9 @@ function MainCatalogApp() {
                 onAbrirNaAgenda={abrirNaAgenda}
                 onNovaAnamnese={novaAnamnesePeloPainel}
               />
-            ) : currentView === 'financeiro' ? (
+            ) : currentView === 'financeiro' || currentView === 'quotes' ? (
+              /* Os orçamentos são a primeira aba do Financeiro. As duas views caem no mesmo
+                 elemento, para a troca de aba não remontar a tela. */
               <FinanceiroView
                 quotes={quotes}
                 atendimentos={attendances}
@@ -1185,6 +1185,18 @@ function MainCatalogApp() {
                 }
                 ehAdmin={isAdminUser}
                 carregando={atendimentosCarregando}
+                naAbaDeOrcamentos={currentView === 'quotes'}
+                onAbrirOrcamentos={() => setCurrentView('quotes')}
+                onSairDosOrcamentos={() => setCurrentView('financeiro')}
+                orcamentos={
+                  <QuotesPanel
+                    embutido
+                    clinic={clinic}
+                    catalogProcedures={procedures}
+                    pedido={currentView === 'quotes' ? pedido : null}
+                    onPedidoAtendido={() => setPedido(null)}
+                  />
+                }
               />
             ) : currentView === 'settings' ? (
               <ClinicSettingsModal
@@ -1294,14 +1306,7 @@ function MainCatalogApp() {
                   />
                 )}
               </div>
-            ) : (
-              <QuotesPanel
-                clinic={clinic}
-                catalogProcedures={procedures}
-                pedido={currentView === 'quotes' ? pedido : null}
-                onPedidoAtendido={() => setPedido(null)}
-              />
-            )}
+            ) : null}
           </main>
 
           {/* Frosted Luxury Footer */}

@@ -12,7 +12,6 @@ import {
   NotebookPen,
   Package,
   Plus,
-  Receipt,
   Settings,
   Share2,
   Syringe,
@@ -238,16 +237,9 @@ const PainelMais: React.FC<{
 
         <div>
           <p className="text-[13px] font-semibold text-brand-light">Documentos da paciente</p>
-          {/* Na ordem da jornada: o orçamento e as fichas — anamnese, avaliação (antes do
-              procedimento) e relatório (depois do atendimento), que são as abas de uma tela só. */}
+          {/* As fichas — anamnese, avaliação (antes do procedimento) e relatório (depois do
+              atendimento), abas de uma tela só. Os orçamentos moram no Financeiro, logo abaixo. */}
           <div className="flex flex-col">
-            <LinhaDoMais
-              icone={Receipt}
-              titulo="Orçamentos"
-              sub="Preços e pagamentos"
-              ativo={currentView === 'quotes'}
-              onClick={() => ir('quotes')}
-            />
             <LinhaDoMais
               icone={ClipboardList}
               titulo="Fichas"
@@ -273,12 +265,12 @@ const PainelMais: React.FC<{
               ativo={currentView === 'estoque'}
               onClick={() => ir('estoque')}
             />
-            {/* Para todas: a administradora vê o painel; a profissional, só a simulação de custo. */}
+            {/* Para todas, e abre nos orçamentos. A administradora tem também o painel. */}
             <QuadroDoMais
               icone={Wallet}
               titulo="Financeiro"
-              ativo={currentView === 'financeiro'}
-              onClick={() => ir('financeiro')}
+              ativo={currentView === 'financeiro' || currentView === 'quotes'}
+              onClick={() => ir('quotes')}
             />
           </div>
         </div>
