@@ -56,6 +56,11 @@ interface QuotesPanelProps {
   /** Pedido vindo da busca global ou da tela Hoje: abrir um orçamento, começar um novo. */
   pedido?: PedidoDeNavegacao | null;
   onPedidoAtendido?: () => void;
+  /**
+   * Dentro do Financeiro, como a aba de orçamentos: quem dá a largura e a margem da tela é ele, e
+   * o título leva "Financeiro" em cima, como a simulação de custo.
+   */
+  embutido?: boolean;
 }
 
 export const QuotesPanel: React.FC<QuotesPanelProps> = ({
@@ -63,6 +68,7 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
   catalogProcedures,
   pedido,
   onPedidoAtendido,
+  embutido = false,
 }) => {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -221,8 +227,13 @@ export const QuotesPanel: React.FC<QuotesPanelProps> = ({
     });
 
   return (
-    <div className="max-w-3xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4">
+    <div
+      className={
+        embutido ? 'flex flex-col gap-4' : 'max-w-3xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4'
+      }
+    >
       <TituloDaTela
+        sobre={embutido ? 'Financeiro' : undefined}
         titulo="Orçamentos"
         acao={
           <div className="flex flex-col items-end gap-0.5">

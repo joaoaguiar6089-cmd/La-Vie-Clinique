@@ -5,7 +5,6 @@ import {
   ClipboardList,
   Share2,
   LogOut,
-  Receipt,
   Users,
   CalendarDays,
   Home,
@@ -172,17 +171,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       ativo: currentView === 'patients',
       onClick: ir('patients'),
     },
-    // Os documentos da paciente, na ordem da jornada: o orçamento e as fichas — anamnese,
-    // avaliação (antes do procedimento) e relatório (depois do atendimento), que são as abas de
-    // uma tela só e por isso um item só no menu.
-    {
-      id: 'quotes',
-      rotulo: 'Orçamentos',
-      titulo: 'Orçamentos',
-      icone: Receipt,
-      ativo: currentView === 'quotes',
-      onClick: ir('quotes'),
-    },
+    // As fichas da paciente — anamnese, avaliação (antes do procedimento) e relatório (depois do
+    // atendimento), que são as abas de uma tela só e por isso um item só no menu. Os orçamentos
+    // moram no Financeiro, na primeira aba.
     {
       id: 'fichas',
       rotulo: 'Fichas',
@@ -211,14 +202,14 @@ export const Navbar: React.FC<NavbarProps> = ({
       ativo: currentView === 'estoque',
       onClick: ir('estoque'),
     },
-    // Para todas: a administradora vê o painel; a profissional, só a simulação de custo.
+    // Para todas, e abre nos orçamentos — a aba de todo dia. A administradora tem também o painel.
     {
       id: 'financeiro',
       rotulo: 'Financeiro',
-      titulo: 'Financeiro',
+      titulo: 'Financeiro — orçamentos, painel e simulação de custo',
       icone: Wallet,
-      ativo: currentView === 'financeiro',
-      onClick: ir('financeiro'),
+      ativo: currentView === 'financeiro' || currentView === 'quotes',
+      onClick: ir('quotes'),
     },
     {
       id: 'export',
