@@ -8,6 +8,7 @@ import { criarRotasDaEquipe, manterEquipeSincronizada } from './server/equipe';
 import { bancoAdmin, espacoDaClinica, PREFIXO_DA_CREDENCIAL } from './server/firebaseAdmin';
 import { criarRotasFichaPublica } from './server/fichaPublica';
 import { criarRotasGoogleAgenda } from './server/googleAgenda';
+import { criarRotasLeituraDePedido } from './server/leituraDePedido';
 import { criarResolvedorDePreview, type LeitorDoBanco } from './server/previewDosLinks';
 import { servirDocumento } from './server/documentosLegais';
 import { servirPrivacidade } from './server/privacidade';
@@ -98,6 +99,9 @@ app.use('/api/equipe', criarRotasDaEquipe());
 app.use('/api/cadastro', criarRotasDoCadastro());
 // Painel do dono da plataforma: só o login do dono, com o segundo fator (ver server/dono.ts).
 app.use('/api/dono', criarRotasDoDono({ espacoDaClinica }));
+// Leitura da foto ou do PDF de um pedido de compra do Estoque pelo Gemini, com a chave do servidor
+// (ver server/leituraDePedido.ts).
+app.use('/api/leitura-de-pedido', criarRotasLeituraDePedido());
 // Política de privacidade pública — o Google exige o link dela na tela de consentimento.
 app.get('/privacidade', servirPrivacidade);
 // Documentos da plataforma (texto em public/legal/*.md): Termos de Uso, Política de Privacidade e o

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Check, ClipboardPaste, Copy, Download, FileUp, Loader2, Paperclip, Plus, X } from 'lucide-react';
+import { AlertCircle, Check, ClipboardPaste, Copy, Download, FileUp, Loader2, Paperclip, Plus, Sparkles, X } from 'lucide-react';
 import { ItemDoPedido, PedidoDeCompra, ProdutoDeEstoque } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import {
@@ -33,6 +33,7 @@ import {
   problemaNoArquivoDeComprovante,
 } from '../../services/comprovantes';
 import { registrarPedidoDeCompra } from '../../services/databaseService';
+import { lerPedidoComIa } from '../../services/leituraDePedidoApi';
 import { SidePanel } from '../common/SidePanel';
 import { AvisoTinta, BotaoPrincipal, CampoTinta, INPUT_TINTA, SetaDoSelect } from '../common/Tinta';
 
@@ -74,11 +75,16 @@ const linhaEmBranco = (): LinhaDoPedido => ({
 const comoTexto = (n?: number) => (n === undefined || n === null || !Number.isFinite(n) || n === 0 ? '' : String(n));
 
 /**
- * Uma linha lida (da planilha, ou da IA na parte de leitura) virando linha do pedido: o produto do
- * cadastro que mais se parece com o nome, ou um produto novo já preenchido com o que foi lido.
+ * Uma linha lida (da planilha ou da IA) virando linha do pedido: o produto do cadastro que a IA
+ * reconheceu, ou o que mais se parece com o nome, ou um produto novo já preenchido com o que foi lido.
  */
-export const linhaDoQueFoiLido = (l: Omit<LinhaDaPlanilha, 'linha'>, produtos: ProdutoDeEstoque[]): LinhaDoPedido => {
-  const produto = casarProduto(l.produto, l.marca, produtos);
+export const linhaDoQueFoiLido = (
+  l: Omit<LinhaDaPlanilha, 'linha'>,
+  produtos: ProdutoDeEstoque[],
+  produtoIdReconhecido?: string
+): LinhaDoPedido => {
+  const reconhecido = produtoIdReconhecido ? produtos.find((p) => p.id === produtoIdReconhecido && !p.arquivado) : undefined;
+  const produto = reconhecido || casarProduto(l.produto, l.marca, produtos);
   return {
     id: novoId('linha'),
     produtoId: produto ? produto.id : NOVO,
@@ -107,8 +113,6 @@ interface PedidoDeCompraPanelProps {
   tiposSugeridos: string[];
   autor?: { uid: string; nome: string } | null;
   onRegistrado?: (pedido: PedidoDeCompra) => void;
-  /** As ações de leitura que chegam na parte da IA ficam aqui, acima dos itens. */
-  leitor?: (adicionar: (linhas: LinhaDoPedido[]) => void, arquivo: File | null) => React.ReactNode;
 }
 
 /**
@@ -127,7 +131,6 @@ export const PedidoDeCompraPanel: React.FC<PedidoDeCompraPanelProps> = ({
   tiposSugeridos,
   autor,
   onRegistrado,
-  leitor,
 }) => {
   const [fornecedor, setFornecedor] = useState('');
   const [dataCompra, setDataCompra] = useState(hojeISO());
@@ -140,6 +143,9 @@ export const PedidoDeCompraPanel: React.FC<PedidoDeCompraPanelProps> = ({
   const [copiado, setCopiado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [lendo, setLendo] = useState(false);
+  /** O resultado da última leitura pela IA — para lembrar de conferir. */
+  const [lido, setLido] = useState<string | null>(null);
 
   useEffect(() => {
     if (!aberto) return;
@@ -153,6 +159,8 @@ export const PedidoDeCompraPanel: React.FC<PedidoDeCompraPanelProps> = ({
     setAvisosDaPlanilha([]);
     setErro(null);
     setSalvando(false);
+    setLendo(false);
+    setLido(null);
   }, [aberto, estoqueInicial]);
 
   const ativos = useMemo(() => produtosAtivos(produtos), [produtos]);
@@ -187,6 +195,39 @@ export const PedidoDeCompraPanel: React.FC<PedidoDeCompraPanelProps> = ({
       adicionarLinhas(lidas.map((l) => linhaDoQueFoiLido(l, produtos)));
       setTextoDaPlanilha('');
       setPlanilhaAberta(false);
+    }
+  };
+
+  /**
+   * A IA lê a foto ou o PDF anexado. Os itens entram como os da planilha — o produto reconhecido
+   * vem escolhido, e o resto é novo —, e o fornecedor, o número e a data preenchem o que estiver
+   * em branco. Nada é gravado: quem registra é a pessoa, depois de conferir.
+   */
+  const lerComIa = async () => {
+    if (!arquivo) return;
+    setLendo(true);
+    setErro(null);
+    setLido(null);
+    try {
+      const leitura = await lerPedidoComIa(arquivo, produtos);
+      if (leitura.itens.length === 0) {
+        setErro('A IA não encontrou itens neste arquivo. Tente uma foto mais nítida, ou use a planilha.');
+        return;
+      }
+      adicionarLinhas(leitura.itens.map((item) => linhaDoQueFoiLido(item, produtos, item.produtoId)));
+      if (!estoqueInicial && leitura.fornecedor && !fornecedor.trim()) setFornecedor(leitura.fornecedor);
+      if (!estoqueInicial && leitura.numero && !numero.trim()) setNumero(leitura.numero);
+      if (leitura.dataCompra && leitura.dataCompra <= hojeISO()) setDataCompra(leitura.dataCompra);
+      const reconhecidos = leitura.itens.filter((i) => i.produtoId).length;
+      setLido(
+        `A IA leu ${leitura.itens.length} ${leitura.itens.length === 1 ? 'item' : 'itens'}` +
+          (reconhecidos ? `, ${reconhecidos} já do cadastro` : '') +
+          '. Confira o produto, a quantidade, o valor, o lote e a validade de cada um antes de registrar.'
+      );
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setLendo(false);
     }
   };
 
@@ -436,7 +477,16 @@ export const PedidoDeCompraPanel: React.FC<PedidoDeCompraPanelProps> = ({
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {leitor?.(adicionarLinhas, arquivo)}
+                <button
+                  type="button"
+                  onClick={lerComIa}
+                  disabled={!arquivo || lendo}
+                  title={arquivo ? 'Ler os itens da foto ou do PDF anexado' : 'Anexe a foto ou o PDF do pedido para ler'}
+                  className="inline-flex items-center gap-2 h-11 px-4 rounded-full bg-ink text-white text-[14px] font-semibold hover:bg-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {lendo ? <Loader2 className="w-[18px] h-[18px] animate-spin" /> : <Sparkles className="w-[18px] h-[18px] text-brand-light" />}
+                  {lendo ? 'Lendo o pedido…' : 'Ler com IA'}
+                </button>
                 <button
                   type="button"
                   onClick={() => setPlanilhaAberta((v) => !v)}
@@ -448,6 +498,17 @@ export const PedidoDeCompraPanel: React.FC<PedidoDeCompraPanelProps> = ({
                 </button>
               </div>
             </div>
+
+            {!arquivo && (
+              <p className="-mt-2 text-[13px] text-ink-soft">
+                Para a IA ler os itens, anexe a foto ou o PDF do pedido lá em cima.
+              </p>
+            )}
+            {lido && (
+              <AvisoTinta tom="info" icone={Sparkles}>
+                {lido}
+              </AvisoTinta>
+            )}
 
             {planilhaAberta && (
               <ImportarPlanilha

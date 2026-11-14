@@ -1,6 +1,6 @@
 # Estoque com tipos, lotes e compras — especificação
 
-Status: **implementado** — 2026-11-14 (a leitura do pedido por IA vem em seguida).
+Status: **implementado** — 2026-11-14, com a leitura do pedido por IA.
 
 O estoque passa a saber **quanto há** de cada produto, de que **lote** e com que **validade**. A
 quantidade entra pelas compras e sai pelos materiais lançados no relatório do atendimento.
@@ -67,8 +67,27 @@ quantidade entra pelas compras e sai pelos materiais lançados no relatório do 
 - Apagar os materiais, o atendimento ou a paciente arquivada **devolve** ao estoque.
 - Material digitado à mão, fora do estoque, não tem lote nem dá baixa.
 
-## 5. Conferências
+## 5. Leitura do pedido por IA
+
+- No pedido de compra, com a foto ou o PDF anexado, **Ler com IA** manda o arquivo ao servidor
+  (`/api/leitura-de-pedido`, `server/leituraDePedido.ts`), que pergunta ao **Gemini** — com a chave
+  do servidor, `GEMINI_API_KEY`, que o AI Studio fornece ao app publicado (`API_KEY` também vale).
+  A chave nunca vai ao navegador. Só login do painel (na plataforma, com clínica); até 30 leituras
+  a cada 10 minutos por login.
+- Vai junto a **lista dos produtos cadastrados** (id, nome, marca, tipo, unidade), e o modelo
+  devolve, num formato fixo (JSON com esquema): fornecedor, número, data e, por item, nome, marca,
+  tipo, quantidade, unidade, valor unitário (ou total), lote, validade e o **id do produto
+  reconhecido**. Id que não está na lista é descartado.
+- Os itens entram como os da planilha: o reconhecido vem escolhido, o que a IA não reconheceu tenta
+  o casamento por nome, e o resto entra como produto novo. Fornecedor, número e data preenchem o que
+  estiver em branco. **Nada é gravado** até a pessoa conferir e registrar.
+- Sem chave no servidor, o botão avisa que a leitura não está ligada e indica a planilha.
+- `GEMINI_MODELO` troca o modelo (padrão `gemini-2.5-flash`); `GEMINI_BASE_URL`, o endereço da API.
+
+## 6. Conferências
 
 - `npx tsx scripts/verificar-lotes.ts` — a compra virando lote, a baixa, a devolução, a validade,
   o resumo por tipo, a planilha e o casamento de nomes.
 - `scripts/verificar-regras-zulia.ts` — as coleções e a pasta de anexos novas.
+- `npx tsx scripts/verificar-leitura-de-pedido.ts` — o que vai ao modelo, a limpeza da resposta e
+  a chamada ao Gemini contra um servidor falso local (sem gastar cota).
