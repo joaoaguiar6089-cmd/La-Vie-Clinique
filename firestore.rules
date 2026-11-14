@@ -220,6 +220,20 @@ service cloud.firestore {
       allow read, write: if ehDaEquipe();
     }
 
+    // Estoque com lotes: os lotes de cada compra (com o saldo), o mínimo de cada tipo de produto e
+    // os pedidos de compra. Só da equipe, como o resto do estoque.
+    match /stock_lots/{loteId} {
+      allow read, write: if ehDaEquipe();
+    }
+
+    match /stock_types/{tipoId} {
+      allow read, write: if ehDaEquipe();
+    }
+
+    match /purchase_orders/{pedidoId} {
+      allow read, write: if ehDaEquipe();
+    }
+
     // Simulações de custo, do Financeiro: custo de material, só da equipe. Aqui, no projeto da
     // La Vie, quem é administradora mora no perfil da clínica e não no login — o "cada uma vê só
     // as suas" é da tela. Na Zulia as regras conferem (ver zulia/firestore.rules).

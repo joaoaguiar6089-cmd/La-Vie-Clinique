@@ -1,7 +1,7 @@
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { app } from '../lib/firebase';
 import { pastaDaClinica } from '../lib/clinicaAtual';
-import { QuoteComprovante } from '../types';
+import { AnexoDoPedido, QuoteComprovante } from '../types';
 import { downscaleImage } from '../utils/imageCompressor';
 
 /**
@@ -79,10 +79,20 @@ export async function enviarComprovanteDoRecibo(reciboId: string, arquivo: File)
   return enviarComprovanteParaPasta(`recibos/${reciboId}/comprovantes`, '"recibos/"', arquivo);
 }
 
+/**
+ * A foto ou o PDF de um pedido de compra do Estoque, em `pedidos/<id do pedido>/`. Mesmas regras
+ * do comprovante: foto grande é reduzida, PDF até 10 MB.
+ */
+export async function enviarAnexoDoPedido(pedidoId: string, arquivo: File): Promise<AnexoDoPedido> {
+  const enviado = await enviarComprovanteParaPasta(`pedidos/${pedidoId}`, '"pedidos/"', arquivo, 'o pedido');
+  return { ...enviado, caminho: `pedidos/${pedidoId}` };
+}
+
 async function enviarComprovanteParaPasta(
   pasta: string,
   nomeDaRegra: string,
-  arquivo: File
+  arquivo: File,
+  oQue = 'o comprovante'
 ): Promise<QuoteComprovante> {
   const problema = problemaNoArquivoDeComprovante(arquivo);
   if (problema) throw new Error(problema);
@@ -113,7 +123,7 @@ async function enviarComprovanteParaPasta(
           `${nomeDaRegra} precisam estar publicadas no Firebase.`
       );
     }
-    throw new Error(`Não foi possível enviar o comprovante: ${(err as Error).message}`);
+    throw new Error(`Não foi possível enviar ${oQue}: ${(err as Error).message}`);
   }
 }
 

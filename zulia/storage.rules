@@ -104,6 +104,13 @@ service firebase.storage {
         allow create, update: if comprovanteDaClinica(c);
         allow delete: if daClinica(c);
       }
+
+      // A foto ou o PDF de um pedido de compra do Estoque — mesmos limites do comprovante.
+      match /pedidos/{pedidoId}/{arquivo} {
+        allow get: if daClinica(c);
+        allow create, update: if comprovanteDaClinica(c);
+        allow delete: if daClinica(c);
+      }
     }
 
     // Qualquer outro caminho fica fechado.

@@ -331,6 +331,14 @@ async function conferirSimulacoes(sessoes: Record<string, Sessao>) {
   const listarAsDe = (s: Sessao, uid: string) => () =>
     getDocsFromServer(query(collection(s.db, base), where('criadoPorUid', '==', uid)));
 
+  console.log('\nFirestore — estoque com lotes');
+  for (const colecao of ['stock_lots', 'stock_types', 'purchase_orders']) {
+    await espera(`profissional de A grava em ${colecao}`, true, gravar(profA, `clinicas/teste-a/${colecao}/x1`, { teste: true }));
+    await espera(`profissional de A lê ${colecao}`, true, listar(profA, `clinicas/teste-a/${colecao}`));
+    await espera(`admin de B NÃO lê ${colecao} de A`, false, listar(adminB, `clinicas/teste-a/${colecao}`));
+    await espera(`admin de B NÃO grava em ${colecao} de A`, false, gravar(adminB, `clinicas/teste-a/${colecao}/x2`));
+  }
+
   console.log('\nFirestore — simulação de custo');
   await espera('profissional de A cria simulação no próprio nome', true, criar(profA, 'da-prof', simulacao(profA)));
   await espera('admin de A cria simulação no próprio nome', true, criar(adminA, 'da-admin', simulacao(adminA)));
@@ -423,6 +431,10 @@ async function conferirStorage(sessoes: Record<string, Sessao>) {
   await espera('admin de A envia foto do acompanhamento', true, enviar(adminA, 'clinicas/teste-a/acompanhamentos/nova.png'));
   await espera('profissional de A baixa a foto do acompanhamento', true, baixar(profA, 'clinicas/teste-a/acompanhamentos/foto.png'));
   await espera('profissional de A envia comprovante em PDF', true, enviar(profA, 'clinicas/teste-a/orcamentos/q1/comprovantes/c.pdf', 'application/pdf'));
+  await espera('profissional de A anexa o PDF de um pedido de compra', true, enviar(profA, 'clinicas/teste-a/pedidos/ped1/pedido.pdf', 'application/pdf'));
+  await espera('admin de A baixa o anexo do pedido', true, baixar(adminA, 'clinicas/teste-a/pedidos/ped1/pedido.pdf'));
+  await espera('admin de B NÃO baixa o anexo do pedido de A', false, baixar(adminB, 'clinicas/teste-a/pedidos/ped1/pedido.pdf'));
+  await espera('anônimo NÃO anexa pedido', false, enviar(anonimo, 'clinicas/teste-a/pedidos/ped2/pedido.pdf', 'application/pdf'));
   await espera('admin de A NÃO envia PDF como foto do catálogo', false, enviar(adminA, 'clinicas/teste-a/procedimentos/p1/x.pdf', 'application/pdf'));
   await espera('profissional de A apaga a foto que a admin enviou', true, apagarArquivo(profA, 'clinicas/teste-a/acompanhamentos/nova.png'));
   await espera('admin de A NÃO lista a pasta de acompanhamentos', false, listarPasta(adminA, 'clinicas/teste-a/acompanhamentos'));

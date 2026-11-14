@@ -1329,6 +1329,12 @@ export interface ProdutoDeEstoque {
    */
   caixa?: CaixaDoProduto;
   marca?: string;
+  /**
+   * O que o produto é, independente de nome e marca — "Ácido hialurônico" agrupa o Voluma e o
+   * Restylane. O estoque mostra a quantidade por tipo. Texto livre; o agrupamento compara sem
+   * acento e sem maiúscula (`chaveDeNome`). Ausente = "Sem tipo".
+   */
+  tipo?: string;
   observacoes?: string;
   /**
    * Sai das listas de escolha, mas continua existindo. É o "excluir" de um produto que já foi
@@ -1387,6 +1393,121 @@ export interface MaterialUsado {
   quantidade: number;
   custoUnitario: number;
   valorCliente: number;
+  /**
+   * De que lote(s) a quantidade saiu — só nos materiais do atendimento com baixa no estoque. Uma
+   * linha pode atravessar dois lotes quando o primeiro acaba. É o que rastreia em quem cada lote
+   * foi usado.
+   */
+  lotes?: SaidaDeLote[];
+}
+
+/** Uma parte de um material usado, tirada de um lote do estoque. */
+export interface SaidaDeLote {
+  loteId: string;
+  /** O código do lote e a validade, espelhados para o atendimento ler sem buscar o lote. */
+  lote?: string;
+  validade?: string; // YYYY-MM-DD
+  quantidade: number;
+}
+
+/** Uma correção manual do saldo de um lote — perda, vencido, contagem. */
+export interface AjusteDeLote {
+  em: string; // ISO
+  de: number;
+  para: number;
+  motivo: string;
+  porNome?: string;
+}
+
+/**
+ * Um lote no estoque: o que entrou numa compra (ou no estoque inicial), com o saldo que ainda
+ * resta. As quantidades são sempre na **unidade de uso** do produto (U, ml, seringa) — a compra em
+ * caixa já entra multiplicada.
+ *
+ * O saldo desce com os materiais lançados no relatório do atendimento, do lote que vence primeiro
+ * (ver `planejarBaixa` em `utils/lotes.ts`), e com os ajustes manuais.
+ */
+export interface LoteDeEstoque {
+  id: string;
+  produtoId: string;
+  /** Espelhos do produto no dia da compra, para a lista não depender dele. */
+  produtoNome: string;
+  marca?: string;
+  /** Quanto entrou. */
+  quantidade: number;
+  /** Quanto ainda resta. */
+  saldo: number;
+  /** Custo de uma unidade de uso nesta compra. */
+  custoUnitario: number;
+  lote?: string;
+  validade?: string; // YYYY-MM-DD
+  dataCompra: string; // YYYY-MM-DD
+  pedidoId?: string;
+  fornecedor?: string;
+  ajustes?: AjusteDeLote[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/**
+ * O que se guarda de um tipo de produto além do nome nos produtos: a quantidade mínima. Um
+ * documento por tipo, com a chave do nome como id; só existe quando alguém define o mínimo.
+ */
+export interface TipoDeProduto {
+  id: string;
+  nome: string;
+  /** Abaixo disto, o tipo aparece em destaque no Estoque. Na `unidade`. */
+  minimo?: number;
+  unidade?: string;
+  updatedAt?: string;
+}
+
+/** Uma linha do pedido de compra, como foi comprada. Vira um lote. */
+export interface ItemDoPedido {
+  produtoId: string;
+  nome: string;
+  marca?: string;
+  /** Na unidade da compra: unidades de uso, ou embalagens quando `porEmbalagem`. */
+  quantidade: number;
+  porEmbalagem: boolean;
+  /** Quantas unidades de uso vêm numa embalagem — só com `porEmbalagem`. */
+  unidadesPorEmbalagem?: number;
+  /** Preço de uma unidade da compra (uma unidade de uso, ou uma embalagem). */
+  valorUnitario: number;
+  lote?: string;
+  validade?: string; // YYYY-MM-DD
+  /** O lote que esta linha criou. */
+  loteId: string;
+}
+
+/** A foto ou o PDF do pedido, no Storage. */
+export interface AnexoDoPedido {
+  url: string;
+  nome: string;
+  tipo: string; // MIME
+  caminho: string; // no Storage, para apagar junto com o pedido
+  enviadoEm: string;
+}
+
+/**
+ * Um pedido de compra registrado no Estoque — ou o "estoque inicial", o que já estava na prateleira
+ * quando o controle começou. Cada linha vira um lote; o custo de cada produto passa a ser o desta
+ * compra.
+ */
+export interface PedidoDeCompra {
+  id: string;
+  dataCompra: string; // YYYY-MM-DD
+  fornecedor?: string;
+  /** Número da nota ou do pedido. */
+  numero?: string;
+  observacoes?: string;
+  anexo?: AnexoDoPedido;
+  itens: ItemDoPedido[];
+  total: number;
+  estoqueInicial?: boolean;
+  criadoPorUid?: string;
+  criadoPorNome?: string;
+  createdAt: string;
 }
 
 /**
@@ -1467,6 +1588,12 @@ export interface MateriaisDoAtendimento extends MarcaDeArquivo {
   itens: MaterialUsado[];
   custoTotal: number;
   valorClienteTotal: number;
+  /**
+   * Este registro deu baixa no estoque. Só os registros feitos depois de o controle de lotes
+   * existir; os antigos, sem a marca, não mexem no estoque nem quando são corrigidos — senão
+   * completar o valor de um atendimento de março tiraria do estoque de hoje.
+   */
+  baixaNoEstoque?: boolean;
   createdAt: string;
   updatedAt?: string;
 }

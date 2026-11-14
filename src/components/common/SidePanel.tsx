@@ -158,8 +158,13 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   useEffect(() => {
     if (!aberto) return;
     const noTeclado = (e: KeyboardEvent) => {
-      // Enquanto a pergunta de descarte está na tela, o Esc é dela.
-      if (e.key === 'Escape' && !confirmacao) tentarFechar();
+      // Enquanto a pergunta de descarte está na tela, o Esc é dela. E com um painel aberto sobre
+      // outro (o produto aberto de dentro do tipo, no Estoque), o Esc é só do de cima — o que tem o
+      // foco; sem isto, um Esc fechava os dois.
+      if (e.key !== 'Escape' || confirmacao) return;
+      const foco = document.activeElement;
+      if (foco && foco !== document.body && painelRef.current && !painelRef.current.contains(foco)) return;
+      tentarFechar();
     };
     document.addEventListener('keydown', noTeclado);
     return () => document.removeEventListener('keydown', noTeclado);

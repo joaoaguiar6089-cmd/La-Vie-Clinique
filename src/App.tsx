@@ -1000,6 +1000,13 @@ function MainCatalogApp() {
   const currentProfessional = clinic.professionals?.find((p) => p.uid === authUser?.uid) || null;
   // Na Zulia, quem é admin diz a claim do login (o servidor é quem grava); no legado, o perfil.
   const isAdminUser = ehZulia ? papelNaClinica === 'admin' : !!currentProfessional?.isAdmin;
+  /** Quem está logada, para assinar o que cria — simulações, pedidos de compra, ajustes de estoque. */
+  const autorDoLogin = authUser
+    ? {
+        uid: authUser.uid,
+        nome: currentProfessional?.name || authUser.displayName || authUser.email || 'Profissional',
+      }
+    : null;
 
   // Os Termos, a Política e o Acordo de Tratamento de Dados: a admin aceita a versão em vigor em
   // nome da clínica (ver src/utils/documentosLegais.ts). "Agora não" vale até o painel abrir de novo.
@@ -1171,18 +1178,7 @@ function MainCatalogApp() {
                 professionals={clinic.professionals || []}
                 pacientes={allPatients}
                 clinic={clinic}
-                autor={
-                  authUser
-                    ? {
-                        uid: authUser.uid,
-                        nome:
-                          currentProfessional?.name ||
-                          authUser.displayName ||
-                          authUser.email ||
-                          'Profissional',
-                      }
-                    : null
-                }
+                autor={autorDoLogin}
                 ehAdmin={isAdminUser}
                 carregando={atendimentosCarregando}
                 naAbaDeOrcamentos={currentView === 'quotes'}
@@ -1259,7 +1255,7 @@ function MainCatalogApp() {
               />
             ) : currentView === 'estoque' ? (
               <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6">
-                <EstoqueModule catalogProcedures={procedures} />
+                <EstoqueModule catalogProcedures={procedures} autor={autorDoLogin} />
               </div>
             ) : ehAbaDasFichas(currentView) ? (
               /* As três fichas da paciente numa tela só, "Fichas", com as abas no topo: anamnese

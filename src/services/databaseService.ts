@@ -60,11 +60,15 @@ import {
   MateriaisDoAtendimento,
   CustoDoOrcamento,
   SimulacaoDeCusto,
+  LoteDeEstoque,
+  PedidoDeCompra,
+  TipoDeProduto,
 } from '../types';
 import { formatQuoteNumber, statusAntesDoDesfecho } from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
 import { normalizarRecibo } from '../utils/recibos';
 import { normalizarSimulacao } from '../utils/simulacaoDeCusto';
+import { normalizarLote, normalizarPedido, planejarBaixa } from '../utils/lotes';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE } from '../data/initialData';
 import { PROCEDIMENTOS_DE_EXEMPLO } from '../data/exemplosZulia';
 import { ehZulia } from '../lib/projetoFirebase';
@@ -171,6 +175,11 @@ const QUOTE_COSTS_COLLECTION = 'quote_costs';
 // Simulações de custo de material, do Financeiro. Cada uma guarda quem a criou (`criadoPorUid`):
 // a profissional lê só as dela, a administradora todas — na Zulia, as regras conferem isso.
 const COST_SIMULATIONS_COLLECTION = 'cost_simulations';
+// Estoque com lotes: cada compra vira lotes com saldo; o mínimo de cada tipo de produto; os
+// pedidos de compra, com o anexo no Storage.
+const STOCK_LOTS_COLLECTION = 'stock_lots';
+const STOCK_TYPES_COLLECTION = 'stock_types';
+const PURCHASE_ORDERS_COLLECTION = 'purchase_orders';
 
 /** As coleções de cada tipo de ficha clínica. Ver `utils/fichasClinicas.ts`. */
 const COLECOES_DA_FICHA: Record<
@@ -2143,6 +2152,8 @@ export async function tirarDoArquivo(paciente: Patient): Promise<void> {
  */
 export async function excluirDoArquivo(paciente: Patient): Promise<void> {
   const brutos = await lerDocumentosDoArquivo(paciente.id);
+  // O que os atendimentos dela usaram volta ao estoque antes de tudo sair.
+  for (const { id } of brutos.atendimentos) await devolverAoEstoqueAntesDeApagar(id);
   const refs = documentosDosBrutos(brutos).map(refDoArquivo);
   brutos.atendimentos.forEach(({ id }) => {
     refs.push(documentoDaClinica(FOLLOWUP_RECORDS_COLLECTION, id), documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, id));
@@ -2852,6 +2863,7 @@ export async function saveAttendance(
  * cuja regra ainda não foi publicada derrubaria o lote inteiro — e a visita junto.
  */
 export async function deleteAttendance(atendimento: Attendance): Promise<void> {
+  if (atendimento.materiaisRegistradosEm) await devolverAoEstoqueAntesDeApagar(atendimento.id);
   const batch = writeBatch(db);
   batch.delete(documentoDaClinica(ATTENDANCES_COLLECTION, atendimento.id));
   if (atendimento.acompanhamentoPreenchidoEm) {
@@ -3822,7 +3834,7 @@ export async function saveProdutoDeEstoque(produto: ProdutoDeEstoque): Promise<v
    * antiga continuaria no banco e voltaria marcada na próxima edição. Entra depois da limpeza,
    * que transformaria o sentinela num `{}`.
    */
-  (['caixa', 'marca', 'observacoes'] as const).forEach((campo) => {
+  (['caixa', 'marca', 'tipo', 'observacoes'] as const).forEach((campo) => {
     if (produto[campo] === undefined) dataToSave[campo] = deleteField();
   });
   await setDoc(documentoDaClinica(STOCK_PRODUCTS_COLLECTION, produto.id), dataToSave, { merge: true });
@@ -3920,31 +3932,165 @@ export async function getMateriaisDoAtendimento(
   };
 }
 
-/**
- * Grava os materiais e, no mesmo lote, a marca e o total no atendimento. O lote existe para as
- * duas coisas não divergirem: um custo no atendimento que não bate com as linhas faria o
- * Financeiro somar um número que ninguém consegue conferir.
- */
-export async function saveMateriaisDoAtendimento(registro: MateriaisDoAtendimento): Promise<void> {
-  const agora = new Date().toISOString();
+/** As marcas e o total dos materiais no atendimento — o que o Financeiro soma. */
+const marcasDosMateriais = (registro: MateriaisDoAtendimento, agora: string) => {
   const semValor = linhasSemValor(registro.itens);
-  const batch = writeBatch(db);
-  batch.set(
-    documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, registro.atendimentoId),
-    cleanForFirestore({ ...registro, id: registro.atendimentoId, updatedAt: agora })
-  );
-  batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, registro.atendimentoId), {
+  return {
     materiaisRegistradosEm: registro.createdAt || agora,
     custoMateriais: registro.custoTotal,
     // Some quando a última linha ganha valor — é o "falta valor" do Financeiro que se apaga.
     materiaisSemValor: semValor > 0 ? semValor : deleteField(),
     updatedAt: agora,
-  });
-  await comConfirmacaoDoServidor(batch.commit(), 'dos materiais');
+  };
+};
+
+/** Os ids dos lotes de uma lista de produtos — em pedaços de 30, o limite do `in`. */
+async function idsDosLotesDosProdutos(produtoIds: string[]): Promise<string[]> {
+  const ids: string[] = [];
+  for (let i = 0; i < produtoIds.length; i += 30) {
+    const snap = await getDocs(
+      query(colecaoDaClinica(STOCK_LOTS_COLLECTION), where('produtoId', 'in', produtoIds.slice(i, i + 30)))
+    );
+    snap.forEach((d) => ids.push(d.id));
+  }
+  return ids;
 }
 
-/** O inverso de `saveMateriaisDoAtendimento`: apaga as linhas, a marca e o total. */
+const loteRef = (id: string) => documentoDaClinica(STOCK_LOTS_COLLECTION, id);
+
+/**
+ * Grava os materiais e, junto, a marca e o total no atendimento — e a **baixa no estoque**.
+ *
+ * Numa transação: lê o registro anterior e os lotes dos produtos, devolve aos lotes o que o
+ * registro anterior tinha tirado e tira de novo (`planejarBaixa` — o lote que vence primeiro sai
+ * primeiro, e o lote que a linha já tinha, ou que alguém escolheu, vem antes). Cada linha grava de
+ * que lote saiu. Feito numa transação para duas gravações ao mesmo tempo não tirarem do mesmo
+ * saldo sem se ver.
+ *
+ * Só registro novo, ou que já deu baixa antes (`baixaNoEstoque`), mexe no estoque: corrigir um
+ * registro de antes do controle de lotes não tira do estoque de hoje. E se o estoque não puder
+ * ser lido (regras ainda não publicadas), os materiais são gravados como antes, sem baixa — o
+ * relatório do atendimento não pode falhar por causa do estoque.
+ */
+export async function saveMateriaisDoAtendimento(registro: MateriaisDoAtendimento): Promise<void> {
+  const agora = new Date().toISOString();
+  const ref = documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, registro.atendimentoId);
+  const refDoAtendimento = documentoDaClinica(ATTENDANCES_COLLECTION, registro.atendimentoId);
+
+  let candidatos: string[] | null = null;
+  try {
+    const anterior = await getDoc(ref);
+    const dados = anterior.exists() ? (anterior.data() as Record<string, unknown>) : null;
+    if (!dados || dados.baixaNoEstoque) {
+      const ids = new Set<string>();
+      paraArray<MateriaisDoAtendimento['itens'][number]>(dados?.itens).forEach((m) =>
+        paraArray<{ loteId: string }>(m.lotes).forEach((s) => s.loteId && ids.add(s.loteId))
+      );
+      const produtoIds = [...new Set(registro.itens.map((i) => i.produtoId).filter((id): id is string => !!id))];
+      (await idsDosLotesDosProdutos(produtoIds)).forEach((id) => ids.add(id));
+      candidatos = [...ids];
+    }
+  } catch (e) {
+    console.warn('O estoque não pôde ser lido — os materiais são gravados sem baixa:', e);
+    candidatos = null;
+  }
+
+  if (candidatos === null) {
+    const batch = writeBatch(db);
+    batch.set(ref, cleanForFirestore({ ...registro, id: registro.atendimentoId, updatedAt: agora }));
+    batch.update(refDoAtendimento, marcasDosMateriais(registro, agora));
+    await comConfirmacaoDoServidor(batch.commit(), 'dos materiais');
+    return;
+  }
+
+  const ids = candidatos;
+  await comConfirmacaoDoServidor(
+    runTransaction(db, async (tx) => {
+      const anterior = await tx.get(ref);
+      const lotesLidos = await Promise.all(ids.map((id) => tx.get(loteRef(id))));
+      const dados = anterior.exists() ? (anterior.data() as Record<string, unknown>) : null;
+      const comBaixa = !dados || !!dados.baixaNoEstoque;
+      let itens = registro.itens;
+      let saldos: Record<string, number> = {};
+      if (comBaixa) {
+        const lotes = lotesLidos
+          .filter((l) => l.exists())
+          .map((l) => normalizarLote({ ...(l.data() as Record<string, unknown>), id: l.id }));
+        const plano = planejarBaixa({
+          anteriores: paraArray<MateriaisDoAtendimento['itens'][number]>(dados?.itens),
+          novas: registro.itens,
+          lotes,
+        });
+        itens = plano.linhas;
+        saldos = plano.saldos;
+      }
+      tx.set(
+        ref,
+        cleanForFirestore({
+          ...registro,
+          itens,
+          id: registro.atendimentoId,
+          ...(comBaixa ? { baixaNoEstoque: true } : {}),
+          updatedAt: agora,
+        })
+      );
+      tx.update(refDoAtendimento, marcasDosMateriais(registro, agora));
+      Object.entries(saldos).forEach(([id, saldo]) => tx.update(loteRef(id), { saldo, updatedAt: agora }));
+    }),
+    'dos materiais'
+  );
+}
+
+/**
+ * Devolve ao estoque o que um registro de materiais tirou e apaga o registro, numa transação. Não
+ * faz nada se o registro não deu baixa — quem chama apaga do jeito de sempre. Devolve se agiu.
+ */
+async function devolverAoEstoqueEApagar(atendimentoId: string, apagarMarcas: boolean): Promise<boolean> {
+  const ref = documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, atendimentoId);
+  const anterior = await getDoc(ref);
+  const dados = anterior.exists() ? (anterior.data() as Record<string, unknown>) : null;
+  if (!dados?.baixaNoEstoque) return false;
+  const ids = [
+    ...new Set(
+      paraArray<MateriaisDoAtendimento['itens'][number]>(dados.itens).flatMap((m) =>
+        paraArray<{ loteId: string }>(m.lotes).map((s) => s.loteId).filter(Boolean)
+      )
+    ),
+  ];
+  const agora = new Date().toISOString();
+  await comConfirmacaoDoServidor(
+    runTransaction(db, async (tx) => {
+      const atual = await tx.get(ref);
+      const lotesLidos = await Promise.all(ids.map((id) => tx.get(loteRef(id))));
+      if (atual.exists()) {
+        const lotes = lotesLidos
+          .filter((l) => l.exists())
+          .map((l) => normalizarLote({ ...(l.data() as Record<string, unknown>), id: l.id }));
+        const { saldos } = planejarBaixa({
+          anteriores: paraArray<MateriaisDoAtendimento['itens'][number]>((atual.data() as Record<string, unknown>).itens),
+          novas: [],
+          lotes,
+        });
+        Object.entries(saldos).forEach(([id, saldo]) => tx.update(loteRef(id), { saldo, updatedAt: agora }));
+        tx.delete(ref);
+      }
+      if (apagarMarcas) {
+        tx.update(documentoDaClinica(ATTENDANCES_COLLECTION, atendimentoId), {
+          materiaisRegistradosEm: deleteField(),
+          custoMateriais: deleteField(),
+          materiaisSemValor: deleteField(),
+          updatedAt: agora,
+        });
+      }
+    }),
+    'da devolução ao estoque'
+  );
+  return true;
+}
+
+/** O inverso de `saveMateriaisDoAtendimento`: devolve ao estoque, apaga as linhas, a marca e o total. */
 export async function deleteMateriaisDoAtendimento(atendimentoId: string): Promise<void> {
+  if (await devolverAoEstoqueEApagar(atendimentoId, true)) return;
   const batch = writeBatch(db);
   batch.delete(documentoDaClinica(ATTENDANCE_MATERIALS_COLLECTION, atendimentoId));
   batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, atendimentoId), {
@@ -3954,6 +4100,167 @@ export async function deleteMateriaisDoAtendimento(atendimentoId: string): Promi
     updatedAt: new Date().toISOString(),
   });
   await comConfirmacaoDoServidor(batch.commit(), 'dos materiais');
+}
+
+/**
+ * Antes de apagar um atendimento (ou a paciente inteira): o que os materiais dele tiraram volta
+ * ao estoque. Sem esperar sucesso — a exclusão não pode falhar por causa do estoque.
+ */
+async function devolverAoEstoqueAntesDeApagar(atendimentoId: string): Promise<void> {
+  try {
+    await devolverAoEstoqueEApagar(atendimentoId, false);
+  } catch (e) {
+    console.warn('O atendimento sai, mas o que ele usou não voltou ao estoque:', e);
+  }
+}
+
+// ==========================================
+// LOTES, TIPOS E PEDIDOS DE COMPRA
+// ==========================================
+
+/** Os lotes do estoque, zerados inclusive — a lista do tipo mostra o histórico. */
+export function subscribeToLotesDeEstoque(
+  onUpdate: (data: LoteDeEstoque[]) => void,
+  onError?: (err: Error) => void
+) {
+  return onSnapshot(
+    colecaoDaClinica(STOCK_LOTS_COLLECTION),
+    (snapshot) => {
+      const items: LoteDeEstoque[] = [];
+      snapshot.forEach((d) => items.push(normalizarLote({ ...(d.data() as Record<string, unknown>), id: d.id })));
+      onUpdate(items);
+    },
+    (error) => {
+      if (!isQuotaOrOfflineError(error)) console.error('Stock lots subscription error:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+export function subscribeToTiposDeProduto(
+  onUpdate: (data: TipoDeProduto[]) => void,
+  onError?: (err: Error) => void
+) {
+  return onSnapshot(
+    colecaoDaClinica(STOCK_TYPES_COLLECTION),
+    (snapshot) => {
+      const items: TipoDeProduto[] = [];
+      snapshot.forEach((d) => {
+        const b = d.data() as Record<string, unknown>;
+        items.push({
+          id: d.id,
+          nome: String(b.nome || ''),
+          minimo: Number(b.minimo) > 0 ? Number(b.minimo) : undefined,
+          unidade: b.unidade ? String(b.unidade) : undefined,
+          updatedAt: b.updatedAt as string | undefined,
+        });
+      });
+      onUpdate(items);
+    },
+    (error) => {
+      if (!isQuotaOrOfflineError(error)) console.error('Stock types subscription error:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/** Grava o mínimo de um tipo. Sem mínimo, o documento sai: tipo sem mínimo é a ausência dele. */
+export async function saveTipoDeProduto(tipo: TipoDeProduto): Promise<void> {
+  const ref = documentoDaClinica(STOCK_TYPES_COLLECTION, tipo.id);
+  if (!tipo.minimo || tipo.minimo <= 0) {
+    await deleteDoc(ref);
+    return;
+  }
+  await setDoc(ref, cleanForFirestore({ ...tipo, updatedAt: new Date().toISOString() }));
+}
+
+export function subscribeToPedidosDeCompra(
+  onUpdate: (data: PedidoDeCompra[]) => void,
+  onError?: (err: Error) => void
+) {
+  return onSnapshot(
+    colecaoDaClinica(PURCHASE_ORDERS_COLLECTION),
+    (snapshot) => {
+      const items: PedidoDeCompra[] = [];
+      snapshot.forEach((d) => items.push(normalizarPedido({ ...(d.data() as Record<string, unknown>), id: d.id })));
+      items.sort((a, b) => (b.dataCompra + b.createdAt).localeCompare(a.dataCompra + a.createdAt));
+      onUpdate(items);
+    },
+    (error) => {
+      if (!isQuotaOrOfflineError(error)) console.error('Purchase orders subscription error:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Registra um pedido de compra num lote só: os produtos novos, o custo dos que já existiam
+ * (passa a ser o desta compra), um lote por linha e o pedido. Tudo ou nada — um pedido pela
+ * metade deixaria lote sem pedido ou produto sem lote.
+ */
+export async function registrarPedidoDeCompra(dados: {
+  pedido: PedidoDeCompra;
+  lotes: LoteDeEstoque[];
+  produtosNovos: ProdutoDeEstoque[];
+  produtosComCusto: ProdutoDeEstoque[];
+}): Promise<void> {
+  const agora = new Date().toISOString();
+  const batch = writeBatch(db);
+  dados.produtosNovos.forEach((p) =>
+    batch.set(documentoDaClinica(STOCK_PRODUCTS_COLLECTION, p.id), cleanForFirestore({ ...p, updatedAt: agora }))
+  );
+  dados.produtosComCusto.forEach((p) =>
+    batch.update(documentoDaClinica(STOCK_PRODUCTS_COLLECTION, p.id), {
+      custoUnitario: p.custoUnitario,
+      ...(p.caixa ? { caixa: cleanForFirestore({ ...p.caixa }) } : {}),
+      updatedAt: agora,
+    })
+  );
+  dados.lotes.forEach((l) => batch.set(loteRef(l.id), cleanForFirestore({ ...l })));
+  batch.set(
+    documentoDaClinica(PURCHASE_ORDERS_COLLECTION, dados.pedido.id),
+    cleanForFirestore({ ...dados.pedido, itens: dados.pedido.itens.map((i) => ({ ...i })) })
+  );
+  await comConfirmacaoDoServidor(batch.commit(), 'do pedido de compra');
+}
+
+/** Apaga o pedido e os lotes dele. Quem chama confere antes que nenhum lote foi usado. */
+export async function excluirPedidoDeCompra(pedido: PedidoDeCompra): Promise<void> {
+  const batch = writeBatch(db);
+  pedido.itens.forEach((i) => i.loteId && batch.delete(loteRef(i.loteId)));
+  batch.delete(documentoDaClinica(PURCHASE_ORDERS_COLLECTION, pedido.id));
+  await comConfirmacaoDoServidor(batch.commit(), 'da exclusão do pedido');
+}
+
+/**
+ * Corrige o saldo de um lote — perda, vencido, contagem — e guarda a correção no próprio lote,
+ * com o saldo de antes, o novo, o motivo e quem fez.
+ */
+export async function ajustarLote(loteId: string, para: number, motivo: string, porNome?: string): Promise<void> {
+  const ref = loteRef(loteId);
+  const agora = new Date().toISOString();
+  await comConfirmacaoDoServidor(
+    runTransaction(db, async (tx) => {
+      const atual = await tx.get(ref);
+      if (!atual.exists()) throw new Error('Este lote não existe mais.');
+      const de = Number((atual.data() as Record<string, unknown>).saldo) || 0;
+      tx.update(ref, {
+        saldo: para,
+        ajustes: arrayUnion(cleanForFirestore({ em: agora, de, para, motivo, porNome })),
+        updatedAt: agora,
+      });
+    }),
+    'do ajuste'
+  );
+}
+
+/** Corrige o código do lote ou a validade — o que foi digitado errado na compra. */
+export async function atualizarLote(loteId: string, campos: { lote?: string; validade?: string }): Promise<void> {
+  await updateDoc(loteRef(loteId), {
+    lote: campos.lote?.trim() ? campos.lote.trim() : deleteField(),
+    validade: campos.validade ? campos.validade : deleteField(),
+    updatedAt: new Date().toISOString(),
+  });
 }
 
 // ==========================================
