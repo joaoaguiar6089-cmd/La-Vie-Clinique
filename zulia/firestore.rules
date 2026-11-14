@@ -251,6 +251,20 @@ service cloud.firestore {
         allow read, write: if daClinica(c);
       }
 
+      // Estoque com lotes: os lotes de cada compra (com o saldo), o mínimo de cada tipo de produto
+      // e os pedidos de compra. Custo é da equipe, como o resto do estoque.
+      match /stock_lots/{loteId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /stock_types/{tipoId} {
+        allow read, write: if daClinica(c);
+      }
+
+      match /purchase_orders/{pedidoId} {
+        allow read, write: if daClinica(c);
+      }
+
       // Simulações de custo, do Financeiro: custo de material, interno. Cada uma é de quem a criou
       // (`criadoPorUid`) — a profissional lê, edita e apaga só as dela; a admin, todas. Cria-se só
       // no próprio nome, e ninguém troca a dona de uma simulação. A profissional lista as suas

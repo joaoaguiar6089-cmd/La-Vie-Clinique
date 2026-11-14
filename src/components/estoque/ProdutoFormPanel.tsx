@@ -28,6 +28,10 @@ interface ProdutoFormPanelProps {
   /** Nome já digitado em outro lugar — "Outro material…" do atendimento, por exemplo. */
   nomeInicial?: string;
   onSalvo?: (produto: ProdutoDeEstoque) => void;
+  /** Os tipos já usados no estoque, para sugerir — "Ácido hialurônico" escrito sempre igual. */
+  tiposSugeridos?: string[];
+  /** Tipo já escolhido ao abrir — o "Novo produto" de dentro do painel de um tipo. */
+  tipoInicial?: string;
 }
 
 /** Campo numérico guardado como texto, para não travar em "0" enquanto se apaga. */
@@ -51,12 +55,15 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
   produto,
   nomeInicial,
   onSalvo,
+  tiposSugeridos = [],
+  tipoInicial,
 }) => {
   const [nome, setNome] = useState('');
   const [unidade, setUnidade] = useState('un');
   const [custo, setCusto] = useState('');
   const [valorCliente, setValorCliente] = useState('');
   const [marca, setMarca] = useState('');
+  const [tipo, setTipo] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [calculadoraAberta, setCalculadoraAberta] = useState(false);
   const [precoEmbalagem, setPrecoEmbalagem] = useState('');
@@ -77,6 +84,7 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
     setCusto(paraCampo(produto?.custoUnitario));
     setValorCliente(paraCampo(produto?.valorCliente));
     setMarca(produto?.marca || '');
+    setTipo(produto?.tipo || tipoInicial || '');
     setObservacoes(produto?.observacoes || '');
     setCalculadoraAberta(false);
     setPrecoEmbalagem('');
@@ -87,7 +95,7 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
     setValorClienteDaCaixa(paraCampo(produto?.caixa?.valorCliente));
     setSalvando(false);
     setErro(null);
-  }, [aberto, produto?.id, nomeInicial]);
+  }, [aberto, produto?.id, nomeInicial, tipoInicial]);
 
   const nomeDaUnidade = unidade.trim() || 'unidade';
   const caixa: CaixaDoProduto = {
@@ -140,6 +148,7 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
       valorCliente: porUnidade.valorCliente,
       caixa: porCaixa ? caixa : undefined,
       marca: marca.trim() || undefined,
+      tipo: tipo.trim() || undefined,
       observacoes: observacoes.trim() || undefined,
       createdAt: produto?.createdAt || agora,
     };
@@ -219,12 +228,33 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
               id="produto-marca"
               value={marca}
               onChange={(e) => setMarca(e.target.value)}
-              placeholder="Fornecedor"
+              placeholder="Fabricante"
               autoComplete="off"
               className={INPUT_TINTA}
             />
           </CampoTinta>
         </div>
+
+        <CampoTinta
+          rotulo="Tipo de produto"
+          htmlFor="produto-tipo"
+          ajuda="O que ele é, qualquer que seja o nome ou a marca — o estoque soma a quantidade por tipo. Ex.: dois ácidos hialurônicos de marcas diferentes, um tipo só."
+        >
+          <input
+            id="produto-tipo"
+            list="produto-tipos-sugeridos"
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+            placeholder="Ex: Ácido hialurônico"
+            autoComplete="off"
+            className={INPUT_TINTA}
+          />
+          <datalist id="produto-tipos-sugeridos">
+            {tiposSugeridos.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+        </CampoTinta>
 
         <div>
           <RotuloTinta>Unidade de uso</RotuloTinta>

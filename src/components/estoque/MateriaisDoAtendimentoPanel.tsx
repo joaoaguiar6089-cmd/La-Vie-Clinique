@@ -3,6 +3,7 @@ import { AlertCircle, Check, Info, Loader2 } from 'lucide-react';
 import {
   Attendance,
   ConsumoPadrao,
+  LoteDeEstoque,
   MateriaisDoAtendimento,
   Procedure,
   ProdutoDeEstoque,
@@ -22,6 +23,7 @@ import {
   saveMateriaisDoAtendimento,
   saveProdutoDeEstoque,
   subscribeToConsumosPadrao,
+  subscribeToLotesDeEstoque,
   subscribeToProdutosDeEstoque,
 } from '../../services/databaseService';
 import { SidePanel } from '../common/SidePanel';
@@ -56,6 +58,8 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
   const aberto = !!atendimento;
   const [produtos, setProdutos] = useState<ProdutoDeEstoque[] | null>(null);
   const [consumos, setConsumos] = useState<ConsumoPadrao[] | null>(null);
+  /** Os lotes, para cada material mostrar de onde saiu. Sem eles (regra não publicada), sem lote. */
+  const [lotes, setLotes] = useState<LoteDeEstoque[] | null>(null);
   const [registro, setRegistro] = useState<MateriaisDoAtendimento | null>(null);
   /** O registro já foi buscado (ou não havia o que buscar). */
   const [registroPronto, setRegistroPronto] = useState(false);
@@ -82,9 +86,11 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
       );
     const pararProdutos = subscribeToProdutosDeEstoque(setProdutos, avisar);
     const pararConsumos = subscribeToConsumosPadrao(setConsumos, avisar);
+    const pararLotes = subscribeToLotesDeEstoque(setLotes, () => setLotes(null));
     return () => {
       pararProdutos();
       pararConsumos();
+      pararLotes();
     };
   }, [aberto]);
 
@@ -289,6 +295,9 @@ export const MateriaisDoAtendimentoPanel: React.FC<MateriaisDoAtendimentoPanelPr
               }}
               produtos={produtos || []}
               oferecerCadastro
+              /* O lote só aparece onde a gravação dá baixa: registro novo, ou que já deu baixa.
+                 Num registro de antes do controle de lotes, escolher lote não mexeria em nada. */
+              lotes={!registro || registro.baixaNoEstoque ? lotes || undefined : undefined}
             />
 
             {registro && totais.custo !== registro.custoTotal && (

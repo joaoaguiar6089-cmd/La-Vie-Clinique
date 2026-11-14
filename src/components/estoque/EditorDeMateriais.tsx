@@ -1,6 +1,6 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
-import { ProdutoDeEstoque } from '../../types';
+import { LoteDeEstoque, ProdutoDeEstoque } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import {
   LinhaDeMaterial,
@@ -11,7 +11,9 @@ import {
   produtosAtivos,
   totaisDosMateriais,
   valorClienteDaLinha,
+  quantidadeComUnidade,
 } from '../../utils/estoque';
+import { ordemDeSaida, rotuloDaSaida } from '../../utils/lotes';
 
 interface EditorDeMateriaisProps {
   itens: LinhaDeMaterial[];
@@ -43,6 +45,11 @@ interface EditorDeMateriaisProps {
   oferecerCadastro?: boolean;
   /** Id base dos campos, para os `label` não colidirem com outro editor na mesma tela. */
   idBase: string;
+  /**
+   * Os lotes do estoque. Com eles, cada linha de produto mostra de que lote saiu e deixa trocar —
+   * é o detalhe dos materiais do atendimento, onde a baixa no estoque fica rastreada.
+   */
+  lotes?: LoteDeEstoque[];
 }
 
 /** O campo de cada linha: o preenchido do redesign, compacto — várias linhas cabem na tela. */
@@ -72,6 +79,7 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
   mostrarTotais = true,
   oferecerCadastro = false,
   idBase,
+  lotes,
 }) => {
   const ativos = produtosAtivos(produtos);
   const totais = totaisDosMateriais(itens);
@@ -245,6 +253,48 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
                 </>
               )}
             </div>
+
+            {lotes && m.produtoId && (() => {
+              const doProduto = lotes.filter((l) => l.produtoId === m.produtoId).sort(ordemDeSaida);
+              const saidas = m.lotes || [];
+              if (doProduto.length === 0 && saidas.length === 0) return null;
+              // Uma saída só: é ela que aparece escolhida. Várias (o lote acabou no meio): automático.
+              const escolhido = saidas.length === 1 ? saidas[0].loteId : '';
+              return (
+                <div>
+                  <label className={miniLabel} htmlFor={`${id}-lote`}>
+                    Lote
+                  </label>
+                  <select
+                    id={`${id}-lote`}
+                    value={escolhido}
+                    onChange={(e) => {
+                      const lote = doProduto.find((l) => l.id === e.target.value);
+                      trocar(i, {
+                        lotes: lote
+                          ? [{ loteId: lote.id, lote: lote.lote, validade: lote.validade, quantidade: m.quantidade }]
+                          : undefined,
+                      });
+                    }}
+                    className={inputClass}
+                  >
+                    <option value="">
+                      {saidas.length > 1
+                        ? saidas.map((s) => `${rotuloDaSaida(s)} (${quantidadeComUnidade(s.quantidade, m.unidade)})`).join(' + ')
+                        : 'Automático — o lote que vence primeiro'}
+                    </option>
+                    {doProduto.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {rotuloDaSaida(l)} — {l.saldo > 0 ? `${quantidadeComUnidade(l.saldo, m.unidade)} no estoque` : 'esgotado'}
+                      </option>
+                    ))}
+                  </select>
+                  {saidas.length === 0 && (
+                    <p className="mt-1 text-[13px] text-ink-soft">O lote é definido ao salvar.</p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* No acompanhamento não há campo de valor: o material de fora do estoque entra sem
                 preço, e o Financeiro avisa que falta completar. */}
