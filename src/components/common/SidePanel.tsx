@@ -14,9 +14,12 @@ import { ConfirmDialog, ConfirmRequest, pedidoDeDescarte } from '../ConfirmDialo
  * Aqui: **tela cheia no celular** (é um formulário, ele merece a tela toda) e **painel lateral
  * de 560px no desktop**, encostado à direita, com a lista continuando visível ao lado.
  *
- * As fichas clínicas e o orçamento são a exceção (`formato="central"`): no computador abrem numa
- * janela flutuante no meio da tela, quase do tamanho dela, preenchida em páginas — ver
- * `FichaFillModal` e `QuoteFormModal`.
+ * No computador, o formulário abre numa **janela no meio da tela** (`formato="central"`, o padrão
+ * desde 2026-11-14): o formulário de orçamento mostrou que centralizado ele fica mais claro, e a
+ * clínica pediu o mesmo para todos. A largura vem de `largura`; as fichas, o orçamento e o pedido
+ * de compra usam a tela quase toda (`tela`), preenchidos em páginas ou em colunas. O painel
+ * encostado à direita (`lateral`) ficou para o cadastro de procedimento, que mostra a prévia do
+ * card ao lado.
  *
  * No redesign ("Tinta") o cabeçalho é preto, com o título grande em serifa e, logo abaixo, o que
  * dá contexto ao formulário — a paciente escolhida, a margem calculada, as etapas. A barra do X
@@ -54,7 +57,12 @@ interface SidePanelProps {
    * cadastro de procedimento com mapa de áreas: a foto, o anel de botões em volta dela (que só
    * engaja a partir de 760px) e o painel de campos ao lado.
    */
-  largura?: 'padrao' | 'larga' | 'mapa';
+  largura?: 'padrao' | 'larga' | 'mapa' | 'tela';
+  /**
+   * O `cabecalho` só no celular. No computador, quem faz o papel dele é a `navegacao` — as etapas
+   * do orçamento, que lá viram abas presas sob o título.
+   */
+  cabecalhoSoNoCelular?: boolean;
   /**
    * `central`: no computador, em vez do painel encostado à direita, uma janela flutuante no meio
    * da tela, cobrindo quase toda ela — é o lugar das fichas e do orçamento, que no computador se
@@ -103,7 +111,8 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   rodape,
   rodapeTom = 'claro',
   largura = 'padrao',
-  formato = 'lateral',
+  cabecalhoSoNoCelular = false,
+  formato = 'central',
   navegacao,
   gravado,
   alterado,
@@ -213,7 +222,16 @@ export const SidePanel: React.FC<SidePanelProps> = ({
           tabIndex={-1}
           className={`bg-surface w-full h-full flex flex-col shadow-2xl focus:outline-none shrink-0 ${
             central
-              ? 'sm:max-w-[1440px] sm:rounded-[28px] sm:overflow-hidden sm:animate-surgirNoCentro'
+              ? `sm:rounded-[28px] sm:overflow-hidden sm:animate-surgirNoCentro ${
+                  // A janela abraça o formulário: curto, ela é baixa; longo, vai até a borda e rola
+                  // por dentro. As grandes (fichas, orçamento) ficam com a altura toda, para não
+                  // mudarem de tamanho a cada página.
+                  largura === 'tela'
+                    ? 'sm:max-w-[1440px]'
+                    : `sm:h-auto sm:max-h-full ${
+                        largura === 'mapa' ? 'sm:max-w-[1180px]' : largura === 'larga' ? 'sm:max-w-[1040px]' : 'sm:max-w-[820px]'
+                      }`
+                }`
               : `sm:animate-slideInRight ${
                   largura === 'mapa'
                     ? 'sm:max-w-[1180px]'
@@ -263,10 +281,15 @@ export const SidePanel: React.FC<SidePanelProps> = ({
             onInput={() => setMexido(true)}
             onChange={() => setMexido(true)}
           >
-            {/* Na janela central, o bloco preto que rola é só do celular: no computador o título
-                sobe para a barra do topo, e o que seria o `cabecalho` (as etapas do orçamento) é a
-                `navegacao`, presa sob ela. */}
-            <div className={`bg-ink text-cream px-5 sm:px-6 pb-5 ${central ? 'sm:hidden' : ''}`}>
+            {/* Na janela central, o título sobe para a barra do topo; o bloco preto que rola fica
+                no computador só com o que ele tiver além do título — a frase de contexto e o
+                resumo (o total da simulação, o orçamento do recibo). As etapas do orçamento
+                (`cabecalhoSoNoCelular`) viram a `navegacao`, presa sob a barra. */}
+            <div
+              className={`flow-root bg-ink text-cream px-5 sm:px-6 pb-5 ${
+                central ? (!subtitulo && (!cabecalho || cabecalhoSoNoCelular) ? 'sm:hidden' : 'sm:px-8') : ''
+              }`}
+            >
               <h2
                 className={`font-serif-luxury text-[32px] font-semibold leading-[1.1] text-white break-words ${
                   central ? 'sm:hidden' : ''
@@ -275,7 +298,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                 {titulo}
               </h2>
               {subtitulo && <p className="mt-1 text-[14px] leading-normal text-cream/80">{subtitulo}</p>}
-              {cabecalho && <div className="mt-3.5">{cabecalho}</div>}
+              {cabecalho && <div className={`mt-3.5 ${central && cabecalhoSoNoCelular ? 'sm:hidden' : ''}`}>{cabecalho}</div>}
             </div>
             {children}
           </div>

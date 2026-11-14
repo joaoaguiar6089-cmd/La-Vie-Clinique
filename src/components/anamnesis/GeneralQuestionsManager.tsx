@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { DEFAULT_GENERAL_QUESTIONS } from '../../data/anamnesisInitialData';
 import { ehZulia } from '../../lib/projetoFirebase';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 /**
  * Serve às perguntas gerais da **anamnese** e às da **avaliação**, que têm a mesma forma e as
@@ -373,20 +374,22 @@ export const GeneralQuestionsManager: React.FC<GeneralQuestionsManagerProps> = (
                   <label className="block text-xs font-semibold text-gray-800 mb-1">
                     Tipo de Campo de Resposta
                   </label>
-                  <select
-                    value={tipoCampo}
-                    onChange={(e) => setTipoCampo(e.target.value as QuestionFieldType)}
-                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
-                  >
-                    <option value="texto_curto">Texto Curto</option>
-                    <option value="texto_longo">Texto Longo (Área de texto)</option>
-                    <option value="numero">Número</option>
-                    <option value="data">Data</option>
-                    <option value="unica_escolha">Única Escolha (Radio)</option>
-                    <option value="multipla_escolha">Múltipla Escolha (Checkbox)</option>
-                    <option value="escala">Escala Numérica</option>
-                    <option value="sim_nao">Sim / Não</option>
-                  </select>
+                  <ListaSuspensa
+                    rotuloAcessivel="Tipo de resposta"
+                    valor={tipoCampo}
+                    onMudar={(v) => setTipoCampo(v as QuestionFieldType)}
+                    buscavel={false}
+                    opcoes={[
+                      { valor: 'texto_curto', rotulo: 'Texto curto' },
+                      { valor: 'texto_longo', rotulo: 'Texto longo', detalhe: 'área de texto' },
+                      { valor: 'numero', rotulo: 'Número' },
+                      { valor: 'data', rotulo: 'Data' },
+                      { valor: 'unica_escolha', rotulo: 'Única escolha', detalhe: 'uma opção da lista' },
+                      { valor: 'multipla_escolha', rotulo: 'Múltipla escolha', detalhe: 'várias opções da lista' },
+                      { valor: 'escala', rotulo: 'Escala numérica' },
+                      { valor: 'sim_nao', rotulo: 'Sim / Não' },
+                    ]}
+                  />
                 </div>
 
                 <div>

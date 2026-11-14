@@ -13,7 +13,8 @@ import {
   valorClienteDaLinha,
   quantidadeComUnidade,
 } from '../../utils/estoque';
-import { ordemDeSaida, rotuloDaSaida } from '../../utils/lotes';
+import { ordemDeSaida, rotuloDaSaida, validadeCurta } from '../../utils/lotes';
+import { ListaSuspensa, OpcaoDaLista } from '../common/ListaSuspensa';
 
 interface EditorDeMateriaisProps {
   itens: LinhaDeMaterial[];
@@ -55,7 +56,27 @@ interface EditorDeMateriaisProps {
 /** O campo de cada linha: o preenchido do redesign, compacto — várias linhas cabem na tela. */
 const inputClass =
   'w-full h-11 px-3 rounded-xl border-0 bg-line-soft text-[15px] font-semibold text-ink tabular-nums transition-colors focus:outline-none focus:bg-card focus:ring-2 focus:ring-ink';
-const miniLabel = 'block text-[12px] font-semibold text-ink-soft mb-1';
+const miniLabel = 'block truncate text-[12px] font-semibold text-ink-soft mb-1';
+
+/**
+ * As cores dos dois valores de cada linha, iguais em todo lugar: o **custo do produto** (o que a
+ * clínica pagou) em bronze, o **valor para a cliente** em verde. O ponto colorido no rótulo do preço
+ * por unidade liga o campo ao total da mesma cor.
+ */
+export const COR_DO_CUSTO = { ponto: 'bg-brand', caixa: 'bg-brand-bg text-brand-deep', valor: 'text-brand-deep' };
+export const COR_DA_CLIENTE = { ponto: 'bg-ok', caixa: 'bg-ok-bg text-ok', valor: 'text-ok' };
+
+const Ponto: React.FC<{ cor: string }> = ({ cor }) => (
+  <span aria-hidden className={`inline-block w-2 h-2 rounded-full mr-1.5 align-middle ${cor}`} />
+);
+
+/** Um produto do estoque como opção da lista: o nome, e embaixo a marca, a unidade e o custo; agrupado pelo tipo. */
+export const opcaoDoProduto = (p: ProdutoDeEstoque): OpcaoDaLista => ({
+  valor: p.id,
+  rotulo: p.nome,
+  detalhe: [p.marca, `por ${p.unidade}`].filter(Boolean).join(' · '),
+  grupo: p.tipo?.trim() || 'Sem tipo',
+});
 
 const OUTRO = '__outro__';
 
@@ -120,31 +141,26 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
             <div className="flex items-start gap-2">
               <div className="flex-1 min-w-0">
                 {m.produtoId ? (
-                  <>
-                    <label className="sr-only" htmlFor={`${id}-produto`}>
-                      Material
-                    </label>
-                    <select
-                      id={`${id}-produto`}
-                      value={m.produtoId}
-                      onChange={(e) => trocarProduto(i, e.target.value)}
-                      className={inputClass}
-                    >
-                      {/* Produto arquivado ou excluído continua aparecendo na linha que já o usa. */}
-                      {!ativos.some((p) => p.id === m.produtoId) && (
-                        <option value={m.produtoId}>
-                          {m.nome}
-                          {produto?.arquivado ? ' (arquivado)' : produto ? '' : ' (fora do estoque)'}
-                        </option>
-                      )}
-                      {ativos.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nome}
-                          {p.marca ? ` — ${p.marca}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </>
+                  <ListaSuspensa
+                    id={`${id}-produto`}
+                    rotuloAcessivel="Material"
+                    valor={m.produtoId}
+                    onMudar={(v) => trocarProduto(i, v)}
+                    placeholderDaBusca="Buscar produto, marca ou tipo…"
+                    opcoes={[
+                      // Produto arquivado ou excluído continua aparecendo na linha que já o usa.
+                      ...(!ativos.some((p) => p.id === m.produtoId)
+                        ? [
+                            {
+                              valor: m.produtoId,
+                              rotulo: m.nome,
+                              detalhe: produto?.arquivado ? 'arquivado' : produto ? undefined : 'fora do estoque',
+                            },
+                          ]
+                        : []),
+                      ...ativos.map(opcaoDoProduto),
+                    ]}
+                  />
                 ) : (
                   <div className="flex gap-2">
                     <div className="flex-1 min-w-0">
@@ -184,18 +200,12 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
               </button>
             </div>
 
-            <div
-              className={`grid gap-2 ${
-                !mostrarValores
-                  ? 'grid-cols-2'
-                  : mostrarCusto
-                  ? 'grid-cols-2 sm:grid-cols-4'
-                  : 'grid-cols-2 sm:grid-cols-3'
-              }`}
-            >
+            <div className={`grid gap-2 ${!mostrarValores ? 'grid-cols-2' : mostrarCusto ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <div>
                 <label className={miniLabel} htmlFor={`${id}-qtd`}>
-                  Quantidade ({m.unidade || 'un'})
+                  {/* "Qtd." no celular: com três colunas, "Quantidade" quebrava e desalinhava os campos. */}
+                  <span className={mostrarValores && mostrarCusto ? 'sm:hidden' : 'hidden'}>Qtd.</span>
+                  <span className={mostrarValores && mostrarCusto ? 'hidden sm:inline' : ''}>Quantidade</span> ({m.unidade || 'un'})
                 </label>
                 <input
                   id={`${id}-qtd`}
@@ -208,51 +218,62 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
                   className={inputClass}
                 />
               </div>
+              {mostrarValores && mostrarCusto && (
+                <div>
+                  <label className={miniLabel} htmlFor={`${id}-custo`}>
+                    <Ponto cor={COR_DO_CUSTO.ponto} />
+                    Custo / {m.unidade || 'un'}
+                  </label>
+                  <input
+                    id={`${id}-custo`}
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    inputMode="decimal"
+                    value={m.custoUnitario || ''}
+                    onChange={(e) => trocar(i, { custoUnitario: numeroValido(e.target.value) })}
+                    className={inputClass}
+                  />
+                </div>
+              )}
               {mostrarValores && (
-                <>
-                  {mostrarCusto && (
-                    <div>
-                      <label className={miniLabel} htmlFor={`${id}-custo`}>
-                        Custo / {m.unidade || 'un'}
-                      </label>
-                      <input
-                        id={`${id}-custo`}
-                        type="number"
-                        min="0"
-                        step="0.0001"
-                        inputMode="decimal"
-                        value={m.custoUnitario || ''}
-                        onChange={(e) => trocar(i, { custoUnitario: numeroValido(e.target.value) })}
-                        className={inputClass}
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <label className={miniLabel} htmlFor={`${id}-cliente`}>
-                      Cliente / {m.unidade || 'un'}
-                    </label>
-                    <input
-                      id={`${id}-cliente`}
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      inputMode="decimal"
-                      value={m.valorCliente || ''}
-                      onChange={(e) => trocar(i, { valorCliente: numeroValido(e.target.value) })}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div className="flex flex-col justify-end">
-                    <span className={miniLabel}>
-                      {totalDaLinha === 'cliente' ? 'Valor da linha' : 'Custo da linha'}
-                    </span>
-                    <span className="text-[16px] font-bold text-ink tabular-nums h-11 flex items-center">
-                      {formatBRL(totalDaLinha === 'cliente' ? valorClienteDaLinha(m) : custoDaLinha(m))}
-                    </span>
-                  </div>
-                </>
+                <div>
+                  <label className={miniLabel} htmlFor={`${id}-cliente`}>
+                    <Ponto cor={COR_DA_CLIENTE.ponto} />
+                    Cliente / {m.unidade || 'un'}
+                  </label>
+                  <input
+                    id={`${id}-cliente`}
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    inputMode="decimal"
+                    value={m.valorCliente || ''}
+                    onChange={(e) => trocar(i, { valorCliente: numeroValido(e.target.value) })}
+                    className={inputClass}
+                  />
+                </div>
               )}
             </div>
+
+            {/* Os totais da linha, lado a lado e cada um na sua cor: o custo do produto e o valor
+                para a cliente. Com os custos escondidos (o orçamento ao lado da cliente), só o dela. */}
+            {mostrarValores && (
+              <div className={`grid gap-2 ${mostrarCusto ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                {mostrarCusto && (
+                  <div className={`rounded-xl px-3 py-2 ${COR_DO_CUSTO.caixa}`}>
+                    <span className="block text-[12px] font-semibold">Total custo do produto</span>
+                    <span className="block text-[17px] font-bold tabular-nums">{formatBRL(custoDaLinha(m))}</span>
+                  </div>
+                )}
+                <div className={`rounded-xl px-3 py-2 ${COR_DA_CLIENTE.caixa}`}>
+                  <span className="block text-[12px] font-semibold">
+                    {totalDaLinha === 'cliente' && !mostrarCusto ? 'Valor da linha' : 'Total para a cliente'}
+                  </span>
+                  <span className="block text-[17px] font-bold tabular-nums">{formatBRL(valorClienteDaLinha(m))}</span>
+                </div>
+              </div>
+            )}
 
             {lotes && m.produtoId && (() => {
               const doProduto = lotes.filter((l) => l.produtoId === m.produtoId).sort(ordemDeSaida);
@@ -262,33 +283,40 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
               const escolhido = saidas.length === 1 ? saidas[0].loteId : '';
               return (
                 <div>
-                  <label className={miniLabel} htmlFor={`${id}-lote`}>
+                  <span className={miniLabel} id={`${id}-lote-rotulo`}>
                     Lote
-                  </label>
-                  <select
+                  </span>
+                  <ListaSuspensa
                     id={`${id}-lote`}
-                    value={escolhido}
-                    onChange={(e) => {
-                      const lote = doProduto.find((l) => l.id === e.target.value);
+                    rotuloAcessivel="Lote"
+                    valor={escolhido}
+                    onMudar={(v) => {
+                      const lote = doProduto.find((l) => l.id === v);
                       trocar(i, {
                         lotes: lote
                           ? [{ loteId: lote.id, lote: lote.lote, validade: lote.validade, quantidade: m.quantidade }]
                           : undefined,
                       });
                     }}
-                    className={inputClass}
-                  >
-                    <option value="">
-                      {saidas.length > 1
-                        ? saidas.map((s) => `${rotuloDaSaida(s)} (${quantidadeComUnidade(s.quantidade, m.unidade)})`).join(' + ')
-                        : 'Automático — o lote que vence primeiro'}
-                    </option>
-                    {doProduto.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {rotuloDaSaida(l)} — {l.saldo > 0 ? `${quantidadeComUnidade(l.saldo, m.unidade)} no estoque` : 'esgotado'}
-                      </option>
-                    ))}
-                  </select>
+                    opcoes={[
+                      {
+                        valor: '',
+                        rotulo:
+                          saidas.length > 1
+                            ? saidas.map((s) => `${rotuloDaSaida(s)} (${quantidadeComUnidade(s.quantidade, m.unidade)})`).join(' + ')
+                            : 'Automático',
+                        detalhe: saidas.length > 1 ? 'saiu de mais de um lote' : 'o lote que vence primeiro',
+                      },
+                      ...doProduto.map((l) => ({
+                        valor: l.id,
+                        rotulo: l.lote ? `Lote ${l.lote}` : 'Lote sem código',
+                        detalhe: [
+                          l.validade ? `validade ${validadeCurta(l.validade)}` : 'sem validade',
+                          l.saldo > 0 ? `${quantidadeComUnidade(l.saldo, m.unidade)} no estoque` : 'esgotado',
+                        ].join(' · '),
+                      })),
+                    ]}
+                  />
                   {saidas.length === 0 && (
                     <p className="mt-1 text-[13px] text-ink-soft">O lote é definido ao salvar.</p>
                   )}
@@ -320,24 +348,19 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
       })}
 
       <div>
-        <label className="sr-only" htmlFor={`${idBase}-adicionar`}>
-          Adicionar material
-        </label>
-        <select
+        <ListaSuspensa
           id={`${idBase}-adicionar`}
-          value=""
-          onChange={(e) => adicionar(e.target.value)}
-          className="w-full sm:w-auto min-h-[44px] px-3.5 rounded-xl border border-dashed border-ink/25 bg-card text-[14px] font-semibold text-ink hover:border-ink/50 focus:outline-none focus:ring-2 focus:ring-ink cursor-pointer"
-        >
-          <option value="">+ Adicionar material…</option>
-          {ativos.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nome}
-              {p.marca ? ` — ${p.marca}` : ''} ({p.unidade})
-            </option>
-          ))}
-          {permitirAvulso && <option value={OUTRO}>Outro material (fora do estoque)…</option>}
-        </select>
+          variante="adicionar"
+          rotuloAcessivel="Adicionar material"
+          placeholder="Adicionar material"
+          placeholderDaBusca="Buscar produto, marca ou tipo…"
+          valor=""
+          onMudar={adicionar}
+          opcoes={[
+            ...ativos.map(opcaoDoProduto),
+            ...(permitirAvulso ? [{ valor: OUTRO, rotulo: 'Outro material (fora do estoque)', acao: true }] : []),
+          ]}
+        />
         {ativos.length === 0 && (
           <p className="mt-1 text-[13px] text-ink-soft">
             Nenhum produto cadastrado no Estoque ainda
@@ -346,20 +369,18 @@ export const EditorDeMateriais: React.FC<EditorDeMateriaisProps> = ({
         )}
       </div>
 
-      {mostrarTotais && itens.length > 0 && (
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-2 border-t border-ink/10">
-          <span className="text-[14px] text-ink-soft">
-            Valor para a cliente:{' '}
-            <strong className="text-ink tabular-nums">{formatBRL(totais.valorCliente)}</strong>
-          </span>
+      {mostrarTotais && itens.length > 0 && mostrarValores && (
+        <div className={`grid gap-2 pt-2 border-t border-ink/10 ${mostrarCusto ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {mostrarCusto && (
-            <span className="text-body-lg text-ink">
-              Custo total:{' '}
-              <strong className="font-serif-luxury text-title tabular-nums">
-                {formatBRL(totais.custo)}
-              </strong>
-            </span>
+            <div className={`rounded-xl px-3 py-2 ${COR_DO_CUSTO.caixa}`}>
+              <span className="block text-[12px] font-semibold">Custo total dos produtos</span>
+              <span className="block text-[19px] font-bold tabular-nums">{formatBRL(totais.custo)}</span>
+            </div>
           )}
+          <div className={`rounded-xl px-3 py-2 ${COR_DA_CLIENTE.caixa}`}>
+            <span className="block text-[12px] font-semibold">Total para a cliente</span>
+            <span className="block text-[19px] font-bold tabular-nums">{formatBRL(totais.valorCliente)}</span>
+          </div>
         </div>
       )}
     </div>

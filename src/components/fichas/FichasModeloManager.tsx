@@ -24,6 +24,7 @@ import { ProcedureMultiSelect } from '../ProcedureMultiSelect';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 interface FichasModeloManagerProps {
   tipo: TipoDeFicha;
@@ -732,18 +733,14 @@ export const FichasModeloManager: React.FC<FichasModeloManagerProps> = ({
                   <label className={labelClass} htmlFor="q-tipo">
                     Tipo de campo
                   </label>
-                  <select
+                  <ListaSuspensa
                     id="q-tipo"
-                    value={qTipo}
-                    onChange={(e) => setQTipo(e.target.value as QuestionFieldType)}
-                    className={inputClass}
-                  >
-                    {Object.entries(FIELD_TYPE_LABELS).map(([valor, rotulo]) => (
-                      <option key={valor} value={valor}>
-                        {rotulo}
-                      </option>
-                    ))}
-                  </select>
+                    rotuloAcessivel="Tipo de resposta"
+                    valor={qTipo}
+                    onMudar={(v) => setQTipo(v as QuestionFieldType)}
+                    buscavel={false}
+                    opcoes={Object.entries(FIELD_TYPE_LABELS).map(([valor, rotulo]) => ({ valor, rotulo }))}
+                  />
                 </div>
 
                 {(qTipo === 'unica_escolha' || qTipo === 'multipla_escolha') && (

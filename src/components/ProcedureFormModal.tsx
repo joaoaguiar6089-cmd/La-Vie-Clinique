@@ -35,6 +35,7 @@ import { SidePanel } from './common/SidePanel';
 import { ConfirmDialog, ConfirmRequest } from './ConfirmDialog';
 import { CampoDoCard, CampoEmDestaque, PreviaDoCardIndividual } from './PreviaDoCardIndividual';
 import { marcaDaClinica } from '../utils/marca';
+import { ListaSuspensa } from './common/ListaSuspensa';
 
 const IMAGEM_PADRAO =
   'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80';
@@ -784,6 +785,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       titulo={procedureToEdit ? 'Editar procedimento' : 'Novo procedimento'}
       sobretitulo="Cadastro & gestão"
       largura={exigeSelecaoDeArea ? 'mapa' : 'padrao'}
+      /* O único painel ainda encostado à direita: no computador, a prévia do card ocupa o lado
+         esquerdo da tela enquanto se preenche. */
+      formato="lateral"
       bloqueado={isSaving}
       /* Foto adicionada, vista e área desenhada não passam por `input`/`change`. */
       alterado={images.length > 0 || (exigeSelecaoDeArea && (areasDoMapa.length > 0 || areaEmEdicao))}
@@ -896,15 +900,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 </label>
                 {!isAddingCustomCategory ? (
                   <div className="flex gap-2">
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="flex-1 px-3 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                    >
-                      {allCategories.map((cat, idx) => (
-                        <option key={idx} value={cat}>{cat}</option>
-                      ))}
-                    </select>
+                    <ListaSuspensa
+                      className="flex-1 min-w-0"
+                      rotuloAcessivel="Categoria"
+                      valor={category}
+                      onMudar={setCategory}
+                      placeholderDaBusca="Buscar categoria…"
+                      opcoes={allCategories.map((cat) => ({ valor: cat, rotulo: cat }))}
+                    />
                     <button
                       type="button"
                       onClick={() => {

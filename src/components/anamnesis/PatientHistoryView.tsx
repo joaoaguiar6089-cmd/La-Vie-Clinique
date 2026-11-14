@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Patient, AnamnesisRecord, AnamnesisTemplate, ClinicProfile } from '../../types';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { ShareAnamnesisLinkModal } from './ShareAnamnesisLinkModal';
-import { ChevronDown, ClipboardList, Camera, Download, Eye, FileText, Share2, Trash2 } from 'lucide-react';
+import { ClipboardList, Camera, Download, Eye, FileText, Share2, Trash2 } from 'lucide-react';
 import { Avatar, CampoDeBusca, MenuDeAcoes } from '../common/Tinta';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 interface PatientHistoryViewProps {
   patients: Patient[];
@@ -125,22 +126,21 @@ export const PatientHistoryView: React.FC<PatientHistoryViewProps> = ({
             : `${filteredPatients.length} ${filteredPatients.length === 1 ? 'paciente' : 'pacientes'}`}
         </p>
         {viewTab === 'records' && (
-          <label className="relative min-w-0">
-            <span className="sr-only">Filtrar por paciente</span>
-            <select
-              value={selectedPatientFilter}
-              onChange={(e) => setSelectedPatientFilter(e.target.value)}
-              className="appearance-none max-w-[220px] truncate bg-transparent border-0 pr-6 py-2 text-[14px] font-semibold text-ink-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-lg text-right"
-            >
-              <option value="all">Todas as pacientes</option>
-              {patients.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome} ({getPatientRecordsCount(p.id)})
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-ink-soft" />
-          </label>
+          <ListaSuspensa
+            className="min-w-0 w-[240px] max-w-[60%]"
+            rotuloAcessivel="Filtrar por paciente"
+            placeholderDaBusca="Buscar paciente…"
+            valor={selectedPatientFilter}
+            onMudar={setSelectedPatientFilter}
+            opcoes={[
+              { valor: 'all', rotulo: 'Todas as pacientes' },
+              ...patients.map((p) => ({
+                valor: p.id,
+                rotulo: p.nome,
+                detalhe: `${getPatientRecordsCount(p.id)} ${getPatientRecordsCount(p.id) === 1 ? 'ficha' : 'fichas'}`,
+              })),
+            ]}
+          />
         )}
       </div>
 

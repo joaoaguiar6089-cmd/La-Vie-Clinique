@@ -39,6 +39,7 @@ import {
   subscribeToProdutosDeEstoque,
 } from '../../services/databaseService';
 import { SidePanel } from '../common/SidePanel';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 import {
   AvisoTinta,
   BotaoPrincipal,
@@ -47,7 +48,6 @@ import {
   PilulasDeEscolha,
   RotuloTinta,
   Segmentado,
-  SetaDoSelect,
 } from '../common/Tinta';
 import { PatientSearchSelect } from '../quotes/PatientSearchSelect';
 import { ComprovanteAnexado, EscolhaDeComprovante } from '../quotes/CampoDeComprovante';
@@ -619,25 +619,14 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
                 rotulo="À vista ou parcelado"
               />
               {parcelado && (
-                <CampoTinta
-                  rotulo="Parcelas"
-                  htmlFor="recibo-parcelas"
-                  ajuda={valorNumero > 0 ? `${parcelas}× de ${formatBRL(valorNumero / parcelas)}` : undefined}
-                  sufixo={<SetaDoSelect />}
-                >
-                  <select
-                    id="recibo-parcelas"
-                    value={parcelas}
-                    onChange={(e) => setParcelas(Number(e.target.value))}
-                    className={`${INPUT_TINTA} appearance-none cursor-pointer`}
-                  >
-                    {Array.from({ length: PARCELAS_MAXIMAS - 1 }, (_, i) => i + 2).map((n) => (
-                      <option key={n} value={n}>
-                        {n} vezes
-                      </option>
-                    ))}
-                  </select>
-                </CampoTinta>
+                <ListaSuspensa
+                  id="recibo-parcelas"
+                  rotulo={`Parcelas${valorNumero > 0 ? ` · ${parcelas}× de ${formatBRL(valorNumero / parcelas)}` : ''}`}
+                  valor={String(parcelas)}
+                  onMudar={(v) => setParcelas(Number(v))}
+                  opcoes={Array.from({ length: PARCELAS_MAXIMAS - 1 }, (_, i) => ({ valor: String(i + 2), rotulo: `${i + 2} vezes` }))}
+                  buscavel={false}
+                />
               )}
             </div>
           )}

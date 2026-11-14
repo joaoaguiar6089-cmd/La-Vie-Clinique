@@ -5,6 +5,7 @@ import { LinhaDeMaterial, linhaDoProduto, linhasParaGravar } from '../../utils/e
 import { saveConsumosPadrao } from '../../services/databaseService';
 import { SidePanel } from '../common/SidePanel';
 import { EditorDeMateriais } from './EditorDeMateriais';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 interface ConsumoPadraoPanelProps {
   aberto: boolean;
@@ -175,19 +176,15 @@ export const ConsumoPadraoPanel: React.FC<ConsumoPadraoPanelProps> = ({
               <Copy className="w-3.5 h-3.5" />
               Copiar de outro procedimento
             </label>
-            <select
+            <ListaSuspensa
               id="consumo-copiar"
-              value={copiarDe}
-              onChange={(e) => copiar(e.target.value)}
-              className="w-full glass-input px-3 py-2 rounded-sm text-sm text-ink focus:outline-hidden"
-            >
-              <option value="">Escolha um procedimento…</option>
-              {comConsumo.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
+              rotuloAcessivel="Copiar o consumo de outro procedimento"
+              placeholder="Escolha um procedimento…"
+              placeholderDaBusca="Buscar procedimento…"
+              valor={copiarDe}
+              onMudar={copiar}
+              opcoes={comConsumo.map((p) => ({ valor: p.id, rotulo: p.title, grupo: p.category || undefined }))}
+            />
           </div>
         )}
 

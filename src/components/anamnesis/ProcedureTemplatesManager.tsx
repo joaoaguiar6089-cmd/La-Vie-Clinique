@@ -39,7 +39,6 @@ import {
   AlertCircle,
   Layers,
   ChevronRight,
-  ChevronDown,
   Share2,
   Upload,
   Image as ImageIcon,
@@ -47,6 +46,7 @@ import {
   ScrollText,
 } from 'lucide-react';
 import { PROFISSIONAL_PADRAO, nomeDaClinica } from '../../utils/marca';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 interface GenderPhotoSlotProps {
   label: string;
@@ -554,22 +554,13 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
 
         {/* Categoria em lista suspensa: a clínica tem categorias demais para caber numa fileira de
             pílulas sem virar rolagem horizontal. */}
-        <div className="relative w-full sm:w-64">
-          <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            aria-label="Filtrar por categoria"
-            className="w-full appearance-none pl-9 pr-9 py-2 text-xs rounded-sm bg-white/80 border border-gray-200 text-ink font-medium cursor-pointer focus:outline-hidden focus:border-brand focus:bg-white"
-          >
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat === 'Todas' ? 'Todas as categorias' : cat}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-        </div>
+        <ListaSuspensa
+          className="w-full sm:w-64"
+          rotuloAcessivel="Filtrar por categoria"
+          valor={selectedCategory}
+          onMudar={setSelectedCategory}
+          opcoes={categories.map((cat) => ({ valor: cat, rotulo: cat === 'Todas' ? 'Todas as categorias' : cat }))}
+        />
       </div>
 
       {/* Templates Grid */}
@@ -745,19 +736,16 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                     <label className="block text-xs font-semibold text-gray-800 mb-1">
                       Procedimento do Catálogo
                     </label>
-                    <select
-                      value={vinculoSelecionado}
-                      onChange={(e) => handleSelecionarProcedimentoDoCatalogo(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-sm bg-surface border border-gray-200 text-ink focus:outline-hidden focus:border-brand font-medium"
-                    >
-                      <option value="">-- Não vinculado (nome livre) --</option>
-                      {catalogProcedures.map((proc) => (
-                        <option key={proc.id} value={proc.id}>
-                          {proc.title}
-                          {proc.category ? ` — ${proc.category}` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <ListaSuspensa
+                      rotuloAcessivel="Procedimento do catálogo"
+                      valor={vinculoSelecionado}
+                      onMudar={handleSelecionarProcedimentoDoCatalogo}
+                      placeholderDaBusca="Buscar procedimento…"
+                      opcoes={[
+                        { valor: '', rotulo: 'Não vinculado', detalhe: 'nome livre' },
+                        ...catalogProcedures.map((proc) => ({ valor: proc.id, rotulo: proc.title, grupo: proc.category || undefined })),
+                      ]}
+                    />
                     <p className="text-label text-gray-500 mt-1 leading-relaxed">
                       {vinculoSelecionado
                         ? 'Vinculado ao catálogo: o nome acompanha o procedimento cadastrado.'
@@ -1300,20 +1288,22 @@ export const ProcedureTemplatesManager: React.FC<ProcedureTemplatesManagerProps>
                   <label className="block text-xs font-semibold text-gray-800 mb-1">
                     Tipo de Campo
                   </label>
-                  <select
-                    value={qTipo}
-                    onChange={(e) => setQTipo(e.target.value as QuestionFieldType)}
-                    className="w-full px-3 py-2 text-xs rounded-sm bg-white border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
-                  >
-                    <option value="sim_nao">Sim / Não</option>
-                    <option value="texto_curto">Texto Curto</option>
-                    <option value="texto_longo">Texto Longo</option>
-                    <option value="numero">Número</option>
-                    <option value="data">Data</option>
-                    <option value="unica_escolha">Única Escolha (Radio)</option>
-                    <option value="multipla_escolha">Múltipla Escolha (Checkbox)</option>
-                    <option value="escala">Escala Numérica</option>
-                  </select>
+                  <ListaSuspensa
+                    rotuloAcessivel="Tipo de resposta"
+                    valor={qTipo}
+                    onMudar={(v) => setQTipo(v as QuestionFieldType)}
+                    buscavel={false}
+                    opcoes={[
+                      { valor: 'sim_nao', rotulo: 'Sim / Não' },
+                      { valor: 'texto_curto', rotulo: 'Texto curto' },
+                      { valor: 'texto_longo', rotulo: 'Texto longo' },
+                      { valor: 'numero', rotulo: 'Número' },
+                      { valor: 'data', rotulo: 'Data' },
+                      { valor: 'unica_escolha', rotulo: 'Única escolha', detalhe: 'uma opção da lista' },
+                      { valor: 'multipla_escolha', rotulo: 'Múltipla escolha', detalhe: 'várias opções da lista' },
+                      { valor: 'escala', rotulo: 'Escala numérica' },
+                    ]}
+                  />
                 </div>
 
                 <div>

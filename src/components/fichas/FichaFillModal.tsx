@@ -886,6 +886,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       titulo={rotulos.nome}
       sobretitulo={`${alvo.pacienteNome} · ${alvo.procedimentoNome} · ${formatDateOnly(alvo.data)}`}
       formato="central"
+      largura="tela"
       navegacao={navegacao}
       // Trocar de página e cada erro novo levam a rolagem ao topo — o aviso mora lá.
       etapa={`${paginaAtiva}:${errosAoSalvar}`}

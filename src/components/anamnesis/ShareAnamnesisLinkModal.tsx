@@ -18,6 +18,7 @@ import {
   QrCode,
 } from 'lucide-react';
 import { PROFISSIONAL_PADRAO, nomeDaClinica } from '../../utils/marca';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 interface ShareAnamnesisLinkModalProps {
   isOpen: boolean;
@@ -146,17 +147,13 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
             <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">
               Procedimento / Ficha-Modelo
             </label>
-            <select
-              value={selectedTemplateId}
-              onChange={(e) => setSelectedTemplateId(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-sm bg-gray-50 border border-gray-200 text-ink focus:outline-hidden focus:border-brand font-medium"
-            >
-              {templates.map((tpl) => (
-                <option key={tpl.id} value={tpl.id}>
-                  {tpl.procedimentoNome} ({tpl.categoria || 'Geral'})
-                </option>
-              ))}
-            </select>
+            <ListaSuspensa
+              rotuloAcessivel="Procedimento / ficha-modelo"
+              valor={selectedTemplateId}
+              onMudar={setSelectedTemplateId}
+              placeholderDaBusca="Buscar procedimento…"
+              opcoes={templates.map((tpl) => ({ valor: tpl.id, rotulo: tpl.procedimentoNome, grupo: tpl.categoria || 'Geral' }))}
+            />
           </div>
 
           {/* Photo presence summary */}
@@ -198,22 +195,20 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
                 </label>
                 <span className="text-label text-gray-400">Preenche o nome automaticamente</span>
               </div>
-              <select
-                value={selectedPatientId}
-                onChange={(e) => {
-                  setSelectedPatientId(e.target.value);
-                  const p = patients.find((pat) => pat.id === e.target.value);
+              <ListaSuspensa
+                rotuloAcessivel="Paciente"
+                placeholderDaBusca="Buscar pelo nome ou telefone…"
+                valor={selectedPatientId}
+                onMudar={(v) => {
+                  setSelectedPatientId(v);
+                  const p = patients.find((pat) => pat.id === v);
                   if (p?.contato) setCustomPhone(p.contato);
                 }}
-                className="w-full px-3 py-2 text-xs rounded-sm bg-gray-50 border border-gray-200 text-ink focus:outline-hidden focus:border-brand"
-              >
-                <option value="">Nenhum (Qualquer paciente novo pode preencher)</option>
-                {patients.map((pat) => (
-                  <option key={pat.id} value={pat.id}>
-                    {pat.nome} {pat.contato ? `(${pat.contato})` : ''}
-                  </option>
-                ))}
-              </select>
+                opcoes={[
+                  { valor: '', rotulo: 'Nenhuma', detalhe: 'qualquer paciente nova pode preencher' },
+                  ...patients.map((pat) => ({ valor: pat.id, rotulo: pat.nome, detalhe: pat.contato || undefined })),
+                ]}
+              />
             </div>
           )}
 
@@ -238,20 +233,13 @@ export const ShareAnamnesisLinkModal: React.FC<ShareAnamnesisLinkModalProps> = (
             <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">
               Profissional Responsável *
             </label>
-            <select
-              value={selectedProfessionalId}
-              onChange={(e) => setSelectedProfessionalId(e.target.value)}
-              className={`w-full px-3 py-2 text-xs rounded-sm bg-gray-50 border ${
-                canShare ? 'border-gray-200' : 'border-amber-300'
-              } text-ink focus:outline-hidden focus:border-brand font-medium`}
-            >
-              <option value="">-- Selecione o profissional --</option>
-              {clinicProfile.professionals?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <ListaSuspensa
+              rotuloAcessivel="Profissional responsável"
+              placeholder="Selecione o profissional…"
+              valor={selectedProfessionalId}
+              onMudar={setSelectedProfessionalId}
+              opcoes={(clinicProfile.professionals || []).map((p) => ({ valor: p.id, rotulo: p.name, detalhe: p.specialty || p.title }))}
+            />
             {!selectedProfessionalId && (
               <p className="text-label text-amber-600 mt-1">
                 Selecione o profissional responsável para gerar e enviar o link.

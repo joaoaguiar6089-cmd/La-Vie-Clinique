@@ -3,8 +3,9 @@ import { Trash2 } from 'lucide-react';
 import { PaymentMethod, QuotePaymentOption } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { NOME_FORMA_PAGAMENTO } from '../../utils/quoteCalc';
-import { CampoTinta, INPUT_TINTA, PilulasDeEscolha, SetaDoSelect } from '../common/Tinta';
+import { CampoTinta, INPUT_TINTA, PilulasDeEscolha } from '../common/Tinta';
 import { OpcaoLigavel } from './PecasDoOrcamento';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 interface QuotePaymentOptionEditorProps {
   opcao: QuotePaymentOption;
@@ -75,34 +76,22 @@ export const QuotePaymentOptionEditor: React.FC<QuotePaymentOptionEditorProps> =
 
       {ehCartao && (
         <div className="grid grid-cols-2 gap-2.5">
-          <CampoTinta rotulo="Parcelas" htmlFor={`pagamento-parcelas-${opcao.id}`} sufixo={<SetaDoSelect />}>
-            <select
-              id={`pagamento-parcelas-${opcao.id}`}
-              value={parcelas}
-              onChange={(e) => patch({ parcelas: Number(e.target.value) })}
-              className={`${INPUT_TINTA} appearance-none cursor-pointer`}
-            >
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {n}×
-                </option>
-              ))}
-            </select>
-          </CampoTinta>
-          <CampoTinta rotulo="Sem juros até" htmlFor={`pagamento-sem-juros-${opcao.id}`} sufixo={<SetaDoSelect />}>
-            <select
-              id={`pagamento-sem-juros-${opcao.id}`}
-              value={semJuros}
-              onChange={(e) => patch({ parcelasSemJuros: Number(e.target.value) })}
-              className={`${INPUT_TINTA} appearance-none cursor-pointer`}
-            >
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {n}×
-                </option>
-              ))}
-            </select>
-          </CampoTinta>
+          <ListaSuspensa
+            id={`pagamento-parcelas-${opcao.id}`}
+            rotulo="Parcelas"
+            valor={String(parcelas)}
+            onMudar={(v) => patch({ parcelas: Number(v) })}
+            opcoes={Array.from({ length: 12 }, (_, i) => ({ valor: String(i + 1), rotulo: i === 0 ? 'À vista (1×)' : `${i + 1}×` }))}
+            buscavel={false}
+          />
+          <ListaSuspensa
+            id={`pagamento-sem-juros-${opcao.id}`}
+            rotulo="Sem juros até"
+            valor={String(semJuros)}
+            onMudar={(v) => patch({ parcelasSemJuros: Number(v) })}
+            opcoes={Array.from({ length: 12 }, (_, i) => ({ valor: String(i + 1), rotulo: `${i + 1}×` }))}
+            buscavel={false}
+          />
           <p
             className={`col-span-2 -mt-1 px-1 text-[13px] leading-snug ${
               temParcelaComJuros ? 'text-warn font-semibold' : 'text-ink-soft'

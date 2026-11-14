@@ -11,6 +11,7 @@ import {
 import { LIMITES_DO_GRATUITO } from '../../utils/planos';
 import { MARCA_DA_PLATAFORMA } from '../../utils/marca';
 import { ConfirmDialog, type ConfirmRequest } from '../ConfirmDialog';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 /**
  * O painel do dono da plataforma: todas as clínicas, com plano, uso, logins, último acesso e espaço
@@ -130,19 +131,15 @@ const CartaoDaClinica: React.FC<{
       <div className="mt-4 flex flex-col sm:flex-row gap-2">
         <label className="flex-1 flex items-center gap-2 text-[13px] text-ink-soft">
           <span className="shrink-0">Plano</span>
-          <select
-            value={opcaoDe(c)}
+          <ListaSuspensa
+            className="flex-1 min-w-0"
+            rotuloAcessivel={`Plano de ${c.nome}`}
+            valor={opcaoDe(c)}
             disabled={ocupado}
-            onChange={(e) => onPlano(c, e.target.value as OpcaoDePlano)}
-            aria-label={`Plano de ${c.nome}`}
-            className="flex-1 h-[42px] px-3 rounded-xl border border-[rgba(26,26,26,.12)] bg-white text-ink text-[13.5px] font-medium focus:outline-hidden focus:border-brand"
-          >
-            {(Object.keys(ROTULO_DO_PLANO) as OpcaoDePlano[]).map((o) => (
-              <option key={o} value={o}>
-                {ROTULO_DO_PLANO[o]}
-              </option>
-            ))}
-          </select>
+            onMudar={(v) => onPlano(c, v as OpcaoDePlano)}
+            buscavel={false}
+            opcoes={(Object.keys(ROTULO_DO_PLANO) as OpcaoDePlano[]).map((o) => ({ valor: o, rotulo: ROTULO_DO_PLANO[o] }))}
+          />
         </label>
         <button
           type="button"

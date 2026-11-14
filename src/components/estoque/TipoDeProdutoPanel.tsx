@@ -20,8 +20,8 @@ import {
   INPUT_TINTA,
   MenuDeAcoes,
   PilulasDeEscolha,
-  SetaDoSelect,
 } from '../common/Tinta';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 interface TipoDeProdutoPanelProps {
   /** O tipo aberto, já resumido. `null` = fechado. */
@@ -266,20 +266,15 @@ export const TipoDeProdutoPanel: React.FC<TipoDeProdutoPanelProps> = ({
                 />
               </CampoTinta>
               {unidades.length > 1 ? (
-                <CampoTinta rotulo="Em" htmlFor="tipo-minimo-unidade" sufixo={<SetaDoSelect />} className="w-40">
-                  <select
-                    id="tipo-minimo-unidade"
-                    value={unidadeDoMinimo}
-                    onChange={(e) => setUnidadeDoMinimo(e.target.value)}
-                    className={`${INPUT_TINTA} appearance-none cursor-pointer`}
-                  >
-                    {unidades.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                </CampoTinta>
+                <ListaSuspensa
+                  id="tipo-minimo-unidade"
+                  rotulo="Em"
+                  className="w-40"
+                  valor={unidadeDoMinimo}
+                  onMudar={setUnidadeDoMinimo}
+                  opcoes={unidades.map((u) => ({ valor: u, rotulo: u }))}
+                  buscavel={false}
+                />
               ) : (
                 <span className="pb-4 text-[15px] font-semibold text-ink-soft">{unidadeDoMinimo}</span>
               )}
