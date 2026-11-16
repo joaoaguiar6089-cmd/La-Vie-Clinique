@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, ChevronRight } from 'lucide-react';
 import { Attendance, ClinicProfile, Patient, Procedure, Professional, Quote } from '../../types';
 import { formatBRL, formatDateOnly } from '../../utils/formatters';
 import { hojeISO, nomeDosProcedimentos } from '../../utils/attendances';
 import { MateriaisDoAtendimentoPanel } from '../estoque/MateriaisDoAtendimentoPanel';
 import { AbasSublinhadas, Chip, ValorEmReais } from '../common/Tinta';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 import { SimulacoesDeCusto } from './SimulacoesDeCusto';
 import {
   Periodo,
@@ -330,22 +331,17 @@ const PainelFinanceiro: React.FC<PainelFinanceiroProps> = ({
             Financeiro
           </h1>
           {professionals.length > 1 && (
-            <label className="relative shrink-0">
-              <span className="sr-only">Profissional</span>
-              <select
-                value={professionalId}
-                onChange={(e) => setProfessionalId(e.target.value)}
-                className="appearance-none h-9 pl-3.5 pr-8 rounded-full bg-cream/10 text-cream text-[13px] font-semibold border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-light max-w-[190px] truncate"
-              >
-                <option value="">Toda a clínica</option>
-                {professionals.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-cream" />
-            </label>
+            <ListaSuspensa
+              variante="pilula"
+              className="shrink-0"
+              rotuloAcessivel="Profissional"
+              valor={professionalId}
+              onMudar={setProfessionalId}
+              opcoes={[
+                { valor: '', rotulo: 'Toda a clínica' },
+                ...professionals.map((p) => ({ valor: p.id, rotulo: p.name })),
+              ]}
+            />
           )}
         </div>
 

@@ -269,6 +269,7 @@ export const TipoDeProdutoPanel: React.FC<TipoDeProdutoPanelProps> = ({
                 <ListaSuspensa
                   id="tipo-minimo-unidade"
                   rotulo="Em"
+                  tituloDaJanela="Unidade do estoque mínimo"
                   className="w-40"
                   valor={unidadeDoMinimo}
                   onMudar={setUnidadeDoMinimo}

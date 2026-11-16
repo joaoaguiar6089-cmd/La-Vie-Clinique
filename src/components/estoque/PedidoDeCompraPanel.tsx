@@ -38,6 +38,7 @@ import { SidePanel } from '../common/SidePanel';
 import { opcaoDoProduto } from './EditorDeMateriais';
 import { AvisoTinta, BotaoPrincipal, CampoTinta, INPUT_TINTA } from '../common/Tinta';
 import { ListaSuspensa } from '../common/ListaSuspensa';
+import { CampoComSugestoes } from '../common/CampoComLista';
 
 const NOVO = '__novo__';
 
@@ -642,35 +643,28 @@ const LinhaDoPedidoCard: React.FC<{
             <CampoTinta rotulo="Marca" htmlFor={`${id}-marca`}>
               <input id={`${id}-marca`} value={l.novo.marca} onChange={(e) => onMudarNovo({ marca: e.target.value })} className={INPUT_TINTA} />
             </CampoTinta>
-            <CampoTinta rotulo="Tipo de produto" htmlFor={`${id}-tipo`}>
-              <input
-                id={`${id}-tipo`}
-                list={`${id}-tipos`}
-                value={l.novo.tipo}
-                onChange={(e) => onMudarNovo({ tipo: e.target.value })}
-                placeholder="Ex: Ácido hialurônico"
-                className={INPUT_TINTA}
-              />
-              <datalist id={`${id}-tipos`}>
-                {tiposSugeridos.map((t) => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
-            </CampoTinta>
-            <CampoTinta rotulo="Unidade de uso" htmlFor={`${id}-unidade`}>
-              <input
-                id={`${id}-unidade`}
-                list={`${id}-unidades`}
-                value={l.novo.unidade}
-                onChange={(e) => onMudarNovo({ unidade: e.target.value })}
-                className={INPUT_TINTA}
-              />
-              <datalist id={`${id}-unidades`}>
-                {UNIDADES_SUGERIDAS.map((u) => (
-                  <option key={u} value={u} />
-                ))}
-              </datalist>
-            </CampoTinta>
+            <CampoComSugestoes
+              id={`${id}-tipo`}
+              rotulo="Tipo de produto"
+              valor={l.novo.tipo}
+              onMudar={(tipo) => onMudarNovo({ tipo })}
+              sugestoes={tiposSugeridos}
+              placeholder="Ex: Ácido hialurônico"
+              rotuloDoNovo={(t) => `Usar “${t}” como tipo novo`}
+              placeholderDaBusca="Buscar ou digitar um tipo"
+              vazio="Nenhum tipo com esse nome ainda."
+            />
+            <CampoComSugestoes
+              id={`${id}-unidade`}
+              rotulo="Unidade de uso"
+              valor={l.novo.unidade}
+              onMudar={(unidade) => onMudarNovo({ unidade })}
+              sugestoes={UNIDADES_SUGERIDAS}
+              placeholder="Ex: U, ml, seringa"
+              rotuloDoNovo={(t) => `Usar “${t}”`}
+              placeholderDaBusca="Buscar ou digitar a unidade"
+              vazio="Nenhuma unidade com esse nome na lista."
+            />
             <CampoTinta rotulo="Unidades por embalagem (opcional)" htmlFor={`${id}-por-embalagem`}>
               <input
                 id={`${id}-por-embalagem`}

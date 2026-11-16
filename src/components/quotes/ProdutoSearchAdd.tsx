@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Plus, Package } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { Package, Plus } from 'lucide-react';
 import { ProdutoDeEstoque } from '../../types';
 import { formatarPrecoUnitario, produtosAtivos } from '../../utils/estoque';
+import { EscolhaNaJanela, OpcaoDaLista } from '../common/JanelaDeEscolha';
 
 interface ProdutoSearchAddProps {
   /** Todos os produtos do estoque — os arquivados ficam de fora da escolha. */
@@ -21,43 +22,37 @@ interface ProdutoSearchAddProps {
  *
  * Mostra o valor repassado à cliente por unidade, que é o preço com que o item nasce. O valor
  * comprado nunca aparece aqui: a busca é aberta com a cliente por perto.
+ *
+ * A busca abre na janela de escolha, no meio da tela (ver `JanelaDeEscolha`).
  */
 export const ProdutoSearchAdd: React.FC<ProdutoSearchAddProps> = ({ produtos, onAdd, grande = false }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    inputRef.current?.focus();
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
+  const botaoRef = useRef<HTMLButtonElement>(null);
 
   const ativos = useMemo(() => produtosAtivos(produtos), [produtos]);
 
-  const filtrados = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return ativos;
-    return ativos.filter(
-      (p) => p.nome.toLowerCase().includes(term) || (p.marca || '').toLowerCase().includes(term)
-    );
-  }, [ativos, searchTerm]);
+  const opcoes = useMemo<OpcaoDaLista[]>(
+    () =>
+      ativos.map((produto) => ({
+        valor: produto.id,
+        rotulo: produto.nome,
+        detalhe: produto.marca || undefined,
+        lateral:
+          produto.valorCliente > 0
+            ? `${formatarPrecoUnitario(produto.valorCliente)}/${produto.unidade || 'un'}`
+            : 'sem valor',
+        icone: Plus,
+      })),
+    [ativos]
+  );
 
   return (
-    <div ref={containerRef} className={grande ? 'relative w-full' : 'relative'}>
+    <div className={grande ? 'w-full' : undefined}>
       <button
+        ref={botaoRef}
         type="button"
-        onClick={() => {
-          setSearchTerm('');
-          setIsOpen((v) => !v);
-        }}
+        onClick={() => setIsOpen(true)}
+        aria-haspopup="dialog"
         aria-expanded={isOpen}
         className={
           grande
@@ -70,61 +65,19 @@ export const ProdutoSearchAdd: React.FC<ProdutoSearchAddProps> = ({ produtos, on
       </button>
 
       {isOpen && (
-        // No orçamento, o botão fica à direita do "Adicionar procedimento" a partir do `sm`: a
-        // lista se alinha pela direita para não sair da tela.
-        <div
-          className={`absolute z-30 mt-1 w-[min(380px,80vw)] bg-white rounded-sm border border-gray-200 shadow-xl overflow-hidden ${
-            grande ? 'left-0 sm:left-auto sm:right-0' : ''
-          }`}
-        >
-          <div className="p-2.5 border-b border-gray-100">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar no estoque..."
-                className="w-full pl-8 pr-3 py-1.5 rounded-xs bg-gray-50 border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
-              />
-            </div>
-          </div>
-
-          <div className="max-h-72 overflow-y-auto">
-            {filtrados.length === 0 ? (
-              <p className="text-center text-xs text-gray-400 py-5 px-3">
-                {ativos.length === 0
-                  ? 'Nenhum produto cadastrado no Estoque ainda.'
-                  : 'Nenhum produto encontrado.'}
-              </p>
-            ) : (
-              filtrados.map((produto) => (
-                <button
-                  key={produto.id}
-                  type="button"
-                  onClick={() => {
-                    onAdd(produto);
-                    setSearchTerm('');
-                    setIsOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 hover:bg-surface transition-colors flex items-center justify-between gap-3 group"
-                >
-                  <span className="text-xs text-ink truncate flex items-center gap-1.5">
-                    <Plus className="w-3 h-3 text-brand opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                    {produto.nome}
-                    {produto.marca ? <span className="text-gray-400"> — {produto.marca}</span> : null}
-                  </span>
-                  <span className="text-body text-gray-400 shrink-0 tabular-nums">
-                    {produto.valorCliente > 0
-                      ? `${formatarPrecoUnitario(produto.valorCliente)}/${produto.unidade || 'un'}`
-                      : 'sem valor'}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
+        <EscolhaNaJanela
+          titulo="Adicionar produto"
+          opcoes={opcoes}
+          buscavel
+          onEscolher={(o) => {
+            const produto = ativos.find((p) => p.id === o.valor);
+            if (produto) onAdd(produto);
+          }}
+          onFechar={() => setIsOpen(false)}
+          placeholderDaBusca="Buscar no estoque…"
+          vazio={ativos.length === 0 ? 'Nenhum produto cadastrado no Estoque ainda.' : 'Nenhum produto encontrado.'}
+          origem={botaoRef}
+        />
       )}
     </div>
   );
