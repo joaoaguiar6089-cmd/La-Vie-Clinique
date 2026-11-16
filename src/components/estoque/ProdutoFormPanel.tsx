@@ -11,6 +11,7 @@ import {
 } from '../../utils/estoque';
 import { saveProdutoDeEstoque } from '../../services/databaseService';
 import { SidePanel } from '../common/SidePanel';
+import { CampoComSugestoes } from '../common/CampoComLista';
 import {
   AvisoTinta,
   BotaoPrincipal,
@@ -235,26 +236,22 @@ export const ProdutoFormPanel: React.FC<ProdutoFormPanelProps> = ({
           </CampoTinta>
         </div>
 
-        <CampoTinta
+        <CampoComSugestoes
+          id="produto-tipo"
           rotulo="Tipo de produto"
-          htmlFor="produto-tipo"
-          ajuda="O que ele é, qualquer que seja o nome ou a marca — o estoque soma a quantidade por tipo. Ex.: dois ácidos hialurônicos de marcas diferentes, um tipo só."
+          valor={tipo}
+          onMudar={setTipo}
+          sugestoes={tiposSugeridos}
+          placeholder="Ex: Ácido hialurônico"
+          rotuloDoNovo={(t) => `Usar “${t}” como tipo novo`}
+          placeholderDaBusca="Buscar ou digitar um tipo"
+          vazio="Nenhum tipo com esse nome ainda."
         >
-          <input
-            id="produto-tipo"
-            list="produto-tipos-sugeridos"
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value)}
-            placeholder="Ex: Ácido hialurônico"
-            autoComplete="off"
-            className={INPUT_TINTA}
-          />
-          <datalist id="produto-tipos-sugeridos">
-            {tiposSugeridos.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
-        </CampoTinta>
+          <p className="mt-1 px-1 text-[13px] text-ink-soft leading-snug">
+            O que ele é, qualquer que seja o nome ou a marca — o estoque soma a quantidade por tipo.
+            Ex.: dois ácidos hialurônicos de marcas diferentes, um tipo só.
+          </p>
+        </CampoComSugestoes>
 
         <div>
           <RotuloTinta>Unidade de uso</RotuloTinta>

@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Plus, Scan } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Plus, Scan } from 'lucide-react';
 import { AreaDoProcedimento, Procedure } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import { precoDaArea, procedimentoTemMapa } from '../../utils/laserAreas';
+import { EscolhaNaJanela, OpcaoDaLista, opcaoCombina } from '../common/JanelaDeEscolha';
 
 interface ProcedureSearchAddProps {
   procedures: Procedure[];
@@ -27,11 +28,8 @@ interface ProcedureSearchAddProps {
   grande?: boolean;
 }
 
-/** Um procedimento na busca e, quando o termo casa com elas, as áreas dele. */
-interface EntradaDaBusca {
-  proc: Procedure;
-  areas: AreaDoProcedimento[];
-}
+/** O que cada linha da janela faz — vai no `valor` da opção, em JSON. */
+type Escolha = ['procedimento', string] | ['mapa', string] | ['area', string, string];
 
 /**
  * Botão que abre a busca no catálogo para acrescentar um procedimento. Diferente do
@@ -41,6 +39,8 @@ interface EntradaDaBusca {
  * A exceção é o procedimento vendido por área: escolher ele abre o mapa, e cada área entra uma
  * vez só (ver `addArea` em `useOrcamentoEmEdicao`) — "Axilas" duas vezes seria cobrar axilas duas
  * vezes.
+ *
+ * A busca abre na janela de escolha, no meio da tela (ver `JanelaDeEscolha`).
  */
 export const ProcedureSearchAdd: React.FC<ProcedureSearchAddProps> = ({
   procedures,
@@ -51,57 +51,77 @@ export const ProcedureSearchAdd: React.FC<ProcedureSearchAddProps> = ({
   grande = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const botaoRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    inputRef.current?.focus();
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
-
-  const grouped = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    const groups: Record<string, EntradaDaBusca[]> = {};
+  const opcoesDaBusca = (busca: string): OpcaoDaLista[] => {
+    const comBusca = !!busca.trim();
+    const lista: OpcaoDaLista[] = [];
     procedures.forEach((p) => {
+      const grupo = p.category || 'Sem categoria';
       const temMapa = procedimentoTemMapa(p);
-      // Com busca, as áreas que casam com o termo aparecem embaixo do procedimento, para entrar
-      // direto; sem busca, o procedimento basta — é o mapa que lista as áreas.
-      const areas = temMapa && term
-        ? (p.areasDoMapa || []).filter((a) => a.nome.toLowerCase().includes(term))
-        : [];
-      const casa =
-        !term ||
-        p.title.toLowerCase().includes(term) ||
-        p.category.toLowerCase().includes(term) ||
-        areas.length > 0;
-      if (!casa) return;
-      if (!groups[p.category]) groups[p.category] = [];
-      groups[p.category].push({ proc: p, areas });
-    });
-    return groups;
-  }, [procedures, searchTerm]);
+      // Com busca, as áreas que casam com ela aparecem embaixo do procedimento, para entrar
+      // direto; sem busca, o procedimento basta — é o mapa que lista as áreas. "laser axila"
+      // acha a área: as palavras valem no nome dela e no do procedimento juntos.
+      const areas =
+        temMapa && comBusca
+          ? (p.areasDoMapa || []).filter((a) => opcaoCombina({ rotulo: `${a.nome} ${p.title}`, grupo }, busca))
+          : [];
+      if (comBusca && !opcaoCombina({ rotulo: p.title, grupo }, busca) && areas.length === 0) return;
 
-  const fechar = () => {
-    setSearchTerm('');
-    setIsOpen(false);
+      if (onAbrirMapa && temMapa) {
+        // Com cara própria: este não vira linha, abre o mapa.
+        const noOrcamento = (p.areasDoMapa || []).filter((a) => areasNoOrcamento?.has(a.id)).length;
+        lista.push({
+          valor: JSON.stringify(['mapa', p.id] as Escolha),
+          rotulo: p.title,
+          detalhe: 'Selecionar áreas no mapa',
+          lateral: noOrcamento > 0 ? `${noOrcamento} no orçamento` : undefined,
+          grupo,
+          icone: Scan,
+        });
+      } else {
+        lista.push({
+          valor: JSON.stringify(['procedimento', p.id] as Escolha),
+          rotulo: p.title,
+          lateral: formatBRL(p.promotionalPrice && p.promotionalPrice > 0 ? p.promotionalPrice : p.price),
+          grupo,
+          icone: Plus,
+        });
+      }
+
+      if (onAddArea) areas.forEach((area) =>
+        lista.push({
+          valor: JSON.stringify(['area', p.id, area.id] as Escolha),
+          rotulo: area.nome,
+          detalhe: areasNoOrcamento?.has(area.id) ? 'Já no orçamento' : undefined,
+          lateral: formatBRL(precoDaArea(area)),
+          grupo,
+          icone: Plus,
+          recuo: true,
+        })
+      );
+    });
+    return lista;
+  };
+
+  const escolher = (o: OpcaoDaLista) => {
+    const escolha = JSON.parse(o.valor) as Escolha;
+    const proc = procedures.find((p) => p.id === escolha[1]);
+    if (!proc) return;
+    if (escolha[0] === 'mapa') onAbrirMapa?.(proc);
+    else if (escolha[0] === 'area') {
+      const area = (proc.areasDoMapa || []).find((a) => a.id === escolha[2]);
+      if (area) onAddArea?.(proc, area);
+    } else onAdd(proc);
   };
 
   return (
-    <div ref={containerRef} className={grande ? 'relative w-full' : 'relative'}>
+    <div className={grande ? 'w-full' : undefined}>
       <button
+        ref={botaoRef}
         type="button"
-        onClick={() => {
-          setSearchTerm('');
-          setIsOpen((v) => !v);
-        }}
+        onClick={() => setIsOpen(true)}
+        aria-haspopup="dialog"
         aria-expanded={isOpen}
         className={
           grande
@@ -114,119 +134,15 @@ export const ProcedureSearchAdd: React.FC<ProcedureSearchAddProps> = ({
       </button>
 
       {isOpen && (
-        <div className="absolute z-30 mt-1 w-[min(380px,80vw)] bg-white rounded-sm border border-gray-200 shadow-xl overflow-hidden">
-          <div className="p-2.5 border-b border-gray-100">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar no catálogo..."
-                className="w-full pl-8 pr-3 py-1.5 rounded-xs bg-gray-50 border border-gray-200 text-xs text-ink focus:outline-hidden focus:border-brand"
-              />
-            </div>
-          </div>
-
-          <div className="max-h-72 overflow-y-auto">
-            {Object.keys(grouped).length === 0 ? (
-              <p className="text-center text-xs text-gray-400 py-5">
-                Nenhum procedimento encontrado.
-              </p>
-            ) : (
-              (Object.entries(grouped) as [string, EntradaDaBusca[]][]).map(([category, entradas]) => (
-                <div key={category}>
-                  <div className="px-3 py-1.5 bg-gray-50 text-label font-semibold uppercase tracking-wider text-gray-400 sticky top-0">
-                    {category}
-                  </div>
-
-                  {entradas.map(({ proc, areas }) => {
-                    const abreMapa = !!onAbrirMapa && procedimentoTemMapa(proc);
-                    const noOrcamento = abreMapa
-                      ? (proc.areasDoMapa || []).filter((a) => areasNoOrcamento?.has(a.id)).length
-                      : 0;
-                    return (
-                      <React.Fragment key={proc.id}>
-                        {abreMapa ? (
-                          /* Com cara própria: este não vira linha, abre o mapa. */
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onAbrirMapa!(proc);
-                              fechar();
-                            }}
-                            className="w-full text-left px-3 py-2.5 bg-[#FDF3F7] hover:bg-[#FBE7F0] border-b border-[#F3C6DC] transition-colors flex items-center justify-between gap-3"
-                          >
-                            <span className="min-w-0">
-                              <span className="block text-xs font-semibold text-[#8E1A54] truncate">
-                                {proc.title}
-                              </span>
-                              <span className="text-body text-[#8E1A54]/80 flex items-center gap-1">
-                                <Scan className="w-3 h-3 shrink-0" />
-                                Selecionar áreas no mapa
-                              </span>
-                            </span>
-                            {noOrcamento > 0 && (
-                              <span className="text-body text-[#8E1A54] shrink-0 tabular-nums">
-                                {noOrcamento} no orçamento
-                              </span>
-                            )}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onAdd(proc);
-                              fechar();
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-surface transition-colors flex items-center justify-between gap-3 group"
-                          >
-                            <span className="text-xs text-ink truncate flex items-center gap-1.5">
-                              <Plus className="w-3 h-3 text-brand opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                              {proc.title}
-                            </span>
-                            <span className="text-body text-gray-400 shrink-0 tabular-nums">
-                              {formatBRL(
-                                proc.promotionalPrice && proc.promotionalPrice > 0
-                                  ? proc.promotionalPrice
-                                  : proc.price
-                              )}
-                            </span>
-                          </button>
-                        )}
-
-                        {onAddArea &&
-                          areas.map((area) => (
-                            <button
-                              key={area.id}
-                              type="button"
-                              onClick={() => {
-                                onAddArea(proc, area);
-                                fechar();
-                              }}
-                              className="w-full text-left pl-7 pr-3 py-2 hover:bg-surface transition-colors flex items-center justify-between gap-3 group"
-                            >
-                              <span className="text-xs text-ink truncate flex items-center gap-1.5">
-                                <Plus className="w-3 h-3 text-brand opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                                {area.nome}
-                                {areasNoOrcamento?.has(area.id) && (
-                                  <span className="text-label text-ok">· no orçamento</span>
-                                )}
-                              </span>
-                              <span className="text-body text-gray-400 shrink-0 tabular-nums">
-                                {formatBRL(precoDaArea(area))}
-                              </span>
-                            </button>
-                          ))}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <EscolhaNaJanela
+          titulo="Adicionar procedimento"
+          opcoes={opcoesDaBusca}
+          onEscolher={escolher}
+          onFechar={() => setIsOpen(false)}
+          placeholderDaBusca="Buscar no catálogo…"
+          vazio="Nenhum procedimento encontrado."
+          origem={botaoRef}
+        />
       )}
     </div>
   );
