@@ -20,6 +20,7 @@ import { getProcedureDoctors } from '../utils/doctorHelpers';
 import { buildSingleProcedureWhatsAppUrl } from '../utils/exportHelpers';
 import { enquadramentoDaCapa } from '../utils/enquadramentoDaFoto';
 import { ClinicLogo } from './ClinicLogo';
+import { useEstiloDaMarca } from './documentos/MarcaDosDocumentos';
 import { FotoEnquadrada } from './FotoEnquadrada';
 
 const IMAGEM_PADRAO =
@@ -89,9 +90,10 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
     { icon: Calendar, label: 'Recomendação', value: procedure.sessionsRecommended, campo: 'recomendacao' },
     { icon: ShieldCheck, label: 'Downtime', value: procedure.recoveryTime, campo: 'downtime' },
   ].filter((s) => s.value);
+  const estiloDaMarca = useEstiloDaMarca();
 
   return (
-    <div id={id} className="font-sans">
+    <div id={id} className="font-sans" style={estiloDaMarca}>
       <div
         data-pdf-page="1"
         className="relative bg-surface text-ink overflow-hidden flex flex-col shadow-2xl"

@@ -20,15 +20,38 @@ export const ALTURA_RODAPE_PAGINACAO = 18;
 export const CONTENT_W = PAGE_W - PAD_X * 2;
 export const ALTURA_UTIL = PAGE_H - PAD_TOP - PAD_BOTTOM - ALTURA_RODAPE_PAGINACAO;
 
-export const BRONZE = '#A67C52';
-export const BRONZE_CLARO = '#C49B74';
+/*
+ * As cores da marca são variáveis CSS, e não hex: cada clínica escolhe a sua (ver
+ * `utils/marcaDosDocumentos.ts`), e a raiz da folha põe as variáveis dela. Sem escolha, valem o
+ * bronze e os cremes de sempre — os do tema (`--color-brand*`) ou o valor depois da vírgula.
+ * O html2canvas lê o estilo já calculado, com a variável resolvida.
+ *
+ * Por isso nenhuma destas pode ser concatenada com um alfa (`${BRONZE}33`) nem passada ao jsPDF ou
+ * a um canvas: lá não existe CSS para resolver a variável.
+ */
+export const BRONZE = 'var(--color-brand)';
+export const BRONZE_CLARO = 'var(--color-brand-light)';
+/** A cor da marca sobre o preto (as iniciais no quadrado preto do cabeçalho). */
+export const BRONZE_SOBRE_PRETO = 'var(--doc-sobre-escuro, #A67C52)';
+/** O filete sobre o preto (o bloco do total). */
+export const FILETE_SOBRE_PRETO = 'var(--doc-divisor-escuro, rgba(196,155,116,.35))';
 export const PRETO = '#1A1A1A';
 export const OFFWHITE = '#F9F8F6';
-export const CREME = '#F6EFE4';
+export const CREME = 'var(--doc-creme, #F6EFE4)';
+/** O zebrado das tabelas e o fundo da linha de total — tintas da cor da marca. */
+export const BEGE_DA_LINHA = 'var(--doc-bege-linha, #F4F0EA)';
+export const BEGE_DO_TOTAL = 'var(--doc-bege-total, #EEE6DB)';
 export const HAIRLINE = '#E2DFD8';
 export const CINZA = '#6B6862';
 export const CINZA_CLARO = '#8A857C';
 export const TEXTO_DETALHE = '#3A3833';
+
+/**
+ * Hífen que não quebra linha (U+2011) nos números dos documentos ("2026‑0042"). O html2canvas desenha
+ * cada trecho entre pontos de quebra separado, e no hífen comum isso abria um vão no PDF ("2026 -0042")
+ * — visível nas fontes sem serifa que a clínica pode escolher.
+ */
+export const semQuebra = (texto: string): string => texto.replace(/-/g, '\u2011');
 
 /** ISO ou "YYYY-MM-DD" → "15/10/2026". */
 export const dataCurta = (valor?: string): string => {

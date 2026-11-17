@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Ban, Building2, Loader2, LogOut, PlayCircle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Ban, Building2, Loader2, LogOut, PlayCircle, RefreshCw, RotateCcw, Trash2, XCircle } from 'lucide-react';
 import {
+  apagarDadosDaClinica,
+  desfazerEncerramentoDaClinica,
+  encerrarContaDaClinica,
   listarClinicasDoDono,
   mensagemDoDono,
   mudarPlanoDaClinica,
@@ -78,18 +81,95 @@ const Uso: React.FC<{ rotulo: string; valor: number; limite: number | null; alar
   );
 };
 
+const dataCurtaDoDono = (iso: string): string =>
+  new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+
+/** O prazo dos 90 dias já correu: os dados podem (e devem) ser apagados. */
+const prazoVenceu = (c: ClinicaParaODono): boolean =>
+  !!c.encerramento && c.encerramento.apagarAPartirDe <= new Date().toISOString();
+
+/**
+ * A conta encerrada: o aviso dos prazos, o "desfazer" (dentro dos 90 dias) e o "apagar de vez" (depois
+ * deles), que pede o id da clínica digitado — apagar não tem volta.
+ */
+const ContaEncerrada: React.FC<{
+  clinica: ClinicaParaODono;
+  ocupado: boolean;
+  onDesfazer: (c: ClinicaParaODono) => void;
+  onApagar: (c: ClinicaParaODono, confirmacao: string) => void;
+}> = ({ clinica: c, ocupado, onDesfazer, onApagar }) => {
+  const [confirmacao, setConfirmacao] = useState('');
+  const enc = c.encerramento!;
+  const venceu = prazoVenceu(c);
+  return (
+    <div className="mt-4 rounded-2xl bg-surface-2 p-3.5 space-y-3">
+      <p className="text-[13px] text-ink leading-snug">
+        Encerrada em <strong>{dataCurtaDoDono(enc.em)}</strong>
+        {enc.por ? ` por ${enc.por}` : ''}. Os dados ficam guardados até{' '}
+        <strong>{dataCurtaDoDono(enc.apagarAPartirDe)}</strong> para a clínica pedir a cópia;{' '}
+        {venceu ? (
+          <span className="text-red-700 font-semibold">
+            o prazo correu — apague até {dataCurtaDoDono(enc.apagarAte)}, como os Termos prometem.
+          </span>
+        ) : (
+          'depois disso, apague aqui.'
+        )}
+      </p>
+      <div className="flex flex-col sm:flex-row gap-2">
+        {!venceu && (
+          <button
+            type="button"
+            disabled={ocupado}
+            onClick={() => onDesfazer(c)}
+            className="h-[42px] px-4 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-1.5 border border-emerald-300 text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
+          >
+            {ocupado ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+            Desfazer o encerramento
+          </button>
+        )}
+        {venceu && (
+          <>
+            <label className="flex-1 min-w-0">
+              <span className="sr-only">Digite {c.id} para confirmar</span>
+              <input
+                value={confirmacao}
+                onChange={(e) => setConfirmacao(e.target.value.trim())}
+                placeholder={`Digite ${c.id} para confirmar`}
+                className="w-full h-[42px] px-3 rounded-xl border border-red-200 bg-white text-[13.5px] text-ink"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={ocupado || confirmacao !== c.id}
+              onClick={() => onApagar(c, confirmacao)}
+              className="h-[42px] px-4 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-1.5 bg-red-700 text-white hover:bg-red-800 disabled:opacity-50"
+            >
+              {ocupado ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Apagar os dados de vez
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const CartaoDaClinica: React.FC<{
   clinica: ClinicaParaODono;
   ocupado: boolean;
   onPlano: (c: ClinicaParaODono, opcao: OpcaoDePlano) => void;
   onSituacao: (c: ClinicaParaODono) => void;
-}> = ({ clinica: c, ocupado, onPlano, onSituacao }) => {
+  onEncerrar: (c: ClinicaParaODono) => void;
+  onDesfazer: (c: ClinicaParaODono) => void;
+  onApagar: (c: ClinicaParaODono, confirmacao: string) => void;
+}> = ({ clinica: c, ocupado, onPlano, onSituacao, onEncerrar, onDesfazer, onApagar }) => {
   const gratuito = c.plano === 'gratuito';
   const suspensa = c.situacao === 'suspensa';
+  const encerrada = c.situacao === 'encerrada';
   return (
     <li
       data-clinica={c.id}
-      className={`rounded-3xl bg-white p-4 sm:p-5 shadow-[0_3px_14px_rgba(0,0,0,.04)] border ${suspensa ? 'border-red-200' : 'border-transparent'}`}
+      className={`rounded-3xl bg-white p-4 sm:p-5 shadow-[0_3px_14px_rgba(0,0,0,.04)] border ${suspensa || encerrada ? 'border-red-200' : 'border-transparent'}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -101,6 +181,7 @@ const CartaoDaClinica: React.FC<{
         </div>
         <div className="flex flex-wrap gap-1.5">
           {suspensa && <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-800">Suspensa</span>}
+          {encerrada && <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-800">Encerrada</span>}
           {!c.aceiteEmDia && (
             <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800">Termos pendentes</span>
           )}
@@ -128,6 +209,9 @@ const CartaoDaClinica: React.FC<{
         </span>
       </div>
 
+      {encerrada && c.encerramento ? (
+        <ContaEncerrada clinica={c} ocupado={ocupado} onDesfazer={onDesfazer} onApagar={onApagar} />
+      ) : (
       <div className="mt-4 flex flex-col sm:flex-row gap-2">
         <label className="flex-1 flex items-center gap-2 text-[13px] text-ink-soft">
           <span className="shrink-0">Plano</span>
@@ -152,7 +236,17 @@ const CartaoDaClinica: React.FC<{
           {ocupado ? <Loader2 className="w-4 h-4 animate-spin" /> : suspensa ? <PlayCircle className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
           {suspensa ? 'Reativar' : 'Suspender'}
         </button>
+        <button
+          type="button"
+          disabled={ocupado}
+          onClick={() => onEncerrar(c)}
+          className="h-[42px] px-4 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-1.5 text-red-700 hover:bg-red-50 disabled:opacity-60"
+        >
+          <XCircle className="w-4 h-4" />
+          Encerrar a conta
+        </button>
       </div>
+      )}
     </li>
   );
 };
@@ -181,13 +275,13 @@ export const PainelDoDono: React.FC<{ email: string | null; onSair: () => void }
     void carregar();
   }, [carregar]);
 
-  const executar = async (clinica: ClinicaParaODono, acao: () => Promise<unknown>, feito: string) => {
+  const executar = async <T,>(clinica: ClinicaParaODono, acao: () => Promise<T>, feito: string | ((resultado: T) => string)) => {
     setOcupada(clinica.id);
     setErro(null);
     setAviso(null);
     try {
-      await acao();
-      setAviso(feito);
+      const resultado = await acao();
+      setAviso(typeof feito === 'function' ? feito(resultado) : feito);
       await carregar();
     } catch (e) {
       setErro(mensagemDoDono(e));
@@ -237,7 +331,46 @@ export const PainelDoDono: React.FC<{ email: string | null; onSair: () => void }
     });
   };
 
+  const pedirEncerramento = (c: ClinicaParaODono) => {
+    setConfirmacao({
+      titulo: `Encerrar a conta de ${c.nome}?`,
+      mensagem:
+        'Use quando a clínica pedir o fim da conta — de preferência depois de a administradora baixar a cópia dos dados (Ajustes → Dados e privacidade). Os logins da equipe deixam de entrar na hora. Os dados ficam guardados por 90 dias: se ela pedir a cópia nesse prazo, desfaça o encerramento para ela baixar e encerre de novo. Passados os 90 dias, os dados são apagados aqui.',
+      textoConfirmar: 'Encerrar a conta',
+      tom: 'perigo',
+      onConfirmar: () =>
+        void executar(c, () => encerrarContaDaClinica(c.id), `${c.nome}: conta encerrada. Os dados ficam guardados por 90 dias.`),
+    });
+  };
+
+  const pedirDesfazer = (c: ClinicaParaODono) => {
+    setConfirmacao({
+      titulo: `Desfazer o encerramento de ${c.nome}?`,
+      mensagem: 'A conta volta ativa, e os logins que o encerramento desligou voltam a entrar.',
+      textoConfirmar: 'Desfazer',
+      tom: 'neutro',
+      onConfirmar: () => void executar(c, () => desfazerEncerramentoDaClinica(c.id), `${c.nome}: conta reativada.`),
+    });
+  };
+
+  const pedirApagar = (c: ClinicaParaODono, digitado: string) => {
+    setConfirmacao({
+      titulo: `Apagar de vez os dados de ${c.nome}?`,
+      mensagem:
+        'Saem todas as pacientes, fichas, fotos, orçamentos, a agenda e os logins da clínica. Não tem volta. Fica só um registro com o nome e as datas, como prova da eliminação.',
+      textoConfirmar: 'Apagar de vez',
+      tom: 'perigo',
+      onConfirmar: () =>
+        void executar(
+          c,
+          () => apagarDadosDaClinica(c.id, digitado),
+          (r) => `${c.nome}: dados apagados (${r.arquivos} arquivos e ${r.logins} logins).`
+        ),
+    });
+  };
+
   const t = dados?.totais;
+  const vencidas = dados?.clinicas.filter(prazoVenceu) || [];
   return (
     <div className="min-h-screen bg-surface">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
@@ -280,6 +413,17 @@ export const PainelDoDono: React.FC<{ email: string | null; onSair: () => void }
           </p>
         )}
 
+        {vencidas.length > 0 && (
+          <p role="alert" className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[13px] flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              {vencidas.length === 1 ? 'Uma clínica encerrada já passou' : `${vencidas.length} clínicas encerradas já passaram`} dos 90
+              dias de guarda: {vencidas.map((c) => c.nome).join(', ')}. Os Termos prometem apagar os dados em até 30 dias depois
+              disso — use "Apagar os dados de vez" no cartão.
+            </span>
+          </p>
+        )}
+
         {t && (
           <section aria-label="Totais" className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
             <Numero rotulo="Clínicas" valor={t.clinicas} destaque />
@@ -287,6 +431,7 @@ export const PainelDoDono: React.FC<{ email: string | null; onSair: () => void }
             <Numero rotulo="Cortesia" valor={t.cortesia} />
             <Numero rotulo="Gratuito" valor={t.gratuito} />
             <Numero rotulo="Suspensas" valor={t.suspensas} />
+            <Numero rotulo="Encerradas" valor={t.encerradas ?? 0} />
             <Numero rotulo="Clientes" valor={t.clientes} />
             <Numero rotulo="Procedimentos" valor={t.procedimentos} />
             <Numero rotulo="Logins" valor={t.logins} />
@@ -305,7 +450,16 @@ export const PainelDoDono: React.FC<{ email: string | null; onSair: () => void }
         ) : (
           <ul className="space-y-3">
             {dados?.clinicas.map((c) => (
-              <CartaoDaClinica key={c.id} clinica={c} ocupado={ocupada === c.id} onPlano={pedirPlano} onSituacao={pedirSituacao} />
+              <CartaoDaClinica
+                key={c.id}
+                clinica={c}
+                ocupado={ocupada === c.id}
+                onPlano={pedirPlano}
+                onSituacao={pedirSituacao}
+                onEncerrar={pedirEncerramento}
+                onDesfazer={pedirDesfazer}
+                onApagar={pedirApagar}
+              />
             ))}
           </ul>
         )}

@@ -4,8 +4,11 @@ import { clinicMonogram } from '../ClinicLogo';
 import { PaginaDoComprovante } from '../quotes/usePaginasDoComprovante';
 import {
   ALTURA_UTIL,
+  BEGE_DA_LINHA,
+  BEGE_DO_TOTAL,
   BRONZE,
   BRONZE_CLARO,
+  BRONZE_SOBRE_PRETO,
   CINZA,
   CONTENT_W,
   CREME,
@@ -19,6 +22,8 @@ import {
   estiloDoNumeroDaPagina,
   estiloDoRotulo,
 } from '../documentos/estiloA4';
+import { LogoDaFolha, useEstiloDaMarca, useMarcaDosDocumentos } from '../documentos/MarcaDosDocumentos';
+import { esperarFontesDosDocumentos } from '../../utils/marcaDosDocumentos';
 import {
   NOME_FORMA_DO_RECIBO,
   comMaiuscula,
@@ -55,9 +60,8 @@ const MARGEM_DO_RECIBO = 20 * MM;
  */
 type Densidade = 0 | 1 | 2;
 
-/** O bege das linhas pares e do total da tabela. */
-const BEGE_DA_LINHA = '#F4F0EA';
-const BEGE_DO_TOTAL = '#EEE6DB';
+/* O bege das linhas pares e do total da tabela: BEGE_DA_LINHA e BEGE_DO_TOTAL, de estiloA4 —
+   tintas da cor da clínica. */
 /** Largura das colunas de quantidade e valor; o procedimento fica com o resto. */
 const COLUNA_QTD = 120;
 const COLUNA_VALOR = 120;
@@ -73,16 +77,20 @@ const Cabecalho: React.FC<{ recibo: Recibo }> = ({ recibo }) => {
   const clinica = recibo.clinica;
   const { curto, complemento } = partesDoNomeDaClinica(clinica.name);
   const linhaDeBaixo = [clinica.tagline, clinica.cityState].filter(Boolean).join(' • ');
+  const { logoUrl } = useMarcaDosDocumentos();
   return (
     <div style={{ flexShrink: 0, marginTop: 14 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
+          {logoUrl ? (
+            <LogoDaFolha url={logoUrl} nome={clinica.name} altura={52} larguraMaxima={170} />
+          ) : (
           <div
             style={{
               width: 52,
               height: 52,
               background: PRETO,
-              color: BRONZE,
+              color: BRONZE_SOBRE_PRETO,
               fontFamily: 'var(--font-serif)',
               fontSize: 18,
               letterSpacing: '.06em',
@@ -94,6 +102,7 @@ const Cabecalho: React.FC<{ recibo: Recibo }> = ({ recibo }) => {
           >
             {clinicMonogram(clinica.name)}
           </div>
+          )}
           <div style={{ minWidth: 0 }}>
             <div style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: PRETO, lineHeight: 1.1 }}>
               {curto}
@@ -118,7 +127,7 @@ const Cabecalho: React.FC<{ recibo: Recibo }> = ({ recibo }) => {
         <div style={{ textAlign: 'right', flexShrink: 0, whiteSpace: 'nowrap' }}>
           <div style={rotuloPequeno}>Recibo</div>
           <div style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: PRETO, lineHeight: 1.25, marginTop: 2 }}>
-            Nº {recibo.numero}
+            Nº {semQuebra(recibo.numero)}
           </div>
           <div style={{ fontSize: 10.5, color: CINZA, marginTop: 1 }}>Emitido em {dataCurta(recibo.createdAt)}</div>
         </div>
@@ -133,7 +142,7 @@ const CabecalhoCompacto: React.FC<{ recibo: Recibo }> = ({ recibo }) => (
   <div style={{ flexShrink: 0 }}>
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
       <div style={{ fontFamily: 'var(--font-serif)', fontSize: 15, color: PRETO }}>
-        Nota de recibo Nº {recibo.numero}
+        Nota de recibo Nº {semQuebra(recibo.numero)}
       </div>
       <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.14em', color: CINZA }}>
         {recibo.pacienteNome}
@@ -173,7 +182,7 @@ const Destaque: React.FC<{ recibo: Recibo; densidade: Densidade }> = ({ recibo, 
         }}
       >
         <div>
-          <div style={rotuloPequeno}>Valor recebido</div>
+          <div style={{ ...rotuloPequeno, color: BRONZE_SOBRE_PRETO }}>Valor recebido</div>
           <div style={{ fontFamily: 'var(--font-serif)', fontSize: 34, lineHeight: 1.15, marginTop: 6 }}>
             {formatBRL(recibo.valor)}
           </div>
@@ -439,7 +448,9 @@ export const paginasDoRecibo = (folhasDoComprovante: number): number => 1 + folh
  */
 export const PaginasDoRecibo: React.FC<PaginasDoReciboProps> = (props) => {
   // Recibo novo (ou editado) começa de novo do desenho normal, e a medição decide.
-  const versao = `${props.recibo.id}|${props.recibo.updatedAt || ''}|${props.recibo.createdAt}`;
+  // A fonte da clínica também: outra fonte, outra medida.
+  const { fontes } = useMarcaDosDocumentos();
+  const versao = `${props.recibo.id}|${props.recibo.updatedAt || ''}|${props.recibo.createdAt}|${fontes || ''}`;
   return <PaginasDoReciboMedidas key={versao} {...props} />;
 };
 
@@ -450,6 +461,10 @@ const PaginasDoReciboMedidas: React.FC<PaginasDoReciboProps> = ({
   totalDePaginas,
 }) => {
   const total = totalDePaginas ?? numeroInicial - 1 + paginasDoRecibo(folhasDoComprovante.length);
+  const { fontes } = useMarcaDosDocumentos();
+  // Cada folha leva a cor e as fontes da clínica: o recibo não tem uma raiz única (sai também
+  // dentro do PDF do orçamento, depois das folhas dele).
+  const estiloDaMarca = useEstiloDaMarca();
 
   /**
    * A folha mede a si mesma: se o conteúdo passou da altura do A4 (muitos itens, nomes longos),
@@ -462,7 +477,7 @@ const PaginasDoReciboMedidas: React.FC<PaginasDoReciboProps> = ({
   useEffect(() => {
     let cancelado = false;
     (async () => {
-      if (document.fonts) await document.fonts.ready;
+      await esperarFontesDosDocumentos(fontes);
       const pagina = paginaRef.current;
       if (cancelado || !pagina) return;
       if (pagina.scrollHeight > pagina.clientHeight + 1 && densidade < 2) {
@@ -484,7 +499,7 @@ const PaginasDoReciboMedidas: React.FC<PaginasDoReciboProps> = ({
       <div
         ref={paginaRef}
         data-pdf-page={numeroInicial}
-        style={{ ...estiloDaPagina, paddingLeft: MARGEM_DO_RECIBO, paddingRight: MARGEM_DO_RECIBO }}
+        style={{ ...estiloDaPagina, ...estiloDaMarca, paddingLeft: MARGEM_DO_RECIBO, paddingRight: MARGEM_DO_RECIBO }}
       >
         {/* A faixa preta no alto, de ponta a ponta — só na folha do recibo */}
         <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 26, background: PRETO }} />
@@ -530,7 +545,7 @@ const PaginasDoReciboMedidas: React.FC<PaginasDoReciboProps> = ({
         const escala = Math.min(CAIXA_COMPROVANTE_W / folha.largura, CAIXA_COMPROVANTE_H / folha.altura);
         const n = numeroInicial + 1 + i;
         return (
-          <div key={i} data-pdf-page={n} style={estiloDaPagina}>
+          <div key={i} data-pdf-page={n} style={{ ...estiloDaPagina, ...estiloDaMarca }}>
             <CabecalhoCompacto recibo={recibo} />
 
             <div style={{ textAlign: 'center' }}>

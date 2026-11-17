@@ -10,8 +10,9 @@ import {
   CheckCircle2,
   Paperclip,
 } from 'lucide-react';
-import { MapaDeAreasPublico, Quote } from '../../types';
-import { getQuoteById, getMapasDeAreasPublicos } from '../../services/databaseService';
+import { ClinicProfile, MapaDeAreasPublico, Quote } from '../../types';
+import { getClinicProfileOnce, getQuoteById, getMapasDeAreasPublicos } from '../../services/databaseService';
+import { ProvedorDaMarcaDosDocumentos } from '../documentos/MarcaDosDocumentos';
 import { formatBRL } from '../../utils/formatters';
 import {
   calcularOrcamento,
@@ -68,6 +69,16 @@ export const PublicQuoteEntry: React.FC = () => {
   useEffect(() => {
     if (!clinicaConhecida) return;
     void getMapasDeAreasPublicos().then(setMapasDeAreas).catch(() => {});
+  }, [clinicaConhecida]);
+  /**
+   * O perfil público da clínica, só pela cara dos documentos (cor, fontes e logo do PDF). Os dados
+   * do orçamento continuam vindo do retrato gravado nele (quote.clinica). Best-effort: sem ele,
+   * o PDF sai com a identidade padrão.
+   */
+  const [perfilPublico, setPerfilPublico] = useState<ClinicProfile | null>(null);
+  useEffect(() => {
+    if (!clinicaConhecida) return;
+    void getClinicProfileOnce().then(setPerfilPublico).catch(() => {});
   }, [clinicaConhecida]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -387,12 +398,14 @@ export const PublicQuoteEntry: React.FC = () => {
       </div>
 
       {mostrarPdf && (
-        <QuotePreviewModal
-          mapasDeAreas={mapasDeAreas}
-          quote={quote}
-          clinic={null}
-          onClose={() => setMostrarPdf(false)}
-        />
+        <ProvedorDaMarcaDosDocumentos perfil={perfilPublico}>
+          <QuotePreviewModal
+            mapasDeAreas={mapasDeAreas}
+            quote={quote}
+            clinic={null}
+            onClose={() => setMostrarPdf(false)}
+          />
+        </ProvedorDaMarcaDosDocumentos>
       )}
     </div>
   );

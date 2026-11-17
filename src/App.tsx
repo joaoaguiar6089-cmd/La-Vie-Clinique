@@ -10,6 +10,7 @@ import { PatientsModule } from './components/patients/PatientsModule';
 import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntry';
 import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { RecibosProvider } from './components/recibos/RecibosContext';
+import { ProvedorDaMarcaDosDocumentos } from './components/documentos/MarcaDosDocumentos';
 import { EvaluationsModule } from './components/evaluations/EvaluationsModule';
 import { EmissaoDeAvaliacao } from './components/evaluations/EmissaoDeAvaliacao';
 import { AcompanhamentoModule } from './components/acompanhamento/AcompanhamentoModule';
@@ -90,6 +91,7 @@ import {
   type User,
 } from './services/authService';
 import { useSincronizacaoGoogleAgenda } from './hooks/useSincronizacaoGoogleAgenda';
+import { avisarAcessoAoPainel } from './services/registroDeAcesso';
 import { firebaseConfig } from './lib/firebase';
 import { ehZulia } from './lib/projetoFirebase';
 import { gravarLocal, lerLocal } from './lib/estadoDaClinica';
@@ -254,6 +256,11 @@ function MainCatalogApp() {
   };
   /** O login é de alguém da equipe e o painel pode carregar os dados. */
   const painelLiberado = !!authUser && acessoAoPainel === 'liberado';
+
+  // O registro de acesso que a plataforma guarda por 6 meses (Marco Civil, art. 15): uma vez por aba.
+  useEffect(() => {
+    if (painelLiberado) avisarAcessoAoPainel(authUser);
+  }, [painelLiberado, authUser]);
 
   // Firebase Real-time Synchronization Status
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced');
@@ -939,7 +946,8 @@ function MainCatalogApp() {
     }
   };
 
-  const handleSaveClinic = async (updatedClinic: ClinicProfile) => {
+  /** Grava o perfil. Devolve o perfil salvo, ou `null` se falhou (o aviso de erro já foi mostrado). */
+  const handleSaveClinic = async (updatedClinic: ClinicProfile): Promise<ClinicProfile | null> => {
     const anterior = clinic;
     try {
       setSyncStatus('syncing');
@@ -952,7 +960,8 @@ function MainCatalogApp() {
       setClinic(clinicaSalva);
 
       setSyncStatus('synced');
-      showToast('Dados da clínica e equipe médica sincronizados no Firebase!');
+      showToast('Ajustes salvos.');
+      return clinicaSalva;
     } catch (err) {
       console.error('Error saving clinic to Firestore:', err);
       setSyncStatus('error');
@@ -965,6 +974,7 @@ function MainCatalogApp() {
           : 'Não foi possível salvar os dados da clínica. Tente novamente.',
         'erro'
       );
+      return null;
     }
   };
 
@@ -1064,6 +1074,8 @@ function MainCatalogApp() {
 
   return (
     // Notas de recibo: uma assinatura e um formulário para o painel inteiro — ver RecibosContext.
+    // A cor, as fontes e o logo da clínica nos PDFs — ver components/documentos/MarcaDosDocumentos.
+    <ProvedorDaMarcaDosDocumentos perfil={clinic}>
     <RecibosProvider clinic={clinic} pacientes={allPatients} procedimentos={procedures}>
       <div className="min-h-screen bg-surface text-ink sm:flex selection:bg-brand/25 selection:text-ink">
         {!aceiteEmDia && !aceiteAdiado && <AceiteDosDocumentosModal onFechar={() => setAceiteAdiado(true)} />}
@@ -1491,6 +1503,7 @@ function MainCatalogApp() {
         />
       </div>
     </RecibosProvider>
+    </ProvedorDaMarcaDosDocumentos>
   );
 }
 

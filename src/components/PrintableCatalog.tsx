@@ -7,6 +7,7 @@ import { getCatalogPrice, formatDiscountPercent } from '../utils/catalogPricing'
 import { getProcedureDoctors, getClinicDoctors } from '../utils/doctorHelpers';
 import { Sparkles, Clock, Home, ChevronRight, MessageCircle } from 'lucide-react';
 import { ClinicLogo } from './ClinicLogo';
+import { useEstiloDaMarca } from './documentos/MarcaDosDocumentos';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { enquadramentoDaCapa } from '../utils/enquadramentoDaFoto';
 import { FotoEnquadrada } from './FotoEnquadrada';
@@ -288,12 +289,18 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
     buildWhatsAppUrl(clinic.phone, 'Olá! Acessei o catálogo de procedimentos e gostaria de tirar dúvidas e agendar um horário.') ||
     (clinic.phone ? `https://wa.me/55${clinic.phone.replace(/\D/g, '')}` : 'https://wa.me/');
 
+  // A cor e as fontes da clínica (ver utils/marcaDosDocumentos.ts).
+  const estiloDaMarca = useEstiloDaMarca();
   const instagramUrl = clinic.instagram
     ? `https://instagram.com/${clinic.instagram.trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '')}`
     : 'https://instagram.com';
 
   return (
-    <div id="printable-catalog-root" className="w-full flex flex-col gap-10 items-start sm:items-center justify-center font-sans bg-line p-4 sm:p-8">
+    <div
+      id="printable-catalog-root"
+      className="w-full flex flex-col gap-10 items-start sm:items-center justify-center font-sans bg-line p-4 sm:p-8"
+      style={estiloDaMarca}
+    >
       {pages.map((page) => {
         if (page.isCover) {
           // ====================================================

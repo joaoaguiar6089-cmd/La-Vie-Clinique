@@ -17,7 +17,9 @@ import { QuestionFieldRenderer } from '../anamnesis/QuestionFieldRenderer';
 import { fotosDaSessao, perguntasDaAvaliacao } from '../../utils/evaluations';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
 import { formatDateOnly } from '../../utils/formatters';
-import { marcaDaClinica, nomeDaClinica } from '../../utils/marca';
+import { marcaDaClinica } from '../../utils/marca';
+import { IdentificacaoDaClinica } from '../documentos/IdentificacaoDaClinica';
+import { useEstiloDaMarca } from '../documentos/MarcaDosDocumentos';
 
 /** O que já se sabe da folha em branco emitida para uma paciente — sai impresso no lugar da linha. */
 export interface CabecalhoDaFicha {
@@ -60,6 +62,7 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
   onClose,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const estiloDaMarca = useEstiloDaMarca();
   const [gerandoPdf, setGerandoPdf] = useState(false);
   const rotulos = ROTULOS_DA_FICHA[tipo];
 
@@ -150,22 +153,12 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
         </div>
 
         {/* Documento */}
-        <div ref={contentRef} className="overflow-y-auto bg-white px-7 sm:px-10 py-8">
+        <div ref={contentRef} className="overflow-y-auto bg-white px-7 sm:px-10 py-8" style={estiloDaMarca}>
           <div className="flex items-start justify-between gap-6 mb-6 pb-4 border-b-2 border-ink">
-            <div>
-              <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-ink leading-tight">
-                {rotulos.curto} - {titulo} - {marcaDaClinica(clinicProfile)}
-              </h2>
-              <p className="text-xs font-semibold text-ink mt-1.5">
-                {nomeDaClinica(clinicProfile)}
-              </p>
-              <p className="text-xs text-gray-500 italic mt-0.5">
-                {clinicProfile.tagline || 'Excelência Médica e Estética Avançada'}
-              </p>
-              <p className="text-[11px] text-gray-500 mt-1">
-                {clinicProfile.address} • {clinicProfile.cityState} • Tel: {clinicProfile.phone}
-              </p>
-            </div>
+            <IdentificacaoDaClinica
+              titulo={<>{rotulos.curto} - {titulo} - {marcaDaClinica(clinicProfile)}</>}
+              clinicProfile={clinicProfile}
+            />
 
             <div className="text-right shrink-0">
               <span className="inline-block px-3 py-1 bg-gray-100 border border-gray-200 text-[10px] font-mono font-bold uppercase tracking-wider text-ink rounded-xs">

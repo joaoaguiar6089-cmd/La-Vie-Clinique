@@ -297,6 +297,9 @@ export interface AgendaSala {
   nome: string;
 }
 
+/** Os pares de fontes que a clínica escolhe para os documentos — ver `PARES_DE_FONTES`. */
+export type FontesDosDocumentos = 'classica' | 'editorial' | 'moderna' | 'delicada';
+
 export interface ClinicProfile {
   name: string;
   tagline: string;
@@ -324,6 +327,17 @@ export interface ClinicProfile {
    */
   publicBaseUrl?: string;
   logoUrl?: string;
+  /**
+   * A cor de destaque dos documentos (orçamento, recibo, fichas, catálogo), em `#RRGGBB`. Vazio ou
+   * ausente = o bronze de sempre. Gravada como string vazia, e não apagada, ao voltar ao padrão: o
+   * perfil é salvo com `merge`, e uma chave removida manteria a cor antiga no banco.
+   * Ver `utils/marcaDosDocumentos.ts`.
+   */
+  corDosDocumentos?: string;
+  /** O par de fontes dos documentos. Ausente = `classica` (a de sempre). */
+  fontesDosDocumentos?: FontesDosDocumentos;
+  /** O logo no cabeçalho dos documentos, no lugar das iniciais. Ausente = sim, quando há logo. */
+  logoNosDocumentos?: boolean;
   watermarkEnabled?: boolean;
   coverBannerUrl?: string;
   catalogWelcomeNote?: string;

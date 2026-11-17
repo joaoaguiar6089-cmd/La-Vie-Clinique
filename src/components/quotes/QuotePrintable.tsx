@@ -19,8 +19,10 @@ import { PaginaDoComprovante } from './usePaginasDoComprovante';
 import {
   ALTURA_UTIL,
   BRONZE,
+  BRONZE_SOBRE_PRETO,
   CINZA,
   CONTENT_W,
+  FILETE_SOBRE_PRETO,
   GAP,
   HAIRLINE,
   OFFWHITE,
@@ -30,7 +32,10 @@ import {
   TEXTO_DETALHE,
   dataCurta,
   estiloDaPagina,
+  semQuebra,
 } from '../documentos/estiloA4';
+import { LogoDaFolha, useEstiloDaMarca, useMarcaDosDocumentos } from '../documentos/MarcaDosDocumentos';
+import { esperarFontesDosDocumentos } from '../../utils/marcaDosDocumentos';
 import { clinicMonogram } from '../ClinicLogo';
 import { ehZulia } from '../../lib/projetoFirebase';
 
@@ -44,6 +49,34 @@ const Hairline: React.FC = () => (
   <div style={{ height: 1, background: HAIRLINE, flexShrink: 0 }} />
 );
 
+/**
+ * A marca no canto do cabeçalho: o logo da clínica, quando ela tem um e não desligou nos ajustes;
+ * senão o quadrado preto com as iniciais, como sempre foi.
+ */
+export const MarcaDoCabecalho: React.FC<{ nome?: string }> = ({ nome }) => {
+  const { logoUrl } = useMarcaDosDocumentos();
+  if (logoUrl) return <LogoDaFolha url={logoUrl} nome={nome} />;
+  return (
+    <div
+      style={{
+        width: 42,
+        height: 42,
+        background: PRETO,
+        color: BRONZE_SOBRE_PRETO,
+        fontFamily: 'var(--font-serif)',
+        fontSize: 15,
+        letterSpacing: '.06em',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      {ehZulia ? clinicMonogram(nome) : 'LV'}
+    </div>
+  );
+};
+
 const CabecalhoCompleto: React.FC<{ quote: Quote; clinic: QuoteClinicSnapshot }> = ({
   quote,
   clinic,
@@ -51,23 +84,7 @@ const CabecalhoCompleto: React.FC<{ quote: Quote; clinic: QuoteClinicSnapshot }>
   <div style={{ flexShrink: 0 }}>
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-        <div
-          style={{
-            width: 42,
-            height: 42,
-            background: PRETO,
-            color: BRONZE,
-            fontFamily: 'var(--font-serif)',
-            fontSize: 15,
-            letterSpacing: '.06em',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          {ehZulia ? clinicMonogram(clinic.name) : 'LV'}
-        </div>
+        <MarcaDoCabecalho nome={clinic.name} />
         <div>
           <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, color: PRETO, lineHeight: 1.1 }}>
             {clinic.name}
@@ -108,7 +125,7 @@ const CabecalhoCompleto: React.FC<{ quote: Quote; clinic: QuoteClinicSnapshot }>
             lineHeight: 1.25,
           }}
         >
-          Nº {quote.numero}
+          Nº {semQuebra(quote.numero)}
         </div>
         <div style={{ fontSize: 10, color: CINZA, fontVariantNumeric: 'tabular-nums' }}>
           Emitido em {dataCurta(quote.dataEmissao)}
@@ -134,7 +151,7 @@ const CabecalhoCompacto: React.FC<{ quote: Quote }> = ({ quote }) => (
           fontVariantNumeric: 'tabular-nums',
         }}
       >
-        Orçamento Nº {quote.numero}
+        Orçamento Nº {semQuebra(quote.numero)}
       </div>
       <div
         style={{
@@ -446,14 +463,14 @@ const RodapeValores: React.FC<{ quote: Quote }> = ({ quote }) => {
           </div>
         )}
 
-        <div style={{ height: 1, background: 'rgba(196,155,116,.35)', margin: '10px 0' }} />
+        <div style={{ height: 1, background: FILETE_SOBRE_PRETO, margin: '10px 0' }} />
 
         <div
           style={{
             fontSize: 8.5,
             textTransform: 'uppercase',
             letterSpacing: '.16em',
-            color: BRONZE,
+            color: BRONZE_SOBRE_PRETO,
           }}
         >
           Total
@@ -586,6 +603,8 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
 }) => {
   const [layout, setLayout] = useState<PaginaLayout[] | null>(null);
   const medicaoRef = useRef<HTMLDivElement>(null);
+  const marca = useMarcaDosDocumentos();
+  const estiloDaMarca = useEstiloDaMarca();
 
   /**
    * As áreas vendidas neste orçamento — o que as páginas do mapa pintam. `areaId` nos itens de
@@ -638,9 +657,9 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
     let cancelado = false;
 
     const medir = async () => {
-      // Sem as fontes carregadas, o Cormorant ainda não está aplicado e toda
-      // medição sai errada — daí a espera antes de ler as alturas
-      if (document.fonts) await document.fonts.ready;
+      // Sem as fontes carregadas, o Cormorant (ou a fonte que a clínica escolheu) ainda não está
+      // aplicado e toda medição sai errada — daí a espera antes de ler as alturas
+      await esperarFontesDosDocumentos(marca.fontes);
       if (cancelado) return;
 
       // Remedindo com as páginas na tela (o orçamento mudou), o passe de medição só volta ao DOM
@@ -679,7 +698,8 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
     return () => {
       cancelado = true;
     };
-  }, [quote, clinic]);
+    // A marca muda a altura dos blocos (outra fonte, o logo no lugar das iniciais): remede.
+  }, [quote, clinic, marca.fontes, marca.logoUrl]);
 
   useEffect(() => {
     if (layout && onReady) onReady();
@@ -711,7 +731,8 @@ export const QuotePrintable: React.FC<QuotePrintableProps> = ({
   const estiloPagina = estiloDaPagina;
 
   return (
-    <div>
+    // A cor e as fontes da clínica, como variáveis CSS que as folhas abaixo leem.
+    <div style={estiloDaMarca}>
       {/* Passe de medição: fora da tela, mas com layout real (visibility, não display) */}
       {!layout && (
         <div
