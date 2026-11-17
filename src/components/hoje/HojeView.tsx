@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ArrowRight,
   CalendarPlus,
-  ChevronRight,
   ClipboardCheck,
   ClipboardList,
   FilePlus2,
@@ -215,7 +214,7 @@ export const HojeView: React.FC<HojeViewProps> = ({
           onAbrirAgenda={() => onIrParaAgenda()}
         />
 
-        {/* Os atalhos, numa linha, na ordem do atendimento — o número diz o passo. */}
+        {/* Os atalhos, numa linha, na ordem do atendimento — as setas mostram a sequência. */}
         <nav aria-labelledby="hoje-atalhos">
           <h2 id="hoje-atalhos" className="sr-only">
             Atalhos, na ordem do atendimento
@@ -228,11 +227,8 @@ export const HojeView: React.FC<HojeViewProps> = ({
                   onClick={() => onIrPara(view)}
                   className="peca-no-relevo group w-full h-full rounded-[18px] sm:rounded-[22px] px-1 py-3 sm:p-3.5 lg:px-5 lg:py-3.5 flex flex-col lg:flex-row items-center gap-2 lg:gap-4 text-center lg:text-left"
                 >
-                  <span className="relative shrink-0 w-11 h-11 lg:w-[52px] lg:h-[52px] rounded-full bg-ink text-brand-pale flex items-center justify-center shadow-[0_8px_18px_-10px_rgba(26,26,26,.8)]">
+                  <span className="shrink-0 w-11 h-11 lg:w-[52px] lg:h-[52px] rounded-full bg-ink text-brand-pale flex items-center justify-center shadow-[0_8px_18px_-10px_rgba(26,26,26,.8)]">
                     <Icone className="w-5 h-5 lg:w-[22px] lg:h-[22px]" />
-                    <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-brand-light text-ink text-[11px] font-bold flex items-center justify-center tabular-nums ring-2 ring-[#FFFCF6]">
-                      {i + 1}
-                    </span>
                   </span>
                   <span className="min-w-0 max-w-full lg:flex-1">
                     <span className="block text-[12px] min-[400px]:text-[13px] sm:text-[15px] lg:text-[17px] font-bold text-ink truncate">
@@ -245,13 +241,13 @@ export const HojeView: React.FC<HojeViewProps> = ({
                     className="hidden lg:block w-[18px] h-[18px] shrink-0 text-brand-deep opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition"
                   />
                 </button>
-                {/* A emenda entre um passo e o seguinte. */}
+                {/* Seta indicando o próximo passo da sequência. */}
                 {i < SEQUENCIA.length - 1 && (
                   <span
                     aria-hidden
-                    className="hidden sm:flex absolute top-1/2 -translate-y-1/2 -right-[18px] lg:-right-[20px] z-10 w-6 h-6 rounded-full bg-[#FFFCF6] border border-white text-brand-deep items-center justify-center shadow-[0_2px_6px_rgba(110,73,36,.25)]"
+                    className="flex absolute top-[34px] sm:top-[36px] lg:top-1/2 -translate-y-1/2 -right-[14px] sm:-right-[18px] lg:-right-[20px] z-10 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-[#FFFCF6] border border-white text-brand-deep items-center justify-center shadow-[0_2px_6px_rgba(110,73,36,.25)] pointer-events-none"
                   >
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   </span>
                 )}
               </li>
