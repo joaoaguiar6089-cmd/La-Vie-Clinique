@@ -1,14 +1,8 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Attendance, ClinicProfile } from '../../types';
 import { DataISO, ehRealizado, nomeDosProcedimentos } from '../../utils/attendances';
-import {
-  deslocarDias,
-  deslocarMeses,
-  diasDoMesDe,
-  expedienteDoDia,
-  instanteNoDia,
-} from '../../utils/agenda';
+import { deslocarMeses, diasDoMesDe, expedienteDoDia, instanteNoDia } from '../../utils/agenda';
 
 /**
  * O calendário grande da tela Hoje — o mês inteiro da agenda, feito para ficar aberto na recepção.
@@ -24,8 +18,6 @@ interface AgendaDoMesProps {
   atendimentos: Attendance[];
   clinic: ClinicProfile;
   hoje: DataISO;
-  /** "14:05" — para o "próximo atendimento" não apontar para um horário que já passou. */
-  agora: string;
   onAbrirDia: (data: DataISO) => void;
   onAbrirAtendimento: (a: Attendance) => void;
   onAbrirAgenda: () => void;
@@ -91,7 +83,6 @@ export const AgendaDoMes: React.FC<AgendaDoMesProps> = ({
   atendimentos,
   clinic,
   hoje,
-  agora,
   onAbrirDia,
   onAbrirAtendimento,
   onAbrirAgenda,
@@ -124,33 +115,6 @@ export const AgendaDoMes: React.FC<AgendaDoMesProps> = ({
     mapa.forEach(doDia);
     return mapa;
   }, [atendimentos, dias]);
-
-  const quantosHoje = useMemo(
-    () => atendimentos.filter((a) => a.data === hoje && a.status !== 'remarcado').length,
-    [atendimentos, hoje]
-  );
-
-  /** O próximo horário marcado a partir de agora — hoje ou no próximo dia com agenda. */
-  const proximo = useMemo(() => {
-    let melhor: Attendance | undefined;
-    atendimentos.forEach((a) => {
-      if (a.status !== 'agendado' || !a.hora || !a.data) return;
-      if (a.data < hoje || (a.data === hoje && a.hora < agora)) return;
-      if (!melhor || a.data < melhor.data || (a.data === melhor.data && a.hora < (melhor.hora || ''))) {
-        melhor = a;
-      }
-    });
-    return melhor;
-  }, [atendimentos, hoje, agora]);
-
-  const quandoDoProximo = (a: Attendance): string => {
-    if (a.data === hoje) return a.hora || '';
-    if (a.data === deslocarDias(hoje, 1)) return `amanhã, ${a.hora}`;
-    const dia = aoMeioDia(a.data)
-      .toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })
-      .replace(/\./g, '');
-    return `${dia}, ${a.hora}`;
-  };
 
   // "Novembro 2026" — o ano vem sempre: na parede da recepção ninguém confere em que ano está.
   const nomeDoMes = aoMeioDia(referencia).toLocaleDateString('pt-BR', { month: 'long' });
@@ -191,7 +155,7 @@ export const AgendaDoMes: React.FC<AgendaDoMesProps> = ({
       aria-labelledby="hoje-agenda-titulo"
       className="vidro-no-relevo relative z-10 rounded-[26px] lg:rounded-[34px] p-3 sm:p-5 lg:px-6 flex flex-col lg:h-[calc(100dvh-244px)] lg:min-h-[580px]"
     >
-      {/* Cabeçalho: o mês, as setas e o resumo de hoje */}
+      {/* Cabeçalho: o mês e as setas; embaixo, o "Voltar a hoje" e o atalho para a agenda */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between px-1 sm:px-0">
         <div className="flex items-center gap-1.5 sm:gap-2">
           <button
@@ -217,36 +181,18 @@ export const AgendaDoMes: React.FC<AgendaDoMesProps> = ({
           >
             <ChevronRight className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* A faixa de baixo fica vazia no mês de hoje; ao passar de mês aparece nela o "Voltar a hoje".
+            No celular ela guarda a altura do botão, para a grade não pular ao trocar de mês. */}
+        <div className="flex items-center gap-2 min-h-10">
           {!noMesAtual && (
             <button
               type="button"
               onClick={() => setDeslocamento(0)}
-              className="ml-1 h-9 px-3.5 shrink-0 rounded-full bg-ink text-cream text-[13px] font-semibold hover:bg-black transition-colors"
+              className="inline-flex items-center h-10 px-4 shrink-0 rounded-full bg-ink text-cream text-[14px] font-semibold whitespace-nowrap hover:bg-black transition-colors animate-fadeIn"
             >
               Voltar a hoje
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-1 px-1">
-          <span className="inline-flex items-center gap-2 h-10 px-4 shrink-0 rounded-full bg-white/70 border border-white text-[14px] text-ink-soft whitespace-nowrap">
-            <CalendarDays className="w-4 h-4 text-brand-deep" aria-hidden />
-            Hoje:
-            <strong className="text-ink tabular-nums">
-              {quantosHoje} {quantosHoje === 1 ? 'atendimento' : 'atendimentos'}
-            </strong>
-          </span>
-          {proximo && (
-            <button
-              type="button"
-              onClick={() => onAbrirAtendimento(proximo)}
-              title={`${proximo.pacienteNome} · ${nomeDosProcedimentos(proximo)}`}
-              className="inline-flex items-center gap-2 h-10 px-4 shrink-0 rounded-full bg-white/70 border border-white text-[14px] text-ink-soft whitespace-nowrap hover:bg-white transition-colors"
-            >
-              <Clock className="w-4 h-4 text-brand-deep" aria-hidden />
-              Próximo:
-              <strong className="text-ink tabular-nums">{quandoDoProximo(proximo)}</strong>
-              <span className="text-ink">{nomeCurto(proximo.pacienteNome)}</span>
             </button>
           )}
           <button
