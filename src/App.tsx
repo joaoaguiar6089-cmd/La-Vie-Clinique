@@ -1306,7 +1306,12 @@ function MainCatalogApp() {
           </main>
 
           {/* Frosted Luxury Footer */}
-          <footer className="bg-ink text-line-soft border-t border-white/10 mt-16 transition-all">
+          {/* Na Hoje o relevo do fundo vai até o rodapé; o respiro fica por conta da própria tela. */}
+          <footer
+            className={`bg-ink text-line-soft border-t border-white/10 transition-all ${
+              currentView === 'hoje' ? '' : 'mt-16'
+            }`}
+          >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 pb-8 border-b border-white/10">
                 {/* Col 1: Brand */}

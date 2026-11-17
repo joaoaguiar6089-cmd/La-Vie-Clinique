@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ArrowRight,
   CalendarPlus,
-  ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
@@ -22,31 +22,22 @@ import {
   Professional,
   Quote,
 } from '../../types';
-import { hojeISO } from '../../utils/attendances';
-import {
-  diasComAtendimento,
-  diasDoMesDe,
-  deslocarMeses,
-  expedienteDoDia,
-} from '../../utils/agenda';
+import { agoraHHMM, hojeISO } from '../../utils/attendances';
 import { dataPorExtenso, saudacaoDaHora } from '../../utils/indicadores';
-import { BotaoRedondo, GatilhoDeBusca, MenuDeAcoes, TituloDaTela } from '../common/Tinta';
+import { BotaoRedondo, GatilhoDeBusca, MenuDeAcoes } from '../common/Tinta';
 import { AcaoDeCriacao } from '../BottomNav';
+import { AgendaDoMes } from './AgendaDoMes';
 import { LinhaDoTempoDaClinica } from './LinhaDoTempoDaClinica';
 import { AlvoDoPasso } from '../linhaDoTempo/PainelDoEvento';
 import { OrigemDaVisita } from '../../utils/passosDaJornada';
 
 /**
- * A tela inicial.
+ * A tela inicial — feita também para ficar aberta na recepção.
  *
- * Três coisas, nesta ordem: os atalhos para os documentos da paciente, na sequência em que o
- * atendimento acontece (orçamento, anamnese, avaliação, relatório); o calendário do mês, com
- * um ponto em cada dia que tem atendimento — tocar num dia abre a agenda nele —; e a linha do
- * tempo da clínica, para consulta.
- *
- * Os números do mês e a lista de pendências saíram daqui: o faturamento mora no Financeiro, e o
- * que está parado (orçamento por enviar, agendamento sem desfecho) aparece na própria tela onde
- * se resolve.
+ * O fundo é o mesmo relevo da tela de entrada, com as figuras de traço boiando. Por cima, em
+ * vidro fosco e nesta ordem: o calendário do mês, grande, com os horários de cada dia (ver
+ * `AgendaDoMes`); os atalhos para os documentos da paciente, numa linha só, na sequência em que o
+ * atendimento acontece (orçamento, anamnese, avaliação, relatório); e a linha do tempo da clínica.
  *
  * Tudo sai das coleções que o `App` já assina — nenhuma leitura nova, a não ser a da linha do
  * tempo, que lê só anamneses e avaliações dos últimos 30 dias.
@@ -72,6 +63,7 @@ interface HojeViewProps {
   /** Os passos do painel da linha do tempo que abrem em outra tela — ver `LinhaDoTempoDaClinica`. */
   onAgendar: (alvo: AlvoDoPasso & { professionalId?: string }) => void;
   onRegistrarVisita: (origem: OrigemDaVisita) => void;
+  /** Abre a agenda no dia do atendimento, já com ele aberto — o calendário e a linha do tempo usam. */
   onAbrirNaAgenda: (a: Attendance) => void;
   onNovaAnamnese: (alvo: AlvoDoPasso & { templateId?: string }) => void;
 }
@@ -84,133 +76,36 @@ const SEQUENCIA: { view: AppView; titulo: string; sub: string; icone: React.Elem
   { view: 'acompanhamento', titulo: 'Relatório', sub: 'Depois do atendimento', icone: NotebookPen },
 ];
 
-const DIAS_DA_SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
-
-// ==========================================
-// CALENDÁRIO DO MÊS
-// ==========================================
+/**
+ * As figuras de traço do login (`public/login/figura-N.webp`), aqui nas bordas: o calendário cobre
+ * o meio da tela, e o que passa por trás do vidro aparece borrado, como desenho na parede.
+ */
+const FIGURAS: { arquivo: number; classes: string; duracao: number; atraso: number }[] = [
+  { arquivo: 1, classes: 'left-[-5%] bottom-[-8%] h-[64vh] hidden md:block', duracao: 19, atraso: 0 },
+  { arquivo: 5, classes: 'right-[-3%] top-[2%] h-[44vh] hidden md:block', duracao: 23, atraso: -6 },
+  { arquivo: 4, classes: 'right-[4%] bottom-[-10%] h-[52vh] hidden lg:block', duracao: 21, atraso: -11 },
+  { arquivo: 3, classes: 'left-[44%] bottom-[-4%] h-[36vh] hidden xl:block', duracao: 25, atraso: -3 },
+];
 
 /**
- * O mês da agenda, só com o que responde "tem gente marcada?": um ponto em cada dia com
- * atendimento. O detalhe (quem, que horas) está a um toque — o dia abre a agenda nele.
+ * O relógio da tela. Deixada aberta o dia inteiro, ela precisa trocar sozinha o "Bom dia" pelo
+ * "Boa tarde", o próximo atendimento quando o horário passa e o dia à meia-noite. Acorda na virada
+ * de cada minuto, não a cada segundo: nada aqui mostra segundos.
  */
-const CalendarioDoMes: React.FC<{
-  atendimentos: Attendance[];
-  clinic: ClinicProfile;
-  hoje: string;
-  onEscolherDia: (data: string) => void;
-  onAbrir: () => void;
-}> = ({ atendimentos, clinic, hoje, onEscolherDia, onAbrir }) => {
-  /** Um dia qualquer do mês mostrado — o primeiro, para as setas nunca pularem mês. */
-  const [referencia, setReferencia] = useState(`${hoje.slice(0, 7)}-01`);
-
-  const dias = useMemo(() => diasDoMesDe(referencia), [referencia]);
-  const comAtendimento = useMemo(() => diasComAtendimento(atendimentos), [atendimentos]);
-  const mesDaReferencia = referencia.slice(0, 7);
-
-  // "Setembro"; o ano só entra quando não é o deste ano.
-  const mesPorExtenso = new Date(`${referencia}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long' });
-  const nomeDoMes =
-    referencia.slice(0, 4) === hoje.slice(0, 4) ? mesPorExtenso : `${mesPorExtenso} de ${referencia.slice(0, 4)}`;
-  const noMesAtual = mesDaReferencia === hoje.slice(0, 7);
-
-  return (
-    <section className="rounded-[24px] bg-card border border-ink/8 p-5 lg:p-6 flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="font-sans text-[18px] font-bold text-ink">Agenda</h2>
-        <button
-          type="button"
-          onClick={onAbrir}
-          className="text-[14px] font-semibold text-brand-hover hover:text-ink transition-colors"
-        >
-          Abrir →
-        </button>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 -my-1">
-        <button
-          type="button"
-          onClick={() => setReferencia((r) => deslocarMeses(r, -1))}
-          aria-label="Mês anterior"
-          className="w-10 h-10 rounded-full flex items-center justify-center text-ink hover:bg-line-soft transition-colors"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setReferencia(`${hoje.slice(0, 7)}-01`)}
-          disabled={noMesAtual}
-          title={noMesAtual ? undefined : 'Voltar para este mês'}
-          className="text-[15px] font-bold text-ink first-letter:uppercase disabled:cursor-default"
-        >
-          {nomeDoMes}
-        </button>
-        <button
-          type="button"
-          onClick={() => setReferencia((r) => deslocarMeses(r, 1))}
-          aria-label="Próximo mês"
-          className="w-10 h-10 rounded-full flex items-center justify-center text-ink hover:bg-line-soft transition-colors"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-7 gap-y-1 text-center" role="grid" aria-label={`Agenda de ${nomeDoMes}`}>
-        {DIAS_DA_SEMANA.map((d, i) => (
-          <span key={i} className="text-[12px] font-semibold text-muted pb-1" aria-hidden>
-            {d}
-          </span>
-        ))}
-        {dias.map((dia) => {
-          const doMes = dia.slice(0, 7) === mesDaReferencia;
-          const ehHoje = dia === hoje;
-          const temAtendimento = comAtendimento.has(dia);
-          const fechado = !expedienteDoDia(clinic, dia);
-          return (
-            <button
-              key={dia}
-              type="button"
-              onClick={() => onEscolherDia(dia)}
-              aria-label={`${new Date(`${dia}T12:00:00`).toLocaleDateString('pt-BR', {
-                day: 'numeric',
-                month: 'long',
-              })}${ehHoje ? ', hoje' : ''}${temAtendimento ? ', com atendimento' : ''}`}
-              className={`mx-auto w-full max-w-11 aspect-square rounded-full flex flex-col items-center justify-center gap-0.5 transition-colors ${
-                ehHoje
-                  ? 'bg-ink text-white'
-                  : doMes
-                  ? fechado
-                    ? 'text-muted hover:bg-line-soft'
-                    : 'text-ink hover:bg-line-soft'
-                  : 'text-[#BDB7AD] hover:bg-line-soft'
-              }`}
-            >
-              <span className={`text-[14px] tabular-nums leading-none ${ehHoje || temAtendimento ? 'font-bold' : 'font-medium'}`}>
-                {Number(dia.slice(8, 10))}
-              </span>
-              {/* O ponto fica no lugar mesmo sem atendimento, para os números não pularem. */}
-              <span
-                aria-hidden
-                className={`w-[5px] h-[5px] rounded-full ${
-                  temAtendimento ? (ehHoje ? 'bg-brand-light' : doMes ? 'bg-brand' : 'bg-brand/40') : 'bg-transparent'
-                }`}
-              />
-            </button>
-          );
-        })}
-      </div>
-
-      <p className="flex items-center gap-2 text-[13px] text-ink-soft">
-        <span aria-hidden className="w-[5px] h-[5px] rounded-full bg-brand" />
-        Dia com atendimento · toque para abrir a agenda nele
-      </p>
-    </section>
-  );
+const useMinutoAtual = (): void => {
+  const [, setTique] = useState(0);
+  useEffect(() => {
+    let id: number;
+    const agendar = () => {
+      id = window.setTimeout(() => {
+        setTique((t) => t + 1);
+        agendar();
+      }, 60_000 - (Date.now() % 60_000) + 50);
+    };
+    agendar();
+    return () => window.clearTimeout(id);
+  }, []);
 };
-
-// ==========================================
-// A TELA
-// ==========================================
 
 export const HojeView: React.FC<HojeViewProps> = ({
   clinic,
@@ -231,7 +126,9 @@ export const HojeView: React.FC<HojeViewProps> = ({
   onAbrirNaAgenda,
   onNovaAnamnese,
 }) => {
+  useMinutoAtual();
   const hoje = hojeISO();
+  const agora = agoraHHMM();
 
   const primeiroNome = (professionalLogada?.name || '')
     .replace(/^(Dra?\.?|Dr\.?)\s+/i, '')
@@ -248,12 +145,42 @@ export const HojeView: React.FC<HojeViewProps> = ({
   ];
 
   return (
-    <div className="max-w-6xl mx-auto px-5 sm:px-8 lg:px-10 pt-6 lg:pt-7 pb-6 flex flex-col gap-[18px] lg:gap-6">
-      <TituloDaTela
-        sobre={dataPorExtenso(hoje)}
-        titulo={`${saudacaoDaHora()}${primeiroNome ? `, ${primeiroNome}` : ''}`}
-        acao={
-          <>
+    <div className="relative min-h-dvh">
+      {/* O relevo do login, preso à tela enquanto o conteúdo rola por cima. É `sticky` (e não
+          `fixed`, que passaria por cima do menu lateral), e o conteúdo sobe sobre ele com margem
+          negativa; no fim da tela ele para junto com ela, sem cobrir o rodapé. */}
+      <div
+        aria-hidden="true"
+        className="sticky top-0 h-dvh overflow-hidden pointer-events-none select-none"
+      >
+        <div
+          className="absolute inset-0 bg-cream bg-cover bg-center"
+          style={{ backgroundImage: 'url(/login-fundo.webp)' }}
+        />
+        {FIGURAS.map((f, i) => (
+          <img
+            key={i}
+            src={`/login/figura-${f.arquivo}.webp`}
+            alt=""
+            className={`figura-flutuante absolute w-auto max-w-none ${f.classes}`}
+            style={{ animationDuration: `${f.duracao}s`, animationDelay: `${f.atraso}s` }}
+          />
+        ))}
+        <div className="absolute inset-0 bg-linear-to-b from-cream/15 via-transparent to-cream/45" />
+      </div>
+
+      <div className="relative -mt-[100dvh] max-w-[1680px] mx-auto px-4 sm:px-8 lg:px-10 pt-5 sm:pt-6 lg:pt-7 pb-10 lg:pb-14 flex flex-col gap-4 lg:gap-5">
+        <header className="flex items-center justify-between gap-3">
+          <div className="min-w-0 marca-em-relevo">
+            <p className="text-[14px] lg:text-[16px] font-semibold text-ink-soft first-letter:uppercase">
+              {dataPorExtenso(hoje)}
+            </p>
+            <h1 className="font-serif-luxury text-[34px] sm:text-[40px] lg:text-[48px] font-semibold leading-[1.05] text-ink break-words">
+              {saudacaoDaHora()}
+              {primeiroNome ? `, ${primeiroNome}` : ''}
+            </h1>
+          </div>
+          <div className="shrink-0 flex items-center gap-2">
             <BotaoRedondo
               icone={Search}
               rotulo="Buscar paciente, procedimento ou orçamento"
@@ -263,7 +190,7 @@ export const HojeView: React.FC<HojeViewProps> = ({
             <GatilhoDeBusca
               onClick={onAbrirBusca}
               texto="Buscar paciente, procedimento ou orçamento"
-              className="hidden sm:flex w-[260px] lg:w-[380px]"
+              className="hidden sm:flex w-[220px] md:w-[260px] lg:w-[380px]"
             />
             <span className="hidden sm:inline-flex">
               <MenuDeAcoes
@@ -273,69 +200,79 @@ export const HojeView: React.FC<HojeViewProps> = ({
                 gatilho={{ texto: 'Criar', icone: Plus }}
               />
             </span>
-          </>
-        }
-      />
-
-      <div className="flex flex-col gap-[18px] lg:grid lg:grid-cols-[1.6fr_1fr] lg:gap-5 lg:items-start">
-        {/* Os atalhos, na ordem do atendimento — o número diz o passo. */}
-        <section aria-labelledby="hoje-atalhos" className="flex flex-col gap-2.5">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 id="hoje-atalhos" className="font-sans text-[18px] font-bold text-ink">
-              Atalhos
-            </h2>
-            <span className="text-[13px] font-medium text-ink-soft">na ordem do atendimento</span>
           </div>
-          <ol className="grid grid-cols-2 gap-2.5 lg:gap-3">
-            {SEQUENCIA.map(({ view, titulo, sub, icone: Icone }, i) => (
-              <li key={view}>
-                <button
-                  type="button"
-                  onClick={() => onIrPara(view)}
-                  className="w-full h-full rounded-[20px] bg-card border border-ink/8 p-3.5 min-[400px]:p-4 lg:p-5 flex flex-col gap-3 lg:gap-6 text-left hover:border-ink/30 transition-colors group"
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="w-10 h-10 lg:w-11 lg:h-11 rounded-full bg-ink text-brand-pale flex items-center justify-center shrink-0">
-                      <Icone className="w-5 h-5" />
-                    </span>
-                    <span className="text-[13px] font-bold text-ink-soft tabular-nums">{i + 1}</span>
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[15px] min-[400px]:text-[16px] font-bold text-ink break-words group-hover:underline underline-offset-2">
-                      {titulo}
-                    </span>
-                    <span className="block text-[13px] text-ink-soft">{sub}</span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ol>
-        </section>
+        </header>
 
-        <CalendarioDoMes
+        <AgendaDoMes
           atendimentos={atendimentos}
           clinic={clinic}
           hoje={hoje}
-          onEscolherDia={(data) => onIrParaAgenda(data)}
-          onAbrir={() => onIrParaAgenda()}
+          agora={agora}
+          onAbrirDia={(data) => onIrParaAgenda(data)}
+          onAbrirAtendimento={onAbrirNaAgenda}
+          onAbrirAgenda={() => onIrParaAgenda()}
+        />
+
+        {/* Os atalhos, numa linha, na ordem do atendimento — o número diz o passo. */}
+        <nav aria-labelledby="hoje-atalhos">
+          <h2 id="hoje-atalhos" className="sr-only">
+            Atalhos, na ordem do atendimento
+          </h2>
+          <ol className="grid grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+            {SEQUENCIA.map(({ view, titulo, sub, icone: Icone }, i) => (
+              <li key={view} className="relative min-w-0">
+                <button
+                  type="button"
+                  onClick={() => onIrPara(view)}
+                  className="peca-no-relevo group w-full h-full rounded-[18px] sm:rounded-[22px] px-1 py-3 sm:p-3.5 lg:px-5 lg:py-3.5 flex flex-col lg:flex-row items-center gap-2 lg:gap-4 text-center lg:text-left"
+                >
+                  <span className="relative shrink-0 w-11 h-11 lg:w-[52px] lg:h-[52px] rounded-full bg-ink text-brand-pale flex items-center justify-center shadow-[0_8px_18px_-10px_rgba(26,26,26,.8)]">
+                    <Icone className="w-5 h-5 lg:w-[22px] lg:h-[22px]" />
+                    <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-brand-light text-ink text-[11px] font-bold flex items-center justify-center tabular-nums ring-2 ring-[#FFFCF6]">
+                      {i + 1}
+                    </span>
+                  </span>
+                  <span className="min-w-0 max-w-full lg:flex-1">
+                    <span className="block text-[12px] min-[400px]:text-[13px] sm:text-[15px] lg:text-[17px] font-bold text-ink truncate">
+                      {titulo}
+                    </span>
+                    <span className="hidden sm:block text-[13px] text-ink-soft truncate">{sub}</span>
+                  </span>
+                  <ArrowRight
+                    aria-hidden
+                    className="hidden lg:block w-[18px] h-[18px] shrink-0 text-brand-deep opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition"
+                  />
+                </button>
+                {/* A emenda entre um passo e o seguinte. */}
+                {i < SEQUENCIA.length - 1 && (
+                  <span
+                    aria-hidden
+                    className="hidden sm:flex absolute top-1/2 -translate-y-1/2 -right-[18px] lg:-right-[20px] z-10 w-6 h-6 rounded-full bg-[#FFFCF6] border border-white text-brand-deep items-center justify-center shadow-[0_2px_6px_rgba(110,73,36,.25)]"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </nav>
+
+        <LinhaDoTempoDaClinica
+          clinic={clinic}
+          catalogProcedures={catalogProcedures}
+          atendimentos={atendimentos}
+          pacientes={pacientes}
+          quotes={quotes}
+          templatesAnamnese={templatesAnamnese}
+          carregando={carregando}
+          professionalLogadaId={professionalLogada?.id}
+          onAbrirPaciente={onAbrirPaciente}
+          onAgendar={onAgendar}
+          onRegistrarVisita={onRegistrarVisita}
+          onAbrirNaAgenda={onAbrirNaAgenda}
+          onNovaAnamnese={onNovaAnamnese}
         />
       </div>
-
-      <LinhaDoTempoDaClinica
-        clinic={clinic}
-        catalogProcedures={catalogProcedures}
-        atendimentos={atendimentos}
-        pacientes={pacientes}
-        quotes={quotes}
-        templatesAnamnese={templatesAnamnese}
-        carregando={carregando}
-        professionalLogadaId={professionalLogada?.id}
-        onAbrirPaciente={onAbrirPaciente}
-        onAgendar={onAgendar}
-        onRegistrarVisita={onRegistrarVisita}
-        onAbrirNaAgenda={onAbrirNaAgenda}
-        onNovaAnamnese={onNovaAnamnese}
-      />
     </div>
   );
 };
