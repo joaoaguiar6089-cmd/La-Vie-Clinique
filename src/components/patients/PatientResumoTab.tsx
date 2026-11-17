@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, CalendarPlus } from 'lucide-react';
+import { CalendarPlus } from 'lucide-react';
 import {
   AnamnesisRecord,
   AnamnesisTemplate,
@@ -12,7 +12,6 @@ import {
 import { formatDateOnly } from '../../utils/formatters';
 import {
   ItemDaLinha,
-  alertaDaAnamnese,
   linhaDoTempo,
   progressoDosPlanos,
 } from '../../utils/pacienteResumo';
@@ -23,10 +22,7 @@ import { ContextoDaJornada } from '../../utils/passosDaJornada';
 /**
  * A aba Resumo da ficha da paciente.
  *
- * A ordem é a ordem do risco: **o alerta da anamnese vem antes de qualquer outra coisa**, porque
- * é a única informação desta tela que muda a conduta de um atendimento que está prestes a
- * acontecer. Depois o progresso dos planos (o que está em curso), depois a evolução em foto, e
- * por último a linha do tempo, que é consulta.
+ * Mostra o progresso dos planos (o que está em curso), a evolução em foto e a linha do tempo.
  */
 
 interface PatientResumoTabProps {
@@ -41,8 +37,6 @@ interface PatientResumoTabProps {
   templates: AnamnesisTemplate[];
   /** O que o painel do evento faz — o mesmo da linha da clínica, na tela Hoje. */
   acoes: AcoesDaLinha;
-  /** Leva para a aba Fichas, já no filtro do que foi tocado. */
-  onIrParaFichas: (filtro: 'anamneses' | 'acompanhamentos') => void;
   onAgendarSessao: (plano: SessionPlan) => void;
   /**
    * O antes e depois por ângulo, montado pela página — é ela que tem o cadastro, as fotos das
@@ -60,14 +54,9 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
   catalogProcedures,
   templates,
   acoes,
-  onIrParaFichas,
   onAgendarSessao,
   antesEDepois,
 }) => {
-  const alerta = useMemo(
-    () => alertaDaAnamnese(records, catalogProcedures),
-    [records, catalogProcedures]
-  );
   const progressos = useMemo(
     () => progressoDosPlanos(planos, atendimentos, catalogProcedures),
     [planos, atendimentos, catalogProcedures]
@@ -92,58 +81,6 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 1. O alerta, antes de tudo */}
-      {alerta && (
-        <section
-          className="rounded-card border border-warn-line bg-warn-bg p-4"
-          role="note"
-          aria-label="Alerta da anamnese"
-        >
-          <div className="flex items-start gap-2.5">
-            <AlertTriangle className="w-[18px] h-[18px] text-warn shrink-0 mt-0.5" />
-            <div className="min-w-0 flex-1">
-              <p className="text-body-lg font-semibold text-warn">
-                Atenção — anamnese de {formatDateOnly(alerta.data.slice(0, 10))}
-              </p>
-              <p className="text-body text-ink-soft mt-0.5">{alerta.procedimentoNome}</p>
-
-              {alerta.contraindicacoes && (
-                <p className="text-body text-ink mt-2.5 leading-relaxed">
-                  <strong className="font-semibold">Contraindicações do procedimento:</strong>{' '}
-                  {alerta.contraindicacoes}
-                </p>
-              )}
-
-              {alerta.respostasDeRisco.length > 0 && (
-                <div className="mt-2.5">
-                  <p className="text-body font-semibold text-ink">
-                    Respondeu "sim" em {alerta.respostasDeRisco.length}{' '}
-                    {alerta.respostasDeRisco.length === 1 ? 'pergunta' : 'perguntas'}:
-                  </p>
-                  <ul className="mt-1 space-y-0.5">
-                    {alerta.respostasDeRisco.map((texto, i) => (
-                      <li key={i} className="text-body text-ink-soft flex gap-1.5">
-                        <span aria-hidden className="text-warn">
-                          •
-                        </span>
-                        <span className="min-w-0">{texto}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => onIrParaFichas('anamneses')}
-                className="mt-2.5 text-body font-semibold text-brand hover:underline"
-              >
-                Ver a ficha completa
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* 2. Planos em curso */}
       {progressos.length > 0 && (

@@ -497,7 +497,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Resumo: alerta da anamnese, pacotes em curso, antes/depois e linha do tempo. */}
+      {/* Resumo: pacotes em curso, antes/depois e linha do tempo. */}
       {aba === 'resumo' && (
         <PatientResumoTab
           records={records}
@@ -526,7 +526,6 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
             onRegistrarVisita,
             onAbrirNaAgenda,
           }}
-          onIrParaFichas={irParaFichas}
           onAgendarSessao={(plano) => {
             irParaFichas('acompanhamentos');
             onAdicionarSessao(plano.id);
