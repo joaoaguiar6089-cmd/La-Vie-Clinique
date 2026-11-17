@@ -457,6 +457,51 @@
     0 12px 26px -20px rgba(110, 73, 36, .35);
 }
 
+/* A película sobre o relevo do fundo: abaixa o brilho e a força do desenho, como um papel vegetal
+   por cima da parede. A cor fica numa variável para, no futuro, cada clínica ajustar a sua junto
+   com o próprio fundo. */
+.pelicula-do-fundo {
+  background: var(--pelicula-do-fundo, rgba(226, 214, 197, .34));
+  -webkit-backdrop-filter: blur(1.5px) saturate(.85) brightness(.95);
+  backdrop-filter: blur(1.5px) saturate(.85) brightness(.95);
+}
+
+/* Uma névoa atrás de um texto solto sobre o relevo (a data e a saudação): uma área translúcida
+   que borra o desenho e some aos poucos nas bordas — o contraste vem dela, e não de um brilho em
+   volta de cada letra. */
+.nevoa-atras-do-texto {
+  position: relative;
+  isolation: isolate;
+  --nevoa-x: 22px;
+  --nevoa-y: 14px;
+}
+
+.nevoa-atras-do-texto::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: calc(-1 * var(--nevoa-y)) calc(-1 * var(--nevoa-x));
+  background: rgba(250, 245, 237, .68);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 var(--nevoa-x), #000 calc(100% - var(--nevoa-x)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--nevoa-y), #000 calc(100% - var(--nevoa-y)), transparent);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 var(--nevoa-x), #000 calc(100% - var(--nevoa-x)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--nevoa-y), #000 calc(100% - var(--nevoa-y)), transparent);
+  mask-composite: intersect;
+  pointer-events: none;
+}
+
+@media (min-width: 640px) {
+  .nevoa-atras-do-texto {
+    --nevoa-x: 48px;
+    --nevoa-y: 22px;
+  }
+}
+
 /* A peça menor sobre o vidro (atalho, cartão da linha do tempo): mais clara, sem borrar de novo. */
 .peca-no-relevo {
   background: rgba(255, 255, 255, .74);
