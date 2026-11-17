@@ -18,6 +18,8 @@ import {
 } from '../../services/fichaPublicaApi';
 import { OnlinePatientAnamnesisForm } from './OnlinePatientAnamnesisForm';
 import { PrintableAnamnesisSheet } from './PrintableAnamnesisSheet';
+import { ProvedorDaMarcaDosDocumentos } from '../documentos/MarcaDosDocumentos';
+import { ehZulia } from '../../lib/projetoFirebase';
 import { mapaDoTemplate } from '../../utils/laserAreas';
 import { anamneseFechada } from '../../utils/evaluations';
 import { resolveOrientationImage } from '../../utils/orientationImage';
@@ -146,7 +148,8 @@ type Screen = 'loading' | 'error' | 'confirmar' | 'form' | 'success';
 
 const DEFAULT_CLINIC: ClinicProfile = {
   name: nomeDaClinica(),
-  tagline: 'Excelência Médica e Estética Avançada',
+  // O slogan da La Vie só no legado: na plataforma, sem o perfil da clínica, não há slogan.
+  tagline: ehZulia ? '' : 'Excelência Médica e Estética Avançada',
   professionals: [],
   phone: '',
   instagram: '',
@@ -589,15 +592,18 @@ export const PublicAnamnesisEntry: React.FC = () => {
         </div>
 
         {showPdfModal && (
-          <PrintableAnamnesisSheet
-            mapasDeAreas={mapasDeAreas}
-            record={savedRecord}
-            clinicProfile={clinicProfile}
-            onClose={() => setShowPdfModal(false)}
-            viewerRole="paciente"
-            orientationImage={resolveOrientationImage(template)}
-            consentSections={resolveConsentTerm(template)}
-          />
+          // O PDF com a cor, as fontes e o logo da clínica (do espelho público do perfil).
+          <ProvedorDaMarcaDosDocumentos perfil={clinicProfile}>
+            <PrintableAnamnesisSheet
+              mapasDeAreas={mapasDeAreas}
+              record={savedRecord}
+              clinicProfile={clinicProfile}
+              onClose={() => setShowPdfModal(false)}
+              viewerRole="paciente"
+              orientationImage={resolveOrientationImage(template)}
+              consentSections={resolveConsentTerm(template)}
+            />
+          </ProvedorDaMarcaDosDocumentos>
         )}
       </div>
     );
@@ -624,15 +630,17 @@ export const PublicAnamnesisEntry: React.FC = () => {
             pode mais ser editada. Você ainda pode salvar o PDF com as suas respostas.
           </p>
         </div>
-        <PrintableAnamnesisSheet
-          mapasDeAreas={mapasDeAreas}
-          record={existingRecord}
-          clinicProfile={clinicProfile}
-          onClose={() => {}}
-          viewerRole="paciente"
-          orientationImage={resolveOrientationImage(template)}
-          consentSections={resolveConsentTerm(template)}
-        />
+        <ProvedorDaMarcaDosDocumentos perfil={clinicProfile}>
+          <PrintableAnamnesisSheet
+            mapasDeAreas={mapasDeAreas}
+            record={existingRecord}
+            clinicProfile={clinicProfile}
+            onClose={() => {}}
+            viewerRole="paciente"
+            orientationImage={resolveOrientationImage(template)}
+            consentSections={resolveConsentTerm(template)}
+          />
+        </ProvedorDaMarcaDosDocumentos>
       </div>
     );
   }

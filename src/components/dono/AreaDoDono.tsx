@@ -12,6 +12,7 @@ import {
 import { usaEmuladores } from '../../lib/projetoFirebase';
 import { MARCA_DA_PLATAFORMA } from '../../utils/marca';
 import { PainelDoDono } from './PainelDoDono';
+import { avisarAcessoAoPainel } from '../../services/registroDeAcesso';
 
 /**
  * O login do dono da plataforma (claim `donoDaPlataforma`, sem clínica).
@@ -171,6 +172,11 @@ export const AreaDoDono: React.FC<{ user: User; onSair: () => void }> = ({ user,
       cancelado = true;
     };
   }, [user]);
+
+  // O acesso do dono também entra nos registros de 6 meses (ver server/registrosDeAcesso.ts).
+  useEffect(() => {
+    if (estado === 'liberado') avisarAcessoAoPainel(user);
+  }, [estado, user]);
 
   if (estado === 'conferindo') {
     return (

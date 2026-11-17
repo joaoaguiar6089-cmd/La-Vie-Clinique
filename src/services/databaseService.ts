@@ -1001,6 +1001,10 @@ function toPublicClinicProfile(profile: ClinicProfile): Partial<ClinicProfile> {
     address: profile.address,
     cityState: profile.cityState,
     logoUrl: profile.logoUrl,
+    // A cara dos documentos: o PDF que a paciente baixa pelo link sai com a cor e as fontes da clínica.
+    corDosDocumentos: profile.corDosDocumentos,
+    fontesDosDocumentos: profile.fontesDosDocumentos,
+    logoNosDocumentos: profile.logoNosDocumentos,
     professionals: (profile.professionals || []).map((p) => ({
       id: p.id,
       name: p.name,

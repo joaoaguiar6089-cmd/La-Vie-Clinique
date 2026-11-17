@@ -19,6 +19,8 @@ export interface ClinicaParaODono {
   ultimoAcesso: string | null;
   espacoBytes: number | null;
   aceiteEmDia: boolean;
+  /** Conta encerrada: quando, e a partir de quando os dados podem ser apagados (90 dias depois). */
+  encerramento: { em: string; por: string | null; apagarAPartirDe: string; apagarAte: string } | null;
 }
 
 export interface TotaisDoDono {
@@ -27,6 +29,9 @@ export interface TotaisDoDono {
   cortesia: number;
   gratuito: number;
   suspensas: number;
+  encerradas: number;
+  /** Encerradas há 90 dias ou mais: o prazo de apagar já correu. */
+  paraApagar: number;
   clientes: number;
   procedimentos: number;
   logins: number;
@@ -66,6 +71,16 @@ export const mudarPlanoDaClinica = (clinicaId: string, plano: 'gratuito' | 'comp
 export const mudarSituacaoDaClinica = (clinicaId: string, situacao: 'ativa' | 'suspensa') =>
   chamar<{ ok: true }>('POST', 'situacao', { clinicaId, situacao });
 
+export const encerrarContaDaClinica = (clinicaId: string) =>
+  chamar<{ ok: true; apagarAPartirDe: string }>('POST', 'encerrar', { clinicaId });
+
+export const desfazerEncerramentoDaClinica = (clinicaId: string) =>
+  chamar<{ ok: true }>('POST', 'desfazer-encerramento', { clinicaId });
+
+/** Apaga de vez uma clínica encerrada há 90 dias. `confirmacao` é o id digitado pelo dono. */
+export const apagarDadosDaClinica = (clinicaId: string, confirmacao: string) =>
+  chamar<{ ok: true; arquivos: number; logins: number }>('POST', 'apagar', { clinicaId, confirmacao });
+
 export function mensagemDoDono(erro: unknown): string {
   const codigo = erro instanceof ErroDoDono ? erro.codigo : '';
   switch (codigo) {
@@ -83,6 +98,16 @@ export function mensagemDoDono(erro: unknown): string {
       return 'Sem conexão. Confira a internet e tente de novo.';
     case 'clinica-nao-encontrada':
       return 'A clínica não existe mais.';
+    case 'encerrada':
+      return 'Esta conta está encerrada. Para voltar a usar, desfaça o encerramento.';
+    case 'nao-encerrada':
+      return 'Só uma conta encerrada pode ter os dados apagados.';
+    case 'prazo-nao-venceu':
+      return 'Os 90 dias de guarda depois do encerramento ainda não passaram.';
+    case 'sem-permissao-arquivos':
+      return 'A conta do servidor não pode apagar arquivos. No Google Cloud, dê à conta do servidor o papel "Administrador de objetos do Storage" e tente de novo — nada foi apagado.';
+    case 'pedido-invalido':
+      return 'Confira o que foi digitado e tente de novo.';
     default:
       return 'Não foi possível concluir agora. Tente de novo em alguns minutos.';
   }

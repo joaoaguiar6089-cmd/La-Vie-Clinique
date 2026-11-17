@@ -5,6 +5,7 @@ import { getCatalogPrice, formatDiscountPercent } from '../utils/catalogPricing'
 import { getProcedureDoctors } from '../utils/doctorHelpers';
 import { Sparkles, Clock, Calendar, CheckCircle2, ShieldCheck, Stethoscope } from 'lucide-react';
 import { ClinicLogo } from './ClinicLogo';
+import { useEstiloDaMarca } from './documentos/MarcaDosDocumentos';
 
 interface PrintableCardProps {
   procedure: Procedure;
@@ -24,11 +25,13 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({
   const { strikePrice, finalPrice, hasDiscount } = getCatalogPrice(procedure, discountPercent);
   const isPromoDay = discountPercent > 0;
   const doctors = getProcedureDoctors(procedure, clinic);
+  const estiloDaMarca = useEstiloDaMarca();
 
   return (
     <div
       id="printable-single-card"
       className="w-[500px] bg-surface rounded-2xl overflow-hidden border-2 border-brand/30 shadow-2xl p-6 text-ink font-sans"
+      style={estiloDaMarca}
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-line pb-4 mb-4">

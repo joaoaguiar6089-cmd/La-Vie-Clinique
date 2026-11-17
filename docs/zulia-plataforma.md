@@ -18,7 +18,7 @@ continua nos nomes internos, que trocar só traria risco: o projeto `zulia-plata
 3. Cadastro de clínica nova, planos e limites.
 4. Cobrança pela InfinitePay.
 5. Painel do dono da plataforma. (Feito em 11/2026: ver "Etapa 5: painel do dono".)
-6. Termos de uso e site instalável no celular. (Os documentos legais foram adiantados em 10/11/2026: ver "Documentos legais".)
+6. Termos de uso e site instalável no celular. (Os documentos legais foram adiantados em 10/11/2026: ver "Documentos legais". O site instalável entrou em 11/2026: ver "A cara da clínica nos documentos, Ajustes e site instalável".)
 7. Apps nas lojas (Android e iPhone).
 
 ## Decisões
@@ -452,20 +452,59 @@ antes de vender o plano completo.
   "Abra o painel pelo endereço do site (não pela prévia de edição)". **Aceite e cadastro só funcionam
   no endereço publicado.**
 - **O que os textos prometem e ainda precisa ficar verdadeiro** (antes de vender, ou ajustar o texto):
-  - registros de acesso guardados por **6 meses** (art. 15 do Marco Civil): configurar a retenção
-    dos registros do Cloud Logging do projeto em que o site roda (o padrão é 30 dias);
+  - ~~registros de acesso guardados por **6 meses**~~ — feito (11/2026): o painel avisa o servidor
+    ao abrir (`POST /api/acesso`, uma vez por aba), e o servidor grava uid, clínica, IP, navegador e
+    data em `registros_de_acesso` (só o Admin SDK lê e escreve; as regras fecham), com `expiraEm` de
+    184 dias. Os vencidos são apagados aos poucos, a cada gravação nova (`server/registrosDeAcesso.ts`).
+    Não depende da retenção do Cloud Logging da hospedagem;
   - **verificação em duas etapas** nas contas Google com acesso aos projetos (dito no Anexo de
     segurança do Acordo);
-  - **cópia dos dados da clínica** em planilha ou JSON mais os arquivos, em até 30 dias: adaptar o
-    `scripts/exportar-banco.ts` para `clinicas/{c}` (o `migrar-la-vie.ts` já sabe ler tudo);
-  - **eliminação** 90 dias depois do encerramento: hoje é à mão (`recursiveDelete` da clínica, os
-    arquivos de `clinicas/{c}/` e os logins);
+  - ~~**cópia dos dados da clínica**~~ — feito (11/2026), pela própria clínica: Ajustes → Dados e
+    privacidade → "Baixar a cópia completa" (só a admin) monta no navegador um ZIP com LEIA-ME, um
+    JSON por coleção, planilhas CSV (pacientes, agenda, orçamentos, recibos) e as fotos e comprovantes
+    que os registros citam (`src/services/copiaDosDados.ts`, ZIP em `src/utils/zip.ts`, sem
+    dependência nova). A cópia de **uma paciente** sai no cadastro dela → Dados pessoais → "Baixar
+    os dados dela" (o Acordo promete isso no item 9);
+  - ~~**eliminação** 90 dias depois do encerramento~~ — feito (11/2026), pelo painel do dono:
+    "Encerrar a conta" desliga os logins e começa os 90 dias (dá para desfazer dentro deles);
+    passado o prazo, "Apagar os dados de vez" (com o id da clínica digitado) apaga os arquivos de
+    `clinicas/{c}/`, os logins e o banco da clínica (`recursiveDelete`), e deixa a lápide
+    `clinicas_apagadas/{c}` (nome e datas) como prova da eliminação. O painel avisa quando o prazo
+    de alguma clínica venceu. **Falta (João):** dar à conta `servidor-zulia` o papel
+    **Administrador de objetos do Storage** no `zulia-plataforma` — sem ele, o apagar recusa antes de
+    mexer em qualquer coisa;
   - **cobrança pela InfinitePay**, nota fiscal e avisos de vencimento: etapa 4;
   - **limites do plano gratuito**: etapa 3, fase 2.
 - **Para o advogado olhar com atenção:** limitação de responsabilidade (14.2) e se o CDC se aplica
   às clínicas; foro; prazo de 48 horas para avisar incidente ao controlador; transferência
   internacional (art. 33) com os fornecedores do Google; arrependimento de 7 dias; reembolso
   proporcional nos casos dos itens 12.2 e 16.2.
+
+## A cara da clínica nos documentos, Ajustes e site instalável (11/2026)
+
+- **Marca dos documentos:** cada clínica escolhe, em Ajustes → Documentos, a **cor de destaque**
+  (11 prontas ou qualquer outra), o **par de fontes** (Clássica, Editorial, Moderna, Delicada) e se
+  o **logo** vai no cabeçalho (padrão: sim, quando há logo). Campos do perfil: `corDosDocumentos`
+  (vazio = bronze), `fontesDosDocumentos`, `logoNosDocumentos`; vão também ao espelho público, para
+  o PDF que a paciente baixa pelo link.
+- **Como funciona:** `src/utils/marcaDosDocumentos.ts` transforma a cor numa paleta de variáveis CSS
+  (`--color-brand*`, `--doc-*`, `--font-serif`, `--font-sans`), que a raiz de cada folha recebe
+  (`useEstiloDaMarca`, de `components/documentos/MarcaDosDocumentos.tsx`). As classes do Tailwind e
+  as constantes de `estiloA4.ts` leem essas variáveis — por isso nenhuma delas pode ser concatenada
+  com alfa nem passada ao jsPDF. Uma cor clara demais é escurecida (só na luminosidade) até ter
+  contraste de texto; a tela avisa. Sem escolha nenhuma, a folha sai idêntica à de antes.
+- **Fontes:** só o par escolhido é baixado do Google Fonts, e só quando uma folha precisa dele.
+  A medição das folhas e a exportação esperam `esperarFontesDosDocumentos` — o `document.fonts.ready`
+  sozinho resolveria antes de a folha de estilo chegar, e a paginação sairia errada.
+- **Folhas cobertas:** orçamento, nota de recibo, simulação de custo, anamnese (preenchida e em
+  branco), avaliação, relatório, catálogo e cartões de procedimento.
+- **Ajustes:** a página virou seções agrupadas (Clínica, Documentos, Atendimento, App e dados), com
+  barra de salvar que só aparece com alteração e aviso ao sair sem salvar.
+- **Site instalável:** `public/manifest.webmanifest` e os ícones de `public/icones/` (feitos a partir
+  do logo da Venus JK), injetados pelo plugin do `vite.config.ts` só no modo Zulia, mais as metas
+  `apple-*` do iPhone. O passo a passo (iPhone, Android, computador, com QR Code do endereço) está
+  em Ajustes → Instalar no celular; no Android e no Chrome do computador aparece "Instalar agora"
+  quando o navegador oferece (`src/lib/instalacao.ts`). Sem service worker: o site continua só online.
 
 ## Etapa 2: várias clínicas e a migração da La Vie
 

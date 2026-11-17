@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
+import { copiarVariaveisDaMarca, esperarFontesDosDocumentos } from './marcaDosDocumentos';
 import { Procedure, ClinicProfile } from '../types';
 import { formatBRL } from './formatters';
 import { getCatalogPrice, formatDiscountPercent } from './catalogPricing';
@@ -253,6 +254,9 @@ function escolherCorte(inicio: number, limite: number, faixas: Faixa[], alturaDa
  */
 async function captureElementFullHeight(element: HTMLElement): Promise<FullHeightCapture> {
   const clone = element.cloneNode(true) as HTMLElement;
+  // O clone vai para o body, longe dos ancestrais: a cor e as fontes da clínica postas acima do
+  // elemento exportado se perderiam no caminho.
+  copiarVariaveisDaMarca(element, clone);
   // Botões e avisos de tela ("Anotar", "Registro histórico") não fazem parte do documento.
   clone.querySelectorAll('[class*="print:hidden"], .no-export').forEach((node) => node.remove());
   clone.style.overflow = 'visible';
@@ -297,9 +301,7 @@ export async function exportElementAsImage(
   filename: string = 'Catalogo La Vie.png'
 ): Promise<string> {
   try {
-    if (document.fonts) {
-      await document.fonts.ready;
-    }
+    await esperarFontesDosDocumentos();
     const restaurarImagens = await prepareImagesForExport(element);
 
     try {
@@ -386,10 +388,8 @@ export function baixarArquivo(blob: Blob, filename: string): void {
 }
 
 async function montarPdf(element: HTMLElement): Promise<jsPDF> {
-  // 1. Ensure fonts are fully ready
-  if (document.fonts) {
-    await document.fonts.ready;
-  }
+  // 1. Ensure fonts are fully ready — inclusive as que a clínica escolheu para os documentos
+  await esperarFontesDosDocumentos();
 
   // 2. Pre-process images into data URLs
   const restaurarImagens = await prepareImagesForExport(element);

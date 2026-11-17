@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useState } from 'react';
-import { AlertCircle, Check, ChevronDown, IdCard, Merge, Pencil, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, Download, IdCard, Loader2, Merge, Pencil, X } from 'lucide-react';
+import { baixarCopiaDaPaciente } from '../../services/copiaDosDados';
 import { Patient } from '../../types';
 import { formatCpf, formatDateOnly } from '../../utils/formatters';
 import { PatientFields, PatientFormValues, formToPatient, patientToForm } from './PatientFields';
@@ -49,6 +50,23 @@ export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = (
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [form, setForm] = useState<PatientFormValues>(() => patientToForm(patient));
+  /**
+   * "Baixar os dados dela": o ZIP com o cadastro e tudo o que é dela — o que a clínica entrega
+   * quando a paciente pede os próprios dados (LGPD, art. 18). Ver services/copiaDosDados.ts.
+   */
+  const [baixando, setBaixando] = useState(false);
+  const baixarDados = async () => {
+    setBaixando(true);
+    setErro(null);
+    try {
+      await baixarCopiaDaPaciente({ pacienteId: patient.id, nome: patient.nome });
+    } catch (e) {
+      console.error('Cópia dos dados da paciente:', e);
+      setErro('Não foi possível montar a cópia dos dados dela agora. Tente de novo.');
+    } finally {
+      setBaixando(false);
+    }
+  };
 
   // Recarrega o formulário quando o paciente muda (ou quando um sync traz uma versão nova), mas
   // nunca no meio de uma edição — sobrescrever o que a pessoa está digitando é pior do que
@@ -163,6 +181,16 @@ export const PatientPersonalDataCard: React.FC<PatientPersonalDataCardProps> = (
             </>
           ) : (
             <>
+              <button
+                type="button"
+                onClick={() => void baixarDados()}
+                disabled={baixando}
+                title="Um arquivo ZIP com o cadastro, as fichas, os atendimentos, os orçamentos, os recibos e as fotos dela"
+                className="flex items-center gap-1.5 min-h-[40px] px-3 rounded-sm text-xs font-medium text-gray-500 hover:text-brand transition-colors disabled:opacity-60"
+              >
+                {baixando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                {baixando ? 'Preparando a cópia…' : 'Baixar os dados dela'}
+              </button>
               {onJuntar && (
                 <button
                   type="button"

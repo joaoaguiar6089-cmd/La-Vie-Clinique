@@ -17,11 +17,26 @@ const marcaDaPlataforma = (): Plugin => ({
     if (escolherModo(plataforma.modo, process.env.VITE_PLATAFORMA) !== 'zulia') return html;
     const titulo = MARCA_DA_PLATAFORMA;
     const descricao = `${MARCA_DA_PLATAFORMA} — ${DESCRICAO_DA_PLATAFORMA.toLowerCase()}: agenda, fichas, orçamentos e catálogo da sua clínica.`;
-    return html
-      .replace(/<title>[\s\S]*?<\/title>/i, `<title>${titulo}</title>`)
-      .replace(/(<meta\s+name="description"\s+content=")[^"]*(")/i, `$1${descricao}$2`)
-      .replace(/(<meta\s+property="og:title"\s+content=")[^"]*(")/i, `$1${titulo}$2`)
-      .replace(/(<meta\s+property="og:description"\s+content=")[^"]*(")/i, `$1${descricao}$2`);
+    return {
+      html: html
+        .replace(/<title>[\s\S]*?<\/title>/i, `<title>${titulo}</title>`)
+        .replace(/(<meta\s+name="description"\s+content=")[^"]*(")/i, `$1${descricao}$2`)
+        .replace(/(<meta\s+property="og:title"\s+content=")[^"]*(")/i, `$1${titulo}$2`)
+        .replace(/(<meta\s+property="og:description"\s+content=")[^"]*(")/i, `$1${descricao}$2`),
+      // O site instalável no celular ("Adicionar à tela inicial"): o manifesto dá nome, ícone e a
+      // abertura em tela cheia; o iPhone lê as metas `apple-*` e o ícone próprio dele. Só na
+      // plataforma — o manifesto leva o nome e o ícone da Venus JK. O passo a passo para a equipe
+      // está em Ajustes → Instalar no celular.
+      tags: [
+        { tag: 'link', attrs: { rel: 'manifest', href: '/manifest.webmanifest' }, injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'theme-color', content: '#F9F8F6' }, injectTo: 'head' },
+        { tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/icones/apple-touch-icon.png' }, injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'apple-mobile-web-app-capable', content: 'yes' }, injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'mobile-web-app-capable', content: 'yes' }, injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'apple-mobile-web-app-title', content: titulo }, injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }, injectTo: 'head' },
+      ],
+    };
   },
 });
 

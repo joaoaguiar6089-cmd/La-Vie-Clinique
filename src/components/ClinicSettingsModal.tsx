@@ -1,5 +1,29 @@
-import React, { useState } from 'react';
-import { X, ArrowLeft, Building2, Check, Sparkles, Phone, Instagram, MapPin, Award, Plus, Trash2, Edit3, UserCheck, Stethoscope, Camera, Mail, KeyRound, ShieldCheck, Shield, Loader2, Crop, Image as ImageIcon, CalendarDays, Gem } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  Building2,
+  CalendarDays,
+  Camera,
+  Check,
+  ChevronRight,
+  Crop,
+  Database,
+  Edit3,
+  FileText,
+  Gem,
+  Image as ImageIcon,
+  KeyRound,
+  Loader2,
+  Phone,
+  Plus,
+  Shield,
+  ShieldCheck,
+  Smartphone,
+  Sparkles,
+  Stethoscope,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { AgendaExpedienteDia, ClinicProfile, Professional } from '../types';
 import { AGENDA_DEFAULTS, INTERVALOS_DISPONIVEIS } from '../utils/agenda';
 import { mascararHora } from './common/MaskedDateTimeInput';
@@ -12,21 +36,25 @@ import {
   mudarPapelNaClinica,
 } from '../services/equipeApi';
 import { ehZulia } from '../lib/projetoFirebase';
+import { clinicaAtual, gravarLocal, lerLocal } from '../lib/estadoDaClinica';
 import { MeuPlano } from './plano/MeuPlano';
 import { ImageCropperModal, AspectOption } from './ImageCropperModal';
 import { ClinicLogo, clinicMonogram, resolveClinicLogoUrl } from './ClinicLogo';
-import { ENDERECO_DO_SITE, motivoEnderecoFechado, normalizarEnderecoPublico } from '../utils/publicLinks';
+import { ENDERECO_DO_SITE, motivoEnderecoFechado, normalizarEnderecoPublico, resolvePublicBase } from '../utils/publicLinks';
 import { formatCnpj } from '../utils/recibos';
 import { ListaSuspensa } from './common/ListaSuspensa';
+import { AvisoTinta, BotaoPilula, CampoTinta, INPUT_TINTA, Interruptor, RotuloTinta, iniciaisDe } from './common/Tinta';
+import { ConfirmDialog, ConfirmRequest } from './ConfirmDialog';
+import { SecaoDocumentos } from './ajustes/SecaoDocumentos';
+import { SecaoCelular } from './ajustes/SecaoCelular';
+import { SecaoDados } from './ajustes/SecaoDados';
 
 /**
  * A foto da profissional entra em dois lugares com recortes diferentes: o bloco 92×104 da capa do
  * catálogo em PDF e o avatar redondo das listas. O frame do recorte é o do PDF (o mais exigente) e
  * o círculo do avatar aparece como guia por cima — assim o rosto não fica cortado em nenhum dos dois.
  */
-const PROFESSIONAL_PHOTO_ASPECTS: AspectOption[] = [
-  { id: 'ficha', label: 'Ficha', ratio: 92 / 104 },
-];
+const PROFESSIONAL_PHOTO_ASPECTS: AspectOption[] = [{ id: 'ficha', label: 'Ficha', ratio: 92 / 104 }];
 
 /**
  * O logo é desenhado dentro de quadros quadrados (cabeçalho do painel, capa do catálogo em PDF)
@@ -38,20 +66,49 @@ const CLINIC_LOGO_ASPECTS: AspectOption[] = [
   { id: 'quadrado', label: 'Quadrado', ratio: 1 },
 ];
 
-/** O índice do topo da página. A ordem é a mesma em que as seções aparecem abaixo. */
-const SECOES = [
-  { id: 'cfg-identidade', rotulo: 'Identidade', icone: Building2 },
-  { id: 'cfg-equipe', rotulo: 'Equipe', icone: Stethoscope },
-  { id: 'cfg-contato', rotulo: 'Contato', icone: Phone },
-  { id: 'cfg-catalogo', rotulo: 'Catálogo', icone: Sparkles },
-  { id: 'cfg-agenda', rotulo: 'Agenda', icone: CalendarDays },
-] as const;
+// ==========================================
+// AS SEÇÕES
+// ==========================================
+
+/**
+ * Os Ajustes viraram seções, como os ajustes do celular: uma lista agrupada do lado (no celular, a
+ * lista vem primeiro e cada toque abre uma seção), e só a seção escolhida na tela. Antes era uma
+ * página única de formulário, com um índice de âncoras no topo, onde o expediente da agenda ficava
+ * a dez rolagens do nome da clínica e nada dizia o que cada bloco fazia.
+ */
+type IdDaSecao = 'plano' | 'identidade' | 'contato' | 'equipe' | 'documentos' | 'catalogo' | 'agenda' | 'celular' | 'dados';
+
+const SECOES: Record<IdDaSecao, { rotulo: string; descricao: string; icone: React.ElementType }> = {
+  plano: { rotulo: 'Plano', descricao: 'Uso, limites e assinatura', icone: Gem },
+  identidade: { rotulo: 'Identidade', descricao: 'Nome, slogan e logo', icone: Building2 },
+  contato: { rotulo: 'Contato e endereço', descricao: 'WhatsApp, Instagram, endereço e CNPJ', icone: Phone },
+  equipe: { rotulo: 'Equipe', descricao: 'Profissionais e logins de acesso', icone: Stethoscope },
+  documentos: { rotulo: 'Documentos (PDF)', descricao: 'Cor, fontes e logo do orçamento, recibo e fichas', icone: FileText },
+  catalogo: { rotulo: 'Catálogo', descricao: 'Mensagens do catálogo em PDF', icone: Sparkles },
+  agenda: { rotulo: 'Agenda', descricao: 'Horários, grade, salas e Google Agenda', icone: CalendarDays },
+  celular: { rotulo: 'Instalar no celular', descricao: 'O sistema na tela inicial, como um app', icone: Smartphone },
+  dados: { rotulo: 'Dados e privacidade', descricao: 'Cópia dos dados, encerramento e termos', icone: Database },
+};
+
+const GRUPOS: { titulo: string; secoes: IdDaSecao[] }[] = [
+  { titulo: 'Clínica', secoes: ['plano', 'identidade', 'contato', 'equipe'] },
+  { titulo: 'Documentos', secoes: ['documentos', 'catalogo'] },
+  { titulo: 'Atendimento', secoes: ['agenda'] },
+  { titulo: 'App e dados', secoes: ['celular', 'dados'] },
+];
+
+/** A seção aberta da última vez, por navegador — quem volta aos Ajustes cai onde parou. */
+const CHAVE_DA_SECAO = 'lavie:ajustes-secao:v1';
 
 interface ClinicSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   clinic: ClinicProfile;
-  onSave: (updatedClinic: ClinicProfile) => void;
+  /**
+   * Grava o perfil. Devolve o perfil salvo (com as imagens já como URL do Storage) ou `null` se
+   * falhou — o App já avisou o erro; a tela só não dá a edição por salva.
+   */
+  onSave: (updatedClinic: ClinicProfile) => Promise<ClinicProfile | null> | void;
   /** UID (Firebase Auth) da profissional logada agora — usado para impedir que ela se auto-exclua. */
   currentUserUid?: string;
   /** Se a profissional logada tem poderes de admin (excluir contas, conceder/revogar admin). */
@@ -82,6 +139,85 @@ const equipeInicial = (clinic: ClinicProfile): Professional[] => {
   ];
 };
 
+const paraFormulario = (clinic: ClinicProfile): ClinicProfile => ({ ...clinic, professionals: equipeInicial(clinic) });
+
+const iguais = (a: ClinicProfile, b: ClinicProfile): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+// ==========================================
+// PEÇAS DE FORMULÁRIO
+// ==========================================
+
+/** Um campo de texto no desenho da casa (rótulo dentro, 56px). */
+const Texto: React.FC<{
+  rotulo: string;
+  valor: string;
+  onMudar: (v: string) => void;
+  placeholder?: string;
+  ajuda?: React.ReactNode;
+  erro?: string;
+  tipo?: 'text' | 'email' | 'tel';
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  obrigatorio?: boolean;
+  className?: string;
+}> = ({ rotulo, valor, onMudar, placeholder, ajuda, erro, tipo = 'text', inputMode, obrigatorio, className }) => {
+  const id = React.useId();
+  return (
+    <CampoTinta rotulo={obrigatorio ? `${rotulo} *` : rotulo} htmlFor={id} ajuda={ajuda} erro={erro} className={className}>
+      <input
+        id={id}
+        type={tipo}
+        inputMode={inputMode}
+        value={valor}
+        onChange={(e) => onMudar(e.target.value)}
+        placeholder={placeholder}
+        required={obrigatorio}
+        className={INPUT_TINTA}
+      />
+    </CampoTinta>
+  );
+};
+
+const TextoLongo: React.FC<{ rotulo: string; valor: string; onMudar: (v: string) => void; ajuda?: React.ReactNode; linhas?: number }> = ({
+  rotulo,
+  valor,
+  onMudar,
+  ajuda,
+  linhas = 3,
+}) => {
+  const id = React.useId();
+  return (
+    <CampoTinta rotulo={rotulo} htmlFor={id} ajuda={ajuda}>
+      <textarea id={id} rows={linhas} value={valor} onChange={(e) => onMudar(e.target.value)} className={`${INPUT_TINTA} resize-y`} />
+    </CampoTinta>
+  );
+};
+
+/** Botão pequeno com rótulo, para as ações de uma linha (Editar, Criar login...). */
+const BotaoDaLinha: React.FC<{
+  onClick: () => void;
+  icone: React.ElementType;
+  children: React.ReactNode;
+  tom?: 'normal' | 'perigo';
+  disabled?: boolean;
+  carregando?: boolean;
+}> = ({ onClick, icone: Icone, children, tom = 'normal', disabled, carregando }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-[13px] font-semibold transition-colors disabled:opacity-50 ${
+      tom === 'perigo' ? 'text-danger hover:bg-danger-bg' : 'text-ink bg-line-soft hover:bg-[#E6E2DA]'
+    }`}
+  >
+    {carregando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Icone className="w-3.5 h-3.5" />}
+    {children}
+  </button>
+);
+
+// ==========================================
+// A TELA
+// ==========================================
+
 export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   isOpen,
   onClose,
@@ -93,36 +229,44 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 }) => {
   // "Plano" só na plataforma e só para a admin (é ela quem cuida do plano e do pagamento).
   const mostrarPlano = ehZulia && isAdminUser;
-  const secoes = mostrarPlano
-    ? [{ id: 'cfg-plano', rotulo: 'Plano', icone: Gem } as const, ...SECOES]
-    : SECOES;
-  const [formData, setFormData] = useState<ClinicProfile>(() => ({ ...clinic, professionals: equipeInicial(clinic) }));
-  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const grupos = GRUPOS.map((g) => ({ ...g, secoes: g.secoes.filter((s) => s !== 'plano' || mostrarPlano) }));
+  const primeira: IdDaSecao = mostrarPlano ? 'plano' : 'identidade';
 
-  // Sync formData only when the modal transitions from closed to open — NOT on every
-  // `clinic` prop change while it stays open. The clinic prop is a live Firestore
-  // subscription and can update mid-edit (e.g. another tab/device saving), which
-  // would otherwise silently wipe out professionals just added/edited in this modal
-  // before the user clicks "Salvar Informações".
-  const wasOpenRef = React.useRef(false);
-  React.useEffect(() => {
-    if (isOpen && !wasOpenRef.current) {
-      setFormData({ ...clinic, professionals: equipeInicial(clinic) });
-      setEditingDocId(null);
-      setShowDoctorForm(false);
-      setDeletingDocId(null);
-      setPhotoCropSource(null);
-      setLogoCropSource(null);
+  /** A seção aberta. `null` no celular = a lista; no computador vale a primeira. */
+  const [secao, setSecao] = useState<IdDaSecao | null>(() => {
+    try {
+      const salva = lerLocal(CHAVE_DA_SECAO) as IdDaSecao | null;
+      // No celular a tela abre na lista; a seção lembrada só vale no computador.
+      if (salva && SECOES[salva] && (salva !== 'plano' || mostrarPlano) && window.matchMedia('(min-width: 1024px)').matches) return salva;
+    } catch {
+      // sem localStorage: começa pela lista
     }
-    wasOpenRef.current = isOpen;
-  }, [isOpen, clinic]);
+    return null;
+  });
+  const abrirSecao = (id: IdDaSecao | null) => {
+    setSecao(id);
+    if (id) {
+      try {
+        gravarLocal(CHAVE_DA_SECAO, id);
+      } catch {
+        // sem localStorage: só não lembra
+      }
+    }
+    window.scrollTo({ top: 0 });
+  };
+  const secaoNaTela: IdDaSecao = secao || primeira;
 
-  // State for adding / editing a doctor
+  const [formData, setFormData] = useState<ClinicProfile>(() => paraFormulario(clinic));
+  /** O perfil como está salvo — o que a tela compara para saber se há alteração. */
+  const [base, setBase] = useState<ClinicProfile>(() => paraFormulario(clinic));
+  const [salvando, setSalvando] = useState(false);
+  const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
+
+  // State for adding / editing a professional
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [docName, setDocName] = useState('');
   const [docRegistry, setDocRegistry] = useState('');
   const [docTitle, setDocTitle] = useState('');
-  const [docSpecialty, setDocSpecialty] = useState('');
   const [docPhotoUrl, setDocPhotoUrl] = useState('');
   const [docEmail, setDocEmail] = useState('');
   /** Foto aguardando recorte: o arquivo recém-escolhido ou a foto atual que a usuária quer reajustar. */
@@ -130,8 +274,26 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   /** Mesma ideia do recorte da foto, para o logo da clínica. */
   const [logoCropSource, setLogoCropSource] = useState<File | string | null>(null);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [creatingLoginForId, setCreatingLoginForId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /** Na Zulia, um pedido à equipe no servidor em andamento (criar, mudar papel, desativar). */
+  const [equipeOcupadaId, setEquipeOcupadaId] = useState<string | null>(null);
+
+  const formularioDaProfissionalAberto = showDoctorForm && !!docName.trim();
+  const sujo = !iguais(formData, base) || formularioDaProfissionalAberto;
+
+  // O perfil chega pela assinatura em tempo real e pode mudar com a tela aberta (outro aparelho
+  // salvou). Sem edição em andamento, a tela acompanha; com edição, nada é atropelado — sobrescrever
+  // o que a pessoa está digitando é pior do que mostrar por um instante um dado desatualizado.
+  const sujoRef = useRef(sujo);
+  sujoRef.current = sujo;
+  useEffect(() => {
+    if (sujoRef.current || salvando) return;
+    setFormData(paraFormulario(clinic));
+    setBase(paraFormulario(clinic));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinic]);
 
   /**
    * O arquivo escolhido não vira foto direto: abre o recorte. É lá que a foto é enquadrada e
@@ -145,7 +307,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setPhotoCropSource(file);
   };
 
-  /** Como a foto da médica: o arquivo escolhido abre o recorte antes de virar o logo salvo. */
+  /** Como a foto da profissional: o arquivo escolhido abre o recorte antes de virar o logo salvo. */
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -157,15 +319,18 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleStartAddDoctor = () => {
+  const limparFormularioDaProfissional = () => {
     setEditingDocId(null);
     setDocName('');
     setDocRegistry('');
     setDocTitle('');
-    setDocSpecialty('');
     setDocPhotoUrl('');
     setDocEmail('');
     setPhotoCropSource(null);
+  };
+
+  const handleStartAddDoctor = () => {
+    limparFormularioDaProfissional();
     setShowDoctorForm(true);
   };
 
@@ -174,38 +339,33 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     setDocName(doc.name);
     setDocRegistry(doc.registryNumber || '');
     setDocTitle(doc.title || doc.specialty || '');
-    setDocSpecialty(doc.specialty || doc.title || '');
     setDocPhotoUrl(doc.photoUrl || '');
     setDocEmail(doc.email || '');
     setPhotoCropSource(null);
     setShowDoctorForm(true);
   };
 
-  const handleSaveDoctor = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!docName.trim()) return;
-
+  /** A equipe com o formulário da profissional aplicado (adicionar ou editar). */
+  const equipeComOFormulario = (equipe: Professional[]): Professional[] => {
+    if (!docName.trim()) return equipe;
     if (editingDocId) {
-      // Edit existing
-      setFormData((prev) => ({
-        ...prev,
-        professionals: prev.professionals.map((d) =>
-          d.id === editingDocId
-            ? {
-                ...d,
-                name: docName.trim(),
-                registryNumber: docRegistry.trim(),
-                title: docTitle.trim(),
-                specialty: docTitle.trim(),
-                photoUrl: docPhotoUrl.trim() || d.photoUrl || undefined,
-                email: docEmail.trim() || undefined,
-              }
-            : d
-        ),
-      }));
-    } else {
-      // Add new
-      const newDoc: Professional = {
+      return equipe.map((d) =>
+        d.id === editingDocId
+          ? {
+              ...d,
+              name: docName.trim(),
+              registryNumber: docRegistry.trim(),
+              title: docTitle.trim(),
+              specialty: docTitle.trim(),
+              photoUrl: docPhotoUrl.trim() || d.photoUrl || undefined,
+              email: docEmail.trim() || undefined,
+            }
+          : d
+      );
+    }
+    return [
+      ...equipe,
+      {
         id: `doc-${Date.now()}`,
         name: docName.trim(),
         registryNumber: docRegistry.trim(),
@@ -213,29 +373,18 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         specialty: docTitle.trim(),
         photoUrl: docPhotoUrl.trim() || undefined,
         email: docEmail.trim() || undefined,
-      };
-      setFormData((prev) => ({
-        ...prev,
-        professionals: [...prev.professionals, newDoc],
-      }));
-    }
+      },
+    ];
+  };
 
-    // Reset doctor form
-    setEditingDocId(null);
-    setDocName('');
-    setDocRegistry('');
-    setDocTitle('');
-    setDocSpecialty('');
-    setDocPhotoUrl('');
-    setDocEmail('');
-    setPhotoCropSource(null);
+  const handleSaveDoctor = () => {
+    if (!docName.trim()) return;
+    setFormData((prev) => ({ ...prev, professionals: equipeComOFormulario(prev.professionals) }));
+    limparFormularioDaProfissional();
     setShowDoctorForm(false);
   };
 
   const adminCount = formData.professionals.filter((d) => d.isAdmin).length;
-
-  /** Na Zulia, um pedido à equipe no servidor em andamento (criar, mudar papel, desativar). */
-  const [equipeOcupadaId, setEquipeOcupadaId] = useState<string | null>(null);
 
   const avisarErro = (texto: string) => {
     setErrorMessage(texto);
@@ -245,20 +394,17 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
   const handleDeleteDoctor = async (id: string) => {
     const target = formData.professionals.find((d) => d.id === id);
     if (formData.professionals.length <= 1) {
-      setErrorMessage('A clínica deve ter ao menos uma profissional cadastrada.');
-      setTimeout(() => setErrorMessage(null), 3500);
+      avisarErro('A clínica deve ter ao menos uma profissional cadastrada.');
       return;
     }
     if (target?.uid && target.uid === currentUserUid) {
-      setErrorMessage('Você não pode excluir a própria conta enquanto está logada.');
-      setTimeout(() => setErrorMessage(null), 3500);
+      avisarErro('Você não pode excluir a própria conta enquanto está logada.');
       return;
     }
     // Na Zulia, quem confere "sobra uma admin" é o servidor, pela claim (o `isAdmin` do perfil é só
     // o que a tela mostra).
     if (!ehZulia && target?.isAdmin && adminCount <= 1) {
-      setErrorMessage('A clínica deve ter ao menos uma profissional admin. Torne outra pessoa admin antes de excluir esta conta.');
-      setTimeout(() => setErrorMessage(null), 3500);
+      avisarErro('A clínica deve ter ao menos uma profissional admin. Torne outra pessoa admin antes de excluir esta conta.');
       return;
     }
     if (ehZulia && target?.uid) {
@@ -274,18 +420,14 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         setEquipeOcupadaId(null);
       }
     }
-    setFormData((prev) => ({
-      ...prev,
-      professionals: prev.professionals.filter((d) => d.id !== id),
-    }));
+    setFormData((prev) => ({ ...prev, professionals: prev.professionals.filter((d) => d.id !== id) }));
     setDeletingDocId(null);
     setErrorMessage(null);
   };
 
   const handleCreateLogin = async (doc: Professional) => {
     if (!doc.email?.trim()) {
-      setErrorMessage(`Informe um e-mail para "${doc.name}" antes de criar o login.`);
-      setTimeout(() => setErrorMessage(null), 3500);
+      avisarErro(`Informe um e-mail para "${doc.name}" antes de criar o login (em Editar).`);
       return;
     }
     setCreatingLoginForId(doc.id);
@@ -305,8 +447,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
         : err?.code === 'auth/email-already-in-use'
           ? 'Este e-mail já possui uma conta de login no Firebase.'
           : 'Não foi possível criar o login agora. Tente novamente.';
-      setErrorMessage(msg);
-      setTimeout(() => setErrorMessage(null), 4500);
+      avisarErro(msg);
     } finally {
       setCreatingLoginForId(null);
     }
@@ -314,8 +455,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
 
   const handleToggleAdmin = async (doc: Professional) => {
     if (!ehZulia && doc.isAdmin && adminCount <= 1) {
-      setErrorMessage('A clínica deve ter ao menos uma profissional admin.');
-      setTimeout(() => setErrorMessage(null), 3500);
+      avisarErro('A clínica deve ter ao menos uma profissional admin.');
       return;
     }
     if (ehZulia && doc.uid) {
@@ -338,690 +478,565 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    let updatedProfessionals = [...formData.professionals];
-
-    // Se o formulário de médica estiver aberto, incorpora as alterações automaticamente
-    if (showDoctorForm && docName.trim()) {
-      if (editingDocId) {
-        updatedProfessionals = updatedProfessionals.map((d) =>
-          d.id === editingDocId
-            ? {
-                ...d,
-                name: docName.trim(),
-                registryNumber: docRegistry.trim(),
-                title: docTitle.trim(),
-                specialty: docTitle.trim(),
-                photoUrl: docPhotoUrl.trim() || d.photoUrl || undefined,
-                email: docEmail.trim() || undefined,
-              }
-            : d
-        );
-      } else {
-        const newDoc: Professional = {
-          id: `doc-${Date.now()}`,
-          name: docName.trim(),
-          registryNumber: docRegistry.trim(),
-          title: docTitle.trim(),
-          specialty: docTitle.trim(),
-          photoUrl: docPhotoUrl.trim() || undefined,
-          email: docEmail.trim() || undefined,
-        };
-        updatedProfessionals.push(newDoc);
-      }
-    } else if (editingDocId && docPhotoUrl.trim()) {
-      updatedProfessionals = updatedProfessionals.map((d) =>
-        d.id === editingDocId ? { ...d, photoUrl: docPhotoUrl.trim() } : d
-      );
+  const salvar = async () => {
+    if (!formData.name.trim()) {
+      abrirSecao('identidade');
+      avisarErro('Dê um nome à clínica antes de salvar.');
+      return;
     }
-
-    // Update legacy fields if needed from first doctor
-    const primaryDoc = updatedProfessionals[0];
+    // O formulário da profissional aberto entra junto: "salvar" é salvar tudo o que está na tela.
+    const equipe = equipeComOFormulario(formData.professionals);
+    const primaryDoc = equipe[0];
     const finalData: ClinicProfile = {
       ...formData,
-      professionals: updatedProfessionals,
+      professionals: equipe,
       professionalName: primaryDoc?.name || formData.professionalName,
       professionalTitle: primaryDoc?.title || formData.professionalTitle,
       registryNumber: primaryDoc?.registryNumber || formData.registryNumber,
     };
-    onSave(finalData);
-    onClose();
+    setSalvando(true);
+    try {
+      const salvo = await onSave(finalData);
+      if (salvo === null) return; // o App já mostrou o erro; a edição continua na tela
+      const novo = paraFormulario(salvo || finalData);
+      setFormData(novo);
+      setBase(novo);
+      limparFormularioDaProfissional();
+      setShowDoctorForm(false);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const descartar = () => {
+    setFormData(base);
+    limparFormularioDaProfissional();
+    setShowDoctorForm(false);
+    setDeletingDocId(null);
+  };
+
+  const sair = () => {
+    if (!sujo) {
+      onClose();
+      return;
+    }
+    setConfirmacao({
+      titulo: 'Sair sem salvar?',
+      mensagem: 'As alterações feitas nos Ajustes ainda não foram salvas e se perdem.',
+      textoConfirmar: 'Sair sem salvar',
+      textoCancelar: 'Continuar editando',
+      tom: 'perigo',
+      onConfirmar: onClose,
+    });
   };
 
   if (!isOpen) return null;
 
-  return (
-    /* Página, não modal.
+  const info = SECOES[secaoNaTela];
+  const temLogo = !!resolveClinicLogoUrl(formData.logoUrl);
 
-       Eram 700 linhas de formulário dentro de uma caixa de 672px com rolagem própria, sobre
-       um véu preto: no celular, meia tela útil; no desktop, a sensação de que fechar sem querer
-       perderia tudo. Como página ela usa a largura que tem, rola com a página e o índice do topo
-       leva direto à seção. */
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
-      <header className="mb-5">
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 pb-36">
+      <header className="mb-6">
         <button
           type="button"
-          onClick={onClose}
+          onClick={sair}
           className="inline-flex items-center gap-1.5 min-h-[44px] -ml-1 pr-2 text-body font-semibold text-muted hover:text-ink transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Voltar
         </button>
-        <p className="text-[13px] font-semibold text-muted">Configurações</p>
-        <h1 className="font-serif-luxury text-[34px] lg:text-[42px] font-semibold leading-[1.1] text-ink">
-          Dados da clínica e equipe
-        </h1>
+        <h1 className="font-serif-luxury text-[34px] lg:text-[42px] font-semibold leading-[1.1] text-ink">Ajustes</h1>
+        <p className="text-[14px] text-ink-soft mt-1">A clínica, a equipe, os documentos e o app — tudo num lugar.</p>
       </header>
 
-      {/* Índice das seções. Rola horizontalmente no celular, onde os seis rótulos não cabem
-          lado a lado — melhor deslizar do que quebrar em três linhas. */}
-      <nav
-        aria-label="Seções das configurações"
-        className="sticky top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 py-2 mb-5 bg-surface/95 border-b border-line overflow-x-auto"
-      >
-        <ul className="flex items-center gap-1.5 w-max">
-          {secoes.map((s) => (
-            <li key={s.id}>
-              <a
-                href={`#${s.id}`}
-                className="inline-flex items-center gap-1.5 min-h-[40px] px-3 rounded-lg text-body font-medium text-ink-soft hover:bg-surface-2 hover:text-brand transition-colors whitespace-nowrap"
-              >
-                <s.icone className="w-3.5 h-3.5 text-brand shrink-0" />
-                {s.rotulo}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-      <div className="glass-card">
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-7">
-          {/* O plano da clínica (só na plataforma, só para a admin): uso, limites e como assinar. */}
-          {mostrarPlano && (
-            <div id="cfg-plano" className="space-y-4 scroll-mt-24">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
-                <Gem className="w-3.5 h-3.5" />
-                Plano
-              </h3>
-              <MeuPlano nomeDaClinica={clinic.name || formData.name} />
+      <div className="lg:grid lg:grid-cols-[272px_minmax(0,1fr)] lg:gap-10">
+        {/* O MENU. No celular é a tela inicial dos Ajustes; no computador, a coluna fixa ao lado. */}
+        <nav aria-label="Seções dos Ajustes" className={`${secao ? 'hidden lg:block' : 'block'} lg:sticky lg:top-6 lg:self-start space-y-5`}>
+          {grupos.map((grupo) => (
+            <div key={grupo.titulo}>
+              <p className="px-1 mb-1.5 text-[12px] font-semibold uppercase tracking-wider text-muted">{grupo.titulo}</p>
+              <ul className="rounded-2xl bg-card border border-line overflow-hidden divide-y divide-line-soft">
+                {grupo.secoes.map((id) => {
+                  const s = SECOES[id];
+                  const ativa = id === secaoNaTela;
+                  return (
+                    <li key={id}>
+                      <button
+                        type="button"
+                        onClick={() => abrirSecao(id)}
+                        aria-current={ativa ? 'page' : undefined}
+                        className={`w-full flex items-center gap-3 min-h-[60px] px-3.5 text-left transition-colors ${
+                          ativa ? 'lg:bg-ink lg:text-white' : 'hover:bg-surface-2'
+                        }`}
+                      >
+                        <span
+                          className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center ${
+                            ativa ? 'bg-line-soft text-ink lg:bg-white/10 lg:text-brand-pale' : 'bg-line-soft text-ink'
+                          }`}
+                        >
+                          <s.icone className="w-[18px] h-[18px]" />
+                        </span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-[15px] font-semibold leading-tight">{s.rotulo}</span>
+                          <span className={`block text-[12.5px] leading-snug truncate ${ativa ? 'text-muted lg:text-cream/70' : 'text-muted'}`}>
+                            {s.descricao}
+                          </span>
+                        </span>
+                        <ChevronRight className="w-4 h-4 shrink-0 opacity-50 lg:hidden" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
+          ))}
+        </nav>
+
+        {/* A SEÇÃO */}
+        <main className={`${secao ? 'block' : 'hidden lg:block'} min-w-0`}>
+          <button
+            type="button"
+            onClick={() => abrirSecao(null)}
+            className="lg:hidden inline-flex items-center gap-1.5 min-h-[44px] -ml-1 mb-1 pr-2 text-body font-semibold text-muted hover:text-ink"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Todos os ajustes
+          </button>
+
+          <div className="flex items-start gap-3 mb-6">
+            <span className="w-11 h-11 shrink-0 rounded-2xl bg-ink text-brand-pale flex items-center justify-center">
+              <info.icone className="w-5 h-5" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-[22px] font-semibold text-ink leading-tight font-sans">{info.rotulo}</h2>
+              <p className="text-[14px] text-ink-soft">{info.descricao}</p>
+            </div>
+          </div>
+
+          {errorMessage && (
+            <AvisoTinta tom="alerta" className="mb-5">
+              <span className="flex items-start justify-between gap-3">
+                <span>{errorMessage}</span>
+                <button type="button" onClick={() => setErrorMessage(null)} aria-label="Fechar aviso" className="shrink-0">
+                  <X className="w-4 h-4" />
+                </button>
+              </span>
+            </AvisoTinta>
           )}
 
-          {/* Clinic & Brand */}
-          <div id="cfg-identidade" className="space-y-4 scroll-mt-24">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
-              <Building2 className="w-3.5 h-3.5" />
-              Identidade da Clínica
-            </h3>
+          {/* PLANO */}
+          {secaoNaTela === 'plano' && mostrarPlano && <MeuPlano nomeDaClinica={clinic.name || formData.name} />}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Nome da Clínica / Consultório *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                  required
+          {/* IDENTIDADE */}
+          {secaoNaTela === 'identidade' && (
+            <div className="space-y-6 max-w-2xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Texto rotulo="Nome da clínica" obrigatorio valor={formData.name} onMudar={(v) => handleChange('name', v)} />
+                <Texto
+                  rotulo="Slogan"
+                  valor={formData.tagline}
+                  onMudar={(v) => handleChange('tagline', v)}
+                  placeholder="Ex.: Estética avançada"
+                  ajuda="Sai embaixo do nome, no catálogo e nos documentos."
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Slogan / Subtítulo da Marca
-                </label>
-                <input
-                  type="text"
-                  value={formData.tagline}
-                  onChange={(e) => handleChange('tagline', e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                />
-              </div>
-            </div>
-
-            {/* Logo — substitui o monograma "LV" no painel e na capa do catálogo em PDF */}
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">
-                Logo da Clínica
-              </label>
-              <div className="p-3 rounded-sm bg-card border border-white/80 space-y-3">
-                <div className="flex items-center gap-3">
-                  {/* A marca aparece sobre fundo claro (página inicial, capa do PDF) e sobre fundo
-                      escuro (menu lateral, rodapé) — as duas prévias mostram os dois casos. */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="text-center">
-                      <div className="w-14 h-14 rounded-sm bg-white border border-gray-200 flex items-center justify-center p-1.5">
-                        <ClinicLogo
-                          clinic={formData}
-                          className="w-full h-full"
-                          monogramClassName="bg-ink text-brand-light font-serif-luxury text-base font-semibold rounded-xs"
-                        />
+                <RotuloTinta>Logo</RotuloTinta>
+                <div className="rounded-2xl bg-card border border-line p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                  {/* A marca aparece sobre fundo claro (documentos, capa do PDF) e sobre fundo escuro (menu
+                      lateral) — as duas prévias mostram os dois casos. */}
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    {(['Claro', 'Escuro'] as const).map((fundo) => (
+                      <div key={fundo} className="text-center">
+                        <div
+                          className={`w-16 h-16 rounded-xl flex items-center justify-center p-1.5 border ${
+                            fundo === 'Claro' ? 'bg-white border-line' : 'bg-ink border-ink'
+                          }`}
+                        >
+                          <ClinicLogo
+                            clinic={formData}
+                            className="w-full h-full"
+                            monogramClassName={`${fundo === 'Claro' ? 'bg-ink rounded-xs' : ''} text-brand-light font-serif-luxury text-base font-semibold`}
+                          />
+                        </div>
+                        <span className="block text-[11px] text-muted mt-1">{fundo}</span>
                       </div>
-                      <span className="block text-label uppercase tracking-wider text-gray-400 mt-1">
-                        Claro
-                      </span>
-                    </div>
-                    <div className="text-center">
-                      <div className="w-14 h-14 rounded-sm bg-ink border border-ink flex items-center justify-center p-1.5">
-                        <ClinicLogo
-                          clinic={formData}
-                          className="w-full h-full"
-                          monogramClassName="text-brand-light font-serif-luxury text-base font-semibold"
-                        />
-                      </div>
-                      <span className="block text-label uppercase tracking-wider text-gray-400 mt-1">
-                        Escuro
-                      </span>
-                    </div>
+                    ))}
                   </div>
-
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 space-y-2.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand cursor-pointer transition-colors flex items-center gap-1">
-                        <ImageIcon className="w-3 h-3" />
-                        {resolveClinicLogoUrl(formData.logoUrl) ? 'Trocar logo' : 'Enviar logo'}
+                      <label className="inline-flex items-center gap-2 h-11 px-4 rounded-full bg-ink text-white text-[14px] font-semibold cursor-pointer hover:bg-black">
+                        <ImageIcon className="w-4 h-4" />
+                        {temLogo ? 'Trocar o logo' : 'Enviar o logo'}
                         <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
                       </label>
-                      {resolveClinicLogoUrl(formData.logoUrl) && (
+                      {temLogo && (
                         <>
-                          <button
-                            type="button"
-                            onClick={() => setLogoCropSource(formData.logoUrl || null)}
-                            className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand transition-colors flex items-center gap-1"
-                          >
-                            <Crop className="w-3 h-3" />
-                            Ajustar enquadramento
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleChange('logoUrl', '')}
-                            className="text-body text-red-500 hover:text-red-700 font-medium"
-                          >
+                          <BotaoDaLinha icone={Crop} onClick={() => setLogoCropSource(formData.logoUrl || null)}>
+                            Ajustar
+                          </BotaoDaLinha>
+                          <BotaoDaLinha icone={Trash2} tom="perigo" onClick={() => handleChange('logoUrl', '')}>
                             Remover
-                          </button>
+                          </BotaoDaLinha>
                         </>
                       )}
                     </div>
-                    <p className="text-label text-gray-500 leading-relaxed mt-2">
-                      Usada na capa do catálogo em PDF e no topo da página inicial, no lugar do
-                      monograma <strong>{clinicMonogram(formData.name)}</strong>. Prefira PNG com
-                      fundo transparente — o arquivo é gravado junto do perfil, então mantenha-o leve.
+                    <p className="text-[13px] text-ink-soft leading-snug">
+                      Aparece no topo do painel, na capa do catálogo e no cabeçalho dos documentos (veja{' '}
+                      <button type="button" onClick={() => abrirSecao('documentos')} className="font-semibold text-ink underline underline-offset-2">
+                        Documentos
+                      </button>
+                      ). Sem logo, saem as iniciais <strong>{clinicMonogram(formData.name)}</strong>. Prefira PNG com fundo
+                      transparente.
                     </p>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Clinical Team / Registered Doctors */}
-          <div id="cfg-equipe" className="space-y-4 scroll-mt-24">
-            <div className="flex items-center justify-between pb-1 border-b border-white/60">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5">
-                <Stethoscope className="w-3.5 h-3.5" />
-                Corpo Clínico & Médicas Cadastradas ({formData.professionals.length})
-              </h3>
-              {!showDoctorForm && (
-                <button
-                  type="button"
-                  onClick={handleStartAddDoctor}
-                  className="px-2.5 py-1 rounded-xs bg-brand text-white text-label uppercase tracking-wider font-semibold hover:bg-brand-hover flex items-center gap-1 transition-all"
-                >
-                  <Plus className="w-3 h-3" />
-                  Adicionar Médica / Dra.
-                </button>
-              )}
-            </div>
+          {/* CONTATO */}
+          {secaoNaTela === 'contato' && (
+            <div className="space-y-6 max-w-2xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Texto
+                  rotulo="WhatsApp / telefone"
+                  obrigatorio
+                  tipo="tel"
+                  valor={formData.phone}
+                  onMudar={(v) => handleChange('phone', v)}
+                  placeholder="(19) 99876-5432"
+                  ajuda="As clientes falam com a clínica por este número."
+                />
+                <Texto
+                  rotulo="Instagram"
+                  valor={formData.instagram}
+                  onMudar={(v) => handleChange('instagram', v)}
+                  placeholder={ehZulia ? '@suaclinica' : '@lavieclinique.indaiatuba'}
+                />
+                <Texto
+                  rotulo="Endereço"
+                  valor={formData.address}
+                  onMudar={(v) => handleChange('address', v)}
+                  placeholder="Rua, número, sala e bairro"
+                  className="sm:col-span-2"
+                />
+                <Texto
+                  rotulo="Cidade / UF"
+                  valor={formData.cityState}
+                  onMudar={(v) => handleChange('cityState', v)}
+                  placeholder={ehZulia ? 'Cidade - UF' : 'Indaiatuba - SP'}
+                />
+                <Texto
+                  rotulo="CNPJ"
+                  inputMode="numeric"
+                  valor={formData.cnpj ? formatCnpj(formData.cnpj) : ''}
+                  onMudar={(v) => handleChange('cnpj', v.replace(/\D/g, '').slice(0, 14))}
+                  placeholder="00.000.000/0001-00"
+                  ajuda="Sai no rodapé da nota de recibo."
+                />
+              </div>
+              <p className="text-[13px] text-ink-soft">
+                O contato e o endereço saem no rodapé do catálogo, nos documentos e nas páginas que a cliente abre pelo link.
+              </p>
 
-            {/* Doctor Add/Edit Form Box */}
-            {showDoctorForm && (
-              <div className="p-4 rounded-sm bg-card border border-brand/40 shadow-xs space-y-3 animate-fadeIn">
-                <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-                  <span className="text-xs font-bold text-ink uppercase tracking-wider">
-                    {editingDocId ? 'Editar Dados da Médica' : 'Cadastrar Nova Médica / Dra.'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDoctorForm(false);
-                      setPhotoCropSource(null);
-                    }}
-                    className="text-xs text-gray-400 hover:text-gray-600"
-                  >
-                    Fechar
-                  </button>
+              <details className="rounded-2xl bg-card border border-line p-4 group">
+                <summary className="cursor-pointer text-[14px] font-semibold text-ink list-none flex items-center gap-2">
+                  <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90" />
+                  Avançado: endereço dos links
+                </summary>
+                <div className="mt-3 space-y-2">
+                  <Texto
+                    rotulo="Endereço público do sistema"
+                    valor={formData.publicBaseUrl || ''}
+                    onMudar={(v) => handleChange('publicBaseUrl', v)}
+                    placeholder={ENDERECO_DO_SITE}
+                    ajuda={
+                      <>
+                        Base dos links enviados à paciente — ficha de anamnese, orçamento, confirmação do agendamento e QR
+                        Code do catálogo. Em branco, vale <strong>{ENDERECO_DO_SITE}</strong>. Só preencha se o site tiver
+                        outro endereço que abra <strong>sem pedir login</strong> (confira numa aba anônima).
+                      </>
+                    }
+                    erro={(() => {
+                      const base = normalizarEnderecoPublico(formData.publicBaseUrl);
+                      const motivo = base ? motivoEnderecoFechado(base) : null;
+                      return motivo ? `Este endereço não serve: ele ${motivo}. Os links saem com ${ENDERECO_DO_SITE}.` : undefined;
+                    })()}
+                  />
                 </div>
+              </details>
+            </div>
+          )}
 
-                <div className="flex items-center gap-3">
-                  <div className="w-16 h-16 rounded-full bg-white border border-gray-200 overflow-hidden shrink-0 flex items-center justify-center">
-                    {docPhotoUrl ? (
-                      <img src={docPhotoUrl} alt="Prévia da foto" className="w-full h-full object-cover" />
-                    ) : (
-                      <Camera className="w-5 h-5 text-gray-300" />
-                    )}
+          {/* EQUIPE */}
+          {secaoNaTela === 'equipe' && (
+            <div className="space-y-4 max-w-3xl">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-[14px] text-ink-soft max-w-md">
+                  Quem atende na clínica. Cada profissional pode ganhar um login para entrar no painel; quem é{' '}
+                  <strong>admin</strong> cuida também da equipe, do plano e dos dados.
+                </p>
+                {!showDoctorForm && (
+                  <BotaoPilula tom="preto" icone={Plus} onClick={handleStartAddDoctor}>
+                    Adicionar profissional
+                  </BotaoPilula>
+                )}
+              </div>
+
+              {showDoctorForm && (
+                <div className="rounded-2xl bg-card border-2 border-ink p-4 sm:p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[16px] font-semibold text-ink">{editingDocId ? 'Editar profissional' : 'Nova profissional'}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        limparFormularioDaProfissional();
+                        setShowDoctorForm(false);
+                      }}
+                      aria-label="Fechar"
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-muted hover:bg-line-soft"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
-                  <div className="flex-1">
-                    <label className="block text-body font-medium text-gray-700 mb-1">
-                      Foto da Médica (usada na capa do catálogo em PDF)
-                    </label>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-16 h-16 rounded-full bg-line-soft overflow-hidden shrink-0 flex items-center justify-center">
+                      {docPhotoUrl ? (
+                        <img src={docPhotoUrl} alt="Prévia da foto" className="w-full h-full object-cover" />
+                      ) : (
+                        <Camera className="w-5 h-5 text-muted" />
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <label className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand cursor-pointer transition-colors">
-                        Escolher Arquivo
+                      <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full bg-line-soft text-[13px] font-semibold text-ink cursor-pointer hover:bg-[#E6E2DA]">
+                        <Camera className="w-3.5 h-3.5" />
+                        {docPhotoUrl ? 'Trocar a foto' : 'Escolher foto'}
                         <input type="file" accept="image/*" onChange={handleDoctorPhotoUpload} className="hidden" />
                       </label>
                       {docPhotoUrl && (
-                        <button
-                          type="button"
-                          onClick={() => setPhotoCropSource(docPhotoUrl)}
-                          className="px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-body font-medium text-ink hover:border-brand transition-colors flex items-center gap-1"
-                        >
-                          <Crop className="w-3 h-3" />
-                          Ajustar enquadramento
-                        </button>
-                      )}
-                      {docPhotoUrl && (
-                        <button
-                          type="button"
-                          onClick={() => setDocPhotoUrl('')}
-                          className="text-body text-red-500 hover:text-red-700 font-medium"
-                        >
-                          Remover
-                        </button>
+                        <>
+                          <BotaoDaLinha icone={Crop} onClick={() => setPhotoCropSource(docPhotoUrl)}>
+                            Ajustar
+                          </BotaoDaLinha>
+                          <BotaoDaLinha icone={Trash2} tom="perigo" onClick={() => setDocPhotoUrl('')}>
+                            Remover
+                          </BotaoDaLinha>
+                        </>
                       )}
                     </div>
                   </div>
-                </div>
+                  <p className="text-[12.5px] text-muted -mt-2">A foto sai na capa do catálogo em PDF.</p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-body font-medium text-gray-700 mb-1">
-                      Nome da Profissional (Ex: Dra. Marcella Ribeiro) *
-                    </label>
-                    <input
-                      type="text"
-                      value={docName}
-                      onChange={(e) => setDocName(e.target.value)}
-                      placeholder="Dra. Nome Completo"
-                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                      required
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Texto rotulo="Nome" obrigatorio valor={docName} onMudar={setDocName} placeholder="Ex.: Dra. Ana Souza" />
+                    <Texto rotulo="Registro profissional" valor={docRegistry} onMudar={setDocRegistry} placeholder="CRBM, CRM, COREN..." />
+                    <Texto
+                      rotulo="Título / especialidade"
+                      valor={docTitle}
+                      onMudar={setDocTitle}
+                      placeholder="Ex.: Biomédica esteta"
+                      className="sm:col-span-2"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-body font-medium text-gray-700 mb-1">
-                      Registro Profissional (CRM / CRBM / COREN)
-                    </label>
-                    <input
-                      type="text"
-                      value={docRegistry}
-                      onChange={(e) => setDocRegistry(e.target.value)}
-                      placeholder="CRBM 28.450 ou CRM 184.920"
-                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-body font-medium text-gray-700 mb-1">
-                      Título / Especialidade
-                    </label>
-                    <input
-                      type="text"
-                      value={docTitle}
-                      onChange={(e) => setDocTitle(e.target.value)}
-                      placeholder="Ex: Biomédica Esteta / Dermatologista / Harmonização Facial"
-                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-body font-medium text-gray-700 mb-1 flex items-center gap-1">
-                      <Mail className="w-3 h-3" />
-                      E-mail de login (usado para criar o acesso ao painel)
-                    </label>
-                    <input
-                      type="email"
-                      value={docEmail}
-                      onChange={(e) => setDocEmail(e.target.value)}
+                    <Texto
+                      rotulo="E-mail de login"
+                      tipo="email"
+                      valor={docEmail}
+                      onMudar={setDocEmail}
                       placeholder={ehZulia ? 'profissional@suaclinica.com' : 'profissional@lavieclinique.com'}
-                      className="w-full px-3 py-1.5 rounded-xs bg-white border border-gray-200 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
+                      ajuda="Usado para criar o acesso dela ao painel."
+                      className="sm:col-span-2"
                     />
                   </div>
-                </div>
 
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowDoctorForm(false)}
-                    className="px-3 py-1.5 rounded-xs border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveDoctor}
-                    className="px-4 py-1.5 rounded-xs bg-ink text-white text-xs font-medium uppercase tracking-wider hover:bg-ink"
-                  >
-                    {editingDocId ? 'Atualizar Médica' : 'Salvar Médica'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* List of Registered Doctors */}
-            {errorMessage && (
-              <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xs flex items-center justify-between">
-                <span>{errorMessage}</span>
-                <button
-                  type="button"
-                  onClick={() => setErrorMessage(null)}
-                  className="text-amber-600 hover:text-amber-900 font-bold ml-2"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              {formData.professionals.map((doc, idx) => (
-                <div
-                  key={doc.id || idx}
-                  className="flex items-center justify-between p-3 rounded-xs bg-card border border-white/80 hover:border-brand/30 transition-all"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <button
-                      type="button"
-                      onClick={() => handleStartEditDoctor(doc)}
-                      className="relative group w-9 h-9 rounded-full bg-ink text-brand-light flex items-center justify-center text-xs font-bold font-serif-luxury shadow-xs overflow-hidden shrink-0 border border-brand/30 hover:border-brand transition-colors"
-                      title="Clique para editar ou trocar foto"
+                  <div className="flex justify-end gap-2">
+                    <BotaoPilula
+                      tom="contorno"
+                      onClick={() => {
+                        limparFormularioDaProfissional();
+                        setShowDoctorForm(false);
+                      }}
                     >
-                      {doc.photoUrl ? (
-                        <img src={doc.photoUrl} alt={doc.name} className="w-full h-full object-cover" />
-                      ) : (
-                        doc.name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'DR'
-                      )}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        <Camera className="w-3.5 h-3.5 text-white" />
-                      </div>
-                    </button>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-xs font-semibold text-ink">{doc.name}</p>
-                        {doc.registryNumber && (
-                          <span className="text-label px-1.5 py-0.2 rounded-xs bg-brand/15 text-brand font-semibold">
-                            {doc.registryNumber}
-                          </span>
-                        )}
-                        {doc.isAdmin && (
-                          <span className="flex items-center gap-0.5 text-label px-1.5 py-0.2 rounded-xs bg-ink text-brand-light font-semibold">
-                            <ShieldCheck className="w-2.5 h-2.5" /> Admin
-                          </span>
-                        )}
-                        {doc.uid ? (
-                          <span className="text-label px-1.5 py-0.2 rounded-xs bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
-                            Login ativo
-                          </span>
-                        ) : (
-                          <span className="text-label px-1.5 py-0.2 rounded-xs bg-gray-100 text-gray-500 font-medium">
-                            Sem login
-                          </span>
-                        )}
-                      </div>
-                      {doc.title && (
-                        <p className="text-body text-gray-500 font-light line-clamp-1">{doc.title}</p>
-                      )}
-                    </div>
+                      Cancelar
+                    </BotaoPilula>
+                    <BotaoPilula tom="preto" icone={Check} onClick={handleSaveDoctor} disabled={!docName.trim()}>
+                      {editingDocId ? 'Atualizar' : 'Adicionar'}
+                    </BotaoPilula>
                   </div>
+                </div>
+              )}
 
-                  {deletingDocId === doc.id ? (
-                    <div className="flex items-center gap-1.5 animate-fadeIn shrink-0">
-                      <span className="text-body text-red-600 font-medium mr-1">
-                        {ehZulia && doc.uid ? 'Excluir e desativar o login?' : 'Excluir?'}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={equipeOcupadaId === doc.id}
-                        onClick={() => handleDeleteDoctor(doc.id)}
-                        className="px-2 py-1 bg-red-600 text-white rounded-xs text-label font-bold uppercase tracking-wider hover:bg-red-700 shadow-xs disabled:opacity-60"
-                      >
-                        {equipeOcupadaId === doc.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Sim'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingDocId(null)}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded-xs text-label font-medium hover:bg-gray-300"
-                      >
-                        Não
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {!doc.uid && (!ehZulia || isAdminUser) && (
+              <ul className="space-y-2">
+                {formData.professionals.map((doc, idx) => {
+                  const ocupado = equipeOcupadaId === doc.id;
+                  return (
+                    <li key={doc.id || idx} className="rounded-2xl bg-card border border-line p-3.5 sm:p-4">
+                      <div className="flex items-start gap-3">
                         <button
                           type="button"
-                          disabled={creatingLoginForId === doc.id}
-                          onClick={() => handleCreateLogin(doc)}
-                          className="p-1.5 rounded-xs text-gray-400 hover:text-brand hover:bg-white transition-colors disabled:opacity-50"
-                          title="Criar login para esta profissional"
+                          onClick={() => handleStartEditDoctor(doc)}
+                          className="w-11 h-11 rounded-full bg-ink text-brand-light flex items-center justify-center text-[13px] font-bold overflow-hidden shrink-0"
+                          title="Editar ou trocar a foto"
                         >
-                          {creatingLoginForId === doc.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          {doc.photoUrl ? (
+                            <img src={doc.photoUrl} alt={doc.name} className="w-full h-full object-cover" />
                           ) : (
-                            <KeyRound className="w-3.5 h-3.5" />
+                            iniciaisDe(doc.name, 2)
                           )}
                         </button>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[15px] font-semibold text-ink">{doc.name}</p>
+                          {doc.title && <p className="text-[13px] text-ink-soft line-clamp-1">{doc.title}</p>}
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {doc.registryNumber && (
+                              <span className="px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-line-soft text-ink">{doc.registryNumber}</span>
+                            )}
+                            {doc.isAdmin && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-ink text-brand-light">
+                                <ShieldCheck className="w-3 h-3" /> Admin
+                              </span>
+                            )}
+                            {doc.uid ? (
+                              <span className="px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                Com login
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[11.5px] font-medium bg-line-soft text-muted">Sem login</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {deletingDocId === doc.id ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-danger-bg px-3 py-2">
+                          <span className="text-[13px] font-semibold text-danger flex-1 min-w-[160px]">
+                            {ehZulia && doc.uid ? 'Excluir e desativar o login dela?' : 'Excluir esta profissional?'}
+                          </span>
+                          <BotaoDaLinha icone={Trash2} tom="perigo" onClick={() => void handleDeleteDoctor(doc.id)} carregando={ocupado} disabled={ocupado}>
+                            Excluir
+                          </BotaoDaLinha>
+                          <BotaoDaLinha icone={X} onClick={() => setDeletingDocId(null)}>
+                            Não
+                          </BotaoDaLinha>
+                        </div>
+                      ) : (
+                        <div className="mt-3 flex flex-wrap gap-1.5 sm:pl-14">
+                          <BotaoDaLinha icone={Edit3} onClick={() => handleStartEditDoctor(doc)}>
+                            Editar
+                          </BotaoDaLinha>
+                          {!doc.uid && (!ehZulia || isAdminUser) && (
+                            <BotaoDaLinha
+                              icone={KeyRound}
+                              onClick={() => void handleCreateLogin(doc)}
+                              carregando={creatingLoginForId === doc.id}
+                              disabled={creatingLoginForId === doc.id}
+                            >
+                              Criar login
+                            </BotaoDaLinha>
+                          )}
+                          {isAdminUser && doc.uid && (
+                            <BotaoDaLinha
+                              icone={doc.isAdmin ? Shield : ShieldCheck}
+                              onClick={() => void handleToggleAdmin(doc)}
+                              carregando={ocupado}
+                              disabled={ocupado}
+                            >
+                              {doc.isAdmin ? 'Tirar de admin' : 'Tornar admin'}
+                            </BotaoDaLinha>
+                          )}
+                          {isAdminUser && (
+                            <BotaoDaLinha icone={Trash2} tom="perigo" onClick={() => setDeletingDocId(doc.id)}>
+                              Excluir
+                            </BotaoDaLinha>
+                          )}
+                        </div>
                       )}
-                      {isAdminUser && doc.uid && (
-                        <button
-                          type="button"
-                          disabled={equipeOcupadaId === doc.id}
-                          onClick={() => handleToggleAdmin(doc)}
-                          className={`p-1.5 rounded-xs transition-colors ${
-                            doc.isAdmin
-                              ? 'text-brand hover:text-gray-400 hover:bg-white'
-                              : 'text-gray-400 hover:text-brand hover:bg-white'
-                          }`}
-                          title={doc.isAdmin ? 'Remover admin' : 'Tornar admin'}
-                        >
-                          {doc.isAdmin ? <ShieldCheck className="w-3.5 h-3.5" /> : <Shield className="w-3.5 h-3.5" />}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleStartEditDoctor(doc)}
-                        className="p-1.5 rounded-xs text-gray-400 hover:text-ink hover:bg-white transition-colors"
-                        title="Editar Médica"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      {isAdminUser && (
-                        <button
-                          type="button"
-                          onClick={() => setDeletingDocId(doc.id)}
-                          className="p-1.5 rounded-xs text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          title="Remover Médica"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-[13px] text-ink-soft">
+                Criar login manda à profissional um e-mail para ela definir a senha. No cadastro de cada procedimento, você
+                escolhe quem o realiza.
+              </p>
             </div>
-            <p className="text-body text-gray-500 italic">
-              * Ao cadastrar um procedimento, você poderá selecionar qual ou quais médicas são responsáveis pelo atendimento.
-            </p>
-          </div>
+          )}
 
-          {/* Contact & Location (Editable for Footer & PDF) */}
-          <div id="cfg-contato" className="space-y-4 scroll-mt-24">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
-              <Phone className="w-3.5 h-3.5" />
-              Canais de Contato & Localização (Exibidos no Rodapé e PDF)
-            </h3>
+          {/* DOCUMENTOS */}
+          {secaoNaTela === 'documentos' && (
+            <SecaoDocumentos perfil={formData} onMudar={(campo, valor) => handleChange(campo, valor)} onIrParaIdentidade={() => abrirSecao('identidade')} />
+          )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">
-                  WhatsApp / Telefone para Agendamentos *
-                </label>
-                <input
-                  type="text"
-                  value={formData.phone}
-                  onChange={(e) => handleChange('phone', e.target.value)}
-                  placeholder="(19) 99876-5432"
-                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Instagram (@perfil)
-                </label>
-                <input
-                  type="text"
-                  value={formData.instagram}
-                  onChange={(e) => handleChange('instagram', e.target.value)}
-                  placeholder={ehZulia ? '@suaclinica' : '@lavieclinique.indaiatuba'}
-                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Endereço do Consultório
-                </label>
-                <input
-                  type="text"
-                  value={formData.address}
-                  onChange={(e) => handleChange('address', e.target.value)}
-                  placeholder="Av. Pres. Vargas, 1400 - Sala 82, Jardim Vitória"
-                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Cidade / UF
-                </label>
-                <input
-                  type="text"
-                  value={formData.cityState}
-                  onChange={(e) => handleChange('cityState', e.target.value)}
-                  placeholder="Indaiatuba - SP"
-                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">
-                  CNPJ (sai na nota de recibo)
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.cnpj ? formatCnpj(formData.cnpj) : ''}
-                  onChange={(e) => handleChange('cnpj', e.target.value.replace(/\D/g, '').slice(0, 14))}
-                  placeholder="00.000.000/0001-00"
-                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink tabular-nums focus:outline-hidden focus:border-brand"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Endereço público do sistema
-                </label>
-                <input
-                  type="text"
-                  value={formData.publicBaseUrl || ''}
-                  onChange={(e) => handleChange('publicBaseUrl', e.target.value)}
-                  placeholder={ENDERECO_DO_SITE}
-                  className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink focus:outline-hidden focus:border-brand"
-                />
-                <p className="text-body text-gray-500 mt-1.5 leading-snug">
-                  Base dos links enviados à paciente — ficha de anamnese, orçamento, confirmação
-                  do agendamento e QR Code do catálogo. Em branco, os links usam o endereço do
-                  site, <strong>{ENDERECO_DO_SITE}</strong>. Só preencha se o site tiver outro
-                  endereço que abra <strong>sem pedir login</strong>. Para conferir, abra o link
-                  numa aba anônima.
-                </p>
-                {(() => {
-                  const base = normalizarEnderecoPublico(formData.publicBaseUrl);
-                  const motivo = base ? motivoEnderecoFechado(base) : null;
-                  return motivo ? (
-                    <p className="text-body text-red-600 mt-1.5 leading-snug">
-                      Este endereço não serve: ele {motivo}. Os links saem com {ENDERECO_DO_SITE}.
-                    </p>
-                  ) : null;
-                })()}
-              </div>
-            </div>
-          </div>
-
-          {/* Catalog notes */}
-          <div id="cfg-catalogo" className="space-y-4 scroll-mt-24">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
-              <Sparkles className="w-3.5 h-3.5" />
-              Mensagens do Catálogo & PDF
-            </h3>
-
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">
-                Mensagem de Boas-Vindas no Topo do Catálogo
-              </label>
-              <textarea
-                rows={2}
-                value={formData.catalogWelcomeNote || ''}
-                onChange={(e) => handleChange('catalogWelcomeNote', e.target.value)}
-                className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
+          {/* CATÁLOGO */}
+          {secaoNaTela === 'catalogo' && (
+            <div className="space-y-4 max-w-2xl">
+              <TextoLongo
+                rotulo="Boas-vindas no topo do catálogo"
+                valor={formData.catalogWelcomeNote || ''}
+                onMudar={(v) => handleChange('catalogWelcomeNote', v)}
+                ajuda="Uma frase curta de apresentação, na capa do catálogo em PDF."
               />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">
-                Nota de Rodapé (Condições / Aviso de Avaliação)
-              </label>
-              <input
-                type="text"
-                value={formData.consultationNote || ''}
-                onChange={(e) => handleChange('consultationNote', e.target.value)}
-                className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
+              <Texto
+                rotulo="Nota de rodapé"
+                valor={formData.consultationNote || ''}
+                onMudar={(v) => handleChange('consultationNote', v)}
+                ajuda="Condições ou aviso — por exemplo, que os valores dependem de avaliação."
               />
+              <p className="text-[13px] text-ink-soft">
+                A cor, as fontes e o logo do catálogo seguem os de{' '}
+                <button type="button" onClick={() => abrirSecao('documentos')} className="font-semibold text-ink underline underline-offset-2">
+                  Documentos
+                </button>
+                .
+              </p>
             </div>
-          </div>
+          )}
 
-          <div id="cfg-agenda" className="scroll-mt-24 space-y-4">
-            <SecaoAgendaDaClinica formData={formData} onChange={handleChange} />
-            <GoogleAgendaConexoes profissionais={clinic.professionals || []} />
-          </div>
+          {/* AGENDA */}
+          {secaoNaTela === 'agenda' && (
+            <div className="space-y-8 max-w-3xl">
+              <SecaoAgendaDaClinica formData={formData} onChange={handleChange} />
+              <GoogleAgendaConexoes profissionais={clinic.professionals || []} />
+            </div>
+          )}
 
-          {/* Ações. Coladas no fim da página, e não numa barra flutuante: numa página de
-              configurações a pessoa rola até acabar e salva — não salva no meio. */}
-          <div className="pt-5 border-t border-line flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="min-h-[44px] px-4 rounded-xl border border-line text-body font-semibold uppercase tracking-wider text-muted hover:text-ink transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="min-h-[44px] px-6 rounded-xl bg-brand text-white text-body font-semibold uppercase tracking-widest shadow-xs active:scale-95 transition-all flex items-center gap-1.5"
-            >
-              <Check className="w-4 h-4" />
-              Salvar informações
-            </button>
-          </div>
-        </form>
+          {/* CELULAR */}
+          {secaoNaTela === 'celular' && (
+            <div className="max-w-2xl">
+              <SecaoCelular endereco={resolvePublicBase(formData)} />
+            </div>
+          )}
+
+          {/* DADOS */}
+          {secaoNaTela === 'dados' && (
+            <div className="max-w-2xl">
+              <SecaoDados nomeDaClinica={clinic.name || formData.name} ehAdmin={isAdminUser} clinicaId={clinicaAtual()} />
+            </div>
+          )}
+        </main>
       </div>
 
-      {/* Fora do <form>: o recorte não pode disparar o submit do cadastro da médica. */}
+      {/* A barra de salvar só aparece quando há o que salvar — e fica à vista em qualquer seção, para
+          ninguém sair achando que a mudança já valeu. No celular, acima da barra de navegação. */}
+      {sujo && (
+        <div className="fixed inset-x-0 z-40 px-4 bottom-[calc(var(--altura-barra-inferior)+8px)] sm:bottom-5">
+          <div className="max-w-3xl mx-auto rounded-2xl bg-ink text-white shadow-[0_10px_30px_rgba(0,0,0,.25)] px-4 py-3 flex flex-wrap items-center gap-3">
+            <p className="flex-1 min-w-[150px] text-[14px] font-semibold">Alterações não salvas</p>
+            <BotaoPilula tom="contorno-escuro" onClick={descartar} disabled={salvando}>
+              Descartar
+            </BotaoPilula>
+            <BotaoPilula tom="ouro" icone={salvando ? Loader2 : Check} onClick={() => void salvar()} disabled={salvando}>
+              {salvando ? 'Salvando…' : 'Salvar'}
+            </BotaoPilula>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
+
       <ImageCropperModal
         isOpen={photoCropSource !== null}
         source={photoCropSource}
@@ -1038,16 +1053,7 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           if (editingDocId) {
             setFormData((prev) => ({
               ...prev,
-              professionals: prev.professionals.map((d) =>
-                d.id === editingDocId ? { ...d, photoUrl: dataUrl } : d
-              ),
-            }));
-          } else if (formData.professionals.length > 0) {
-            setFormData((prev) => ({
-              ...prev,
-              professionals: prev.professionals.map((d, i) =>
-                i === 0 ? { ...d, photoUrl: dataUrl } : d
-              ),
+              professionals: prev.professionals.map((d) => (d.id === editingDocId ? { ...d, photoUrl: dataUrl } : d)),
             }));
           }
           setPhotoCropSource(null);
@@ -1072,38 +1078,49 @@ export const ClinicSettingsModal: React.FC<ClinicSettingsModalProps> = ({
           setLogoCropSource(null);
         }}
       />
-
     </div>
   );
 };
 
+// ==========================================
+// AGENDA
+// ==========================================
+
 /**
- * Configurações da agenda: expediente, granularidade da grade e a mensagem de confirmação.
+ * Configurações da agenda: expediente, granularidade da grade e salas.
  *
  * O expediente **não bloqueia nada** — só pinta de cinza o que está fora dele. Encaixe continua
  * gravável, porque quem decide abrir uma exceção é a clínica, não a grade.
  */
-const DIAS_DO_EXPEDIENTE = [
-  'Domingo',
-  'Segunda',
-  'Terça',
-  'Quarta',
-  'Quinta',
-  'Sexta',
-  'Sábado',
-];
+const DIAS_DO_EXPEDIENTE = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+const CampoDeHora: React.FC<{ valor: string; onMudar: (v: string) => void; rotulo: string; apagado?: boolean }> = ({
+  valor,
+  onMudar,
+  rotulo,
+  apagado,
+}) => (
+  <input
+    type="text"
+    inputMode="numeric"
+    value={valor}
+    onChange={(e) => onMudar(mascararHora(e.target.value))}
+    placeholder="hh:mm"
+    aria-label={rotulo}
+    className={`w-[72px] h-10 px-2.5 rounded-xl bg-line-soft text-[14px] font-semibold tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-ink focus:bg-card ${
+      apagado ? 'text-ink-soft' : 'text-ink'
+    }`}
+  />
+);
 
 const SecaoAgendaDaClinica: React.FC<{
   formData: ClinicProfile;
   onChange: (campo: keyof ClinicProfile, valor: any) => void;
 }> = ({ formData, onChange }) => {
   const tabela =
-    formData.agendaExpediente && formData.agendaExpediente.length > 0
-      ? formData.agendaExpediente
-      : AGENDA_DEFAULTS.expediente;
+    formData.agendaExpediente && formData.agendaExpediente.length > 0 ? formData.agendaExpediente : AGENDA_DEFAULTS.expediente;
 
-  const doDia = (diaSemana: number): AgendaExpedienteDia =>
-    tabela.find((d) => d.diaSemana === diaSemana) || { diaSemana };
+  const doDia = (diaSemana: number): AgendaExpedienteDia => tabela.find((d) => d.diaSemana === diaSemana) || { diaSemana };
 
   /** Reescreve a tabela inteira, sempre com os sete dias — assim nunca falta linha no banco. */
   const atualizar = (diaSemana: number, mudanca: Partial<AgendaExpedienteDia>) => {
@@ -1115,113 +1132,78 @@ const SecaoAgendaDaClinica: React.FC<{
   };
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-brand flex items-center gap-1.5 pb-1 border-b border-white/60">
-        <CalendarDays className="w-3.5 h-3.5" />
-        Agenda
-      </h3>
-
-      <div>
-        <p className="text-body text-gray-500 leading-relaxed mb-2">
-          Horário de funcionamento. O que fica fora dele aparece em cinza na agenda — mas continua
-          clicável, para encaixe.
-        </p>
-
-        <div className="space-y-1.5">
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <div>
+          <RotuloTinta>Horário de funcionamento</RotuloTinta>
+          <p className="text-[13px] text-ink-soft -mt-1">
+            O que fica fora dele aparece em cinza na agenda — mas continua clicável, para encaixe.
+          </p>
+        </div>
+        <ul className="rounded-2xl bg-card border border-line divide-y divide-line-soft">
           {DIAS_DO_EXPEDIENTE.map((rotulo, i) => {
             const dia = doDia(i);
             const aberto = !!dia.abre && !!dia.fecha;
             return (
-              <div
-                key={rotulo}
-                className="flex items-center gap-2 bg-white/60 border border-white/80 rounded-sm px-2.5 py-1.5"
-              >
-                <label className="flex items-center gap-2 w-28 shrink-0 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={aberto}
-                    onChange={(e) =>
+              <li key={rotulo} className="px-3.5 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="w-[150px] shrink-0">
+                  <Interruptor
+                    ligado={aberto}
+                    onMudar={(ligado) =>
                       atualizar(
                         i,
-                        e.target.checked
+                        ligado
                           ? { abre: '09:00', fecha: '19:00' }
                           : // String vazia, não `undefined`: o `cleanForFirestore` remove chaves
                             // indefinidas e o `merge: true` preservaria o horário antigo.
                             { abre: '', fecha: '' }
                       )
                     }
-                    className="w-4 h-4 accent-brand"
+                    rotulo={rotulo}
                   />
-                  <span className="text-xs font-medium text-ink">{rotulo}</span>
-                </label>
-
+                </div>
                 {aberto ? (
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={dia.abre || ''}
-                      onChange={(e) => atualizar(i, { abre: mascararHora(e.target.value) })}
-                      placeholder="hh:mm"
-                      aria-label={`${rotulo}: abre às`}
-                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-body text-ink tabular-nums focus:outline-hidden"
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                    <CampoDeHora valor={dia.abre || ''} onMudar={(v) => atualizar(i, { abre: v })} rotulo={`${rotulo}: abre às`} />
+                    <span className="text-[13px] text-muted">às</span>
+                    <CampoDeHora valor={dia.fecha || ''} onMudar={(v) => atualizar(i, { fecha: v })} rotulo={`${rotulo}: fecha às`} />
+                    {/* Pausa do almoço. As duas pontas juntas ou nenhuma: só o início pintaria de
+                        cinza tudo dali até o fechamento. */}
+                    <span className="text-[13px] text-muted ml-2">almoço</span>
+                    <CampoDeHora
+                      valor={dia.almocoInicio || ''}
+                      onMudar={(v) => atualizar(i, { almocoInicio: v })}
+                      rotulo={`${rotulo}: almoço começa às`}
+                      apagado
                     />
-                    <span className="text-body text-muted">às</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={dia.fecha || ''}
-                      onChange={(e) => atualizar(i, { fecha: mascararHora(e.target.value) })}
-                      placeholder="hh:mm"
-                      aria-label={`${rotulo}: fecha às`}
-                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-body text-ink tabular-nums focus:outline-hidden"
-                    />
-
-                    {/* Pausa do almoço. As duas pontas juntas ou nenhuma: só o início
-                        pintaria de cinza tudo dali até o fechamento. */}
-                    <span className="text-body text-muted ml-1">almoço</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={dia.almocoInicio || ''}
-                      onChange={(e) => atualizar(i, { almocoInicio: mascararHora(e.target.value) })}
-                      placeholder="hh:mm"
-                      aria-label={`${rotulo}: almoço começa às`}
-                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-body text-muted tabular-nums focus:outline-hidden"
-                    />
-                    <span className="text-body text-muted">às</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={dia.almocoFim || ''}
-                      onChange={(e) => atualizar(i, { almocoFim: mascararHora(e.target.value) })}
-                      placeholder="hh:mm"
-                      aria-label={`${rotulo}: almoço termina às`}
-                      className="w-20 glass-input px-2.5 py-1.5 rounded-sm text-body text-muted tabular-nums focus:outline-hidden"
+                    <span className="text-[13px] text-muted">às</span>
+                    <CampoDeHora
+                      valor={dia.almocoFim || ''}
+                      onMudar={(v) => atualizar(i, { almocoFim: v })}
+                      rotulo={`${rotulo}: almoço termina às`}
+                      apagado
                     />
                   </div>
                 ) : (
-                  <span className="text-body text-muted">Fechado</span>
+                  <span className="text-[13px] text-muted">Fechado</span>
                 )}
-              </div>
+              </li>
             );
           })}
-        </div>
-      </div>
+        </ul>
+      </section>
 
-      <div>
-        <label className="block text-xs font-medium text-ink mb-1">
-          Divisão da grade
-        </label>
+      <section className="space-y-2">
+        <RotuloTinta>Divisão da grade</RotuloTinta>
         <ListaSuspensa
-          className="max-w-[220px]"
+          className="max-w-[240px]"
           rotuloAcessivel="Divisão da grade"
           valor={String(formData.agendaIntervaloMin || AGENDA_DEFAULTS.intervaloMin)}
           onMudar={(v) => onChange('agendaIntervaloMin', Number(v))}
-          opcoes={INTERVALOS_DISPONIVEIS.map((m) => ({ valor: String(m), rotulo: `${m} minutos` }))}
+          opcoes={INTERVALOS_DISPONIVEIS.map((m) => ({ valor: String(m), rotulo: `De ${m} em ${m} minutos` }))}
           buscavel={false}
         />
-      </div>
+      </section>
 
       {/* Salas e equipamentos.
 
@@ -1230,16 +1212,14 @@ const SecaoAgendaDaClinica: React.FC<{
           profissional não pega — são duas profissionais diferentes, cada uma com a coluna
           livre. Clínica que não usa o conceito deixa a lista vazia e o campo some do
           formulário de agendamento. */}
-      <div>
-        <label className="block text-body font-medium text-ink mb-1">
-          Salas e equipamentos
-        </label>
-        <p className="text-label text-muted mb-2">
-          Dois agendamentos na mesma sala e no mesmo horário são impedidos — ao contrário do
-          conflito de profissional, que só avisa.
-        </p>
-
-        <div className="space-y-1.5">
+      <section className="space-y-3">
+        <div>
+          <RotuloTinta>Salas e equipamentos</RotuloTinta>
+          <p className="text-[13px] text-ink-soft -mt-1">
+            Dois agendamentos na mesma sala e no mesmo horário são impedidos. Sem salas, o campo nem aparece ao agendar.
+          </p>
+        </div>
+        <div className="space-y-2">
           {(formData.agendaSalas || []).map((sala, i) => (
             <div key={sala.id} className="flex items-center gap-2">
               <input
@@ -1252,46 +1232,33 @@ const SecaoAgendaDaClinica: React.FC<{
                 }}
                 placeholder="Ex.: Sala laser"
                 aria-label={`Nome da sala ${i + 1}`}
-                className="flex-1 glass-input px-3 py-2 rounded-sm text-body text-ink focus:outline-hidden"
+                className="flex-1 h-12 px-4 rounded-[14px] bg-line-soft text-[15px] font-semibold text-ink focus:outline-none focus:ring-2 focus:ring-ink focus:bg-card"
               />
               <button
                 type="button"
-                onClick={() =>
-                  onChange(
-                    'agendaSalas',
-                    (formData.agendaSalas || []).filter((s) => s.id !== sala.id)
-                  )
-                }
+                onClick={() => onChange('agendaSalas', (formData.agendaSalas || []).filter((s) => s.id !== sala.id))}
                 aria-label={`Remover ${sala.nome || 'esta sala'}`}
-                className="w-11 h-11 shrink-0 rounded-lg flex items-center justify-center text-muted hover:text-danger hover:bg-danger-bg transition-colors"
+                className="w-11 h-11 shrink-0 rounded-full flex items-center justify-center text-muted hover:text-danger hover:bg-danger-bg transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
           ))}
         </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            onChange('agendaSalas', [
-              ...(formData.agendaSalas || []),
-              { id: `sala-${Date.now()}`, nome: '' },
-            ])
-          }
-          className="mt-2 inline-flex items-center gap-1.5 min-h-[40px] px-3 rounded-lg border border-line bg-card text-body font-semibold text-ink hover:border-brand transition-colors"
+        <BotaoPilula
+          tom="contorno"
+          icone={Plus}
+          onClick={() => onChange('agendaSalas', [...(formData.agendaSalas || []), { id: `sala-${Date.now()}`, nome: '' }])}
         >
-          <Plus className="w-4 h-4 text-brand" />
           Adicionar sala
-        </button>
-      </div>
+        </BotaoPilula>
+      </section>
 
       {/* A confirmação vai sempre pelo link do agendamento — não há mais modelo de mensagem
           para editar aqui. */}
-      <p className="text-body text-muted">
-        A confirmação no WhatsApp vai sempre com o <strong>link do agendamento</strong>: a cliente
-        confirma, avisa que não vai ou pede outro horário pela página, e as orientações de preparo
-        de cada procedimento aparecem lá.
+      <p className="text-[13px] text-ink-soft">
+        A confirmação no WhatsApp vai sempre com o <strong>link do agendamento</strong>: a cliente confirma, avisa que não vai
+        ou pede outro horário pela página, e as orientações de preparo de cada procedimento aparecem lá.
       </p>
     </div>
   );

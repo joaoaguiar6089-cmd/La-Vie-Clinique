@@ -28,7 +28,9 @@ import {
   PenTool,
 } from 'lucide-react';
 import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
-import { equipeDaClinica, marcaDaClinica, nomeDaClinica } from '../../utils/marca';
+import { equipeDaClinica, marcaDaClinica } from '../../utils/marca';
+import { IdentificacaoDaClinica } from '../documentos/IdentificacaoDaClinica';
+import { useEstiloDaMarca } from '../documentos/MarcaDosDocumentos';
 
 interface PrintableAnamnesisSheetProps {
   record: AnamnesisRecord;
@@ -73,6 +75,8 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
   mapasDeAreas,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  // A cor e as fontes da clínica, só na folha (os botões da janela continuam os do painel).
+  const estiloDaMarca = useEstiloDaMarca();
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [annotatingTarget, setAnnotatingTarget] = useState<'modelo' | 'paciente' | null>(null);
@@ -250,31 +254,17 @@ export const PrintableAnamnesisSheet: React.FC<PrintableAnamnesisSheetProps> = (
         <div
           ref={contentRef}
           className="flex-1 overflow-y-auto p-6 sm:p-10 text-ink font-sans bg-white print:p-0 print:overflow-visible"
+          style={estiloDaMarca}
         >
           {/* Clinic Header */}
           <div className="border-b-2 border-ink pb-5 mb-6 flex items-start justify-between gap-4">
-            <div>
-              {/* O documento se apresenta pelo que ele é. Antes o topo trazia só o nome da
-                  clínica, e uma folha impressa não dizia de qual procedimento era sem que
-                  alguém lesse o corpo dela. O selo "Prontuário & Anamnese" saiu porque o
-                  título agora diz a mesma coisa.
-
-                  "La Vie Clinique" é a marca, e vai literal: o nome cadastrado no perfil é a
-                  razão social por extenso, longa demais para um título — ela continua logo
-                  abaixo, que é onde identifica a clínica. */}
-              <h2 className="font-serif-luxury text-2xl font-bold tracking-tight text-ink leading-tight">
-                Anamnese - {record.procedimentoNome} - {marcaDaClinica(clinicProfile)}
-              </h2>
-              <p className="text-xs font-semibold text-ink mt-1.5">
-                {nomeDaClinica(clinicProfile)}
-              </p>
-              <p className="text-xs text-gray-500 italic mt-0.5">
-                {clinicProfile.tagline || 'Excelência Médica e Estética Avançada'}
-              </p>
-              <p className="text-[11px] text-gray-500 mt-1">
-                {clinicProfile.address} • {clinicProfile.cityState} • Tel: {clinicProfile.phone}
-              </p>
-            </div>
+            {/* O documento se apresenta pelo que ele é: o título diz o procedimento, e o nome da
+                clínica vem logo abaixo, com o logo dela ao lado. "La Vie Clinique" é a marca, e vai
+                literal no título: o nome cadastrado no perfil é a razão social por extenso. */}
+            <IdentificacaoDaClinica
+              titulo={<>Anamnese - {record.procedimentoNome} - {marcaDaClinica(clinicProfile)}</>}
+              clinicProfile={clinicProfile}
+            />
 
             <div className="text-right">
               <span className="inline-block px-3 py-1 bg-gray-100 border border-gray-200 text-xs font-mono font-bold text-ink rounded-xs">

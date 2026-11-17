@@ -5,10 +5,11 @@ import { fileURLToPath } from 'node:url';
 import { criarRotasDoCadastro } from './server/cadastro';
 import { criarRotasDoDono } from './server/dono';
 import { criarRotasDaEquipe, manterEquipeSincronizada } from './server/equipe';
-import { bancoAdmin, espacoDaClinica, PREFIXO_DA_CREDENCIAL } from './server/firebaseAdmin';
+import { apagarArquivosDaClinica, bancoAdmin, espacoDaClinica, PREFIXO_DA_CREDENCIAL } from './server/firebaseAdmin';
 import { criarRotasFichaPublica } from './server/fichaPublica';
 import { criarRotasGoogleAgenda } from './server/googleAgenda';
 import { criarRotasLeituraDePedido } from './server/leituraDePedido';
+import { criarRotasDeAcesso } from './server/registrosDeAcesso';
 import { criarResolvedorDePreview, type LeitorDoBanco } from './server/previewDosLinks';
 import { servirDocumento } from './server/documentosLegais';
 import { servirPrivacidade } from './server/privacidade';
@@ -98,7 +99,9 @@ app.use('/api/equipe', criarRotasDaEquipe());
 // Cadastro sozinho de clínica nova, na Zulia: o login confirmado vira a admin (ver server/cadastro.ts).
 app.use('/api/cadastro', criarRotasDoCadastro());
 // Painel do dono da plataforma: só o login do dono, com o segundo fator (ver server/dono.ts).
-app.use('/api/dono', criarRotasDoDono({ espacoDaClinica }));
+app.use('/api/dono', criarRotasDoDono({ espacoDaClinica, apagarArquivos: apagarArquivosDaClinica }));
+// Registros de acesso ao painel, guardados por 6 meses (Marco Civil, art. 15 — ver server/registrosDeAcesso.ts).
+app.use('/api/acesso', criarRotasDeAcesso());
 // Leitura da foto ou do PDF de um pedido de compra do Estoque pelo Gemini, com a chave do servidor
 // (ver server/leituraDePedido.ts).
 app.use('/api/leitura-de-pedido', criarRotasLeituraDePedido());

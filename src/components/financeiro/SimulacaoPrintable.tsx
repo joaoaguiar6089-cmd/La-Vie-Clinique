@@ -4,7 +4,10 @@ import { ClinicProfile, SimulacaoDeCusto } from '../../types';
 import { clinicMonogram } from '../ClinicLogo';
 import {
   ALTURA_UTIL,
+  BEGE_DA_LINHA,
+  BEGE_DO_TOTAL,
   BRONZE,
+  BRONZE_SOBRE_PRETO,
   CINZA,
   CINZA_CLARO,
   CONTENT_W,
@@ -19,6 +22,8 @@ import {
   estiloDoNumeroDaPagina,
   estiloDoRotulo,
 } from '../documentos/estiloA4';
+import { LogoDaFolha, useEstiloDaMarca, useMarcaDosDocumentos } from '../documentos/MarcaDosDocumentos';
+import { esperarFontesDosDocumentos } from '../../utils/marcaDosDocumentos';
 import { formatBRL } from '../../utils/formatters';
 import { custoDaLinha, formatarPrecoUnitario, quantidadeComUnidade, valorClienteDaLinha } from '../../utils/estoque';
 import { totaisDoProcedimento } from '../../utils/simulacaoDeCusto';
@@ -39,8 +44,6 @@ type DadosDaClinica = Pick<ClinicProfile, 'name' | 'tagline' | 'cityState' | 'ph
 /** Larguras das colunas; o material fica com o resto. Somam com folga dentro da folha. */
 const COLUNAS = { qtd: 92, custoUn: 92, custo: 92, repasseUn: 92, repasse: 92 };
 const COLUNA_MATERIAL = CONTENT_W - Object.values(COLUNAS).reduce((a, b) => a + b, 0);
-const BEGE_DA_LINHA = '#F4F0EA';
-const BEGE_DO_TOTAL = '#EEE6DB';
 
 const rotuloPequeno: React.CSSProperties = { ...estiloDoRotulo, fontWeight: 600, letterSpacing: '.1em' };
 
@@ -55,16 +58,20 @@ const celula = (largura: number, alinhamento: 'left' | 'right' = 'right'): React
 const Cabecalho: React.FC<{ simulacao: SimulacaoDeCusto; clinica: DadosDaClinica }> = ({ simulacao, clinica }) => {
   const { curto, complemento } = partesDoNomeDaClinica(clinica.name);
   const linhaDeBaixo = [clinica.tagline, clinica.cityState].filter(Boolean).join(' • ');
+  const { logoUrl } = useMarcaDosDocumentos();
   return (
     <div style={{ flexShrink: 0, marginTop: 8 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
+          {logoUrl ? (
+            <LogoDaFolha url={logoUrl} nome={clinica.name} altura={52} larguraMaxima={170} />
+          ) : (
           <div
             style={{
               width: 52,
               height: 52,
               background: PRETO,
-              color: BRONZE,
+              color: BRONZE_SOBRE_PRETO,
               fontFamily: 'var(--font-serif)',
               fontSize: 18,
               letterSpacing: '.06em',
@@ -76,6 +83,7 @@ const Cabecalho: React.FC<{ simulacao: SimulacaoDeCusto; clinica: DadosDaClinica
           >
             {clinicMonogram(clinica.name)}
           </div>
+          )}
           <div style={{ minWidth: 0 }}>
             <div style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: PRETO, lineHeight: 1.1 }}>{curto}</div>
             {[complemento, linhaDeBaixo].filter(Boolean).map((linha) => (
@@ -156,7 +164,7 @@ const Identificacao: React.FC<{ simulacao: SimulacaoDeCusto }> = ({ simulacao })
       }}
     >
       <div>
-        <div style={rotuloPequeno}>Custo total dos materiais</div>
+        <div style={{ ...rotuloPequeno, color: BRONZE_SOBRE_PRETO }}>Custo total dos materiais</div>
         <div style={{ fontFamily: 'var(--font-serif)', fontSize: 32, lineHeight: 1.15, marginTop: 6 }}>
           {formatBRL(simulacao.custoTotal)}
         </div>
@@ -433,6 +441,9 @@ interface PaginasDaSimulacaoProps {
 export const PaginasDaSimulacao: React.FC<PaginasDaSimulacaoProps> = ({ simulacao, clinica, onPronta }) => {
   const medicaoRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<Pagina[] | null>(null);
+  const marca = useMarcaDosDocumentos();
+  // As folhas não têm uma raiz única, e a medição mora no body: cada uma leva a marca.
+  const estiloDaMarca = useEstiloDaMarca();
 
   useEffect(() => {
     let cancelado = false;
@@ -441,7 +452,7 @@ export const PaginasDaSimulacao: React.FC<PaginasDaSimulacaoProps> = ({ simulaca
 
     (async () => {
       // Sem as fontes carregadas, a serifa ainda não está aplicada e toda medida sai errada.
-      if (document.fonts) await document.fonts.ready;
+      await esperarFontesDosDocumentos(marca.fontes);
       for (let tentativa = 0; !medicaoRef.current && tentativa < 30; tentativa++) {
         await new Promise((r) => requestAnimationFrame(() => r(null)));
         if (cancelado) return;
@@ -472,7 +483,7 @@ export const PaginasDaSimulacao: React.FC<PaginasDaSimulacaoProps> = ({ simulaca
     };
     // `onPronta` é um setter estável de quem chama; medir de novo só quando o documento muda.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [simulacao, clinica]);
+  }, [simulacao, clinica, marca.fontes, marca.logoUrl]);
 
   useEffect(() => {
     if (layout) onPronta?.(true);
@@ -497,6 +508,7 @@ export const PaginasDaSimulacao: React.FC<PaginasDaSimulacaoProps> = ({ simulaca
             top: 0,
             width: CONTENT_W,
             visibility: 'hidden',
+            ...estiloDaMarca,
             fontFamily: 'var(--font-sans)',
             background: OFFWHITE,
           }}
@@ -539,7 +551,7 @@ export const PaginasDaSimulacao: React.FC<PaginasDaSimulacaoProps> = ({ simulaca
         )}
 
       {layout?.map((pagina, indice) => (
-        <div key={indice} data-pdf-page={indice + 1} style={estiloDaPagina}>
+        <div key={indice} data-pdf-page={indice + 1} style={{ ...estiloDaPagina, ...estiloDaMarca }}>
           {indice === 0 && (
             <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 18, background: PRETO }} />
           )}

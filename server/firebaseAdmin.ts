@@ -180,6 +180,27 @@ export function definirAuthAdmin(novo: Auth | undefined): void {
   autenticacao = novo;
 }
 
+/**
+ * Apaga os arquivos de `clinicas/{c}/` no Storage — a eliminação dos dados de uma clínica
+ * encerrada (ver `apagarClinica`, em `server/dono.ts`). Devolve quantos foram apagados.
+ *
+ * Lança se a conta do servidor não puder apagar: ela precisa do papel **Administrador de objetos do
+ * Storage** (o "Leitor de objetos" do espaço das fotos só lê). Quem chama trata isso antes de mexer
+ * em qualquer outra coisa, para a exclusão poder ser repetida inteira depois.
+ */
+export async function apagarArquivosDaClinica(clinicaId: string): Promise<number> {
+  const app = appComCredencial();
+  if (!app || !ehZulia) throw new Error('sem-credencial');
+  if (!/^[A-Za-z0-9_-]+$/.test(clinicaId)) throw new Error('id-invalido');
+  const bucket = getStorage(app).bucket(firebaseConfig.storageBucket);
+  const [arquivos] = await bucket.getFiles({ prefix: `clinicas/${clinicaId}/` });
+  for (let i = 0; i < arquivos.length; i += 20) {
+    await Promise.all(arquivos.slice(i, i + 20).map((a) => a.delete({ ignoreNotFound: true })));
+  }
+  medidos.delete(clinicaId);
+  return arquivos.length;
+}
+
 const medidos = new Map<string, { ate: number; bytes: number }>();
 
 /**
