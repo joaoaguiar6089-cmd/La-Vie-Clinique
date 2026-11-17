@@ -39,8 +39,9 @@ interface ItemDaLinhaDoTempoProps {
  * Os atalhos que ficavam à direita saíram: com o painel, seriam um segundo caminho para as mesmas
  * ações, e é o caminho único que ensina a ordem do atendimento.
  *
- * O mesmo componente serve à linha da clínica (tela Hoje) e à da paciente (aba Resumo): as duas
- * são a mesma coisa em recortes diferentes, e com dois desenhos a equipe teria que aprender dois.
+ * Serve à linha da paciente (aba Resumo). A tela Hoje mostra os mesmos eventos em cartões
+ * (`CartaoDaLinhaDoTempo`, abaixo), com o mesmo conteúdo e os mesmos toques — lá a linha ocupa a
+ * largura da tela, e uma coluna estreita deixava metade dela vazia.
  *
  * A ficha da paciente abre pelo botão com a pessoa, e não pelo nome: com a linha toda clicável, o
  * nome não pode levar a outro lugar.
@@ -137,6 +138,99 @@ export const ItemDaLinhaDoTempo: React.FC<ItemDaLinhaDoTempoProps> = ({
           <ChevronRight aria-hidden className="w-[18px] h-[18px] text-muted shrink-0 self-center" />
         )}
       </div>
+    </li>
+  );
+};
+
+/** A cor de cada etapa da jornada, no selo do cartão. */
+const TOM_DO_TIPO = {
+  orcamento: 'bg-brand-bg text-brand-deep',
+  anamnese: 'bg-info-bg text-info',
+  avaliacao: 'bg-warn-bg text-warn',
+  atendimento: 'bg-ok-bg text-ok',
+} as const;
+
+/**
+ * O mesmo evento em forma de cartão — o da tela Hoje, onde a linha da clínica inteira ocupa a
+ * largura da tela e os eventos de um dia ficam lado a lado em vez de numa coluna estreita.
+ *
+ * O conteúdo e os toques são os do item: o cartão inteiro abre o painel do evento, "Paciente"
+ * abre a ficha dela e o orçamento traz o desfecho. Muda só o desenho — letra maior, a hora e a
+ * etapa em destaque, a cliente acima do procedimento.
+ */
+export const CartaoDaLinhaDoTempo: React.FC<{
+  item: ItemDaLinha;
+  onAbrirPaciente: (pacienteId: string) => void;
+  onAbrir: (item: ItemDaLinha) => void;
+}> = ({ item, onAbrirPaciente, onAbrir }) => {
+  const Icone = ICONE_DO_TIPO[item.tipo];
+  const hora = item.tipo === 'atendimento' ? item.ref.hora : undefined;
+  const pacienteId = item.ref.pacienteId;
+  const faltou = item.tipo === 'atendimento' && item.ref.status === 'faltou';
+
+  const detalhe =
+    item.tipo === 'orcamento'
+      ? `${formatBRL(item.ref.total)} · ${item.ref.itens.length} procedimento${
+          item.ref.itens.length === 1 ? '' : 's'
+        }`
+      : item.profissional;
+
+  return (
+    <li className="peca-no-relevo group relative min-w-0 rounded-2xl p-4 flex flex-col gap-2.5">
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden
+          className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${
+            faltou ? 'bg-danger-bg text-danger' : TOM_DO_TIPO[item.tipo]
+          }`}
+        >
+          <Icone className="w-5 h-5" />
+        </span>
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[.12em] text-ink-soft">
+            {ROTULO_DO_TIPO[item.tipo]}
+            {faltou && (
+              <span className="px-1.5 py-px rounded-md bg-danger-bg text-danger border border-danger-line text-[11px] tracking-wider">
+                {ROTULO_DO_STATUS.faltou}
+              </span>
+            )}
+          </span>
+          {hora && <span className="block text-[16px] font-bold text-ink tabular-nums">{hora}</span>}
+        </span>
+        {pacienteId && (
+          <button
+            type="button"
+            onClick={() => onAbrirPaciente(pacienteId)}
+            aria-label={`Abrir a página de ${item.ref.pacienteNome}`}
+            className="relative z-10 shrink-0 inline-flex items-center gap-1.5 h-9 px-3 -mr-1.5 rounded-full text-[13px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 transition-colors"
+          >
+            <UserRound className="w-4 h-4" aria-hidden />
+            Paciente
+          </button>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-[17px] font-semibold text-ink leading-snug truncate">{item.ref.pacienteNome}</p>
+        {/* O botão do título se estica pelo cartão inteiro (`after:inset-0`); "Paciente" e o
+            desfecho do orçamento sobem acima dele (`relative z-10`). */}
+        <button
+          type="button"
+          onClick={() => onAbrir(item)}
+          aria-label={`Abrir ${ROTULO_DO_TIPO[item.tipo].toLowerCase()}: ${item.titulo} — ${item.ref.pacienteNome}`}
+          className="block max-w-full text-left text-[14px] leading-snug text-ink-soft line-clamp-2 group-hover:text-brand-deep transition-colors after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand"
+        >
+          {item.titulo}
+        </button>
+        {detalhe && <p className="mt-0.5 text-[13px] text-muted truncate">{detalhe}</p>}
+      </div>
+
+      {/* Pagou / recusou / comprovante — o mesmo controle da tela de Orçamentos. */}
+      {item.tipo === 'orcamento' && (
+        <div className="relative z-10 mt-auto w-fit max-w-full">
+          <QuoteDesfecho quote={item.ref} />
+        </div>
+      )}
     </li>
   );
 };

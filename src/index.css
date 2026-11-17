@@ -440,6 +440,71 @@
 }
 
 /* ==========================================================================
+   TELA HOJE — o relevo do login com vidro fosco por cima
+
+   A tela inicial usa o mesmo fundo da entrada (o gesso com a lua e as árvores).
+   O conteúdo fica em painéis de vidro creme: o desenho atravessa borrado, sem
+   disputar a leitura com os números do calendário.
+   ========================================================================== */
+.vidro-no-relevo {
+  background: rgba(255, 252, 246, .62);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+  border: 1px solid rgba(255, 255, 255, .78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .9),
+    0 34px 70px -38px rgba(110, 73, 36, .55),
+    0 12px 26px -20px rgba(110, 73, 36, .35);
+}
+
+/* A peça menor sobre o vidro (atalho, cartão da linha do tempo): mais clara, sem borrar de novo. */
+.peca-no-relevo {
+  background: rgba(255, 255, 255, .74);
+  border: 1px solid rgba(255, 255, 255, .95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .95),
+    0 10px 24px -16px rgba(110, 73, 36, .45);
+  transition: background-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.peca-no-relevo:hover {
+  background: rgba(255, 255, 255, .96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 16px 32px -18px rgba(110, 73, 36, .55);
+}
+
+/* A prévia do dia no calendário: aparece ao parar o mouse sobre o dia (com um respiro, para não
+   piscar enquanto o mouse atravessa a grade) e some quando ele sai. No toque não existe: tocar no
+   dia já abre a agenda. */
+.previa-do-dia {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition: opacity .16s ease, transform .16s ease, visibility 0s linear .16s;
+}
+
+@media (hover: hover) {
+  .dia-do-calendario:hover .previa-do-dia {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: opacity .18s ease .14s, transform .18s ease .14s, visibility 0s linear .14s;
+  }
+}
+
+.dia-do-calendario:has(:focus-visible) .previa-do-dia {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity .18s ease, transform .18s ease, visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .previa-do-dia { transform: none; }
+}
+
+/* ==========================================================================
    ÁREA SEGURA DO IPHONE
 
    O `env(safe-area-inset-bottom)` é a faixa do gesto de início do iPhone. A
