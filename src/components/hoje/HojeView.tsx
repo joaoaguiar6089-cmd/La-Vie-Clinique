@@ -150,21 +150,25 @@ export const HojeView: React.FC<HojeViewProps> = ({
           negativa; no fim da tela ele para junto com ela, sem cobrir o rodapé. */}
       <div
         aria-hidden="true"
-        className="sticky top-0 h-dvh overflow-hidden pointer-events-none select-none"
+        className="sticky top-0 h-dvh overflow-hidden pointer-events-none select-none bg-cream"
       >
-        <div
-          className="absolute inset-0 bg-cream bg-cover bg-center"
-          style={{ backgroundImage: 'url(/login-fundo.webp)' }}
-        />
-        {FIGURAS.map((f, i) => (
-          <img
-            key={i}
-            src={`/login/figura-${f.arquivo}.webp`}
-            alt=""
-            className={`figura-flutuante absolute w-auto max-w-none ${f.classes}`}
-            style={{ animationDuration: `${f.duracao}s`, animationDelay: `${f.atraso}s` }}
+        {/* O relevo e as figuras a 40%: aparecem como textura, sem disputar as cores da tela com
+            os cartões e o calendário. O creme de baixo é o que preenche o resto. */}
+        <div className="absolute inset-0 opacity-40">
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: 'url(/login-fundo.webp)' }}
           />
-        ))}
+          {FIGURAS.map((f, i) => (
+            <img
+              key={i}
+              src={`/login/figura-${f.arquivo}.webp`}
+              alt=""
+              className={`figura-flutuante absolute w-auto max-w-none ${f.classes}`}
+              style={{ animationDuration: `${f.duracao}s`, animationDelay: `${f.atraso}s` }}
+            />
+          ))}
+        </div>
         <div className="pelicula-do-fundo absolute inset-0" />
       </div>
 
