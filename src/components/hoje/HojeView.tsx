@@ -22,7 +22,7 @@ import {
   Professional,
   Quote,
 } from '../../types';
-import { agoraHHMM, hojeISO } from '../../utils/attendances';
+import { hojeISO } from '../../utils/attendances';
 import { dataPorExtenso, saudacaoDaHora } from '../../utils/indicadores';
 import { BotaoRedondo, GatilhoDeBusca, MenuDeAcoes } from '../common/Tinta';
 import { AcaoDeCriacao } from '../BottomNav';
@@ -128,7 +128,6 @@ export const HojeView: React.FC<HojeViewProps> = ({
 }) => {
   useMinutoAtual();
   const hoje = hojeISO();
-  const agora = agoraHHMM();
 
   const primeiroNome = (professionalLogada?.name || '')
     .replace(/^(Dra?\.?|Dr\.?)\s+/i, '')
@@ -207,7 +206,6 @@ export const HojeView: React.FC<HojeViewProps> = ({
           atendimentos={atendimentos}
           clinic={clinic}
           hoje={hoje}
-          agora={agora}
           onAbrirDia={(data) => onIrParaAgenda(data)}
           onAbrirAtendimento={onAbrirNaAgenda}
           onAbrirAgenda={() => onIrParaAgenda()}
