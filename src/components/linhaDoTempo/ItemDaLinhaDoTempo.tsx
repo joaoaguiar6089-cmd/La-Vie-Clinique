@@ -154,8 +154,8 @@ const TOM_DO_TIPO = {
  * O mesmo evento em forma de cartão — o da tela Hoje, onde a linha da clínica inteira ocupa a
  * largura da tela e os eventos de um dia ficam lado a lado em vez de numa coluna estreita.
  *
- * O conteúdo e os toques são os do item: o cartão inteiro abre o painel do evento, "Paciente"
- * abre a ficha dela e o orçamento traz o desfecho. Muda só o desenho — letra maior, a hora e a
+ * O conteúdo e os toques são os do item: o cartão inteiro abre o painel do evento, "Área do
+ * paciente" abre a ficha dela e o orçamento traz o desfecho. Muda só o desenho — letra maior, a hora e a
  * etapa em destaque, a cliente acima do procedimento.
  */
 export const CartaoDaLinhaDoTempo: React.FC<{
@@ -177,43 +177,43 @@ export const CartaoDaLinhaDoTempo: React.FC<{
 
   return (
     <li className="peca-no-relevo group relative min-w-0 rounded-2xl p-4 flex flex-col gap-2.5">
-      <div className="flex items-center gap-3">
+      {/* O rótulo cresce do tamanho do texto (`flex-auto`): se ele e o botão não couberem lado a
+          lado — num celular estreito —, o botão desce para a linha de baixo em vez de cobrir o
+          rótulo. */}
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
         <span
           aria-hidden
-          className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${
+          className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-xl flex items-center justify-center ${
             faltou ? 'bg-danger-bg text-danger' : TOM_DO_TIPO[item.tipo]
           }`}
         >
-          <Icone className="w-5 h-5" />
+          <Icone className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
         </span>
-        <span className="min-w-0 flex-1 leading-tight">
-          <span className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[.12em] text-ink-soft">
+        <span className="min-w-0 flex-auto leading-tight">
+          <span className="block text-[11px] sm:text-[12px] font-bold uppercase tracking-[.1em] sm:tracking-[.12em] text-ink-soft">
             {ROTULO_DO_TIPO[item.tipo]}
-            {faltou && (
-              <span className="px-1.5 py-px rounded-md bg-danger-bg text-danger border border-danger-line text-[11px] tracking-wider">
-                {ROTULO_DO_STATUS.faltou}
-              </span>
-            )}
           </span>
           {hora && <span className="block text-[16px] font-bold text-ink tabular-nums">{hora}</span>}
         </span>
+        {/* Com contorno, fundo e a seta, para se ler como botão — e não como mais um rótulo do
+            cartão. */}
         {pacienteId && (
           <button
             type="button"
             onClick={() => onAbrirPaciente(pacienteId)}
-            aria-label={`Abrir a página de ${item.ref.pacienteNome}`}
-            className="relative z-10 shrink-0 inline-flex items-center gap-1.5 h-9 px-3 -mr-1.5 rounded-full text-[13px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 transition-colors"
+            aria-label={`Abrir a área do paciente de ${item.ref.pacienteNome}`}
+            className="relative z-10 shrink-0 ml-auto inline-flex items-center gap-0.5 h-8 pl-2.5 pr-1.5 rounded-full border border-brand/35 bg-brand-bg text-[11px] font-semibold text-brand-deep whitespace-nowrap shadow-[0_2px_6px_-3px_rgba(110,73,36,.45)] hover:bg-brand hover:border-brand hover:text-white transition-colors"
           >
-            <UserRound className="w-4 h-4" aria-hidden />
-            Paciente
+            Área do paciente
+            <ChevronRight className="w-3.5 h-3.5" aria-hidden />
           </button>
         )}
       </div>
 
       <div className="min-w-0">
         <p className="text-[17px] font-semibold text-ink leading-snug truncate">{item.ref.pacienteNome}</p>
-        {/* O botão do título se estica pelo cartão inteiro (`after:inset-0`); "Paciente" e o
-            desfecho do orçamento sobem acima dele (`relative z-10`). */}
+        {/* O botão do título se estica pelo cartão inteiro (`after:inset-0`); "Área do paciente"
+            e o desfecho do orçamento sobem acima dele (`relative z-10`). */}
         <button
           type="button"
           onClick={() => onAbrir(item)}
@@ -224,6 +224,14 @@ export const CartaoDaLinhaDoTempo: React.FC<{
         </button>
         {detalhe && <p className="mt-0.5 text-[13px] text-muted truncate">{detalhe}</p>}
       </div>
+
+      {/* Embaixo, como o status do orçamento — no topo, ao lado da hora, apertava o botão da
+          área do paciente. */}
+      {faltou && (
+        <span className="mt-auto w-fit px-2 py-0.5 rounded-md bg-danger-bg text-danger border border-danger-line text-[12px] font-bold uppercase tracking-wider">
+          {ROTULO_DO_STATUS.faltou}
+        </span>
+      )}
 
       {/* Pagou / recusou / comprovante — o mesmo controle da tela de Orçamentos. */}
       {item.tipo === 'orcamento' && (

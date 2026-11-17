@@ -251,223 +251,229 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
     : undefined;
 
   return (
-    <section
-      className="vidro-no-relevo rounded-[26px] lg:rounded-[34px] p-4 sm:p-6 lg:p-8"
-      aria-labelledby="linha-do-tempo-titulo"
-    >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-[12px] font-bold uppercase tracking-[.18em] text-brand-deep">
-            O que aconteceu na clínica
-          </p>
-          <h2
-            id="linha-do-tempo-titulo"
-            className="flex flex-wrap items-center gap-x-3 gap-y-1 font-serif-luxury text-[30px] lg:text-[38px] font-semibold leading-tight text-ink"
+    <>
+      <section
+        className="vidro-no-relevo rounded-[26px] lg:rounded-[34px] p-4 sm:p-6 lg:p-8"
+        aria-labelledby="linha-do-tempo-titulo"
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[12px] font-bold uppercase tracking-[.18em] text-brand-deep">
+              O que aconteceu na clínica
+            </p>
+            <h2
+              id="linha-do-tempo-titulo"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 font-serif-luxury text-[30px] lg:text-[38px] font-semibold leading-tight text-ink"
+            >
+              Linha do tempo
+              <span className="inline-flex items-center h-7 px-3 rounded-full bg-white/80 border border-white font-sans text-[13px] font-bold text-ink-soft tabular-nums">
+                {filtrados.length} {filtrados.length === 1 ? 'registro' : 'registros'}
+              </span>
+            </h2>
+          </div>
+
+          {/* Período */}
+          <div
+            className="flex w-fit max-w-full p-1 rounded-full bg-white/55 border border-white overflow-x-auto [scrollbar-width:none]"
+            role="group"
+            aria-label="Período"
           >
-            Linha do tempo
-            <span className="inline-flex items-center h-7 px-3 rounded-full bg-white/80 border border-white font-sans text-[13px] font-bold text-ink-soft tabular-nums">
-              {filtrados.length} {filtrados.length === 1 ? 'registro' : 'registros'}
-            </span>
-          </h2>
-        </div>
-
-        {/* Período */}
-        <div
-          className="flex w-fit max-w-full p-1 rounded-full bg-white/55 border border-white overflow-x-auto [scrollbar-width:none]"
-          role="group"
-          aria-label="Período"
-        >
-          {PERIODOS_DA_LINHA.map((p) => (
-            <button
-              key={p.dias}
-              type="button"
-              onClick={() => setDias(p.dias)}
-              aria-pressed={dias === p.dias}
-              className={`h-10 px-4 sm:px-5 rounded-full text-[14px] font-semibold whitespace-nowrap transition-colors ${
-                dias === p.dias ? 'bg-ink text-cream shadow-[0_8px_18px_-10px_rgba(26,26,26,.8)]' : 'text-ink-soft hover:text-ink'
-              }`}
-            >
-              {p.rotulo}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
-        {/* Busca */}
-        <div className="relative lg:w-[340px] shrink-0">
-          <Search className="w-[18px] h-[18px] text-ink-soft absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar paciente ou procedimento"
-            aria-label="Buscar na linha do tempo"
-            className="w-full h-12 pl-11 pr-11 rounded-full bg-white/75 border border-white text-[15px] text-ink placeholder:text-muted focus:outline-hidden focus:bg-white focus:border-brand/50 transition-colors"
-          />
-          {busca && (
-            <button
-              type="button"
-              onClick={() => setBusca('')}
-              aria-label="Limpar busca"
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-ink hover:bg-surface-2"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Tipo — desliza no celular em vez de quebrar em duas linhas. */}
-        <div className="-mx-4 px-4 sm:mx-0 sm:px-0 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex items-center gap-2 w-max" role="group" aria-label="Tipo">
-            <button
-              type="button"
-              onClick={() => setTipos([])}
-              aria-pressed={tipos.length === 0}
-              className={chip(tipos.length === 0)}
-            >
-              Todos
-            </button>
-            {TIPOS_DA_LINHA.map(({ tipo, rotulo }) => (
+            {PERIODOS_DA_LINHA.map((p) => (
               <button
-                key={tipo}
+                key={p.dias}
                 type="button"
-                onClick={() => alternarTipo(tipo)}
-                aria-pressed={tipos.includes(tipo)}
-                className={chip(tipos.includes(tipo))}
+                onClick={() => setDias(p.dias)}
+                aria-pressed={dias === p.dias}
+                className={`h-10 px-4 sm:px-5 rounded-full text-[14px] font-semibold whitespace-nowrap transition-colors ${
+                  dias === p.dias ? 'bg-ink text-cream shadow-[0_8px_18px_-10px_rgba(26,26,26,.8)]' : 'text-ink-soft hover:text-ink'
+                }`}
               >
-                {rotulo}
-                <span
-                  className={`min-w-6 h-6 px-1.5 rounded-full inline-flex items-center justify-center text-[12px] font-bold tabular-nums ${
-                    tipos.includes(tipo) ? 'bg-white/15' : 'bg-ink/6'
-                  }`}
-                >
-                  {contagem[tipo]}
-                </span>
+                {p.rotulo}
               </button>
             ))}
           </div>
         </div>
-      </div>
 
-      {erro && (
-        <p className="mt-4 px-4 py-2.5 rounded-xl bg-danger-bg border border-danger-line text-[14px] text-danger">
-          {erro}
-        </p>
-      )}
-
-      {carregando || !anamnesesProntas ? (
-        <div className="mt-6 rounded-2xl bg-white/60 p-5">
-          <SkeletonLinhas linhas={4} />
-        </div>
-      ) : filtrados.length === 0 ? (
-        <div className="mt-6 rounded-2xl bg-white/60 border border-white px-6 py-10 text-center">
-          <History className="w-9 h-9 text-brand mx-auto mb-3" />
-          <p className="text-[17px] font-semibold text-ink">
-            {busca || tipos.length > 0 ? 'Nada encontrado com esses filtros.' : 'Nada registrado no período.'}
-          </p>
-          <p className="text-[14px] text-ink-soft mt-1">
-            {dias < MAIOR_PERIODO_DA_LINHA
-              ? 'Aumente o período para ver mais.'
-              : 'Orçamentos, anamneses, avaliações, atendimentos e relatórios aparecem aqui conforme acontecem.'}
-          </p>
-        </div>
-      ) : (
-        <div className="mt-6">
-          <div className="divide-y divide-ink/8">
-            {porDia.map((dia) => (
-              <div
-                key={dia.data}
-                className="grid gap-3 py-5 first:pt-0 lg:grid-cols-[150px_minmax(0,1fr)] lg:gap-6 lg:py-6"
+        <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
+          {/* Busca */}
+          <div className="relative lg:w-[340px] shrink-0">
+            <Search className="w-[18px] h-[18px] text-ink-soft absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar paciente ou procedimento"
+              aria-label="Buscar na linha do tempo"
+              className="w-full h-12 pl-11 pr-11 rounded-full bg-white/75 border border-white text-[15px] text-ink placeholder:text-muted focus:outline-hidden focus:bg-white focus:border-brand/50 transition-colors"
+            />
+            {busca && (
+              <button
+                type="button"
+                onClick={() => setBusca('')}
+                aria-label="Limpar busca"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-ink hover:bg-surface-2"
               >
-                <CabecalhoDoDia data={dia.data} rotulo={dia.rotulo} total={dia.itens.length} />
-                <ol className="grid gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3">
-                  {dia.itens.map((item) => (
-                    <CartaoDaLinhaDoTempo
-                      key={`${item.tipo}-${item.id}`}
-                      item={item}
-                      onAbrirPaciente={onAbrirPaciente}
-                      onAbrir={setAberto}
-                    />
-                  ))}
-                </ol>
-              </div>
-            ))}
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
-          {filtrados.length > visiveis.length && (
-            <button
-              type="button"
-              onClick={() => setLimite((l) => l + PAGINA)}
-              className="peca-no-relevo mt-4 w-full h-12 rounded-full text-[15px] font-semibold text-ink"
-            >
-              Mostrar mais ({filtrados.length - visiveis.length})
-            </button>
-          )}
+          {/* Tipo — desliza no celular em vez de quebrar em duas linhas. */}
+          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex items-center gap-2 w-max" role="group" aria-label="Tipo">
+              <button
+                type="button"
+                onClick={() => setTipos([])}
+                aria-pressed={tipos.length === 0}
+                className={chip(tipos.length === 0)}
+              >
+                Todos
+              </button>
+              {TIPOS_DA_LINHA.map(({ tipo, rotulo }) => (
+                <button
+                  key={tipo}
+                  type="button"
+                  onClick={() => alternarTipo(tipo)}
+                  aria-pressed={tipos.includes(tipo)}
+                  className={chip(tipos.includes(tipo))}
+                >
+                  {rotulo}
+                  <span
+                    className={`min-w-6 h-6 px-1.5 rounded-full inline-flex items-center justify-center text-[12px] font-bold tabular-nums ${
+                      tipos.includes(tipo) ? 'bg-white/15' : 'bg-ink/6'
+                    }`}
+                  >
+                    {contagem[tipo]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-      )}
 
-      {acoesDeOrcamento.modais}
+        {erro && (
+          <p className="mt-4 px-4 py-2.5 rounded-xl bg-danger-bg border border-danger-line text-[14px] text-danger">
+            {erro}
+          </p>
+        )}
 
-      {aberto && (
-        <PainelDoEvento
-          item={aberto}
-          contexto={contexto}
-          acoes={acoes}
-          onFechar={() => setAberto(null)}
-        />
-      )}
+        {carregando || !anamnesesProntas ? (
+          <div className="mt-6 rounded-2xl bg-white/60 p-5">
+            <SkeletonLinhas linhas={4} />
+          </div>
+        ) : filtrados.length === 0 ? (
+          <div className="mt-6 rounded-2xl bg-white/60 border border-white px-6 py-10 text-center">
+            <History className="w-9 h-9 text-brand mx-auto mb-3" />
+            <p className="text-[17px] font-semibold text-ink">
+              {busca || tipos.length > 0 ? 'Nada encontrado com esses filtros.' : 'Nada registrado no período.'}
+            </p>
+            <p className="text-[14px] text-ink-soft mt-1">
+              {dias < MAIOR_PERIODO_DA_LINHA
+                ? 'Aumente o período para ver mais.'
+                : 'Orçamentos, anamneses, avaliações, atendimentos e relatórios aparecem aqui conforme acontecem.'}
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6">
+            <div className="divide-y divide-ink/8">
+              {porDia.map((dia) => (
+                <div
+                  key={dia.data}
+                  className="grid gap-3 py-5 first:pt-0 lg:grid-cols-[150px_minmax(0,1fr)] lg:gap-6 lg:py-6"
+                >
+                  <CabecalhoDoDia data={dia.data} rotulo={dia.rotulo} total={dia.itens.length} />
+                  <ol className="grid gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3">
+                    {dia.itens.map((item) => (
+                      <CartaoDaLinhaDoTempo
+                        key={`${item.tipo}-${item.id}`}
+                        item={item}
+                        onAbrirPaciente={onAbrirPaciente}
+                        onAbrir={setAberto}
+                      />
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
 
-      <EmissaoDeAvaliacao
-        aberto={!!avaliacaoNova}
-        onFechar={() => setAvaliacaoNova(null)}
-        pacientes={pacientes}
-        catalogo={catalogProcedures}
-        professionals={clinic.professionals || []}
-        clinic={clinic}
-        professionalIdPadrao={professionalLogadaId}
-        pacienteInicial={pacientes.find((p) => p.id === avaliacaoNova?.pacienteId) || null}
-        procedimentoInicial={avaliacaoNova?.tratamento || null}
-      />
+            {filtrados.length > visiveis.length && (
+              <button
+                type="button"
+                onClick={() => setLimite((l) => l + PAGINA)}
+                className="peca-no-relevo mt-4 w-full h-12 rounded-full text-[15px] font-semibold text-ink"
+              >
+                Mostrar mais ({filtrados.length - visiveis.length})
+              </button>
+            )}
+          </div>
+        )}
+      </section>
 
-      {anamneseAberta && (
-        <PrintableAnamnesisSheet
-          record={anamneses.find((r) => r.id === anamneseAberta.id) || anamneseAberta}
-          clinicProfile={clinic}
-          onClose={() => setAnamneseAberta(null)}
-          viewerRole="staff"
-          onSaveRecord={saveAnamnesisRecord}
-          orientationImage={resolveOrientationImage(templateDaAnamnese)}
-          consentSections={resolveConsentTerm(templateDaAnamnese)}
-          mapasDeAreas={mapasDeAreas}
-        />
-      )}
+        {/* Os painéis e formulários ficam FORA da seção de vidro. O `backdrop-filter` do vidro faz
+            dela o quadro de referência de tudo o que é `position: fixed` lá dentro: o painel do
+            evento, em vez de cobrir a tela, ficava preso no pé da seção — no celular, a página
+            rolava até ele e ele saía da vista, atrás da barra de baixo. */}
+        {acoesDeOrcamento.modais}
 
-      {avaliacaoAberta && (
-        <FichaFillModal
-          tipo="avaliacao"
-          isOpen
-          onClose={() => setAvaliacaoAberta(null)}
-          alvo={alvoDoRegistro(avaliacaoAberta)}
-          paciente={pacientes.find((p) => p.id === avaliacaoAberta.pacienteId)}
+        {aberto && (
+          <PainelDoEvento
+            item={aberto}
+            contexto={contexto}
+            acoes={acoes}
+            onFechar={() => setAberto(null)}
+          />
+        )}
+
+        <EmissaoDeAvaliacao
+          aberto={!!avaliacaoNova}
+          onFechar={() => setAvaliacaoNova(null)}
+          pacientes={pacientes}
           catalogo={catalogProcedures}
           professionals={clinic.professionals || []}
-          clinicProfile={clinic}
+          clinic={clinic}
+          professionalIdPadrao={professionalLogadaId}
+          pacienteInicial={pacientes.find((p) => p.id === avaliacaoNova?.pacienteId) || null}
+          procedimentoInicial={avaliacaoNova?.tratamento || null}
         />
-      )}
 
-      {acompanhando && (
-        <FichaFillModal
-          tipo="acompanhamento"
-          isOpen
-          onClose={() => setAcompanhando(null)}
-          alvo={alvoDoAtendimento(acompanhando)}
-          paciente={pacientes.find((p) => p.id === acompanhando.pacienteId)}
-          catalogo={catalogProcedures}
-          professionals={clinic.professionals || []}
-          clinicProfile={clinic}
-        />
-      )}
-    </section>
+        {anamneseAberta && (
+          <PrintableAnamnesisSheet
+            record={anamneses.find((r) => r.id === anamneseAberta.id) || anamneseAberta}
+            clinicProfile={clinic}
+            onClose={() => setAnamneseAberta(null)}
+            viewerRole="staff"
+            onSaveRecord={saveAnamnesisRecord}
+            orientationImage={resolveOrientationImage(templateDaAnamnese)}
+            consentSections={resolveConsentTerm(templateDaAnamnese)}
+            mapasDeAreas={mapasDeAreas}
+          />
+        )}
+
+        {avaliacaoAberta && (
+          <FichaFillModal
+            tipo="avaliacao"
+            isOpen
+            onClose={() => setAvaliacaoAberta(null)}
+            alvo={alvoDoRegistro(avaliacaoAberta)}
+            paciente={pacientes.find((p) => p.id === avaliacaoAberta.pacienteId)}
+            catalogo={catalogProcedures}
+            professionals={clinic.professionals || []}
+            clinicProfile={clinic}
+          />
+        )}
+
+        {acompanhando && (
+          <FichaFillModal
+            tipo="acompanhamento"
+            isOpen
+            onClose={() => setAcompanhando(null)}
+            alvo={alvoDoAtendimento(acompanhando)}
+            paciente={pacientes.find((p) => p.id === acompanhando.pacienteId)}
+            catalogo={catalogProcedures}
+            professionals={clinic.professionals || []}
+            clinicProfile={clinic}
+          />
+        )}
+    </>
   );
 };
