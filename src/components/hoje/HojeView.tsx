@@ -166,12 +166,12 @@ export const HojeView: React.FC<HojeViewProps> = ({
             style={{ animationDuration: `${f.duracao}s`, animationDelay: `${f.atraso}s` }}
           />
         ))}
-        <div className="absolute inset-0 bg-linear-to-b from-cream/15 via-transparent to-cream/45" />
+        <div className="pelicula-do-fundo absolute inset-0" />
       </div>
 
       <div className="relative -mt-[100dvh] max-w-[1680px] mx-auto px-4 sm:px-8 lg:px-10 pt-5 sm:pt-6 lg:pt-7 pb-10 lg:pb-14 flex flex-col gap-4 lg:gap-5">
         <header className="flex items-center justify-between gap-3">
-          <div className="min-w-0 marca-em-relevo">
+          <div className="min-w-0 nevoa-atras-do-texto">
             <p className="text-[14px] lg:text-[16px] font-semibold text-ink-soft first-letter:uppercase">
               {dataPorExtenso(hoje)}
             </p>
