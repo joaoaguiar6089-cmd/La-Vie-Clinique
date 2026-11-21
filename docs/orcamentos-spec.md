@@ -208,6 +208,36 @@ Modal com seções empilhadas, no padrão de `ProcedureFormModal` /
   saem como notas abaixo das formas de pagamento no PDF, aplicando-se ao orçamento
   inteiro, não a uma forma específica.
 
+**Parcelado sem cartão — a negociação direta** (2026-11-21)
+- Em "Negociação e observações", a pílula **"Pagamento parcelado sem cartão"** liga a negociação
+  direta com a clínica: **entrada** (opcional, em reais) e **quantas vezes** o resto se divide
+  (1 a 24). A parcela é sempre (total − entrada) ÷ parcelas, calculada — nunca gravada. O campo
+  "Negociação" continua sendo a descrição livre (datas combinadas, Pix todo dia 20…).
+- Grava `pagamento.parcelamento = { entrada?, parcelas }`. O valor negociado é o total do
+  orçamento (a forma principal). No PDF e no link, uma linha "Parcelado sem cartão ·
+  R$ 5.000,00 + 5 × R$ 1.040,00" abaixo das formas.
+- **Cada pagamento que chega é uma nota de recibo** do orçamento (data, valor, forma e o
+  comprovante). O botão do cartão vira **"Registrar a entrada"** / **"Registrar pagamento"**, e o
+  formulário do recibo já vem com o valor do próximo pagamento (a entrada, depois a parcela; o
+  último é sempre o que falta, para o arredondamento não deixar centavo pendente). Os itens saem
+  sem valor no recibo, porque cada recibo é só uma parte do total. Valor acima do que falta não
+  salva. O recibo grava qual pagamento é (`parcelaDoOrcamento`: "Entrada (1 de 6)",
+  "Pagamento 3 de 6") e o saldo depois dele, que saem na grade do PDF.
+- O orçamento guarda o espelho dos pagamentos em `recebimentos` (data e valor, sem CPF), refeito
+  por `sincronizarRecebimentosDoOrcamento` a cada recibo emitido, corrigido ou excluído — os
+  recibos são a verdade. A soma decide o status sozinha:
+  - entrou alguma coisa e falta: **enviado**, exibido como **"Em negociação"** (rótulo, não status
+    gravado). Rascunho que recebe a entrada sai do rascunho e trava a edição. Não vence pela
+    validade, não se substitui e não oferece "Recusou";
+  - a soma alcançou o total: **pago**, com `pagoEm` no dia do último pagamento;
+  - o único recibo foi excluído: volta para onde estava.
+- O cartão mostra a barra do que já entrou e quanto falta; a folha de pagamento lista os recibos e
+  o "Registrar pagamento · Parcela 2 de 5 · R$ 1.040,00". A página da cliente mostra a barra e
+  "Recebido R$ X de R$ Y · falta R$ Z".
+- **Faturamento:** o parcelado entra **pagamento a pagamento**, cada um no dia do recibo — a
+  entrada de novembro é dinheiro de novembro, mesmo que a última parcela só chegue em abril. O
+  ticket médio e o ranking de procedimentos contam o orçamento quando ele é quitado.
+
 ## 5. Regras de cálculo (`src/utils/quoteCalc.ts`)
 
 ```

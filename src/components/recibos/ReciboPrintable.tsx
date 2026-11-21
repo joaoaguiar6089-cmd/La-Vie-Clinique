@@ -28,6 +28,7 @@ import {
   NOME_FORMA_DO_RECIBO,
   comMaiuscula,
   condicaoDoPagamento,
+  saldoDoRecibo,
   cpfLegivel,
   dataPorExtenso,
   declaracaoDoRecibo,
@@ -331,6 +332,8 @@ const Detalhes: React.FC<{ recibo: Recibo; paginaDoComprovante?: number }> = ({
     { rotulo: 'Forma de pagamento', valor: NOME_FORMA_DO_RECIBO[recibo.forma] },
     { rotulo: 'Condição', valor: condicaoDoPagamento(recibo) },
   ];
+  const saldo = saldoDoRecibo(recibo);
+  if (saldo) celulas.push({ rotulo: 'Saldo do orçamento', valor: semQuebra(saldo) });
   if (recibo.quoteNumero) celulas.push({ rotulo: 'Orçamento', valor: semQuebra(`Nº ${recibo.quoteNumero}`) });
   if (paginaDoComprovante) celulas.push({ rotulo: 'Comprovante', valor: `Anexo na página ${paginaDoComprovante}` });
 

@@ -10,6 +10,9 @@ import {
   itemTemDescontoVisivel,
   itemValorFinal,
   NOME_FORMA_PAGAMENTO,
+  progressoDoParcelamento,
+  recebidoDoParcelado,
+  valorDoParcelado,
 } from '../../utils/quoteCalc';
 import { quantidadeDoProduto } from '../../utils/estoque';
 import { isLaserCategory } from '../../utils/templateMatching';
@@ -358,6 +361,7 @@ const BlocoItem: React.FC<{ item: QuoteItem; semSeparador: boolean }> = ({ item,
 
 const RodapeValores: React.FC<{ quote: Quote }> = ({ quote }) => {
   const totais = calcularOrcamento(quote);
+  const parcelado = progressoDoParcelamento(quote);
 
   return (
     <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start', flexShrink: 0, paddingTop: 11, borderTop: `1px solid ${HAIRLINE}` }}>
@@ -426,6 +430,43 @@ const RodapeValores: React.FC<{ quote: Quote }> = ({ quote }) => {
             </div>
           );
         })}
+
+        {parcelado && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 12,
+              fontSize: 11.5,
+              color: PRETO,
+              marginTop: 7,
+              paddingTop: 7,
+              borderTop: `1px solid ${HAIRLINE}`,
+            }}
+          >
+            <div>
+              <div>Parcelado sem cartão</div>
+              <div style={{ fontSize: 9.5, color: '#8A857C', marginTop: 2 }}>
+                {parcelado.plano.entrada > 0
+                  ? `entrada + ${parcelado.plano.parcelas} ${parcelado.plano.parcelas === 1 ? 'parcela' : 'parcelas'}`
+                  : `${parcelado.plano.parcelas} ${parcelado.plano.parcelas === 1 ? 'parcela' : 'parcelas'}`}{' '}
+                · direto com a clínica
+              </div>
+            </div>
+            {/* Sem tabular-nums: o html2canvas mede os algarismos de um jeito e desenha de outro, e
+                o "+" ficava encavalado no valor da entrada. */}
+            <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {valorDoParcelado(parcelado.plano)}
+            </span>
+          </div>
+        )}
+
+        {parcelado && parcelado.recebimentos.length > 0 && (
+          <div style={{ fontSize: 10.5, color: PRETO, marginTop: 9, lineHeight: 1.55, fontWeight: 600 }}>
+{recebidoDoParcelado(parcelado)}
+          </div>
+        )}
 
         {quote.pagamento.negociacao && (
           <div style={{ fontSize: 10.5, color: CINZA, marginTop: 9, lineHeight: 1.55 }}>

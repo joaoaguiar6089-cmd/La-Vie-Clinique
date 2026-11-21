@@ -48,6 +48,13 @@ Cormorant, bronze, bloco preto do valor), para enviar pelo WhatsApp.
   Sobe **antes** do recibo ser gravado: se falhar, nada foi emitido e o número não foi gasto.
 - Emitido, abre a **prévia** — o próximo passo é mandar para a cliente.
 
+**Orçamento parcelado sem cartão** (2026-11-21): cada pagamento é um recibo do orçamento. O
+formulário vem com o valor do próximo pagamento e mostra quanto já entrou e quanto falta; não
+oferece as pílulas das formas (cada uma preencheria o total) e não aceita valor acima do que
+falta. Os itens vêm sem valor. Emitir, corrigir ou excluir o recibo refaz os `recebimentos` do
+orçamento e o status dele — pago sozinho quando a soma chega ao total. Ver
+`docs/orcamentos-spec.md`, "Parcelado sem cartão".
+
 ## 3. Dados
 
 - Coleção `receipts`, **só a equipe lê e escreve** (leva CPF; a cliente recebe o PDF, não um link).
@@ -57,6 +64,9 @@ Cormorant, bronze, bloco preto do valor), para enviar pelo WhatsApp.
   em Configurações → Contato). Refeito ao editar o recibo.
 - `itens[]`: `titulo`, `valor` (total da linha), e `sessoes` no procedimento ou `produtoId`,
   `unidade` e `quantidade` no produto. `desconto` em reais, ausente quando não há.
+- `parcelaDoOrcamento` (só no recibo de orçamento parcelado sem cartão): `ordem`, `de`, `entrada`
+  e `saldo` depois deste pagamento — retrato da emissão. No PDF, a condição vira "Entrada (1 de 6)"
+  ou "Pagamento 3 de 6", e entra a célula "Saldo do orçamento" (ou "Quitado").
 - Vínculo com orçamento por `quoteId` + `quoteNumero`. Um orçamento pode ter vários recibos
   (entrada e restante). O recibo de um orçamento da paciente aparece na página dela mesmo que quem
   pagou tenha sido outra pessoa.

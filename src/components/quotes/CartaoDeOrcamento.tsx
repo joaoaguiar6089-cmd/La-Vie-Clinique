@@ -17,14 +17,16 @@ import {
 import { Quote, QuoteStatus } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import {
+  estaEmNegociacao,
   isQuoteEditavel,
   podeRegistrarDesfecho,
   podeSubstituir,
+  progressoDoParcelamento,
   resolveQuoteStatus,
 } from '../../utils/quoteCalc';
 import { AcaoDoMenu, MenuDeAcoes, Selo } from '../common/Tinta';
 import { AcoesDeOrcamento } from './useAcoesDeOrcamento';
-import { QUOTE_STATUS_LABEL, useDesfechoDoOrcamento } from './QuoteDesfecho';
+import { rotuloDoStatusDoOrcamento, useDesfechoDoOrcamento } from './QuoteDesfecho';
 
 /** O selo de status em pílula — fundo claro e texto escuro do mesmo tom, sem borda. */
 export const SELO_DO_STATUS: Record<QuoteStatus, string> = {
@@ -81,6 +83,21 @@ export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
   const podeDecidir = podeRegistrarDesfecho(quote);
   const substituivel = podeSubstituir(quote);
   const desfecho = useDesfechoDoOrcamento(quote);
+  /** Parcelado sem cartão: quanto já entrou e o próximo pagamento. */
+  const parcelado = progressoDoParcelamento(quote);
+  const emNegociacao = estaEmNegociacao(quote);
+  /** No parcelado, "a cliente pagou" é registrar mais um pagamento — a nota de recibo dele. */
+  const registrarPagamento = parcelado
+    ? {
+        rotulo:
+          parcelado.recebimentos.length === 0 && parcelado.plano.entrada > 0
+            ? 'Registrar a entrada'
+            : 'Registrar pagamento',
+        icone: ReceiptText,
+        onClick: desfecho.criarRecibo,
+        escuro: true,
+      }
+    : null;
 
   const principal: {
     rotulo: string;
@@ -95,6 +112,8 @@ export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
           onClick: () => acoes.abrirCompartilhamento(quote),
           escuro: true,
         }
+      : registrarPagamento && podeDecidir && (status === 'enviado' || status === 'expirado')
+      ? registrarPagamento
       : status === 'enviado' && podeDecidir
       ? { rotulo: 'Marcar pago', icone: CheckCircle2, onClick: desfecho.abrirPagamento, escuro: true }
       : quote.status === 'pago'
@@ -132,12 +151,19 @@ export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
     menu.push({ rotulo: 'Editar rascunho', icone: Pencil, onClick: () => acoes.abrirEdicao(quote) });
   }
   if (podeDecidir && status === 'rascunho') {
-    menu.push({ rotulo: 'A cliente pagou', icone: CheckCircle2, onClick: desfecho.abrirPagamento });
+    menu.push(
+      registrarPagamento
+        ? { rotulo: registrarPagamento.rotulo, icone: ReceiptText, onClick: desfecho.criarRecibo }
+        : { rotulo: 'A cliente pagou', icone: CheckCircle2, onClick: desfecho.abrirPagamento }
+    );
   }
-  if (podeDecidir) {
+  if (parcelado && parcelado.recebimentos.length > 0) {
+    menu.push({ rotulo: 'Ver pagamentos', icone: ReceiptText, onClick: desfecho.abrirPagamento });
+  }
+  if (podeDecidir && !emNegociacao) {
     menu.push({ rotulo: 'A cliente recusou', icone: XCircle, onClick: desfecho.recusar });
   }
-  if (quote.status === 'pago' && desfecho.recibos.length > 0) {
+  if (quote.status === 'pago' && desfecho.recibos.length > 0 && !parcelado) {
     menu.push({ rotulo: 'Nova nota de recibo', icone: ReceiptText, onClick: desfecho.criarRecibo });
   }
   // O comprovante anexado direto ao orçamento, de antes da nota de recibo
@@ -173,7 +199,9 @@ export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
   const procedimentos = `${quote.itens.length} ${quote.itens.length === 1 ? 'procedimento' : 'procedimentos'}`;
   const detalhe =
     quote.status === 'pago' && quote.pagoEm
-      ? `pago em ${diaBarraMes(quote.pagoEm)}`
+      ? `${parcelado ? 'quitado' : 'pago'} em ${diaBarraMes(quote.pagoEm)}`
+      : emNegociacao && parcelado
+      ? `${parcelado.recebimentos.length} de ${parcelado.plano.pagamentos} pagamentos`
       : status === 'rascunho' || status === 'enviado'
       ? `válido até ${diaBarraMes(quote.dataValidade)}`
       : status === 'expirado'
@@ -188,8 +216,8 @@ export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
         <p className="text-[12px] font-semibold tracking-[.04em] text-ink-soft tabular-nums truncate">
           {quote.numero} · {diaEMes(quote.dataEmissao)}
         </p>
-        <Selo className={SELO_DO_STATUS[status]}>
-          {QUOTE_STATUS_LABEL[status]}
+        <Selo className={emNegociacao ? 'bg-info-bg text-info' : SELO_DO_STATUS[status]}>
+          {rotuloDoStatusDoOrcamento(quote, status)}
           {quote.status === 'pago'
             ? desfecho.recibos.length > 0
               ? ' · recibo'
@@ -214,6 +242,32 @@ export const CartaoDeOrcamento: React.FC<CartaoDeOrcamentoProps> = ({
           {formatBRL(quote.total)}
         </p>
       </div>
+
+      {/* Parcelado sem cartão: a barra do que já entrou e o que falta */}
+      {parcelado && quote.status !== 'pago' && quote.status !== 'cancelado' && (
+        <button
+          type="button"
+          onClick={desfecho.abrirPagamento}
+          className="text-left -mt-1"
+          title="Ver os pagamentos"
+        >
+          <span className="block h-1.5 rounded-full bg-line-soft overflow-hidden">
+            <span className="block h-full bg-ok" style={{ width: `${parcelado.percentual}%` }} />
+          </span>
+          <span className="mt-1.5 flex items-baseline justify-between gap-3 text-[13px] tabular-nums">
+            <span className="text-ink-soft truncate">
+              {parcelado.recebimentos.length > 0
+                ? `Recebido ${formatBRL(parcelado.recebido)}`
+                : `Parcelado sem cartão · ${parcelado.plano.pagamentos} pagamentos`}
+            </span>
+            <span className="shrink-0 font-semibold text-ink">
+              {parcelado.recebimentos.length > 0
+                ? `falta ${formatBRL(parcelado.pendente)}`
+                : `${parcelado.proximoRotulo}: ${formatBRL(parcelado.proximoValor)}`}
+            </span>
+          </span>
+        </button>
+      )}
 
       <div className="flex gap-2">
         <button

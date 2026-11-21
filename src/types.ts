@@ -782,10 +782,44 @@ export interface QuotePaymentOption {
   descontoPercentual?: number; // Abate do valor desta opção
 }
 
+/**
+ * Pagamento parcelado **sem cartão** — a negociação direta com a clínica: uma entrada (opcional) e
+ * o restante em N parcelas iguais, pagas por Pix ou dinheiro conforme combinado.
+ *
+ * O valor negociado é o total do orçamento (`Quote.total`). A parcela não é gravada: é sempre
+ * (total − entrada) ÷ parcelas, calculada em `calcularParcelamento`.
+ *
+ * Cada pagamento que chega vira uma nota de recibo do orçamento; o orçamento acompanha o quanto
+ * já entrou (`Quote.recebimentos`) e passa a pago sozinho quando a soma alcança o total.
+ */
+export interface QuoteParcelamento {
+  entrada?: number; // Em reais; ausente ou 0 = sem entrada
+  parcelas: number; // Quantas vezes depois da entrada (1 a 24)
+}
+
 /** Seção de pagamento: uma ou mais formas aceitas, mais a negociação em texto livre. */
 export interface QuotePayment {
   opcoes: QuotePaymentOption[]; // Sempre ao menos uma
   negociacao?: string; // Texto livre — sai como nota abaixo das formas de pagamento
+  /** Presente quando a cliente paga parcelado sem cartão. Ver `QuoteParcelamento`. */
+  parcelamento?: QuoteParcelamento;
+}
+
+/**
+ * Um pagamento recebido de um orçamento parcelado — o espelho de uma nota de recibo dele.
+ *
+ * Fica no próprio orçamento (e não só em `receipts`) porque o faturamento e a página pública leem
+ * só `quotes`: o faturamento soma cada pagamento no mês em que entrou, e o link da cliente mostra
+ * quanto já foi pago. Sem CPF nem comprovante — só data e valor, que a cliente já sabe.
+ *
+ * Quem grava é `sincronizarRecebimentosDoOrcamento`, sempre a partir das notas de recibo: elas
+ * são a verdade, e isto é refeito a cada recibo emitido, corrigido ou excluído.
+ */
+export interface QuoteRecebimento {
+  reciboId: string;
+  numero: string; // Nº do recibo
+  data: string; // YYYY-MM-DD — o dia em que o dinheiro entrou
+  valor: number;
 }
 
 /**
@@ -881,6 +915,11 @@ export interface Quote extends MarcaDeArquivo {
    */
   pagoEm?: string; // ISO
   comprovante?: QuoteComprovante; // Só em orçamento pago; opcional, pode ser anexado depois
+  /**
+   * Só no parcelado sem cartão (`pagamento.parcelamento`): os pagamentos já recebidos, do mais
+   * antigo para o mais novo. Ver `QuoteRecebimento`.
+   */
+  recebimentos?: QuoteRecebimento[];
   recusadoEm?: string; // ISO
   /**
    * Legado: a data de aceite, de quando o status se chamava `aceito`. Só é lido — vira `pagoEm`
@@ -907,6 +946,7 @@ export type QuoteDraft = Omit<
   | 'enviadoEm'
   | 'pagoEm'
   | 'comprovante'
+  | 'recebimentos'
   | 'recusadoEm'
   | 'aceitoEm'
   | 'substituidoPor'
@@ -957,6 +997,17 @@ export interface ReciboItem {
 }
 
 /**
+ * Em que ponto do parcelamento sem cartão este recibo entrou — "Entrada (1 de 6)", "Parcela 3 de 5"
+ * — e quanto ficou faltando depois dele. Retrato do momento da emissão: é o que a cliente recebeu.
+ */
+export interface ReciboParcela {
+  ordem: number; // 1 = o primeiro pagamento do orçamento
+  de: number; // Quantos pagamentos o plano tem (entrada + parcelas)
+  entrada: boolean; // Este pagamento é a entrada
+  saldo: number; // O que faltava pagar do orçamento depois deste recibo
+}
+
+/**
  * Nota de recibo de pagamento: o documento que diz à cliente "recebemos de você tanto, em tal
  * data, por tal forma, referente a isto". Sai em PDF para enviar a ela.
  *
@@ -999,6 +1050,8 @@ export interface Recibo extends MarcaDeArquivo {
   observacoes?: string;
   quoteId?: string;
   quoteNumero?: string;
+  /** Recibo de um orçamento parcelado sem cartão: qual pagamento é este e o saldo depois dele. */
+  parcelaDoOrcamento?: ReciboParcela;
   /** Foto ou PDF do comprovante (Pix, maquininha). Entra como folha anexa no fim do PDF. */
   comprovante?: QuoteComprovante;
   clinica: ReciboClinica;

@@ -23,6 +23,9 @@ import {
   itemTemDescontoVisivel,
   itemValorFinal,
   NOME_FORMA_PAGAMENTO,
+  progressoDoParcelamento,
+  recebidoDoParcelado,
+  valorDoParcelado,
   resolveQuoteStatus,
 } from '../../utils/quoteCalc';
 import { quantidadeDoProduto } from '../../utils/estoque';
@@ -125,6 +128,7 @@ export const PublicQuoteEntry: React.FC = () => {
 
   const clinica = quote.clinica || SNAPSHOT_CLINICA_PADRAO;
   const totais = calcularOrcamento(quote);
+  const parcelado = progressoDoParcelamento(quote);
   const status = resolveQuoteStatus(quote);
 
   const mensagemWhatsApp = `Olá! Quero falar sobre o orçamento ${quote.numero}: ${window.location.href}`;
@@ -354,6 +358,29 @@ export const PublicQuoteEntry: React.FC = () => {
               </div>
             );
           })}
+
+          {parcelado && (
+            <div className="flex justify-between text-sm gap-3 mt-2 pt-2 border-t border-line">
+              <span>
+                Parcelado sem cartão
+                <span className="block text-body text-muted mt-0.5">direto com a clínica</span>
+              </span>
+              <span className="font-semibold tabular-nums text-right">
+                {valorDoParcelado(parcelado.plano)}
+              </span>
+            </div>
+          )}
+
+          {parcelado && parcelado.recebimentos.length > 0 && (
+            <div className="mt-3">
+              <div className="h-1.5 rounded-full bg-line overflow-hidden">
+                <div className="h-full bg-ok" style={{ width: `${parcelado.percentual}%` }} />
+              </div>
+              <p className="text-xs text-ink font-semibold mt-1.5 tabular-nums">
+{recebidoDoParcelado(parcelado)}
+              </p>
+            </div>
+          )}
 
           {quote.pagamento.negociacao && (
             <p className="text-xs text-ink-soft mt-3 leading-relaxed">

@@ -1,7 +1,7 @@
 import { Attendance, Procedure, Quote } from '../types';
 import { DataISO, ehRealizado, hojeISO, instanteDoAtendimento } from './attendances';
 import { minutosDoHHMM } from './agenda';
-import { itemValorFinal, resolveQuoteStatus } from './quoteCalc';
+import { ehParcelado, itemValorFinal, resolveQuoteStatus } from './quoteCalc';
 
 /**
  * Os números que a tela Hoje e o painel financeiro mostram.
@@ -122,7 +122,44 @@ export const pagosNoMes = (quotes: Quote[], mes: MesISO): Quote[] =>
   orcamentosPagos(quotes).filter((q) => mesDe(dataDoPagamento(q)) === mes);
 
 export const faturamentoDoMes = (quotes: Quote[], mes: MesISO): number =>
-  pagosNoMes(quotes, mes).reduce((soma, q) => soma + valorDoOrcamento(q), 0);
+  faturamentoNoPeriodo(quotes, periodoDoMes(mes));
+
+/**
+ * Os pagamentos de orçamentos **parcelados sem cartão** que entraram no período, cada um no dia
+ * dele — e não o total do orçamento no dia em que ele foi quitado: a entrada de novembro é
+ * dinheiro de novembro, mesmo que a última parcela só chegue em abril.
+ *
+ * Conta o que entrou mesmo de orçamento ainda não quitado (ou cancelado depois): o dinheiro veio.
+ */
+export const recebimentosNoPeriodo = (
+  quotes: Quote[],
+  periodo: Pick<Periodo, 'de' | 'ate'>,
+  professionalId?: string
+): { data: DataISO; valor: number }[] =>
+  quotes
+    .filter(
+      (q) =>
+        ehParcelado(q) &&
+        (!professionalId || (q.itens || []).some((i) => i.professionalId === professionalId))
+    )
+    .flatMap((q) => q.recebimentos || [])
+    .filter((r) => r.data >= periodo.de && r.data <= periodo.ate);
+
+/**
+ * O dinheiro que entrou no período: os orçamentos pagos de uma vez, pelo total na data do
+ * pagamento, mais cada pagamento dos parcelados sem cartão, na data dele.
+ */
+export const faturamentoNoPeriodo = (
+  quotes: Quote[],
+  periodo: Pick<Periodo, 'de' | 'ate'>,
+  professionalId?: string
+): number => {
+  const deUmaVez = pagosNoPeriodo(quotes, periodo, professionalId)
+    .filter((q) => !ehParcelado(q))
+    .reduce((s, q) => s + valorDoOrcamento(q), 0);
+  const parcelados = recebimentosNoPeriodo(quotes, periodo, professionalId).reduce((s, r) => s + r.valor, 0);
+  return Math.round((deUmaVez + parcelados) * 100) / 100;
+};
 
 /**
  * Orçamentos enviados e ainda dentro da validade — o que está em aberto agora.
@@ -274,7 +311,7 @@ export const periodoAnterior = (periodo: Periodo): Periodo => {
  */
 export const pagosNoPeriodo = (
   quotes: Quote[],
-  periodo: Periodo,
+  periodo: Pick<Periodo, 'de' | 'ate'>,
   professionalId?: string
 ): Quote[] =>
   orcamentosPagos(quotes).filter((q) => {
@@ -395,11 +432,12 @@ export const resumoFinanceiro = (
   professionalId?: string,
   hoje: DataISO = hojeISO()
 ): ResumoFinanceiro => {
+  // Os pagos no período — o parcelado entra aqui quando é quitado, para o ticket e o ranking de
+  // procedimentos. O dinheiro dele, no faturamento, entra pagamento a pagamento.
   const pagos = pagosNoPeriodo(quotes, periodo, professionalId);
-  const anteriores = pagosNoPeriodo(quotes, periodoAnterior(periodo), professionalId);
 
-  const faturamento = pagos.reduce((s, q) => s + valorDoOrcamento(q), 0);
-  const faturamentoAnterior = anteriores.reduce((s, q) => s + valorDoOrcamento(q), 0);
+  const faturamento = faturamentoNoPeriodo(quotes, periodo, professionalId);
+  const faturamentoAnterior = faturamentoNoPeriodo(quotes, periodoAnterior(periodo), professionalId);
 
   /**
    * Os meses que o período toca, na ordem.
@@ -431,15 +469,21 @@ export const resumoFinanceiro = (
     ticket:
       pagos.length === 0
         ? { valor: 0, base: 0 }
-        : { valor: faturamento / pagos.length, base: pagos.length },
+        : { valor: pagos.reduce((s, q) => s + valorDoOrcamento(q), 0) / pagos.length, base: pagos.length },
     conversao: conversaoNoPeriodo(quotes, periodo, professionalId),
     porProcedimento: faturamentoPorProcedimento(pagos, 6),
-    porMes: meses.map((mes) => ({
-      mes,
-      valor: pagos
-        .filter((q) => mesDe(dataDoPagamento(q)) === mes)
-        .reduce((s, q) => s + valorDoOrcamento(q), 0),
-    })),
+    porMes: meses.map((mes) => {
+      // O mês inteiro, cortado nas pontas do período — o gráfico soma o mesmo que o bloco preto
+      const doMes = periodoDoMes(mes);
+      return {
+        mes,
+        valor: faturamentoNoPeriodo(
+          quotes,
+          { de: doMes.de < periodo.de ? periodo.de : doMes.de, ate: doMes.ate > periodo.ate ? periodo.ate : doMes.ate },
+          professionalId
+        ),
+      };
+    }),
   };
 };
 

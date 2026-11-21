@@ -44,6 +44,7 @@ import {
   QuoteDraft,
   QuoteStoredStatus,
   QuoteComprovante,
+  QuoteRecebimento,
   Recibo,
   ReciboDraft,
   EspelhoDosMapas,
@@ -64,7 +65,12 @@ import {
   PedidoDeCompra,
   TipoDeProduto,
 } from '../types';
-import { formatQuoteNumber, statusAntesDoDesfecho } from '../utils/quoteCalc';
+import {
+  ehParcelado,
+  formatQuoteNumber,
+  progressoDoParcelamento,
+  statusAntesDoDesfecho,
+} from '../utils/quoteCalc';
 import { clonarItens, normalizarQuote } from '../utils/quoteFactory';
 import { normalizarRecibo } from '../utils/recibos';
 import { normalizarSimulacao } from '../utils/simulacaoDeCusto';
@@ -2566,7 +2572,72 @@ export async function desfazerDesfechoDoQuote(quote: Quote): Promise<void> {
     comprovante: deleteField(),
     recusadoEm: deleteField(),
     aceitoEm: deleteField(),
+    // Desfazer o pagamento leva os recibos junto (quem chama os exclui), e com eles os recebimentos
+    recebimentos: deleteField(),
     updatedAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Refaz, a partir das notas de recibo, o quanto já entrou de um orçamento **parcelado sem cartão**
+ * — e o status dele, que acompanha a soma:
+ *
+ * - alcançou o total: **pago**, com `pagoEm` no dia do último pagamento;
+ * - entrou alguma coisa, mas não tudo: **enviado** (um rascunho que recebe a entrada sai do
+ *   rascunho e trava a edição; um pago que perdeu um recibo volta a enviado);
+ * - não entrou nada (o único recibo foi excluído): volta para onde estava antes do desfecho.
+ *
+ * `recibos` são os recibos do orçamento como estão agora — quem chama já trocou o recém-salvo ou
+ * tirou o recém-excluído, porque a assinatura ainda não os trouxe. Orçamento que não é parcelado
+ * não muda: nele quem marca o pago é a profissional.
+ */
+export async function sincronizarRecebimentosDoOrcamento(
+  quoteId: string,
+  recibos: Recibo[]
+): Promise<void> {
+  const ref = documentoDaClinica(QUOTES_COLLECTION, quoteId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const quote = normalizarQuote({ ...(snap.data() as Quote), id: snap.id });
+  if (!ehParcelado(quote)) return;
+
+  const recebimentos: QuoteRecebimento[] = recibos
+    .filter((r) => r.quoteId === quoteId && r.valor > 0)
+    .sort((a, b) => (a.dataPagamento + a.createdAt).localeCompare(b.dataPagamento + b.createdAt))
+    .map((r) => ({ reciboId: r.id, numero: r.numero, data: r.dataPagamento, valor: r.valor }));
+  const progresso = progressoDoParcelamento(quote, recebimentos);
+  const agora = new Date().toISOString();
+
+  if (recebimentos.length === 0) {
+    await updateDoc(ref, {
+      recebimentos: deleteField(),
+      ...(quote.status === 'pago' || (quote.status === 'enviado' && !quote.enviadoEm)
+        ? { status: statusAntesDoDesfecho(quote), pagoEm: deleteField() }
+        : {}),
+      updatedAt: agora,
+    });
+    return;
+  }
+
+  if (progresso?.completo) {
+    const ultimo = recebimentos[recebimentos.length - 1].data;
+    await updateDoc(ref, {
+      recebimentos,
+      status: 'pago' as QuoteStoredStatus,
+      pagoEm: new Date(`${ultimo}T12:00:00`).toISOString(),
+      recusadoEm: deleteField(),
+      aceitoEm: deleteField(),
+      updatedAt: agora,
+    });
+    return;
+  }
+
+  await updateDoc(ref, {
+    recebimentos,
+    status: 'enviado' as QuoteStoredStatus,
+    pagoEm: deleteField(),
+    recusadoEm: deleteField(),
+    updatedAt: agora,
   });
 }
 

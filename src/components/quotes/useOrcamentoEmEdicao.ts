@@ -11,6 +11,7 @@ import {
   Quote,
   QuoteDraft,
   QuoteItem,
+  QuoteParcelamento,
   QuotePaymentOption,
 } from '../../types';
 import {
@@ -22,6 +23,7 @@ import {
   montarTextoApresentacao,
   sugerirDescontoCombinado,
   contarProcedimentosParaDesconto,
+  calcularParcelamento,
 } from '../../utils/quoteCalc';
 import {
   criarOpcaoPagamento,
@@ -128,6 +130,8 @@ export const useOrcamentoEmEdicao = ({
   const [descontoCombinadoPercentual, setDescontoCombinadoPercentual] = useState(0);
   const [opcoesPagamento, setOpcoesPagamento] = useState<QuotePaymentOption[]>([]);
   const [negociacao, setNegociacao] = useState('');
+  /** Parcelado sem cartão — a negociação direta: entrada e parcelas. `null` = desligado. */
+  const [parcelamento, setParcelamento] = useState<QuoteParcelamento | null>(null);
   const [observacoes, setObservacoes] = useState('');
   /** `id` do procedimento cujo mapa de áreas está aberto. */
   const [mapaAberto, setMapaAberto] = useState<string | null>(null);
@@ -182,6 +186,7 @@ export const useOrcamentoEmEdicao = ({
       // Cópia rasa: editar aqui não pode mexer no objeto do orçamento de origem
       setOpcoesPagamento(base.pagamento.opcoes.map((o) => ({ ...o })));
       setNegociacao(base.pagamento.negociacao || '');
+      setParcelamento(base.pagamento.parcelamento ? { ...base.pagamento.parcelamento } : null);
       setObservacoes(base.observacoes || '');
       setMostrarMapaCorporal(base.mostrarMapaCorporal !== false);
       setSexoDoMapa(base.sexoDoMapa || 'feminino');
@@ -201,6 +206,7 @@ export const useOrcamentoEmEdicao = ({
       setDescontoCombinadoPercentual(0);
       setOpcoesPagamento([criarOpcaoPagamento('pix')]);
       setNegociacao('');
+      setParcelamento(null);
       setObservacoes('');
       setMostrarMapaCorporal(true);
       setSexoDoMapa(initialPatient?.genero || 'feminino');
@@ -354,8 +360,14 @@ export const useOrcamentoEmEdicao = ({
     () => ({
       opcoes: opcoesPagamento,
       negociacao: negociacao.trim() || undefined,
+      parcelamento: parcelamento
+        ? {
+            parcelas: Math.max(1, Math.round(parcelamento.parcelas || 1)),
+            entrada: parcelamento.entrada && parcelamento.entrada > 0 ? parcelamento.entrada : undefined,
+          }
+        : undefined,
     }),
-    [opcoesPagamento, negociacao]
+    [opcoesPagamento, negociacao, parcelamento]
   );
 
   const totais = useMemo(
@@ -367,6 +379,12 @@ export const useOrcamentoEmEdicao = ({
         pagamento,
       }),
     [itens, temDescontoCombinado, descontoCombinadoPercentual, pagamento]
+  );
+
+  /** O plano do parcelado sem cartão sobre o total de agora — entrada, parcelas e o valor de cada. */
+  const planoDoParcelamento = useMemo(
+    () => calcularParcelamento(totais.total, pagamento.parcelamento),
+    [totais.total, pagamento.parcelamento]
   );
 
   /** As áreas de um mesmo procedimento contam como um só aqui. Ver `quoteCalc`. */
@@ -599,6 +617,8 @@ export const useOrcamentoEmEdicao = ({
     if (itens.length === 0) novosErros.itens = 'Adicione ao menos um procedimento';
     if (itens.some((i) => !i.titulo.trim())) novosErros.itens = 'Todo procedimento precisa de um título';
     if (!dataValidade) novosErros.validade = 'Informe a data de validade';
+    if (parcelamento && (parcelamento.entrada || 0) >= totais.total && totais.total > 0)
+      novosErros.parcelamento = 'A entrada precisa ser menor que o total — o resto é o que se parcela.';
     if (jaTeveAvaliacao && !dataAvaliacao) novosErros.avaliacao = 'Informe a data da avaliação';
     setErrors(novosErros);
     return novosErros;
@@ -665,6 +685,9 @@ export const useOrcamentoEmEdicao = ({
     opcoesPagamento,
     negociacao,
     setNegociacao,
+    parcelamento,
+    setParcelamento,
+    planoDoParcelamento,
     observacoes,
     setObservacoes,
     mapaAberto,

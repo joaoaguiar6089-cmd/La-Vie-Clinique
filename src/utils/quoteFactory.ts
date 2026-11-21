@@ -8,8 +8,10 @@ import {
   QuoteClinicSnapshot,
   QuoteItem,
   QuoteItemDetail,
+  QuoteParcelamento,
   QuotePayment,
   QuotePaymentOption,
+  QuoteRecebimento,
 } from "../types";
 import { QUOTE_DEFAULTS } from "./quoteCalc";
 import { nomeDaClinica } from './marca';
@@ -184,6 +186,16 @@ export const criarOpcaoPagamento = (forma: PaymentMethod = "pix"): QuotePaymentO
   temDesconto: false,
 });
 
+/** O parcelado sem cartão lido do banco, saneado — ou `undefined` quando não há (ou está torto). */
+const normalizarParcelamento = (raw: unknown): QuoteParcelamento | undefined => {
+  if (!raw || typeof raw !== "object") return undefined;
+  const bruto = raw as Partial<QuoteParcelamento>;
+  const parcelas = Math.round(Number(bruto.parcelas));
+  if (!(parcelas >= 1)) return undefined;
+  const entrada = Number(bruto.entrada);
+  return { parcelas, entrada: entrada > 0 ? entrada : undefined };
+};
+
 /**
  * Normaliza `pagamento` na leitura: documentos criados antes da seção virar uma
  * lista de opções guardavam um único objeto (`{forma, parcelas, ...}`, sem
@@ -199,7 +211,11 @@ export const normalizarPagamento = (raw: unknown): QuotePayment => {
   };
 
   if (Array.isArray(bruto.opcoes)) {
-    return { opcoes: bruto.opcoes, negociacao: bruto.negociacao };
+    return {
+      opcoes: bruto.opcoes,
+      negociacao: bruto.negociacao,
+      parcelamento: normalizarParcelamento(bruto.parcelamento),
+    };
   }
 
   if (bruto.forma) {
@@ -245,7 +261,13 @@ export const montarSnapshotClinica = (clinic: ClinicProfile): QuoteClinicSnapsho
  * só troca de fato no banco quando alguém mexer no status dele de novo.
  */
 export const normalizarQuote = <
-  T extends { pagamento?: unknown; status?: string; pagoEm?: string; aceitoEm?: string },
+  T extends {
+    pagamento?: unknown;
+    status?: string;
+    pagoEm?: string;
+    aceitoEm?: string;
+    recebimentos?: unknown;
+  },
 >(
   quote: T
 ): T & { pagamento: QuotePayment } =>
@@ -255,7 +277,24 @@ export const normalizarQuote = <
       ? { status: "pago", pagoEm: quote.pagoEm || quote.aceitoEm }
       : {}),
     pagamento: normalizarPagamento(quote.pagamento),
+    recebimentos: normalizarRecebimentos(quote.recebimentos),
   }) as T & { pagamento: QuotePayment };
+
+/** Os pagamentos de um parcelado lidos do banco: só os que têm data e valor, do mais antigo ao mais novo. */
+const normalizarRecebimentos = (raw: unknown): QuoteRecebimento[] | undefined => {
+  if (!Array.isArray(raw)) return undefined;
+  const lidos = raw
+    .filter((r) => r && typeof r === "object")
+    .map((r) => ({
+      reciboId: String(r.reciboId || ""),
+      numero: String(r.numero || ""),
+      data: String(r.data || "").slice(0, 10),
+      valor: Number(r.valor) || 0,
+    }))
+    .filter((r) => r.data && r.valor > 0)
+    .sort((a, b) => a.data.localeCompare(b.data));
+  return lidos.length > 0 ? lidos : undefined;
+};
 
 /** Cópia profunda de itens com IDs novos — usada ao duplicar ou substituir um orçamento. */
 export const clonarItens = (itens: QuoteItem[]): QuoteItem[] =>

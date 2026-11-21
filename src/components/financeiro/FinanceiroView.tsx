@@ -495,7 +495,8 @@ const PainelFinanceiro: React.FC<PainelFinanceiroProps> = ({
             achar que o sistema está errado. */}
         <p className="text-body text-ink-soft leading-relaxed">
           O faturamento soma os <strong className="text-ink">orçamentos pagos</strong>, pela data
-          do pagamento. É o único valor que o sistema guarda fechado e datado — o atendimento não
+          do pagamento — o parcelado sem cartão entra pagamento a pagamento, cada um no dia em que
+          a nota de recibo diz que ele entrou. É o único valor que o sistema guarda fechado e datado — o atendimento não
           tem preço gravado, e usar o preço do catálogo faria o faturamento de um mês fechado mudar
           sozinho a cada reajuste. <strong className="text-ink">Atendimento realizado sem
           orçamento emitido não entra nesta conta.</strong>
