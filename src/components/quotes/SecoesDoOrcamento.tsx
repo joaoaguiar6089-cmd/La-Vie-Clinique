@@ -2,7 +2,11 @@ import React from 'react';
 import { AlertCircle, Eye, EyeOff, Plus } from 'lucide-react';
 import { ClinicProfile, Patient, Procedure } from '../../types';
 import { formatBRL } from '../../utils/formatters';
-import { sugerirDescontoCombinado } from '../../utils/quoteCalc';
+import {
+  PARCELAS_SEM_CARTAO_MAX,
+  resumoDoParcelamento,
+  sugerirDescontoCombinado,
+} from '../../utils/quoteCalc';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { ProcedureSearchAdd } from './ProcedureSearchAdd';
 import { ProdutoSearchAdd } from './ProdutoSearchAdd';
@@ -13,7 +17,8 @@ import { LaserQuoteMapModal } from '../laser/LaserQuoteMapModal';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { AvisoTinta, CampoTinta, INPUT_TINTA, Interruptor } from '../common/Tinta';
 import { OrcamentoEmEdicao, fromDateInput, toDateInput } from './useOrcamentoEmEdicao';
-import { TituloDeSecao } from './PecasDoOrcamento';
+import { OpcaoLigavel, PrefixoReais, TituloDeSecao } from './PecasDoOrcamento';
+import { ListaSuspensa } from '../common/ListaSuspensa';
 
 /*
   As partes do formulário de orçamento — a paciente e as datas, os itens com o desconto, e o
@@ -398,10 +403,91 @@ export const FormasDePagamentoDoOrcamento: React.FC<{ orc: OrcamentoEmEdicao }> 
   </div>
 );
 
+/**
+ * Parcelado sem cartão — a negociação direta com a clínica: uma entrada (opcional) e o resto em
+ * parcelas iguais. Ligado, o orçamento passa a acompanhar os pagamentos: cada um vira uma nota de
+ * recibo, o painel mostra quanto falta, e ele vira pago sozinho quando a soma chega ao total.
+ */
+export const ParcelamentoSemCartao: React.FC<{ orc: OrcamentoEmEdicao }> = ({ orc }) => {
+  const p = orc.parcelamento;
+  const plano = orc.planoDoParcelamento;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <OpcaoLigavel
+          ligada={!!p}
+          onMudar={(ligada) => {
+            orc.setParcelamento(ligada ? { parcelas: p?.parcelas || 5, entrada: p?.entrada } : null);
+            orc.setErrors((e) => ({ ...e, parcelamento: '' }));
+          }}
+        >
+          Pagamento parcelado sem cartão
+        </OpcaoLigavel>
+      </div>
+      {p && (
+        <div className="rounded-[20px] bg-card border border-ink/10 p-4 sm:p-5 flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-2.5">
+            <CampoTinta
+              rotulo="Entrada (opcional)"
+              htmlFor="orcamento-parcelamento-entrada"
+              prefixo={<PrefixoReais />}
+            >
+              <input
+                id="orcamento-parcelamento-entrada"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={p.entrada ?? ''}
+                onChange={(e) => {
+                  const valor = Number(String(e.target.value).replace(',', '.'));
+                  orc.setParcelamento({ ...p, entrada: valor > 0 ? valor : undefined });
+                  orc.setErrors((x) => ({ ...x, parcelamento: '' }));
+                }}
+                placeholder="0,00"
+                className={`${INPUT_TINTA} tabular-nums`}
+              />
+            </CampoTinta>
+            <ListaSuspensa
+              id="orcamento-parcelamento-parcelas"
+              rotulo={p.entrada ? 'Parcelas depois da entrada' : 'Quantas vezes'}
+              valor={String(p.parcelas)}
+              onMudar={(v) => orc.setParcelamento({ ...p, parcelas: Number(v) || 1 })}
+              opcoes={Array.from({ length: PARCELAS_SEM_CARTAO_MAX }, (_, i) => ({
+                valor: String(i + 1),
+                rotulo: `${i + 1}×`,
+              }))}
+              buscavel={false}
+            />
+          </div>
+          {orc.errors.parcelamento ? (
+            <p className="px-1 text-[13px] font-medium text-danger">{orc.errors.parcelamento}</p>
+          ) : (
+            plano && (
+              <div className="pt-3 border-t border-ink/8 flex items-baseline justify-between gap-3">
+                <span className="text-[14px] font-semibold text-ink-soft">
+                  {resumoDoParcelamento(plano, formatBRL)}
+                </span>
+                <span className="text-[19px] font-bold text-ink tabular-nums">{formatBRL(plano.total)}</span>
+              </div>
+            )
+          )}
+          <p className="px-1 text-[13px] text-ink-soft leading-snug">
+            Pago direto à clínica (Pix ou dinheiro), sem maquininha. Cada pagamento recebido vira uma
+            nota de recibo, com o comprovante; o orçamento mostra quanto falta e passa a pago sozinho
+            quando a soma chegar ao total. Combine as datas no campo de negociação abaixo.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /** A negociação e as observações — notas do orçamento inteiro, abaixo das formas no PDF. */
 export const NotasDoPagamento: React.FC<{ orc: OrcamentoEmEdicao }> = ({ orc }) => (
   <div className="space-y-3">
     <TituloDeSecao titulo="Negociação e observações" descricao="Opcionais. Saem no PDF abaixo das formas de pagamento." />
+    <ParcelamentoSemCartao orc={orc} />
     <CampoTinta rotulo="Negociação" htmlFor="orcamento-negociacao">
       <textarea
         id="orcamento-negociacao"

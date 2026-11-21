@@ -26,6 +26,7 @@ import {
   subtotalDoRecibo,
 } from '../../utils/recibos';
 import { sessoesDoProcedimento } from '../../utils/quoteFactory';
+import { ehParcelado, progressoDoParcelamento } from '../../utils/quoteCalc';
 import {
   apagarComprovante,
   enviarComprovanteDoRecibo,
@@ -187,10 +188,20 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
   const quoteId = recibo?.quoteId ?? orcamento?.id;
   const quoteNumero = recibo?.quoteNumero ?? orcamento?.numero;
 
-  const sugestoes = useMemo(() => (orcamento && !editando ? pagamentosSugeridos(orcamento) : []), [
-    orcamento,
-    editando,
-  ]);
+  /**
+   * Recibo novo de um orçamento parcelado sem cartão: qual pagamento é este, quanto já entrou e
+   * quanto falta. O valor nasce com o do próximo pagamento (a entrada, depois a parcela).
+   */
+  const progresso = useMemo(
+    () => (orcamento && !editando && ehParcelado(orcamento) ? progressoDoParcelamento(orcamento) : null),
+    [orcamento, editando]
+  );
+
+  // No parcelado, as formas do orçamento não servem de atalho: cada uma preencheria o total.
+  const sugestoes = useMemo(
+    () => (orcamento && !editando && !progresso ? pagamentosSugeridos(orcamento) : []),
+    [orcamento, editando, progresso]
+  );
 
   // Os produtos do estoque, para o "+ Adicionar produto" — só enquanto o formulário está aberto.
   useEffect(() => {
@@ -231,14 +242,23 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
     setPacienteNome(orcamento?.pacienteNome || pacienteInicial?.nome || '');
     setPacienteContato(orcamento?.pacienteContato || paciente?.contato);
     setCpf(formatCpf(paciente?.cpf || ''));
-    setData((orcamento?.status === 'pago' && isoParaDia(orcamento.pagoEm)) || hojeISO());
-    setValor(valorDoCampo(principal?.valor ?? orcamento?.total));
-    setForma(principal?.forma || 'pix');
-    setParcelas(principal?.parcelas || 1);
+    const parcela = orcamento && ehParcelado(orcamento) ? progressoDoParcelamento(orcamento) : null;
+    setData((orcamento?.status === 'pago' && !parcela && isoParaDia(orcamento.pagoEm)) || hojeISO());
+    setValor(valorDoCampo(parcela ? parcela.proximoValor : principal?.valor ?? orcamento?.total));
+    setForma(principal?.forma === 'credito' && parcela ? 'pix' : principal?.forma || 'pix');
+    setParcelas(parcela ? 1 : principal?.parcelas || 1);
     const doOrcamento = orcamento ? itensDoOrcamento(orcamento).map(paraEdicao) : [];
-    setItens(doOrcamento.length > 0 ? doOrcamento : [itemEmBranco()]);
+    // No parcelado, cada recibo é uma parte do total: os itens saem sem valor (a tabela mostra "—")
+    // e o que vale é o recebido — senão o PDF mostraria a soma dos itens acima de uma parcela.
+    setItens(
+      doOrcamento.length > 0
+        ? parcela
+          ? doOrcamento.map((i) => ({ ...i, valor: '', valorUnitario: undefined }))
+          : doOrcamento
+        : [itemEmBranco()]
+    );
     // Os itens chegam com o valor de cada um no orçamento; o que ele abateu do total vem aqui.
-    setDesconto(valorDoCampo(principal?.desconto));
+    setDesconto(parcela ? '' : valorDoCampo(principal?.desconto));
     setComprovanteAtual(undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto, recibo?.id, orcamento?.id]);
@@ -347,6 +367,8 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
     if (!data) novos.data = 'Informe a data do pagamento.';
     else if (data > hojeISO()) novos.data = 'O recibo é de um pagamento que já aconteceu.';
     if (!(valorNumero > 0)) novos.valor = 'Informe o valor recebido.';
+    else if (progresso && valorNumero - progresso.pendente >= 0.01)
+      novos.valor = `Passa do que falta pagar do orçamento (${formatBRL(progresso.pendente)}).`;
     if (itensPreenchidos.length === 0) novos.itens = 'Informe ao menos um procedimento ou produto.';
     if (descontoNumero < 0) novos.desconto = 'O desconto não pode ser negativo.';
     else if (subtotal !== null && descontoNumero > subtotal) novos.desconto = 'O desconto passa da soma dos itens.';
@@ -397,6 +419,15 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
         observacoes: recibo?.observacoes,
         quoteId,
         quoteNumero,
+        // Qual pagamento do parcelado é este — retrato da emissão; a correção mantém o que estava.
+        parcelaDoOrcamento: progresso
+          ? {
+              ordem: progresso.proximaOrdem,
+              de: Math.max(progresso.plano.pagamentos, progresso.proximaOrdem),
+              entrada: progresso.plano.entrada > 0 && progresso.proximaOrdem === 1,
+              saldo: Math.max(0, centavos(progresso.pendente - valorNumero)),
+            }
+          : recibo?.parcelaDoOrcamento,
         comprovante: novoComprovante ?? comprovanteAtual,
         clinica: montarClinicaDoRecibo(clinic),
       };
@@ -408,8 +439,9 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
         void apagarComprovante(recibo.comprovante);
       }
 
-      // Recibo de orçamento ainda aberto: a cliente pagou, então o orçamento passa a pago.
-      if (orcamento && !editando && orcamento.status !== 'pago') {
+      // Recibo de orçamento ainda aberto: a cliente pagou, então o orçamento passa a pago. No
+      // parcelado, não: quem decide é a soma dos recibos (`sincronizarRecebimentosDoOrcamento`).
+      if (orcamento && !editando && orcamento.status !== 'pago' && !ehParcelado(orcamento)) {
         await marcarQuoteComoPago(orcamento.id, diaParaISO(data)).catch((e) =>
           console.warn('Recibo emitido, mas o orçamento não foi marcado como pago:', e)
         );
@@ -436,9 +468,11 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
   const prefixoReais = <span className="text-[14px] font-semibold text-ink-soft shrink-0">R$</span>;
 
   const cabecalho = quoteNumero ? (
-    <div className="flex items-center justify-between gap-3 rounded-2xl bg-cream/8 px-3.5 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-cream/8 px-3.5 py-3">
       <div className="min-w-0">
-        <p className="text-[12px] font-semibold text-brand-light">Orçamento vinculado</p>
+        <p className="text-[12px] font-semibold text-brand-light">
+          {progresso ? 'Orçamento parcelado sem cartão' : 'Orçamento vinculado'}
+        </p>
         <p className="text-[15px] font-semibold text-white tabular-nums truncate">
           Nº {quoteNumero}
           {orcamento ? ` · ${orcamento.pacienteNome}` : ''}
@@ -446,6 +480,17 @@ export const ReciboFormPanel: React.FC<ReciboFormPanelProps> = ({
       </div>
       {orcamento && (
         <p className="shrink-0 text-[18px] font-bold text-white tabular-nums">{formatBRL(orcamento.total)}</p>
+      )}
+      {progresso && (
+        <div className="basis-full">
+          <div className="h-1.5 rounded-full bg-white/15 overflow-hidden">
+            <div className="h-full bg-brand-light" style={{ width: `${progresso.percentual}%` }} />
+          </div>
+          <p className="mt-1.5 text-[13px] text-white/80 tabular-nums">
+            {progresso.proximoRotulo} · já recebido {formatBRL(progresso.recebido)} · falta{' '}
+            {formatBRL(progresso.pendente)}
+          </p>
+        </div>
       )}
     </div>
   ) : undefined;

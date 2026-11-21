@@ -14,8 +14,11 @@ import { Quote, QuoteComprovante, QuoteStatus, Recibo } from '../../types';
 import { formatBRL, formatDate } from '../../utils/formatters';
 import { hojeISO } from '../../utils/attendances';
 import {
+  estaEmNegociacao,
   podeRegistrarDesfecho,
+  progressoDoParcelamento,
   resolveQuoteStatus,
+  resumoDoParcelamento,
   statusAntesDoDesfecho,
 } from '../../utils/quoteCalc';
 import { dataCurta } from '../documentos/estiloA4';
@@ -53,6 +56,13 @@ export const QUOTE_STATUS_CLASS: Record<QuoteStatus, string> = {
   expirado: 'bg-amber-50 text-amber-700 border-amber-200',
   cancelado: 'bg-ink text-brand-light border-ink',
 };
+
+/**
+ * O rótulo do status na lista: o de sempre, ou "Em negociação" no parcelado sem cartão que já
+ * recebeu algum pagamento e ainda não foi quitado (o status gravado continua `enviado`).
+ */
+export const rotuloDoStatusDoOrcamento = (quote: Quote, status: QuoteStatus = resolveQuoteStatus(quote)): string =>
+  estaEmNegociacao(quote) ? 'Em negociação' : QUOTE_STATUS_LABEL[status];
 
 /** "2026-09-20" → o ISO do meio-dia local desse dia. Ver `pagoEm` em `types.ts`. */
 const dataParaISO = (data: string): string => new Date(`${data}T12:00:00`).toISOString();
@@ -155,6 +165,8 @@ export const FolhaDePagamento: React.FC<FolhaDePagamentoProps> = ({ quote, onFec
   if (!quote) return null;
 
   const recibos = recibosCtx?.doOrcamento(quote.id) ?? [];
+  /** Parcelado sem cartão: o plano e quanto já entrou — a folha vira o acompanhamento. */
+  const parcelado = progressoDoParcelamento(quote);
 
   const escolher = (novo: File | null) => {
     setErro(novo ? problemaNoArquivoDeComprovante(novo) : null);
@@ -231,7 +243,7 @@ export const FolhaDePagamento: React.FC<FolhaDePagamentoProps> = ({ quote, onFec
       onFechar={() => {
         if (!salvando) onFechar();
       }}
-      titulo={jaPago ? 'Pagamento' : 'Registrar pagamento'}
+      titulo={parcelado ? 'Pagamentos' : jaPago ? 'Pagamento' : 'Registrar pagamento'}
       descricao={`Nº ${quote.numero} · ${quote.pacienteNome}`}
     >
       <div className="px-2 pb-3 space-y-4">
@@ -242,12 +254,29 @@ export const FolhaDePagamento: React.FC<FolhaDePagamentoProps> = ({ quote, onFec
           </span>
         </div>
 
+        {parcelado && (
+          <div className="px-1 space-y-2">
+            <p className="text-body text-ink-soft">
+              Parcelado sem cartão · {resumoDoParcelamento(parcelado.plano, formatBRL)}
+            </p>
+            <div className="h-2 rounded-full bg-line overflow-hidden">
+              <div className="h-full bg-ok" style={{ width: `${parcelado.percentual}%` }} />
+            </div>
+            <div className="flex items-baseline justify-between gap-3 text-body tabular-nums">
+              <span className="text-ok font-semibold">Recebido {formatBRL(parcelado.recebido)}</span>
+              <span className={parcelado.completo ? 'text-ok font-semibold' : 'text-ink font-semibold'}>
+                {parcelado.completo ? 'Quitado' : `Falta ${formatBRL(parcelado.pendente)}`}
+              </span>
+            </div>
+          </div>
+        )}
+
         {jaPago ? (
           <p className="px-1 text-body-lg text-ok flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             Pago em {formatDate(quote.pagoEm || '')}
           </p>
-        ) : (
+        ) : parcelado ? null : (
           <label className="block px-1">
             <span className={`${rotulo} mb-1.5`}>Data do pagamento</span>
             <input
@@ -260,10 +289,10 @@ export const FolhaDePagamento: React.FC<FolhaDePagamentoProps> = ({ quote, onFec
           </label>
         )}
 
-        {/* As notas de recibo do orçamento pago */}
-        {jaPago && recibosCtx && (
+        {/* As notas de recibo do orçamento pago — e, no parcelado, de cada pagamento que já entrou */}
+        {(jaPago || parcelado) && recibosCtx && (
           <div className="px-1 space-y-2">
-            <span className={rotulo}>Nota de recibo</span>
+            <span className={rotulo}>{parcelado ? 'Pagamentos recebidos' : 'Nota de recibo'}</span>
             {recibos.map((r) => (
               <button
                 key={r.id}
@@ -289,19 +318,38 @@ export const FolhaDePagamento: React.FC<FolhaDePagamentoProps> = ({ quote, onFec
                 <ChevronRight className="w-4 h-4 text-muted shrink-0 mr-1" />
               </button>
             ))}
-            <button
-              type="button"
-              onClick={criarRecibo}
-              className={`w-full min-h-[48px] px-5 rounded-xl text-body font-semibold flex items-center justify-center gap-2 transition-colors ${
-                recibos.length === 0
-                  ? 'bg-ink text-white hover:bg-black'
-                  : 'border border-dashed border-brand/50 text-brand-hover hover:bg-brand/5'
-              }`}
-            >
-              <ReceiptText className="w-4 h-4" />
-              {recibos.length === 0 ? 'Criar nota de recibo' : 'Nova nota de recibo'}
-            </button>
-            {recibos.length === 0 && (
+            {parcelado ? (
+              !parcelado.completo && (
+                <button
+                  type="button"
+                  onClick={criarRecibo}
+                  className="w-full min-h-[48px] px-5 rounded-xl text-body font-semibold flex items-center justify-center gap-2 transition-colors bg-ink text-white hover:bg-black"
+                >
+                  <ReceiptText className="w-4 h-4" />
+                  Registrar pagamento · {parcelado.proximoRotulo} · {formatBRL(parcelado.proximoValor)}
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={criarRecibo}
+                className={`w-full min-h-[48px] px-5 rounded-xl text-body font-semibold flex items-center justify-center gap-2 transition-colors ${
+                  recibos.length === 0
+                    ? 'bg-ink text-white hover:bg-black'
+                    : 'border border-dashed border-brand/50 text-brand-hover hover:bg-brand/5'
+                }`}
+              >
+                <ReceiptText className="w-4 h-4" />
+                {recibos.length === 0 ? 'Criar nota de recibo' : 'Nova nota de recibo'}
+              </button>
+            )}
+            {parcelado && !parcelado.completo && (
+              <p className="text-body text-muted leading-relaxed">
+                Data, valor e o comprovante de cada pagamento. O orçamento passa a pago sozinho quando
+                a soma chegar ao total.
+              </p>
+            )}
+            {!parcelado && recibos.length === 0 && (
               <p className="text-body text-muted leading-relaxed">
                 Data, valor, forma de pagamento e o comprovante, num PDF com a identidade da
                 clínica para enviar à cliente.
@@ -332,7 +380,7 @@ export const FolhaDePagamento: React.FC<FolhaDePagamentoProps> = ({ quote, onFec
           </div>
         )}
 
-        {!jaPago && (
+        {!jaPago && !parcelado && (
           <p className="px-1 text-body text-muted leading-relaxed">
             A forma de pagamento e o comprovante vão na nota de recibo, que sai em PDF para enviar
             à cliente.
@@ -346,7 +394,7 @@ export const FolhaDePagamento: React.FC<FolhaDePagamentoProps> = ({ quote, onFec
           </div>
         )}
 
-        {!jaPago && (
+        {!jaPago && !parcelado && (
           <div className="space-y-1.5">
             <button
               type="button"
@@ -502,6 +550,8 @@ export const QuoteDesfecho: React.FC<{ quote: Quote }> = ({ quote }) => {
 
   const status = resolveQuoteStatus(quote);
   const podeDecidir = podeRegistrarDesfecho(quote);
+  const parcelado = progressoDoParcelamento(quote);
+  const emNegociacao = estaEmNegociacao(quote);
 
   const chip =
     'inline-flex items-center gap-1 px-2 py-1 text-label font-semibold rounded-xs border transition-colors';
@@ -509,31 +559,59 @@ export const QuoteDesfecho: React.FC<{ quote: Quote }> = ({ quote }) => {
   return (
     <div className="flex flex-col items-start gap-1.5">
       <span
-        className={`px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border ${QUOTE_STATUS_CLASS[status]}`}
+        className={`px-2 py-0.5 text-label font-semibold uppercase tracking-wider rounded-xs border ${
+          emNegociacao ? 'bg-info-bg text-info border-info-line' : QUOTE_STATUS_CLASS[status]
+        }`}
       >
-        {QUOTE_STATUS_LABEL[status]}
+        {rotuloDoStatusDoOrcamento(quote, status)}
       </span>
+
+      {parcelado && parcelado.recebimentos.length > 0 && quote.status !== 'pago' && (
+        <button
+          type="button"
+          onClick={desfecho.abrirPagamento}
+          title="Ver os pagamentos recebidos"
+          className="text-label text-ink-soft tabular-nums hover:text-ink"
+        >
+          {formatBRL(parcelado.recebido)} de {formatBRL(parcelado.plano.total)} · falta{' '}
+          {formatBRL(parcelado.pendente)}
+        </button>
+      )}
 
       {podeDecidir && (
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={desfecho.abrirPagamento}
-            title="A cliente pagou — registrar o pagamento e emitir a nota de recibo"
-            className={`${chip} bg-white/60 text-ok border-ok-line hover:bg-ok-bg`}
-          >
-            <CheckCircle2 className="w-3 h-3" />
-            Pagou
-          </button>
-          <button
-            type="button"
-            onClick={desfecho.recusar}
-            title="A cliente recusou este orçamento"
-            className={`${chip} bg-white/60 text-danger border-danger-line hover:bg-danger-bg`}
-          >
-            <XCircle className="w-3 h-3" />
-            Recusou
-          </button>
+          {parcelado ? (
+            <button
+              type="button"
+              onClick={desfecho.criarRecibo}
+              title="Registrar um pagamento do parcelado, com o comprovante"
+              className={`${chip} bg-white/60 text-ok border-ok-line hover:bg-ok-bg`}
+            >
+              <ReceiptText className="w-3 h-3" />
+              Registrar pagamento
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={desfecho.abrirPagamento}
+              title="A cliente pagou — registrar o pagamento e emitir a nota de recibo"
+              className={`${chip} bg-white/60 text-ok border-ok-line hover:bg-ok-bg`}
+            >
+              <CheckCircle2 className="w-3 h-3" />
+              Pagou
+            </button>
+          )}
+          {!emNegociacao && (
+            <button
+              type="button"
+              onClick={desfecho.recusar}
+              title="A cliente recusou este orçamento"
+              className={`${chip} bg-white/60 text-danger border-danger-line hover:bg-danger-bg`}
+            >
+              <XCircle className="w-3 h-3" />
+              Recusou
+            </button>
+          )}
         </div>
       )}
 

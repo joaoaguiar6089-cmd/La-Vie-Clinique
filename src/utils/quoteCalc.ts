@@ -3,7 +3,9 @@ import {
   PaymentMethod,
   Quote,
   QuoteItem,
+  QuoteParcelamento,
   QuotePayment,
+  QuoteRecebimento,
   QuoteStatus,
 } from "../types";
 import { isLaserCategory } from "./templateMatching";
@@ -229,16 +231,153 @@ export const calcularDataValidade = (
   return base.toISOString();
 };
 
+// ==========================================
+// PARCELADO SEM CARTÃO
+// ==========================================
+
+/** Até quantas parcelas a negociação direta aceita, depois da entrada. */
+export const PARCELAS_SEM_CARTAO_MAX = 24;
+
+export interface ParcelamentoCalculado {
+  /** O valor negociado — o total do orçamento. */
+  total: number;
+  /** 0 quando não há entrada. */
+  entrada: number;
+  parcelas: number;
+  /** (total − entrada) ÷ parcelas, em centavos. A última absorve o arredondamento. */
+  valorParcela: number;
+  /** Quantos pagamentos ao todo: a entrada, se houver, mais as parcelas. */
+  pagamentos: number;
+}
+
+/** O plano do parcelado sem cartão sobre um total, ou `null` quando o orçamento não é parcelado. */
+export const calcularParcelamento = (
+  total: number,
+  parcelamento?: QuoteParcelamento | null
+): ParcelamentoCalculado | null => {
+  if (!parcelamento) return null;
+  const base = isPositive(total) ? round2(total) : 0;
+  const parcelas = Math.min(
+    PARCELAS_SEM_CARTAO_MAX,
+    Math.max(1, Math.round(Number(parcelamento.parcelas) || 1))
+  );
+  const entrada = isPositive(parcelamento.entrada) ? Math.min(round2(parcelamento.entrada), base) : 0;
+  const valorParcela = round2((base - entrada) / parcelas);
+  return { total: base, entrada, parcelas, valorParcela, pagamentos: parcelas + (entrada > 0 ? 1 : 0) };
+};
+
+/** O orçamento é pago parcelado sem cartão — a negociação direta, acompanhada pelos recibos. */
+export const ehParcelado = (quote: Pick<Quote, "pagamento">): boolean => !!quote.pagamento?.parcelamento;
+
+/** "Entrada de R$ 5.000,00 + 5× de R$ 1.040,00", ou "6× de R$ 1.700,00" sem entrada. */
+export const resumoDoParcelamento = (
+  plano: ParcelamentoCalculado,
+  formatar: (valor: number) => string
+): string =>
+  plano.entrada > 0
+    ? `Entrada de ${formatar(plano.entrada)} + ${plano.parcelas}× de ${formatar(plano.valorParcela)}`
+    : `${plano.parcelas}× de ${formatar(plano.valorParcela)}`;
+
+const brl = (valor: number): string =>
+  valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/**
+ * "R$ 5.000,00 + 5 × R$ 1.040,00" — o valor da linha do parcelado no PDF e no link. Num texto só:
+ * o html2canvas posiciona cada pedaço de texto à parte e encavalava o "+" entre dois deles.
+ */
+export const valorDoParcelado = (plano: ParcelamentoCalculado): string =>
+  // Espaços inseparáveis em "5 × R$ 1.040,00": na tela estreita, a quebra fica depois do "+"
+  `${plano.entrada > 0 ? `${brl(plano.entrada)} + ` : ""}${plano.parcelas}\u00a0×\u00a0${brl(plano.valorParcela)}`;
+
+/** "Recebido R$ 5.000,00 de R$ 10.200,00 · falta R$ 5.200,00" (ou "· quitado"). Num texto só, idem. */
+export const recebidoDoParcelado = (p: ProgressoDoParcelamento): string =>
+  `Recebido ${brl(p.recebido)} de ${brl(p.plano.total)} · ${p.completo ? "quitado" : `falta ${brl(p.pendente)}`}`;
+
+/** O nome do pagamento de número `ordem` (1 = o primeiro): "Entrada", "Parcela 2 de 5". */
+export const rotuloDoPagamento = (plano: ParcelamentoCalculado, ordem: number): string => {
+  if (plano.entrada > 0 && ordem === 1) return "Entrada";
+  if (ordem > plano.pagamentos) return "Saldo restante";
+  const parcela = plano.entrada > 0 ? ordem - 1 : ordem;
+  return `Parcela ${parcela} de ${plano.parcelas}`;
+};
+
+export interface ProgressoDoParcelamento {
+  plano: ParcelamentoCalculado;
+  recebimentos: QuoteRecebimento[];
+  recebido: number;
+  /** O que falta — nunca negativo. */
+  pendente: number;
+  /** 0 a 100. */
+  percentual: number;
+  completo: boolean;
+  /** O número do próximo pagamento (1 = o primeiro). */
+  proximaOrdem: number;
+  /** "Entrada", "Parcela 2 de 5", "Saldo restante". */
+  proximoRotulo: string;
+  /**
+   * Quanto o próximo pagamento deve ser: a entrada, enquanto ela não veio; depois, a parcela. Nunca
+   * passa do que falta — e o último pagamento do plano é sempre o que falta, para o arredondamento
+   * da parcela não deixar um centavo pendente.
+   */
+  proximoValor: number;
+}
+
+/**
+ * Quanto já entrou de um orçamento parcelado sem cartão e o que vem em seguida, ou `null` quando
+ * ele não é parcelado. Lê os recebimentos gravados no orçamento — ou os que quem chama passar (o
+ * formulário do recibo, que sabe dos recibos antes da sincronização).
+ */
+export const progressoDoParcelamento = (
+  quote: Pick<Quote, "pagamento" | "total" | "recebimentos">,
+  recebimentos: QuoteRecebimento[] = quote.recebimentos || []
+): ProgressoDoParcelamento | null => {
+  const plano = calcularParcelamento(quote.total, quote.pagamento?.parcelamento);
+  if (!plano) return null;
+  const recebido = round2(recebimentos.reduce((s, r) => s + (isPositive(r.valor) ? r.valor : 0), 0));
+  const pendente = Math.max(0, round2(plano.total - recebido));
+  const completo = recebimentos.length > 0 && pendente < 0.01;
+  const proximaOrdem = recebimentos.length + 1;
+  const esperado =
+    plano.entrada > 0 && proximaOrdem === 1
+      ? plano.entrada
+      : proximaOrdem >= plano.pagamentos
+      ? pendente
+      : plano.valorParcela;
+  return {
+    plano,
+    recebimentos,
+    recebido,
+    pendente,
+    percentual: plano.total > 0 ? Math.min(100, Math.round((recebido / plano.total) * 100)) : 0,
+    completo,
+    proximaOrdem,
+    proximoRotulo: rotuloDoPagamento(plano, proximaOrdem),
+    proximoValor: round2(Math.min(esperado, pendente)),
+  };
+};
+
+/**
+ * Orçamento parcelado com algum pagamento recebido e ainda não quitado — "em negociação". Não é um
+ * status gravado: o gravado continua `enviado`, e a interface troca só o rótulo.
+ */
+export const estaEmNegociacao = (quote: Pick<Quote, "status" | "pagamento" | "recebimentos">): boolean =>
+  ehParcelado(quote) &&
+  (quote.recebimentos?.length ?? 0) > 0 &&
+  quote.status !== "pago" &&
+  quote.status !== "cancelado";
+
 /**
  * Status para exibição. `expirado` nunca é gravado no banco: é derivado aqui,
  * então nunca fica desatualizado e não depende de rotina agendada.
  */
 export const resolveQuoteStatus = (
-  quote: Pick<Quote, "status" | "dataValidade">,
+  quote: Pick<Quote, "status" | "dataValidade"> & Partial<Pick<Quote, "recebimentos">>,
   agora: Date = new Date()
 ): QuoteStatus => {
   // Pago, recusado e cancelado são estados finais; rascunho nunca "vence" porque nem saiu daqui
   if (quote.status !== "enviado") return quote.status;
+  // Parcelado que já começou a ser pago não vence: a cliente está pagando, a validade era da proposta
+  if ((quote.recebimentos?.length ?? 0) > 0) return quote.status;
   const validade = new Date(quote.dataValidade);
   if (isNaN(validade.getTime())) return quote.status;
   return validade < agora ? "expirado" : quote.status;
@@ -257,11 +396,16 @@ export const isQuoteEditavel = (quote: Pick<Quote, "status">): boolean =>
  * oferecem o mesmo botão.
  */
 export const podeSubstituir = (
-  quote: Pick<Quote, "status" | "dataValidade" | "substituidoPor">
+  quote: Pick<Quote, "status" | "dataValidade" | "substituidoPor"> & Partial<Pick<Quote, "recebimentos">>
 ): boolean => {
   const status = resolveQuoteStatus(quote);
   return (
-    !isQuoteEditavel(quote) && !quote.substituidoPor && status !== "cancelado" && status !== "pago"
+    !isQuoteEditavel(quote) &&
+    !quote.substituidoPor &&
+    status !== "cancelado" &&
+    status !== "pago" &&
+    // Parcelado em andamento também não: já entrou dinheiro por este número
+    !(quote.recebimentos?.length)
   );
 };
 

@@ -1,6 +1,10 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ClinicProfile, Patient, Procedure, Quote, Recibo } from '../../types';
-import { excluirRecibo, subscribeToRecibos } from '../../services/databaseService';
+import {
+  excluirRecibo,
+  sincronizarRecebimentosDoOrcamento,
+  subscribeToRecibos,
+} from '../../services/databaseService';
 import { apagarComprovante } from '../../services/comprovantes';
 import { recibosDoOrcamento } from '../../utils/recibos';
 import { ConfirmDialog, ConfirmRequest, aviso } from '../ConfirmDialog';
@@ -82,6 +86,31 @@ export const RecibosProvider: React.FC<{
 
   const doOrcamento = useCallback((quoteId: string) => recibosDoOrcamento(recibos, quoteId), [recibos]);
 
+  /** A lista mais recente, para as ações sem dependência (a exclusão) não lerem uma cópia velha. */
+  const recibosRef = useRef(recibos);
+  recibosRef.current = recibos;
+
+  /**
+   * Orçamento parcelado sem cartão: refaz o quanto já entrou e o status, a partir dos recibos dele
+   * — com o recém-salvo já trocado ou o recém-excluído já fora, porque a assinatura ainda não os
+   * trouxe. Nos outros orçamentos não muda nada (ver `sincronizarRecebimentosDoOrcamento`).
+   */
+  const sincronizarOrcamento = useCallback(
+    (quoteId: string, mudar: (lista: Recibo[]) => Recibo[]) => {
+      const lista = mudar(recibosRef.current.filter((r) => r.quoteId === quoteId));
+      sincronizarRecebimentosDoOrcamento(quoteId, lista).catch((e) =>
+        setConfirmacao(
+          aviso(
+            'O recibo foi salvo, mas o orçamento não foi atualizado',
+            `${(e as Error).message}. Abra o recibo e salve de novo para tentar outra vez.`,
+            'perigo'
+          )
+        )
+      );
+    },
+    []
+  );
+
   const excluirDoOrcamento = useCallback(
     async (quoteId: string) => {
       const doQuote = recibosDoOrcamento(recibos, quoteId);
@@ -103,12 +132,15 @@ export const RecibosProvider: React.FC<{
           await excluirRecibo(recibo.id);
           void apagarComprovante(recibo.comprovante);
           setPreviaId((atual) => (atual === recibo.id ? null : atual));
+          if (recibo.quoteId) {
+            sincronizarOrcamento(recibo.quoteId, (lista) => lista.filter((r) => r.id !== recibo.id));
+          }
         } catch (e) {
           setConfirmacao(aviso('Não foi possível excluir o recibo', (e as Error).message, 'perigo'));
         }
       },
     });
-  }, []);
+  }, [sincronizarOrcamento]);
 
   const valor = useMemo<RecibosContextValue>(
     () => ({
@@ -154,6 +186,12 @@ export const RecibosProvider: React.FC<{
           // Emitido, o passo seguinte é mandar para a cliente: a prévia abre com o "Enviar".
           setRecemSalvo(salvo);
           setPreviaId(salvo.id);
+          if (salvo.quoteId) {
+            sincronizarOrcamento(salvo.quoteId, (lista) => [
+              ...lista.filter((r) => r.id !== salvo.id),
+              salvo,
+            ]);
+          }
         }}
       />
 

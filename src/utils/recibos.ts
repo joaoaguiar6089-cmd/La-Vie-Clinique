@@ -37,10 +37,24 @@ export const rotuloCurtoDoPagamento = (r: Pick<Recibo, 'forma' | 'parcelas'>): s
   return n > 1 ? `Crédito ${n}×` : 'Crédito à vista';
 };
 
-/** "À vista" ou "Parcelado em 3× de R$ 500,00". */
-export const condicaoDoPagamento = (r: Pick<Recibo, 'forma' | 'parcelas' | 'valor'>): string => {
+/**
+ * "À vista" ou "Parcelado em 3× de R$ 500,00". No recibo de um orçamento parcelado sem cartão,
+ * qual pagamento é este: "Entrada (1 de 6)", "Pagamento 3 de 6".
+ */
+export const condicaoDoPagamento = (
+  r: Pick<Recibo, 'forma' | 'parcelas' | 'valor' | 'parcelaDoOrcamento'>
+): string => {
+  const etapa = r.parcelaDoOrcamento;
+  if (etapa) return etapa.entrada ? `Entrada (1 de ${etapa.de})` : `Pagamento ${etapa.ordem} de ${etapa.de}`;
   const n = parcelasDoRecibo(r);
   return n > 1 ? `Parcelado em ${n}× de ${formatBRL(r.valor / n)}` : 'À vista';
+};
+
+/** O que faltava pagar do orçamento parcelado depois deste recibo — "Quitado" no último. */
+export const saldoDoRecibo = (r: Pick<Recibo, 'parcelaDoOrcamento'>): string | null => {
+  const etapa = r.parcelaDoOrcamento;
+  if (!etapa) return null;
+  return etapa.saldo >= 0.01 ? formatBRL(etapa.saldo) : 'Quitado';
 };
 
 // ==========================================

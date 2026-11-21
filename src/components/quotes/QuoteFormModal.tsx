@@ -8,6 +8,7 @@ import {
   itemSessoes,
   itemValorFinal,
   NOME_FORMA_PAGAMENTO,
+  resumoDoParcelamento,
 } from '../../utils/quoteCalc';
 import { SidePanel } from '../common/SidePanel';
 import { AvisoTinta } from '../common/Tinta';
@@ -108,7 +109,15 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     const novosErros = orc.validar();
     if (Object.keys(novosErros).length > 0) {
       // Volta para a etapa do primeiro problema — o aviso mora lá, junto do campo.
-      setEtapa(novosErros.paciente || novosErros.validade || novosErros.avaliacao ? 1 : 2);
+      setEtapa(
+        novosErros.paciente || novosErros.validade || novosErros.avaliacao
+          ? 1
+          : novosErros.itens
+          ? 2
+          : novosErros.parcelamento
+          ? 3
+          : 2
+      );
       return;
     }
 
@@ -384,6 +393,11 @@ export const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                       <span className="block text-[13px] text-ink-soft">
                         {NOME_FORMA_PAGAMENTO[opcaoPrincipal.forma]}
                         {principal.parcela ? ` · ${principal.parcelas}× de ${formatBRL(principal.parcela)}` : ''}
+                      </span>
+                    )}
+                    {orc.planoDoParcelamento && (
+                      <span className="block text-[13px] text-ink-soft">
+                        Parcelado sem cartão · {resumoDoParcelamento(orc.planoDoParcelamento, formatBRL)}
                       </span>
                     )}
                   </div>
