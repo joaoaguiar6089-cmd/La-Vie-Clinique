@@ -1,5 +1,5 @@
 import { Attendance, AttendanceStatus, Procedure, ProcedimentoDaVisita, SessionPlan } from '../types';
-import { nomeComFoco } from './procedimentoAvaliacao';
+import { focosDe, nomeComFoco } from './procedimentoAvaliacao';
 
 /**
  * As regras do diário de atendimentos: o que é agendamento, o que conta como sessão feita, e
@@ -122,7 +122,7 @@ type ComProcedimentos = Pick<
   Attendance,
   'procedureId' | 'procedimentoNome' | 'planoId' | 'procedimentosAdicionais'
 > &
-  Partial<Pick<Attendance, 'foco'>>;
+  Partial<Pick<Attendance, 'foco' | 'focos'>>;
 
 /**
  * Todos os procedimentos da visita, o principal primeiro. Registro de antes da lista devolve um
@@ -133,7 +133,7 @@ export const procedimentosDoAtendimento = (a: ComProcedimentos): ProcedimentoDaV
     procedureId: a.procedureId,
     procedimentoNome: a.procedimentoNome || '',
     planoId: a.planoId,
-    ...(a.foco ? { foco: a.foco } : {}),
+    ...(focosDe(a).length > 0 ? { focos: focosDe(a) } : {}),
   },
   ...(Array.isArray(a.procedimentosAdicionais) ? a.procedimentosAdicionais : []).filter(
     (p): p is ProcedimentoDaVisita =>
@@ -144,7 +144,7 @@ export const procedimentosDoAtendimento = (a: ComProcedimentos): ProcedimentoDaV
 /** Cada procedimento com o foco dele: "Harmonização Glútea · Trocanter". */
 const nomesDaVisita = (a: ComProcedimentos): string[] =>
   procedimentosDoAtendimento(a)
-    .map((p) => (p.procedimentoNome.trim() ? nomeComFoco(p.procedimentoNome.trim(), p.foco) : ''))
+    .map((p) => (p.procedimentoNome.trim() ? nomeComFoco(p.procedimentoNome.trim(), focosDe(p)) : ''))
     .filter(Boolean);
 
 /**

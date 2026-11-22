@@ -75,6 +75,11 @@ export interface AvaliacaoDoOrcamento {
   pacienteContato?: string;
   procedureId?: string;
   procedimentoNome: string;
+  /**
+   * Os procedimentos avaliados, quando são mais de um (a Avaliação com vários focos): um item para
+   * cada. Ausente = o `procedureId`/`procedimentoNome` acima.
+   */
+  procedimentos?: { procedureId?: string; procedimentoNome: string }[];
   /** YYYY-MM-DD (ou ISO) do dia da avaliação. */
   data: string;
   professionalId?: string;
@@ -594,20 +599,32 @@ export const useOrcamentoEmEdicao = ({
       return;
     }
 
-    const procedimento = procedimentoDoAtendimento(avaliacao, procedures);
-    const doCatalogo = procedimento
-      ? montarItemDoProcedimento(procedimento, professionals)
-      : { ...montarItemAvulso(), titulo: avaliacao.procedimentoNome };
     // Quem avaliou costuma ser quem faz — e continua trocável no item.
     const profissional = professionals.find((p) => p.id === avaliacao.professionalId);
-    const item = profissional
-      ? { ...doCatalogo, professionalId: profissional.id, profissionalNome: profissional.name }
-      : doCatalogo;
-    const consumo = linhas || materiaisDoItem(item, consumos || [], produtos || [], procedures);
+    const alvos =
+      avaliacao.procedimentos && avaliacao.procedimentos.length > 0
+        ? avaliacao.procedimentos
+        : [{ procedureId: avaliacao.procedureId, procedimentoNome: avaliacao.procedimentoNome }];
+    const novosItens: QuoteItem[] = [];
+    const novosCustos: Record<string, MaterialUsado[]> = {};
+    alvos.forEach((alvo) => {
+      const procedimento = procedimentoDoAtendimento(alvo, procedures);
+      const doCatalogo = procedimento
+        ? montarItemDoProcedimento(procedimento, professionals)
+        : { ...montarItemAvulso(), titulo: alvo.procedimentoNome };
+      const item = profissional
+        ? { ...doCatalogo, professionalId: profissional.id, profissionalNome: profissional.name }
+        : doCatalogo;
+      // O consumo gravado é de um item só: com vários, cada um parte do consumo padrão dele.
+      const consumo =
+        (alvos.length === 1 && linhas) || materiaisDoItem(item, consumos || [], produtos || [], procedures);
+      novosItens.push(aplicarConsumoNoItem(item, consumo));
+      novosCustos[item.id] = consumo;
+    });
 
-    setItens([aplicarConsumoNoItem(item, consumo)]);
-    setCustos({ [item.id]: consumo });
-    setCustoFixo(new Set([item.id]));
+    setItens(novosItens);
+    setCustos(novosCustos);
+    setCustoFixo(new Set(novosItens.map((i) => i.id)));
   };
 
   /** Confere o que impede salvar. Devolve os erros — vazio = pode salvar. */

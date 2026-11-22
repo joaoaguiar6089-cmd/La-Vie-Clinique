@@ -17,6 +17,7 @@ import { EstoqueModule } from './components/estoque/EstoqueModule';
 import { AgendaModule } from './components/agenda/AgendaModule';
 import { agendamentosAtrasados } from './utils/agenda';
 import { respostasParaResolver } from './utils/agendamentoLink';
+import { umPorVisita } from './utils/visitas';
 import { PublicQuoteEntry } from './components/quotes/PublicQuoteEntry';
 import { PublicAppointmentEntry } from './components/agenda/PublicAppointmentEntry';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -708,7 +709,9 @@ function MainCatalogApp() {
    * as clientes responderam e espera uma decisão (pedido de outro horário, aviso de ausência).
    */
   const agendamentosPendentes = useMemo(
-    () => agendamentosAtrasados(attendances).length + respostasParaResolver(attendances).length,
+    () =>
+      umPorVisita(agendamentosAtrasados(attendances)).length +
+      umPorVisita(respostasParaResolver(attendances)).length,
     [attendances]
   );
 

@@ -82,46 +82,54 @@ const comAvaliacoes = (...avs: Attendance[]): ContextoDaJornada => ({
 ok('sem atendimento de Avaliação, o passo está por fazer', !avaliacaoDaAnamnese(anamnese, contexto));
 ok(
   'Avaliação com o foco no tratamento da anamnese conta',
-  avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('a1', '2026-10-29', { foco: 'Ozonioterapia' })))?.id === 'a1'
+  avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('a1', '2026-10-29', { focos: ['Ozonioterapia'] })))?.id === 'a1'
 );
 ok(
   'Avaliação com foco em outro tratamento não conta',
-  !avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('a2', '2026-10-29', { foco: 'Botox' })))
+  !avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('a2', '2026-10-29', { focos: ['Botox'] })))
 );
 ok(
   'Avaliação sem foco serve, mas a do foco vence',
   avaliacaoDaAnamnese(
     anamnese,
-    comAvaliacoes(aval('geral', '2026-10-30'), aval('foco', '2026-10-29', { foco: 'ozonioterapia' }))
+    comAvaliacoes(aval('geral', '2026-10-30'), aval('foco', '2026-10-29', { focos: ['ozonioterapia'] }))
   )?.id === 'foco'
 );
 ok(
   'Avaliação de antes da anamnese não conta',
-  !avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('antes', '2026-10-20', { foco: 'Ozonioterapia' })))
+  !avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('antes', '2026-10-20', { focos: ['Ozonioterapia'] })))
 );
 ok(
   'falta não conta; agendada conta',
-  !avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('f', '2026-10-29', { foco: 'Ozonioterapia', status: 'faltou' }))) &&
-    avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('ag', '2099-01-02', { foco: 'Ozonioterapia', status: 'agendado' })))?.id === 'ag'
+  !avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('f', '2026-10-29', { focos: ['Ozonioterapia'], status: 'faltou' }))) &&
+    avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('ag', '2099-01-02', { focos: ['Ozonioterapia'], status: 'agendado' })))?.id === 'ag'
+);
+ok(
+  'Avaliação com vários focos conta para a anamnese de qualquer um deles',
+  avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('varios', '2026-10-29', { focos: ['Botox', 'Ozonioterapia'] })))?.id === 'varios'
+);
+ok(
+  'o foco antigo (um só, gravado em `foco`) continua valendo',
+  avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('antigo', '2026-10-29', { foco: 'Ozonioterapia' } as Partial<Attendance>)))?.id === 'antigo'
 );
 ok(
   'feita vence a agendada',
   avaliacaoDaAnamnese(
     anamnese,
     comAvaliacoes(
-      aval('ag', '2099-01-02', { foco: 'Ozonioterapia', status: 'agendado' }),
-      aval('feita', '2026-10-29', { foco: 'Ozonioterapia' })
+      aval('ag', '2099-01-02', { focos: ['Ozonioterapia'], status: 'agendado' }),
+      aval('feita', '2026-10-29', { focos: ['Ozonioterapia'] })
     )
   )?.id === 'feita'
 );
 const agendamento = sementeDoAgendamento({
   pacienteId: 'p1',
   pacienteNome: 'Cristiane Soares',
-  tratamento: { procedureId: PROCEDIMENTO_AVALIACAO_ID, procedimentoNome: 'Avaliação', foco: 'Ozonioterapia' },
+  tratamento: { procedureId: PROCEDIMENTO_AVALIACAO_ID, procedimentoNome: 'Avaliação', focos: ['Ozonioterapia'] },
 });
 ok(
   'agendar a avaliação leva o procedimento Avaliação e o foco',
-  agendamento.procedureId === PROCEDIMENTO_AVALIACAO_ID && agendamento.foco === 'Ozonioterapia'
+  agendamento.procedureId === PROCEDIMENTO_AVALIACAO_ID && agendamento.focos?.join() === 'Ozonioterapia'
 );
 
 console.log(falhas === 0 ? '\nTudo certo.' : `\n${falhas} falha(s).`);

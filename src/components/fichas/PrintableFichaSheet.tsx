@@ -20,7 +20,7 @@ import { formatDateOnly } from '../../utils/formatters';
 import { marcaDaClinica } from '../../utils/marca';
 import { IdentificacaoDaClinica } from '../documentos/IdentificacaoDaClinica';
 import { useEstiloDaMarca } from '../documentos/MarcaDosDocumentos';
-import { nomeComFoco } from '../../utils/procedimentoAvaliacao';
+import { focosDe, nomeComFoco } from '../../utils/procedimentoAvaliacao';
 
 /** O que já se sabe da folha em branco emitida para uma paciente — sai impresso no lugar da linha. */
 export interface CabecalhoDaFicha {
@@ -79,8 +79,27 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
     [registro, gerais, ficha]
   );
 
+  /**
+   * O relatório com mais de um foco sai em blocos, como foi preenchido: as perguntas de fora dos
+   * blocos primeiro, depois um título por foco com as respostas dele. Bloco sem resposta não sai.
+   */
+  const secoes = useMemo((): { foco?: string; perguntas: AnamnesisQuestion[] }[] => {
+    const blocos = registro?.blocosDeFoco || [];
+    if (blocos.length === 0) return [{ perguntas }];
+    const noBloco = new Set(blocos.flatMap((b) => b.perguntaIds));
+    return [
+      { perguntas: perguntas.filter((q) => !noBloco.has(q.id)) },
+      ...blocos.map((b) => ({
+        foco: b.foco,
+        perguntas: b.perguntaIds
+          .map((id) => perguntas.find((q) => q.id === id))
+          .filter((q): q is AnamnesisQuestion => !!q),
+      })),
+    ].filter((secao) => secao.perguntas.length > 0);
+  }, [registro?.blocosDeFoco, perguntas]);
+
   const titulo =
-    (registro?.procedimentoNome && nomeComFoco(registro.procedimentoNome, registro.foco)) ||
+    (registro?.procedimentoNome && nomeComFoco(registro.procedimentoNome, focosDe(registro))) ||
     cabecalho?.procedimentoNome ||
     ficha?.nome ||
     rotulos.curto;
@@ -211,7 +230,7 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
                 </span>
                 <span className="font-semibold text-ink">
                   {registro?.procedimentoNome
-                    ? nomeComFoco(registro.procedimentoNome, registro.foco)
+                    ? nomeComFoco(registro.procedimentoNome, focosDe(registro))
                     : cabecalho?.procedimentoNome}
                 </span>
               </div>
@@ -237,14 +256,23 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
                 ? perguntas.map((q, idx) => (
                     <QuestionBlock key={q.id} question={q} index={idx + 1} />
                   ))
-                : perguntas.map((q) => (
-                    <QuestionFieldRenderer
-                      key={q.id}
-                      question={q}
-                      value={registro?.respostas?.[q.id]}
-                      readOnly
-                      hideMandatoryAsterisk
-                    />
+                : secoes.map((secao) => (
+                    <div key={secao.foco || '-'} className={secao.foco ? 'mt-4' : ''}>
+                      {secao.foco && (
+                        <p className="text-[12px] font-bold text-ink uppercase tracking-wider border-b border-gray-200 pb-1 mb-2">
+                          {secao.foco}
+                        </p>
+                      )}
+                      {secao.perguntas.map((q) => (
+                        <QuestionFieldRenderer
+                          key={q.id}
+                          question={q}
+                          value={registro?.respostas?.[q.id]}
+                          readOnly
+                          hideMandatoryAsterisk
+                        />
+                      ))}
+                    </div>
                   ))}
             </div>
           )}

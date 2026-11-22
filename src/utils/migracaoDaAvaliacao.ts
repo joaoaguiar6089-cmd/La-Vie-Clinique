@@ -10,6 +10,7 @@ import { fichaDeAvaliacaoPara } from './evaluations';
 import {
   PROCEDIMENTO_AVALIACAO_ID,
   ehAvaliacao,
+  focosDe,
   focosDoProcedimento,
   mesmoFoco,
 } from './procedimentoAvaliacao';
@@ -285,9 +286,14 @@ export const planejarMigracaoDaAvaliacao = (entrada: EntradaDaMigracao): PlanoDa
             atendimentoId: existente.id,
             procedureId: existente.procedureId,
             procedimentoNome: existente.procedimentoNome,
-            foco: existente.foco || (ehAvaliacao(existente) ? foco : undefined),
+            focos:
+              focosDe(existente).length > 0
+                ? focosDe(existente)
+                : ehAvaliacao(existente) && foco
+                ? [foco]
+                : undefined,
           },
-          focoNoAtendimentoExistente: ehAvaliacao(existente) && !existente.foco ? foco : undefined,
+          focoNoAtendimentoExistente: ehAvaliacao(existente) && focosDe(existente).length === 0 ? foco : undefined,
         };
       }
 
@@ -300,7 +306,7 @@ export const planejarMigracaoDaAvaliacao = (entrada: EntradaDaMigracao): PlanoDa
         data: dia,
         procedureId: PROCEDIMENTO_AVALIACAO_ID,
         procedimentoNome: nomeDaAvaliacao,
-        foco,
+        focos: foco ? [foco] : undefined,
         professionalId: r.professionalId,
         profissionalNome: r.profissionalNome,
         acompanhamentoPreenchidoEm: r.preenchidoEm || r.createdAt || entrada.agora,
@@ -319,7 +325,7 @@ export const planejarMigracaoDaAvaliacao = (entrada: EntradaDaMigracao): PlanoDa
           atendimentoId: id,
           procedureId: PROCEDIMENTO_AVALIACAO_ID,
           procedimentoNome: nomeDaAvaliacao,
-          foco,
+          focos: foco ? [foco] : undefined,
         },
       };
     });
@@ -345,7 +351,11 @@ export const paraAtendimentoNovo = (
 ): RelatorioDaMigracao => {
   const id = idDoAtendimentoDaAvaliacao(original.id);
   const nome = (avaliacao?.title || '').trim() || 'Avaliação';
-  const foco = item.relatorio.foco || item.focoNoAtendimentoExistente;
+  const focos = focosDe(item.relatorio).length > 0
+    ? focosDe(item.relatorio)
+    : item.focoNoAtendimentoExistente
+    ? [item.focoNoAtendimentoExistente]
+    : undefined;
   return {
     origemId: item.origemId,
     atendimentoNovo: {
@@ -355,7 +365,7 @@ export const paraAtendimentoNovo = (
       data: (original.dataAtendimento || original.createdAt || agora).slice(0, 10),
       procedureId: PROCEDIMENTO_AVALIACAO_ID,
       procedimentoNome: nome,
-      foco,
+      focos,
       professionalId: original.professionalId,
       profissionalNome: original.profissionalNome,
       acompanhamentoPreenchidoEm: original.preenchidoEm || original.createdAt || agora,
@@ -370,7 +380,7 @@ export const paraAtendimentoNovo = (
       atendimentoId: id,
       procedureId: PROCEDIMENTO_AVALIACAO_ID,
       procedimentoNome: nome,
-      foco,
+      focos,
     },
   };
 };

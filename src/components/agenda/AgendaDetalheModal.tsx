@@ -27,6 +27,7 @@ import {
   minutosDoHHMM,
 } from '../../utils/agenda';
 import { ROTULO_DO_STATUS, ehPendente, procedimentosDoAtendimento } from '../../utils/attendances';
+import { focosDe, nomeComFoco } from '../../utils/procedimentoAvaliacao';
 import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fichasClinicas';
 import { ausenciaAvisada, instanteCurto } from '../../utils/agendamentoLink';
 import {
@@ -47,6 +48,11 @@ import {
 
 interface AgendaDetalheModalProps {
   atendimento: Attendance;
+  /**
+   * Os atendimentos da visita dele (`utils/visitas.ts`). Com mais de um, o detalhe diz quais são:
+   * Compareceu, Faltou, Remarcar e Editar valem para todos; Excluir, só para este.
+   */
+  visita?: Attendance[];
   clinic: ClinicProfile;
   catalogo: Procedure[];
   pacientes: Patient[];
@@ -76,6 +82,7 @@ const acaoBase =
 
 export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
   atendimento,
+  visita,
   clinic,
   catalogo,
   pacientes,
@@ -198,9 +205,19 @@ export const AgendaDetalheModal: React.FC<AgendaDetalheModalProps> = ({
               <span className="min-w-0">
                 {procedimentosDoAtendimento(atendimento).map((p, i) => (
                   <span key={i} className="block">
-                    {p.procedimentoNome}
+                    {nomeComFoco(p.procedimentoNome, focosDe(p))}
                   </span>
                 ))}
+                {visita && visita.length > 1 && (
+                  <span className="block text-body text-muted mt-0.5">
+                    Na mesma visita:{' '}
+                    {visita
+                      .filter((m) => m.id !== atendimento.id)
+                      .map((m) => `${m.hora ? `${m.hora} ` : ''}${nomeComFoco(m.procedimentoNome, focosDe(m))}`)
+                      .join(' · ')}
+                    . Compareceu, Faltou, Remarcar e Editar valem para todos; Excluir, só para este.
+                  </span>
+                )}
                 {rotuloDoPlano && (
                   <span className="block text-body text-brand">{rotuloDoPlano}</span>
                 )}

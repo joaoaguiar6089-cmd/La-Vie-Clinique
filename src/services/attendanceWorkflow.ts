@@ -4,8 +4,8 @@ import { ehRealizado } from '../utils/attendances';
 import {
   encerrarAnamnese,
   getRecordsForPatient,
+  salvarVisita,
   savePatient,
-  saveAttendance,
   saveSessionPlan,
 } from './databaseService';
 
@@ -18,7 +18,13 @@ import {
  * vê acontecer e cuja falta só aparece semanas depois, num link que continuou aberto.
  */
 export interface SalvamentoDeAtendimento {
-  registro: Attendance;
+  /**
+   * A visita: um atendimento por procedimento (`utils/visitas.ts`). Um só na visita de um
+   * procedimento.
+   */
+  registros: Attendance[];
+  /** Os atendimentos da visita que saíram no formulário — apagados com o que é deles. */
+  removidos?: Attendance[];
   /** Plano criado no mesmo formulário. */
   planoNovo?: SessionPlan;
   /** Cadastro de quem só existia como nome num orçamento ou numa ficha. */
@@ -68,7 +74,8 @@ const fecharAnamnesesDaVisita = async (
  * para paciente que não existe.
  */
 export const salvarAtendimento = async ({
-  registro,
+  registros,
+  removidos,
   planoNovo,
   pacienteACriar,
   anamneses,
@@ -76,6 +83,12 @@ export const salvarAtendimento = async ({
 }: SalvamentoDeAtendimento): Promise<void> => {
   if (pacienteACriar) await savePatient(pacienteACriar);
   if (planoNovo) await saveSessionPlan(planoNovo);
-  await saveAttendance(registro, { limparConfirmacao });
-  await fecharAnamnesesDaVisita(registro, anamneses);
+  await salvarVisita(registros, { limparConfirmacao, removidos });
+  // Cada procedimento fecha a anamnese dele. As fichas são lidas uma vez só, para todos.
+  const fichas =
+    anamneses ??
+    (registros.some((r) => ehRealizado(r) && !!r.data)
+      ? await getRecordsForPatient(registros[0].pacienteId).catch(() => undefined)
+      : undefined);
+  for (const registro of registros) await fecharAnamnesesDaVisita(registro, fichas);
 };

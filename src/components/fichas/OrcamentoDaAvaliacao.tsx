@@ -57,6 +57,7 @@ export interface OrcamentoGravado {
  */
 export const useOrcamentoDaAvaliacao = ({
   alvo,
+  procedimentos,
   paciente,
   catalogo,
   clinic,
@@ -64,6 +65,11 @@ export const useOrcamentoDaAvaliacao = ({
   registro,
 }: {
   alvo: AlvoDaFicha;
+  /**
+   * Os procedimentos avaliados — um item do orçamento para cada. Ausente = o procedimento do
+   * `alvo`. Na Avaliação com mais de um foco, um por foco.
+   */
+  procedimentos?: { procedureId?: string; procedimentoNome: string }[];
   paciente?: Patient;
   catalogo: Procedure[];
   clinic: ClinicProfile;
@@ -177,6 +183,7 @@ export const useOrcamentoDaAvaliacao = ({
         pacienteContato: paciente?.contato,
         procedureId: alvo.procedureId,
         procedimentoNome: alvo.procedimentoNome,
+        procedimentos: procedimentos && procedimentos.length > 1 ? procedimentos : undefined,
         data: alvo.data,
         professionalId: alvo.professionalId,
         semItem: personalizada,
@@ -187,19 +194,26 @@ export const useOrcamentoDaAvaliacao = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ativo, carregado, estimou, semeado, carregandoLigado, ligado, travado, orc.estoquePronto]);
 
-  /** O item do procedimento avaliado — as linhas de consumo dele são o consumo estimado. */
-  const itemDaAvaliacao = (): QuoteItem | undefined => {
+  /**
+   * Os itens dos procedimentos avaliados — as linhas de consumo deles são o consumo estimado. Com
+   * um procedimento só, o item dele (ou o primeiro calculado por consumo); com vários, os itens
+   * calculados por consumo, todos.
+   */
+  const itensDaAvaliacao = (): QuoteItem[] => {
+    if (procedimentos && procedimentos.length > 1) {
+      return orc.itens.filter((i) => i.calculadoPorConsumo);
+    }
     const procedimento = procedimentoDoAtendimento(alvo, catalogo);
     const procedureId = procedimento?.id || alvo.procedureId;
     const doProcedimento = (i: QuoteItem) =>
       procedureId
         ? i.procedureId === procedureId
         : i.titulo.trim() === alvo.procedimentoNome.trim();
-    return (
+    const item =
       orc.itens.find((i) => i.calculadoPorConsumo && doProcedimento(i)) ||
       orc.itens.find(doProcedimento) ||
-      orc.itens.find((i) => i.calculadoPorConsumo)
-    );
+      orc.itens.find((i) => i.calculadoPorConsumo);
+    return item ? [item] : [];
   };
 
   const montando = estimou && !travado && (carregandoLigado || !semeado);
@@ -233,8 +247,9 @@ export const useOrcamentoDaAvaliacao = ({
     if (!estimou) return { consumoEstimado: [] };
     if (travado) return { orcamentoId: travado.id, consumoEstimado: registro?.consumoEstimado || [] };
 
-    const item = itemDaAvaliacao();
-    const consumoEstimado = linhasParaGravar((item && orc.custos[item.id]) || []);
+    const consumoEstimado = linhasParaGravar(
+      itensDaAvaliacao().flatMap((item) => orc.custos[item.id] || [])
+    );
     if (!gerar) return { consumoEstimado };
 
     let existente = gravadoAgora.current || undefined;
@@ -276,6 +291,8 @@ export const useOrcamentoDaAvaliacao = ({
     gravado,
     nomeDoProcedimento: personalizada
       ? 'o tratamento'
+      : procedimentos && procedimentos.length > 1
+      ? procedimentos.map((p) => p.procedimentoNome).join(', ')
       : procedimentoDoAtendimento(alvo, catalogo)?.title || alvo.procedimentoNome,
     /** Marcar, desmarcar ou mexer em botões — o painel só percebe digitação, não clique. */
     mexido: mexido || (estimou && !ligado && !gravado && !travado && orc.itens.length > 0),

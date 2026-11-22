@@ -1,5 +1,5 @@
 import { Attendance, ClinicProfile, Procedure } from '../../types';
-import { garantirLinkDoAgendamento } from '../../services/databaseService';
+import { garantirLinkDoAgendamento, visitaDoAtendimento } from '../../services/databaseService';
 import { mensagemDoLink } from '../../utils/agendamentoLink';
 import { buildPublicLink } from '../../utils/publicLinks';
 import { buildWhatsAppUrl } from '../../utils/whatsapp';
@@ -85,7 +85,9 @@ export const enviarLinkNoWhatsApp = async (
 ): Promise<void> => {
   try {
     const link = await gerarLinkDeConfirmacao(atendimento, clinic, catalogo);
-    const url = buildWhatsAppUrl(telefone, mensagemDoLink(clinic, atendimento, link));
+    // Da visita com mais de um procedimento, a mensagem fala de todos — é uma mensagem só.
+    const visita = await visitaDoAtendimento(atendimento).catch(() => atendimento);
+    const url = buildWhatsAppUrl(telefone, mensagemDoLink(clinic, visita, link));
     if (!url) throw new Error('Sem telefone no cadastro.');
     if (aba && !aba.closed) aba.location.href = url;
     else window.open(url, '_blank', 'noopener,noreferrer');

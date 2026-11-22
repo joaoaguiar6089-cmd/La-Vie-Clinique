@@ -23,6 +23,7 @@ import { CampoTinta, INPUT_TINTA } from '../common/Tinta';
 import { OpcaoLigavel, PrefixoReais } from './PecasDoOrcamento';
 import { ListaSuspensa } from '../common/ListaSuspensa';
 import { EscolhaDoFoco } from '../common/EscolhaDoFoco';
+import { focosDe } from '../../utils/procedimentoAvaliacao';
 
 interface QuoteItemEditorProps {
   item: QuoteItem;
@@ -171,8 +172,9 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
         {!produto && (
           <EscolhaDoFoco
             procedimento={procedimento}
-            valor={item.foco}
-            onMudar={(foco) => patch({ foco })}
+            valores={focosDe(item)}
+            // Gravado sempre como lista: o `foco` único de antes sai na primeira mudança.
+            onMudar={(focos) => patch({ focos: focos.length > 0 ? focos : undefined, foco: undefined })}
           />
         )}
         {/* Produto: quantidade × valor de uma unidade. Sem profissional — ninguém "realiza" um produto. */}

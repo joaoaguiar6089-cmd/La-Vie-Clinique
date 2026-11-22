@@ -186,8 +186,8 @@ export interface Procedure {
    * "Foco / Aplicação": as variações de um mesmo procedimento — na Harmonização Glútea,
    * "Trocanter", "Volume", "Celulite"; na Avaliação, o procedimento que a cliente quer avaliar.
    *
-   * É a clínica que cadastra a lista; o agendamento, o orçamento e o relatório escolhem um deles
-   * (`Attendance.foco`, `QuoteItem.foco`, `EvaluationRecord.foco`), e a ficha-modelo do relatório
+   * É a clínica que cadastra a lista; o agendamento, o orçamento e o relatório escolhem um ou mais
+   * (`Attendance.focos`, `QuoteItem.focos`, `EvaluationRecord.focos`), e a ficha-modelo do relatório
    * pode valer só para alguns (`EvaluationTemplate.focosPorProcedimento`). Ausente ou vazia = o
    * procedimento não tem variações, e nenhum desses lugares pergunta o foco.
    */
@@ -730,7 +730,12 @@ export interface QuoteItem {
   areaId?: string;
   categoria: string;
   titulo: string;
-  /** O foco / aplicação do procedimento neste item — "Trocanter". Ver `Procedure.focos`. */
+  /**
+   * Os focos / aplicações do procedimento neste item — "Fase 1, Fase 2". Um item só, com um valor:
+   * o catálogo não tem preço por foco. Ver `Procedure.focos`.
+   */
+  focos?: string[];
+  /** **Legado**: o foco único, de antes de dar para marcar mais de um. Ler por `focosDe()`. */
   foco?: string;
   professionalId?: string; // Quem realiza ESTE procedimento — cada item pode ter a sua
   profissionalNome?: string; // Espelha o nome no momento da emissão, para o documento
@@ -1120,7 +1125,9 @@ export interface ProcedimentoDaVisita {
   /** Origem no catálogo. Ausente quando o procedimento foi digitado à mão. */
   procedureId?: string;
   procedimentoNome: string;
-  /** O foco / aplicação deste procedimento na visita — ver `Procedure.focos`. */
+  /** Os focos / aplicações deste procedimento na visita — ver `Procedure.focos`. */
+  focos?: string[];
+  /** **Legado**: o foco único. Ler por `focosDe()`. */
   foco?: string;
   /** Vínculo com o plano deste procedimento. Ausente = avulso. */
   planoId?: string;
@@ -1154,11 +1161,25 @@ export interface Attendance extends MarcaDeArquivo {
   procedureId?: string;
   procedimentoNome: string;
   /**
-   * O foco / aplicação do procedimento principal — "Trocanter" da Harmonização Glútea, ou, na
-   * Avaliação, o procedimento que a cliente veio avaliar. Ver `Procedure.focos`. É ele que escolhe
-   * a ficha-modelo do relatório desta visita.
+   * Os focos / aplicações do procedimento — "Fase 1, Fase 2" da Harmonização Glútea, ou, na
+   * Avaliação, os procedimentos que a cliente veio avaliar. Ver `Procedure.focos`. São eles que
+   * escolhem as fichas-modelo do relatório: com mais de um, o relatório junta as fichas de cada
+   * foco num formulário só, em blocos.
    */
+  focos?: string[];
+  /** **Legado**: o foco único, de antes de dar para marcar mais de um. Ler por `focosDe()`. */
   foco?: string;
+  /**
+   * A visita de que este atendimento faz parte. Agendar mais de um procedimento no mesmo horário
+   * ("Harmonização Glútea + Botox") cria um atendimento por procedimento, um depois do outro, cada
+   * um com o seu relatório e os seus materiais — e todos com o mesmo `grupoId`.
+   *
+   * O que o grupo divide: o link e a mensagem da cliente (o mesmo `linkToken`), a resposta dela, e
+   * na agenda o Compareceu, o Faltou, o Remarcar e o Editar. Excluir tira só um. Ausente = visita
+   * de um procedimento só (ou de antes do grupo, que guardava os demais em
+   * `procedimentosAdicionais`). Ver `utils/visitas.ts`.
+   */
+  grupoId?: string;
   /** Vínculo com o plano. Ausente = sessão avulsa. */
   planoId?: string;
   /**
@@ -1347,7 +1368,13 @@ export interface AppointmentLinkClinica {
 export interface AppointmentLink {
   /** O token, igual ao id do documento. */
   id: string;
+  /** O primeiro atendimento da visita. */
   attendanceId: string;
+  /**
+   * Todos os atendimentos da visita, quando ela tem mais de um procedimento (`Attendance.grupoId`):
+   * a resposta da cliente vale para todos. Ausente = só `attendanceId`.
+   */
+  attendanceIds?: string[];
   /** Só o primeiro nome — a saudação da página. */
   clientePrimeiroNome: string;
   procedimento: {
@@ -1750,6 +1777,15 @@ export interface EvaluationTemplate {
   updatedAt?: string;
 }
 
+/** Um bloco do relatório com mais de um foco — ver `EvaluationRecord.blocosDeFoco`. */
+export interface BlocoDeFoco {
+  foco: string;
+  /** A ficha-modelo do foco. Ausente = foco sem ficha própria: o bloco nasce vazio. */
+  templateId?: string;
+  /** Os ids das perguntas do bloco, na ordem — as da ficha e as criadas na hora nele. */
+  perguntaIds: string[];
+}
+
 /** Uma foto da sessão, com a versão anotada e o estado do editor de anotação. */
 export interface FotoDaSessao {
   url: string;
@@ -1786,6 +1822,11 @@ export interface GrupoDePerguntasExtra {
   /** `true` = o grupo das perguntas criadas na hora: texto, tipo e opções editáveis. */
   livre?: boolean;
   /**
+   * No relatório com mais de um foco: o bloco do foco a que este grupo de perguntas criadas na
+   * hora pertence. Ausente = o grupo de sempre, no fim da ficha.
+   */
+  foco?: string;
+  /**
    * Cópia das perguntas, com ids próprios do grupo — duas fichas-modelo podem ter nascido uma da
    * outra e repetir ids, e a resposta de uma não pode aparecer na outra.
    */
@@ -1816,8 +1857,16 @@ export interface EvaluationRecord extends MarcaDeArquivo {
   pacienteGenero?: PatientGender;
   procedureId?: string;
   procedimentoNome: string;
-  /** O foco / aplicação do atendimento, espelhado dele no momento do registro. */
+  /** Os focos / aplicações do atendimento, espelhados dele no momento do registro. */
+  focos?: string[];
+  /** **Legado**: o foco único. Ler por `focosDe()`. */
   foco?: string;
+  /**
+   * Os blocos do relatório com mais de um foco: um por foco, com a ficha-modelo dele (quando tem)
+   * e as perguntas que entraram no bloco. Gravado para o relatório reaberto, e o PDF, mostrarem os
+   * mesmos blocos mesmo que as fichas-modelo mudem depois. Ausente = relatório de uma ficha só.
+   */
+  blocosDeFoco?: BlocoDeFoco[];
   /** YYYY-MM-DD. No acompanhamento, a data da visita; na avaliação, a data em que foi feita. */
   dataAtendimento: string;
   professionalId?: string;

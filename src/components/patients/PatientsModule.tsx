@@ -23,7 +23,7 @@ import {
   savePatient,
   saveAnamnesisRecord,
   deleteAnamnesisRecord,
-  saveAttendance,
+  salvarVisita,
   deleteAttendance,
   saveSessionPlan,
   deleteSessionPlan,
@@ -67,6 +67,8 @@ import { FichaFillModal } from '../fichas/FichaFillModal';
 import { perguntaDoAcompanhamento } from '../fichas/perguntaDoAcompanhamento';
 import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { salvarAtendimento } from '../../services/attendanceWorkflow';
+import { membrosDaVisita, visitaComoUmAtendimento } from '../../utils/visitas';
+import { EscolhaDoRelatorio } from '../fichas/EscolhaDoRelatorio';
 import { useRecibos } from '../recibos/RecibosContext';
 
 interface PatientsModuleProps {
@@ -116,6 +118,8 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
 }) => {
   /** Visita cujo acompanhamento (com os materiais usados) está aberto. */
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
+  /** A visita com mais de um procedimento que acabou de ser confirmada — ver `EscolhaDoRelatorio`. */
+  const [relatoriosDaVisita, setRelatoriosDaVisita] = useState<Attendance[] | null>(null);
   const [acompanhamentos, setAcompanhamentos] = useState<EvaluationRecord[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [records, setRecords] = useState<AnamnesisRecord[]>([]);
@@ -340,24 +344,34 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
    * então vão junto e poupam a leitura que o workflow faria sozinho.
    */
   const handleSalvarAtendimento = async (
-    registro: Attendance,
+    registros: Attendance[],
     planoNovo?: SessionPlan,
-    opcoes?: { limparConfirmacao?: boolean }
+    opcoes?: { limparConfirmacao?: boolean; removidos?: Attendance[] }
   ) => {
     await salvarAtendimento({
-      registro,
+      registros,
+      removidos: opcoes?.removidos,
       planoNovo,
       pacienteACriar:
         pacienteAberto && !idsCadastrados.has(pacienteAberto.id) ? pacienteAberto : undefined,
       anamneses: records,
       limparConfirmacao: opcoes?.limparConfirmacao,
     });
+    const [registro] = registros;
     // Pedida pelo painel da anamnese "Sem avaliação": a visita existia só para levar o relatório.
-    if (formAtendimento?.paraAcompanhar && ehRealizado(registro)) setAcompanhando(registro);
-    // Compareceu: o acompanhamento é o passo seguinte, e é agora que a profissional lembra.
+    if (formAtendimento?.paraAcompanhar && ehRealizado(registro)) {
+      if (registros.length > 1) setRelatoriosDaVisita(registros);
+      else setAcompanhando(registro);
+    }
+    // Compareceu: o relatório é o passo seguinte, e é agora que a profissional lembra. Com mais de
+    // um procedimento, a janela oferece o relatório de cada um.
     if (formAtendimento?.modo === 'confirmacao') {
-      const pergunta = perguntaDoAcompanhamento(formAtendimento.atendimento, registro, setAcompanhando);
-      if (pergunta) setConfirmacao(pergunta);
+      if (registros.length > 1) {
+        setRelatoriosDaVisita(registros);
+      } else {
+        const pergunta = perguntaDoAcompanhamento(formAtendimento.atendimento, registro, setAcompanhando);
+        if (pergunta) setConfirmacao(pergunta);
+      }
     }
   };
 
@@ -368,9 +382,12 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   };
 
   /** Desfecho sem formulário: só o status muda. */
+  /** Os atendimentos da visita de `a` — Compareceu, Faltou, Remarcar e Editar valem para todos. */
+  const visitaDe = (a: Attendance) => membrosDaVisita(a, doPacienteAberto.atendimentos);
+
   const marcarStatus = async (a: Attendance, status: Attendance['status']) => {
     try {
-      await saveAttendance({ ...a, status });
+      await salvarVisita(visitaDe(a).map((m) => ({ ...m, status })));
       setErro(null);
     } catch (e) {
       setErro(`Não foi possível atualizar o agendamento: ${(e as Error).message}`);
@@ -382,10 +399,12 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
    * data e a hora — que são justamente o que a pessoa vai escolher de novo.
    */
   const handleRemarcar = async (a: Attendance) => {
+    const membros = visitaDe(a);
     await marcarStatus(a, 'remarcado');
+    // A visita inteira volta ao formulário, como semente de uma visita nova (outro grupo).
     abrirFormulario({
       modo: 'novo',
-      atendimento: { ...a, data: '', hora: undefined },
+      atendimento: { ...visitaComoUmAtendimento(membros), grupoId: undefined, data: '', hora: undefined },
     });
   };
 
@@ -704,12 +723,26 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           professionalIdPadrao={currentProfessionalId}
           ultimaAnamnese={ultimaAnamnese}
           atendimento={formAtendimento?.atendimento}
+          grupo={
+            formAtendimento?.atendimento && formAtendimento.modo !== 'novo'
+              ? visitaDe(formAtendimento.atendimento)
+              : undefined
+          }
           modo={formAtendimento?.modo || 'novo'}
           planoFixoId={formAtendimento?.planoFixoId}
           soVisitaFeita={formAtendimento?.paraAcompanhar}
           onSalvar={handleSalvarAtendimento}
           onAvisoDoLink={setErro}
         />
+
+        {relatoriosDaVisita && !acompanhando && (
+          <EscolhaDoRelatorio
+            visita={relatoriosDaVisita}
+            atendimentosAoVivo={doPacienteAberto.atendimentos}
+            onAbrir={setAcompanhando}
+            onFechar={() => setRelatoriosDaVisita(null)}
+          />
+        )}
 
         {acompanhando && (
           <FichaFillModal

@@ -19,8 +19,9 @@ import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fi
 import { ROTULO_DO_STATUS, ehPendente, nomeDosProcedimentos } from '../../utils/attendances';
 import {
   PROCEDIMENTO_AVALIACAO_ID,
-  alvoDoQueFoiAvaliado,
   ehAvaliacao,
+  focosDe,
+  procedimentosAvaliados,
 } from '../../utils/procedimentoAvaliacao';
 import {
   ContextoDaJornada,
@@ -165,18 +166,13 @@ export const PainelDoEvento: React.FC<PainelDoEventoProps> = ({ item, contexto, 
       ? item.ref.itens[0] && {
           procedureId: item.ref.itens[0].procedureId,
           procedimentoNome: item.ref.itens[0].titulo,
-          foco: item.ref.itens[0].foco,
+          focos: focosDe(item.ref.itens[0]),
         }
       : item.tipo === 'anamnese'
       ? { procedureId: item.ref.procedimentoId, procedimentoNome: item.ref.procedimentoNome }
       : ehAvaliacao(item.ref)
-      ? item.ref.foco
-        ? (() => {
-            const avaliado = alvoDoQueFoiAvaliado(item.ref, contexto.catalogo);
-            return { procedureId: avaliado.procedureId, procedimentoNome: avaliado.procedimentoNome };
-          })()
-        : undefined
-      : { procedureId: item.ref.procedureId, procedimentoNome: item.ref.procedimentoNome, foco: item.ref.foco };
+      ? procedimentosAvaliados(item.ref, contexto.catalogo)[0]
+      : { procedureId: item.ref.procedureId, procedimentoNome: item.ref.procedimentoNome, focos: focosDe(item.ref) };
 
   const cabecalho = (
     <div>
@@ -403,7 +399,7 @@ const PassosDaAnamnese: React.FC<PassosProps & { r: AnamnesisRecord }> = ({ r, c
       tratamento: {
         procedureId: PROCEDIMENTO_AVALIACAO_ID,
         procedimentoNome: contexto.catalogo.find(ehAvaliacao)?.title || 'Avaliação',
-        foco: r.procedimentoNome,
+        focos: [r.procedimentoNome],
       },
       professionalId: r.professionalId,
     })

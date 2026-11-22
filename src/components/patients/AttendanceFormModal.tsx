@@ -81,6 +81,8 @@ import {
   RotuloTinta,
 } from '../common/Tinta';
 import { gravarLocal, lerLocal } from '../../lib/estadoDaClinica';
+import { focosDe } from '../../utils/procedimentoAvaliacao';
+import { duracoesDasLinhas, horariosEmSequencia, novoGrupoId } from '../../utils/visitas';
 
 /**
  * `novo` nasce em branco; `edicao` corrige um registro; `confirmacao` é o "compareceu" de um
@@ -144,6 +146,12 @@ interface AttendanceFormModalProps {
    * profissional e o plano da visita que caiu.
    */
   atendimento?: Attendance | null;
+  /**
+   * Em `edicao` e `confirmacao`, os atendimentos da visita de `atendimento` (`utils/visitas.ts`):
+   * o formulário edita a visita inteira — um procedimento por atendimento —, e o Compareceu vale
+   * para todos. Ausente = só `atendimento`.
+   */
+  grupo?: Attendance[];
   modo: ModoDoFormulario;
   /** "+ adicionar sessão" de dentro de um plano: o registro nasce amarrado a ele. */
   planoFixoId?: string;
@@ -159,10 +167,14 @@ interface AttendanceFormModalProps {
    * Vale o mesmo para o aviso de ausência e o pedido de outro horário que ela fez pelo link — e
    * também para o agendamento novo de uma remarcação, que herda o link mas não as respostas.
    */
+  /**
+   * `registros` é a visita: um atendimento por procedimento, um depois do outro (um só, com um
+   * procedimento). `removidos`: os atendimentos da visita cujo procedimento saiu da lista.
+   */
   onSalvar: (
-    attendance: Attendance,
+    registros: Attendance[],
     planoNovo?: SessionPlan,
-    opcoes?: { limparConfirmacao?: boolean }
+    opcoes?: { limparConfirmacao?: boolean; removidos?: Attendance[] }
   ) => Promise<void>;
   /**
    * O agendamento foi salvo, mas o link de confirmação não saiu para o WhatsApp. O formulário já
@@ -215,8 +227,12 @@ interface LinhaDeProcedimento {
   chave: string;
   procedureId?: string;
   procedimentoNome: string;
-  /** O foco / aplicação escolhido para este procedimento — ver `Procedure.focos`. */
-  foco?: string;
+  /** Os focos / aplicações marcados para este procedimento — ver `Procedure.focos`. */
+  focos: string[];
+  /** O atendimento da visita que esta linha é, na edição. Ausente = procedimento novo na visita. */
+  atendimentoId?: string;
+  /** A duração gravada no atendimento desta linha, na edição. */
+  duracaoMin?: number;
   /** O plano que veio de fora: o do registro editado ou remarcado, ou o do "+ adicionar sessão". */
   planoDeOrigemId?: string;
   /** "Desvincular" tocado: fica avulso mesmo havendo plano aberto do mesmo procedimento. */
@@ -225,12 +241,19 @@ interface LinhaDeProcedimento {
 
 let ultimaChave = 0;
 const linhaDeProcedimento = (
-  p: Partial<Pick<LinhaDeProcedimento, 'procedureId' | 'procedimentoNome' | 'planoDeOrigemId' | 'foco'>> = {}
+  p: Partial<
+    Pick<
+      LinhaDeProcedimento,
+      'procedureId' | 'procedimentoNome' | 'planoDeOrigemId' | 'focos' | 'atendimentoId' | 'duracaoMin'
+    >
+  > = {}
 ): LinhaDeProcedimento => ({
   chave: `proc-${++ultimaChave}`,
   procedureId: p.procedureId,
   procedimentoNome: p.procedimentoNome || '',
-  foco: p.foco,
+  focos: p.focos || [],
+  atendimentoId: p.atendimentoId,
+  duracaoMin: p.duracaoMin,
   planoDeOrigemId: p.planoDeOrigemId,
 });
 
@@ -265,6 +288,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   professionalIdPadrao,
   ultimaAnamnese,
   atendimento,
+  grupo,
   modo,
   planoFixoId,
   soVisitaFeita,
@@ -298,6 +322,19 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
   const [salvando, setSalvando] = useState(false);
   const [diaInteiro, setDiaInteiro] = useState(false);
   const [enviarConfirmacao, setEnviarConfirmacao] = useState(lerPreferenciaDeConfirmacao);
+  /**
+   * Os atendimentos da visita como estavam ao abrir (edição e confirmação). Guardados na abertura:
+   * a lista ao vivo muda enquanto o formulário está aberto, e o que se compara ao salvar — quem saiu,
+   * o que mudou — é com o que estava na tela.
+   */
+  const [membrosIniciais, setMembrosIniciais] = useState<Attendance[] | null>(null);
+  /**
+   * Atendimento de antes da visita em grupo, com os outros procedimentos dentro dele
+   * (`procedimentosAdicionais`): continua sendo um registro só ao ser editado.
+   */
+  const [combinadoLegado, setCombinadoLegado] = useState(false);
+  /** As observações ao abrir — mexidas, valem para todos os atendimentos da visita. */
+  const [observacoesIniciais, setObservacoesIniciais] = useState('');
 
   // Cada abertura recomeça do zero: sobras do preenchimento anterior virariam o atendimento de
   // uma paciente lançado na página de outra.
@@ -313,10 +350,54 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     setDiaInteiro(false);
     setEnviarConfirmacao(lerPreferenciaDeConfirmacao());
 
+    setMembrosIniciais(null);
+    setCombinadoLegado(false);
+    setObservacoesIniciais('');
+
+    // Edição e confirmação de uma visita em grupo: uma linha por atendimento dela.
+    const membros =
+      atendimento && modo !== 'novo' && atendimento.grupoId && grupo && grupo.length > 0
+        ? grupo
+        : null;
+    if (atendimento && membros) {
+      const primeiro = membros[0];
+      setMembrosIniciais(membros);
+      setData(isoParaData(sementeDataHora?.data || primeiro.data));
+      setHora(sementeDataHora?.hora ?? primeiro.hora ?? '');
+      setProcedimentos(
+        membros.map((m) =>
+          linhaDeProcedimento({
+            procedureId: m.procedureId,
+            procedimentoNome: m.procedimentoNome,
+            focos: focosDe(m),
+            planoDeOrigemId: m.planoId,
+            atendimentoId: m.id,
+            duracaoMin: m.duracaoMin,
+          })
+        )
+      );
+      setProfessionalId(primeiro.professionalId || professionalIdPadrao || '');
+      setSalaId(primeiro.salaId || '');
+      const duracoes = membros.map((m) => m.duracaoMin);
+      setDuracaoDigitada(
+        duracoes.every((d) => typeof d === 'number' && d > 0)
+          ? String(duracoes.reduce((soma, d) => soma + (d as number), 0))
+          : null
+      );
+      setObservacoes(primeiro.observacoes || '');
+      setObservacoesIniciais(primeiro.observacoes || '');
+      return;
+    }
+
     if (atendimento) {
       // A semente da grade vence a data do registro-modelo: é ela que carrega o horário clicado.
       setData(isoParaData(sementeDataHora?.data || atendimento.data));
       setHora(sementeDataHora?.hora ?? atendimento.hora ?? '');
+      if (modo !== 'novo') {
+        setMembrosIniciais([atendimento]);
+        // Os procedimentos a mais de um registro de antes do grupo continuam dentro dele.
+        setCombinadoLegado(!!atendimento.procedimentosAdicionais?.length);
+      }
       // Cada procedimento volta com o plano que já consumia. O "+ adicionar sessão" (raro com
       // registro-semente) continua mandando no principal, como sempre mandou.
       setProcedimentos(
@@ -324,8 +405,9 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
           linhaDeProcedimento({
             procedureId: p.procedureId,
             procedimentoNome: p.procedimentoNome,
-            foco: p.foco,
+            focos: focosDe(p),
             planoDeOrigemId: (i === 0 && planoFixoId) || p.planoId,
+            atendimentoId: i === 0 && modo !== 'novo' ? atendimento.id : undefined,
           })
         )
       );
@@ -334,6 +416,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
       // Duração já gravada foi escolha de alguém: trocar o procedimento não a reescreve.
       setDuracaoDigitada(atendimento.duracaoMin ? String(atendimento.duracaoMin) : null);
       setObservacoes(atendimento.observacoes || '');
+      setObservacoesIniciais(atendimento.observacoes || '');
       return;
     }
 
@@ -427,6 +510,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     return conflitosDe(
       {
         id: modo === 'novo' ? undefined : atendimento?.id,
+        ignorarIds: (membrosIniciais || []).map((m) => m.id),
         data: dataISO,
         hora,
         duracaoMin,
@@ -448,6 +532,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     procedures,
     modo,
     atendimento,
+    membrosIniciais,
   ]);
 
   /**
@@ -460,6 +545,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     return conflitosDeSala(
       {
         id: modo === 'novo' ? undefined : atendimento?.id,
+        ignorarIds: (membrosIniciais || []).map((m) => m.id),
         data: dataISO,
         hora,
         duracaoMin,
@@ -481,6 +567,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     procedures,
     modo,
     atendimento,
+    membrosIniciais,
   ]);
 
   /**
@@ -672,15 +759,15 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               ...l,
               procedureId: escolha.procedureId,
               procedimentoNome: escolha.procedimentoNome,
-              // O foco é do procedimento: trocado o procedimento, o foco de antes não vale.
-              foco: escolha.procedureId === l.procedureId ? l.foco : undefined,
+              // O foco é do procedimento: trocado o procedimento, os focos de antes não valem.
+              focos: escolha.procedureId === l.procedureId ? l.focos : [],
             }
           : l
       )
     );
 
-  const mudarFoco = (chave: string, foco: string | undefined) =>
-    setProcedimentos((atual) => atual.map((l) => (l.chave === chave ? { ...l, foco } : l)));
+  const mudarFocos = (chave: string, focos: string[]) =>
+    setProcedimentos((atual) => atual.map((l) => (l.chave === chave ? { ...l, focos } : l)));
 
   const adicionarProcedimento = () => {
     const nova = linhaDeProcedimento();
@@ -706,6 +793,18 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         : undefined,
     }));
   const partesComDuracao = partesDaDuracao.filter((p) => p.minutos !== undefined);
+
+  /** Os atendimentos em que a visita vai se dividir ao salvar, com o horário de cada um. */
+  const sequenciaDaVisita = (() => {
+    const linhas = procedimentos.filter((l) => l.procedimentoNome.trim());
+    if (linhas.length < 2) return [];
+    const duracoes = duracoesDasLinhas(linhas, duracaoMin, procedures);
+    const horas = horariosEmSequencia(
+      hora.trim() || undefined,
+      duracoes.map((d) => d ?? AGENDA_DEFAULTS.duracaoMin)
+    );
+    return linhas.map((l, i) => ({ nome: l.procedimentoNome.trim(), hora: horas[i] }));
+  })();
   const partesSemDuracao = partesDaDuracao.filter((p) => p.minutos === undefined);
 
   const desvincular = (chave: string) =>
@@ -787,82 +886,142 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
       }
 
       // Linha deixada em branco não vira procedimento: o primeiro preenchido é o principal.
-      const daVisita: ProcedimentoDaVisita[] = procedimentos
+      const linhas = procedimentos
         .map((linha, i) => ({
-          procedureId: linha.procedureId,
-          procedimentoNome: linha.procedimentoNome.trim(),
-          ...(linha.foco ? { foco: linha.foco } : {}),
+          linha,
           planoId:
             planoNovo && linha.chave === alvoDoPlanoNovo?.chave
               ? planoNovo.id
               : planosVinculados[i]?.id,
         }))
-        .filter((p) => p.procedimentoNome);
-      const [principalDaVisita, ...adicionais] = daVisita;
+        .filter(({ linha }) => linha.procedimentoNome.trim());
 
-      const registro: Attendance = {
-        // Em `novo`, `atendimento` é semente e não identidade — reaproveitar o id dele
-        // sobrescreveria a visita que serviu de modelo.
-        id: modo === 'novo' ? `atd-${Date.now()}` : atendimento!.id,
+      const membros = membrosIniciais || [];
+      // Em `novo`, `atendimento` é só semente (a remarcação): não há "antes" — nem o grupo, nem a
+      // confirmação, nem o status dele passam para a visita nova.
+      const primeiroAntes = modo === 'novo' ? undefined : membros[0] || atendimento || undefined;
+      const status: Attendance['status'] =
+        modo === 'confirmacao'
+          ? 'compareceu'
+          : modo === 'novo'
+          ? seraAgendamento
+            ? 'agendado'
+            : undefined
+          : primeiroAntes?.status;
+      const mexeuNasObservacoes = observacoes.trim() !== observacoesIniciais.trim();
+      const carimbo = Date.now();
+
+      /** O que todo atendimento da visita leva igual. */
+      const comum = {
         pacienteId: patient.id,
         pacienteNome: patient.nome,
         data: dataISO!,
-        hora: hora.trim() || undefined,
-        duracaoMin,
-        procedureId: principalDaVisita.procedureId,
-        procedimentoNome: principalDaVisita.procedimentoNome,
-        foco: principalDaVisita.foco,
-        planoId: principalDaVisita.planoId,
-        procedimentosAdicionais: adicionais.length > 0 ? adicionais : undefined,
         professionalId: professionalId || undefined,
         salaId: salaId || undefined,
         profissionalNome: profissional?.name,
-        observacoes: observacoes.trim() || undefined,
         // O link que a paciente recebeu. Em `novo` a semente é sempre uma remarcação (é o único
         // caminho que passa `atendimento` aí), e o agendamento novo fica com o mesmo endereço.
         linkToken: atendimento?.linkToken,
         // Natureza congelada na criação. Confirmar resolve o agendamento; editar não mexe nela.
-        status:
-          modo === 'confirmacao'
-            ? 'compareceu'
-            : modo === 'novo'
-            ? seraAgendamento
-              ? 'agendado'
-              : undefined
-            : atendimento?.status,
-        // Guarda o horário que estava marcado, para o caso de a pessoa ter chegado noutro.
-        agendadoPara:
-          modo === 'confirmacao'
-            ? atendimento?.agendadoPara ||
-              `${atendimento?.data}T${atendimento?.hora || '00:00'}:00`
-            : modo === 'edicao'
-            ? atendimento?.agendadoPara
-            : undefined,
-        createdAt: modo === 'novo' ? agora : atendimento?.createdAt || agora,
+        status,
       };
+
+      let registros: Attendance[];
+      if (combinadoLegado && atendimento) {
+        // Registro de antes da visita em grupo: continua um só, com os demais dentro dele.
+        const [principalDaVisita, ...adicionais]: ProcedimentoDaVisita[] = linhas.map(({ linha, planoId }) => ({
+          procedureId: linha.procedureId,
+          procedimentoNome: linha.procedimentoNome.trim(),
+          ...(linha.focos.length > 0 ? { focos: linha.focos } : {}),
+          planoId,
+        }));
+        registros = [
+          {
+            ...comum,
+            id: atendimento.id,
+            hora: hora.trim() || undefined,
+            duracaoMin,
+            procedureId: principalDaVisita.procedureId,
+            procedimentoNome: principalDaVisita.procedimentoNome,
+            focos: principalDaVisita.focos,
+            planoId: principalDaVisita.planoId,
+            procedimentosAdicionais: adicionais.length > 0 ? adicionais : undefined,
+            observacoes: observacoes.trim() || undefined,
+            agendadoPara:
+              modo === 'confirmacao'
+                ? atendimento.agendadoPara || `${atendimento.data}T${atendimento.hora || '00:00'}:00`
+                : atendimento.agendadoPara,
+            createdAt: atendimento.createdAt || agora,
+          },
+        ];
+      } else {
+        // Um atendimento por procedimento, um depois do outro, cada um com a duração dele.
+        const duracoes = duracoesDasLinhas(
+          linhas.map(({ linha }) => linha),
+          duracaoMin,
+          procedures
+        );
+        const horas = horariosEmSequencia(
+          hora.trim() || undefined,
+          duracoes.map((d) => d ?? AGENDA_DEFAULTS.duracaoMin)
+        );
+        const grupoId =
+          linhas.length > 1 ? primeiroAntes?.grupoId || novoGrupoId() : primeiroAntes?.grupoId;
+        registros = linhas.map(({ linha, planoId }, i) => {
+          const antes = linha.atendimentoId ? membros.find((m) => m.id === linha.atendimentoId) : undefined;
+          return {
+            ...comum,
+            id: antes?.id || (linhas.length > 1 ? `atd-${carimbo}-${i}` : `atd-${carimbo}`),
+            grupoId,
+            hora: horas[i],
+            duracaoMin: duracoes[i],
+            procedureId: linha.procedureId,
+            procedimentoNome: linha.procedimentoNome.trim(),
+            focos: linha.focos.length > 0 ? linha.focos : undefined,
+            planoId,
+            // Cada atendimento guarda as suas observações; mexidas aqui, valem para todos.
+            observacoes:
+              antes && !mexeuNasObservacoes ? antes.observacoes : observacoes.trim() || undefined,
+            // O procedimento que entra numa visita já confirmada entra confirmado também.
+            confirmadoEm: antes ? undefined : primeiroAntes?.confirmadoEm,
+            // Guarda o horário que estava marcado, para o caso de a pessoa ter chegado noutro.
+            agendadoPara:
+              modo === 'confirmacao'
+                ? antes?.agendadoPara ||
+                  `${(antes || primeiroAntes)?.data}T${(antes || primeiroAntes)?.hora || '00:00'}:00`
+                : modo === 'edicao'
+                ? antes?.agendadoPara
+                : undefined,
+            createdAt: antes?.createdAt || agora,
+          };
+        });
+      }
+      const removidos = membros.filter((m) => !registros.some((r) => r.id === m.id));
 
       const horarioMudou =
         modo === 'edicao' &&
-        (registro.data !== atendimento?.data || (registro.hora || '') !== (atendimento?.hora || ''));
+        (registros[0].data !== primeiroAntes?.data ||
+          (registros[0].hora || '') !== (primeiroAntes?.hora || ''));
 
       const temRespostaDaPaciente =
-        !!atendimento?.confirmadoEm ||
-        !!atendimento?.avisoAusenciaEm ||
-        !!atendimento?.pedidoRemarcacao;
-      await onSalvar(registro, planoNovo, {
+        !!primeiroAntes?.confirmadoEm ||
+        !!primeiroAntes?.avisoAusenciaEm ||
+        !!primeiroAntes?.pedidoRemarcacao;
+      await onSalvar(registros, planoNovo, {
         limparConfirmacao:
           (temRespostaDaPaciente && horarioMudou) ||
           // Remarcação que herdou o link: o agendamento novo começa sem resposta nenhuma.
           (modo === 'novo' && !!atendimento?.linkToken) ||
           // O link guarda o que a paciente respondeu para o horário antigo, mesmo sem selo.
           (!!atendimento?.linkToken && horarioMudou),
+        removidos,
       });
 
       // A confirmação vai pelo link: a cliente confirma, avisa que não vai ou pede outro horário
       // na página do horário. O agendamento já está salvo — se o link falhar, a aba fecha e o
       // aviso vai para a tela de trás, sem desfazer nada.
       if (confirmarNoWhatsApp && clinic) {
-        enviarLinkNoWhatsApp(registro, clinic, procedures, contatoDaPaciente, janela).catch((e) => {
+        enviarLinkNoWhatsApp(registros[0], clinic, procedures, contatoDaPaciente, janela).catch((e) => {
           console.warn('Agendamento salvo, mas o link de confirmação não saiu:', e);
           onAvisoDoLink?.(`Agendamento salvo, mas o link não foi enviado. ${explicarErroDoLink(e)}`);
         });
@@ -1005,11 +1164,25 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
               <EscolhaDoFoco
                 className="px-1 pb-1"
                 procedimento={procedures.find((c) => c.id === linha.procedureId)}
-                valor={linha.foco}
-                onMudar={(foco) => mudarFoco(linha.chave, foco)}
+                valores={linha.focos}
+                onMudar={(focos) => mudarFocos(linha.chave, focos)}
               />
             </React.Fragment>
           ))}
+          {/* Mais de um procedimento: cada um vira um atendimento, um depois do outro, com o seu
+              relatório — a prévia mostra os horários antes de salvar. */}
+          {!combinadoLegado && sequenciaDaVisita.length > 1 && (
+            <p className="px-1 text-[13px] text-ink leading-snug">
+              Vira {sequenciaDaVisita.length} atendimentos, cada um com o seu relatório:{' '}
+              {sequenciaDaVisita.map((p, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && ' · '}
+                  <strong className="tabular-nums">{p.hora || '—'}</strong> {p.nome}
+                </React.Fragment>
+              ))}
+              .
+            </p>
+          )}
           {partesDaDuracao.length > 1 && (
             <p className="px-1 text-[13px] text-ink-soft leading-snug">
               {partesComDuracao.length > 0 && (

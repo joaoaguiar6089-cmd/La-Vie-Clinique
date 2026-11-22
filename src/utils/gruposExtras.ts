@@ -50,6 +50,18 @@ export const grupoDaFichaModelo = (
   };
 };
 
+/**
+ * O id do grupo das perguntas criadas na hora dentro do bloco de um foco — um por foco, fixo pelo
+ * nome dele, para o relatório reaberto pôr cada pergunta de volta no bloco certo.
+ */
+export const idDoGrupoLivreDoFoco = (foco: string): string =>
+  `${ID_DO_GRUPO_LIVRE}-foco-${(foco || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')}`;
+
 /** Título do grupo dos campos criados na hora — é o que aparece em cima deles. */
 export const TITULO_DO_GRUPO_LIVRE = 'Perguntas adicionais';
 
@@ -80,8 +92,8 @@ export const opcoesDoCampo = (q: Pick<AnamnesisQuestion, 'opcoes'>): string[] =>
  * Uma pergunta criada na hora: o texto que a profissional escreve, o tipo que ela escolhe (texto,
  * sim/não, escolha…) e a resposta. Começa como texto.
  */
-export const novoDadoLivre = (ordem: number): AnamnesisQuestion => ({
-  id: `${ID_DO_GRUPO_LIVRE}-${sufixoAleatorio()}`,
+export const novoDadoLivre = (ordem: number, grupoId: string = ID_DO_GRUPO_LIVRE): AnamnesisQuestion => ({
+  id: `${grupoId}-${sufixoAleatorio()}`,
   texto: '',
   tipo_campo: 'texto_curto',
   obrigatoria: false,

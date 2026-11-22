@@ -3,7 +3,7 @@ import { formatBRL, formatCpf } from './formatters';
 import { calcularOrcamento, itemEhProduto, itemQuantidade, itemSessoes, itemValorFinal } from './quoteCalc';
 import { quantidadeDoProduto } from './estoque';
 import { nomeDaClinica } from './marca';
-import { nomeComFoco } from './procedimentoAvaliacao';
+import { focosDe, nomeComFoco } from './procedimentoAvaliacao';
 
 /**
  * As regras da nota de recibo que não dependem de tela nem de banco: os nomes das formas de
@@ -302,7 +302,7 @@ export const itensDoOrcamento = (quote: Pick<Quote, 'itens'>): ReciboItem[] =>
       const base = {
         id: crypto.randomUUID(),
         // Com o foco no nome: "Harmonização Glútea · Trocanter" — o recibo é a mesma conversa.
-        titulo: nomeComFoco(i.titulo.trim(), i.foco),
+        titulo: nomeComFoco(i.titulo.trim(), focosDe(i)),
         valor: valor > 0 ? valor : undefined,
         procedureId: i.procedureId,
       };

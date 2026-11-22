@@ -12,11 +12,12 @@ import {
   paraAtendimentoNovo,
   planejarMigracaoDaAvaliacao,
 } from '../src/utils/migracaoDaAvaliacao';
-import { fichaDeAvaliacaoPara } from '../src/utils/evaluations';
+import { fichaDeAvaliacaoPara, fichasDoRelatorioPara, perguntasDosBlocos } from '../src/utils/evaluations';
 import {
   PROCEDIMENTO_AVALIACAO_ID,
-  alvoDoQueFoiAvaliado,
+  focosDe,
   focosDoProcedimento,
+  procedimentosAvaliados,
   limparCamposDaAvaliacao,
   nomeComFoco,
   procedimentoAvaliacaoPadrao,
@@ -169,11 +170,11 @@ const sozinha = relatorioDe('aval-sozinha')!;
 ok('sem visita: atendimento novo da Avaliação', sozinha.atendimentoNovo?.procedureId === PROCEDIMENTO_AVALIACAO_ID);
 ok('com id fixo', sozinha.atendimentoNovo?.id === idDoAtendimentoDaAvaliacao('aval-sozinha'));
 ok('no dia da avaliação, sem hora, realizado', sozinha.atendimentoNovo?.data === '2026-11-01' && !sozinha.atendimentoNovo?.hora && !sozinha.atendimentoNovo?.status);
-ok('com o foco no que foi avaliado', sozinha.atendimentoNovo?.foco === 'Harmonização Glútea');
+ok('com o foco no que foi avaliado', focosDe(sozinha.atendimentoNovo).join() === 'Harmonização Glútea');
 ok('com a profissional', sozinha.atendimentoNovo?.professionalId === 'karol');
 ok('o atendimento já nasce com o relatório marcado', !!sozinha.atendimentoNovo?.acompanhamentoPreenchidoEm);
 ok('o relatório tem o id do atendimento', sozinha.relatorio.id === sozinha.atendimentoNovo?.id && sozinha.relatorio.atendimentoId === sozinha.relatorio.id);
-ok('o relatório é da Avaliação, com o foco', sozinha.relatorio.procedureId === PROCEDIMENTO_AVALIACAO_ID && sozinha.relatorio.foco === 'Harmonização Glútea');
+ok('o relatório é da Avaliação, com o foco', sozinha.relatorio.procedureId === PROCEDIMENTO_AVALIACAO_ID && focosDe(sozinha.relatorio).join() === 'Harmonização Glútea');
 ok('respostas, perguntas e orçamento vêm junto', sozinha.relatorio.respostas.q === 'x' && sozinha.relatorio.perguntasSnapshot.length === 1 && sozinha.relatorio.orcamentoId === 'q-1');
 ok('a ficha-modelo continua a mesma', sozinha.relatorio.templateId === 'aval-gluteo');
 
@@ -190,11 +191,11 @@ const jaTem = relatorioDe('aval-ja-tem-relatorio')!;
 ok('visita que já tem relatório não recebe outro', !!jaTem.atendimentoNovo && jaTem.relatorio.id !== 'outra-paciente');
 
 const laser = relatorioDe('aval-laser')!;
-ok('laser: o foco é a categoria da ficha', laser.relatorio.foco === 'Depilação a Laser');
+ok('laser: o foco é a categoria da ficha', focosDe(laser.relatorio).join() === 'Depilação a Laser');
 const pers = relatorioDe('aval-pers')!;
-ok('personalizada: sem foco, continua personalizada', !pers.relatorio.foco && pers.relatorio.personalizada === true);
+ok('personalizada: sem foco, continua personalizada', focosDe(pers.relatorio).length === 0 && pers.relatorio.personalizada === true);
 const velha = relatorioDe('aval-velha')!;
-ok('procedimento que saiu do catálogo: o foco é o nome gravado', velha.relatorio.foco === 'Peeling');
+ok('procedimento que saiu do catálogo: o foco é o nome gravado', focosDe(velha.relatorio).join() === 'Peeling');
 const arquivada = relatorioDe('aval-arquivada')!;
 ok('arquivada: a visita nova vai para o arquivo junto', arquivada.atendimentoNovo?.arquivadoEm === '2026-11-11T00:00:00.000Z' && arquivada.atendimentoNovo?.arquivoDe === 'p3');
 ok('toda avaliação tem destino', plano.relatorios.length === registros.length);
@@ -242,24 +243,42 @@ ok('não tem categoria nem os campos de fora', (() => {
 })());
 ok('focos sem repetir nem vazios', focosDoProcedimento({ focos: ['Trocanter', ' trocanter ', '', 'Volume'] }).join() === 'Trocanter,Volume');
 ok('o nome leva o foco', nomeComFoco('Harmonização Glútea', 'Trocanter') === 'Harmonização Glútea · Trocanter');
+ok('e os focos', nomeComFoco('Harmonização Glútea', ['Fase 1', 'Fase 2']) === 'Harmonização Glútea · Fase 1, Fase 2');
+ok('o foco antigo vira lista', focosDe({ foco: 'Trocanter' }).join() === 'Trocanter' && focosDe({ focos: ['A', 'a', ''] }).join() === 'A');
 ok(
-  'a visita mostra o foco',
-  nomeDosProcedimentos({ procedimentoNome: 'Avaliação', foco: 'Botox', procedimentosAdicionais: [{ procedimentoNome: 'Laser', foco: 'Axilas' }] } as Attendance) ===
-    'Avaliação · Botox + Laser · Axilas'
+  'a visita mostra os focos',
+  nomeDosProcedimentos({ procedimentoNome: 'Avaliação', focos: ['Botox', 'Glúteo'], procedimentosAdicionais: [{ procedimentoNome: 'Laser', foco: 'Axilas' }] } as Attendance) ===
+    'Avaliação · Botox, Glúteo + Laser · Axilas'
 );
-const avaliado = alvoDoQueFoiAvaliado({ procedureId: PROCEDIMENTO_AVALIACAO_ID, procedimentoNome: 'Avaliação', foco: 'botox' }, catalogoComAvaliacao);
-ok('o orçamento da Avaliação é do procedimento avaliado', avaliado.procedureId === 'proc-botox' && avaliado.procedimentoNome === 'Botox');
+const avaliados = procedimentosAvaliados({ focos: ['botox', 'Lipo enzimática'] }, catalogoComAvaliacao);
+ok('o orçamento da Avaliação tem um item por foco', avaliados.length === 2);
+ok('do catálogo, quando o foco é um procedimento', avaliados[0].procedureId === 'proc-botox' && avaliados[0].procedimentoNome === 'Botox');
+ok('avulso, quando não é', !avaliados[1].procedureId && avaliados[1].procedimentoNome === 'Lipo enzimática');
+ok('sem foco, orçamento sem item', procedimentosAvaliados({}, catalogo).length === 0);
+
+console.log('== relatório com mais de um foco');
+const perguntaDe = (id: string, texto: string) => ({ ...pergunta(id, texto) });
+const fasesFichas: EvaluationTemplate[] = [
+  ficha('rel-geral', { procedureIds: ['proc-gluteo'], perguntas: [perguntaDe('g1', 'Geral')] }),
+  ficha('rel-f1', { procedureIds: ['proc-gluteo'], focosPorProcedimento: { 'proc-gluteo': ['Fase 1'] }, perguntas: [perguntaDe('q-queixa', 'Queixa principal'), perguntaDe('f1', 'Volume aplicado')] }),
+  ficha('rel-f3', { procedureIds: ['proc-gluteo'], focosPorProcedimento: { 'proc-gluteo': ['Fase 3'] }, perguntas: [perguntaDe('q-queixa-3', 'Queixa principal'), perguntaDe('f3', 'Retoque')] }),
+];
+const gluteoAlvo = { procedureId: 'proc-gluteo', procedimentoNome: 'Harmonização Glútea' };
+const doisComFicha = fichasDoRelatorioPara({ ...gluteoAlvo, focos: ['Fase 1', 'Fase 2', 'Fase 3'] }, fasesFichas, catalogo);
+ok('um bloco por foco, na ordem', doisComFicha.blocos?.map((b) => b.foco).join() === 'Fase 1,Fase 2,Fase 3');
+ok('cada bloco com a ficha do foco', doisComFicha.blocos?.map((b) => b.ficha?.id || '-').join() === 'rel-f1,-,rel-f3');
+ok('a ficha geral não entra quando há blocos', !doisComFicha.ficha);
+const perguntasDosTres = perguntasDosBlocos([], doisComFicha.blocos || []);
+ok('pergunta repetida (mesmo texto) aparece uma vez só', perguntasDosTres.map((l) => l.map((q) => q.id).join('+')).join(',') === 'q-queixa+f1,,f3');
 ok(
-  'foco fora do catálogo vira item avulso',
-  alvoDoQueFoiAvaliado({ procedimentoNome: 'Avaliação', foco: 'Lipo enzimática' }, catalogo).procedimentoNome === 'Lipo enzimática'
+  'pergunta das gerais não se repete no bloco',
+  perguntasDosBlocos([perguntaDe('q-queixa', 'Queixa principal')], doisComFicha.blocos || [])[0].map((q) => q.id).join() === 'f1'
 );
-ok(
-  'sem foco, orçamento sem item',
-  !!alvoDoQueFoiAvaliado<{ procedimentoNome: string; foco?: string; personalizada?: boolean }>(
-    { procedimentoNome: 'Avaliação' },
-    catalogo
-  ).personalizada
-);
+const nenhumComFicha = fichasDoRelatorioPara({ ...gluteoAlvo, focos: ['Fase 2', 'Celulite'] }, fasesFichas, catalogo);
+ok('nenhum foco com ficha própria: a ficha geral, uma vez', !nenhumComFicha.blocos && nenhumComFicha.ficha?.id === 'rel-geral');
+const umFoco = fichasDoRelatorioPara({ ...gluteoAlvo, focos: ['Fase 1'] }, fasesFichas, catalogo);
+ok('um foco só: a ficha dele, sem blocos', !umFoco.blocos && umFoco.ficha?.id === 'rel-f1');
+
 ok(
   'foco da avaliação preenchida sem ficha: o nome do procedimento',
   focoDaAvaliacaoPreenchida(registro('x', { procedureId: 'proc-botox', procedimentoNome: 'Botox' }), [], catalogo) === 'Botox'

@@ -17,7 +17,7 @@ import {
 } from './templateMatching';
 import { paraArray } from './firestoreShapes';
 import { ehRealizado, hojeISO, procedimentosDoAtendimento } from './attendances';
-import { mesmoFoco } from './procedimentoAvaliacao';
+import { focosDe, mesmoFoco } from './procedimentoAvaliacao';
 
 /**
  * As regras das fichas clínicas: qual ficha-modelo vale para cada procedimento, e o que uma
@@ -117,6 +117,82 @@ export const fichaDeAvaliacaoPara = (
   }
 
   return undefined;
+};
+
+/**
+ * A ficha-modelo **própria** de um foco: a ligada ao procedimento e restrita a este foco. Não cai
+ * na ficha sem foco nem na da categoria — é isso que diz se o foco tem ficha.
+ */
+export const fichaDoFoco = (
+  alvo: { procedureId?: string; procedimentoNome: string },
+  foco: string,
+  fichas: EvaluationTemplate[],
+  catalogo: Procedure[]
+): EvaluationTemplate | undefined => {
+  const idAlvo = procedimentoDoAtendimento(alvo, catalogo)?.id || alvo.procedureId;
+  if (!idAlvo) return undefined;
+  return (fichas || []).find(
+    (f) =>
+      (f.procedureIds || []).includes(idAlvo) &&
+      focosDaFichaNoProcedimento(f, idAlvo).some((x) => mesmoFoco(x, foco))
+  );
+};
+
+/** Um bloco do relatório com mais de um foco: o foco e a ficha própria dele, quando tem. */
+export interface BlocoDoRelatorio {
+  foco: string;
+  ficha?: EvaluationTemplate;
+}
+
+/**
+ * Que fichas-modelo o relatório usa.
+ *
+ * - **Um foco ou nenhum**: uma ficha só, a de sempre (`fichaDeAvaliacaoPara`).
+ * - **Mais de um foco**: um bloco por foco, cada um com a ficha própria dele — o formulário junta
+ *   todos numa página só. Foco sem ficha própria entra como bloco vazio, com o título dele, para
+ *   receber as perguntas criadas na hora.
+ * - **Mais de um foco e nenhum com ficha própria**: volta a ser uma ficha só, a geral do
+ *   procedimento (ou da categoria) — blocos todos vazios não teriam pergunta nenhuma.
+ */
+export const fichasDoRelatorioPara = (
+  alvo: { procedureId?: string; procedimentoNome: string; focos?: string[]; foco?: string },
+  fichas: EvaluationTemplate[],
+  catalogo: Procedure[]
+): { ficha?: EvaluationTemplate; blocos?: BlocoDoRelatorio[] } => {
+  const focos = focosDe(alvo);
+  if (focos.length <= 1) {
+    return { ficha: fichaDeAvaliacaoPara({ ...alvo, foco: focos[0] }, fichas, catalogo) };
+  }
+  const blocos = focos.map((foco) => ({ foco, ficha: fichaDoFoco(alvo, foco, fichas, catalogo) }));
+  if (blocos.every((b) => !b.ficha)) {
+    return { ficha: fichaDeAvaliacaoPara({ ...alvo, foco: undefined }, fichas, catalogo) };
+  }
+  return { blocos };
+};
+
+/**
+ * As perguntas de cada bloco, sem repetir: a pergunta que já apareceu (nas gerais ou num bloco de
+ * cima) não aparece de novo. Repetida é a de mesmo id (duas fichas que nasceram uma da outra) ou a
+ * de mesmo texto e tipo de resposta ("Queixa principal" cadastrada nas duas fases).
+ */
+export const perguntasDosBlocos = (
+  gerais: AnamnesisQuestion[],
+  blocos: BlocoDoRelatorio[]
+): AnamnesisQuestion[][] => {
+  const ids = new Set<string>();
+  const textos = new Set<string>();
+  const marcar = (q: AnamnesisQuestion) => {
+    ids.add(q.id);
+    textos.add(`${q.tipo_campo}|${chaveDeNome(q.texto)}`);
+  };
+  (gerais || []).forEach(marcar);
+  return blocos.map((b) =>
+    ((b.ficha?.perguntas as AnamnesisQuestion[]) || []).filter((q) => {
+      if (!q || ids.has(q.id) || textos.has(`${q.tipo_campo}|${chaveDeNome(q.texto)}`)) return false;
+      marcar(q);
+      return true;
+    })
+  );
 };
 
 /**
