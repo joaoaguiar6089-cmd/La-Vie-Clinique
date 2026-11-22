@@ -20,6 +20,7 @@ import { formatDateOnly } from '../../utils/formatters';
 import { marcaDaClinica } from '../../utils/marca';
 import { IdentificacaoDaClinica } from '../documentos/IdentificacaoDaClinica';
 import { useEstiloDaMarca } from '../documentos/MarcaDosDocumentos';
+import { nomeComFoco } from '../../utils/procedimentoAvaliacao';
 
 /** O que já se sabe da folha em branco emitida para uma paciente — sai impresso no lugar da linha. */
 export interface CabecalhoDaFicha {
@@ -79,7 +80,10 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
   );
 
   const titulo =
-    registro?.procedimentoNome || cabecalho?.procedimentoNome || ficha?.nome || rotulos.curto;
+    (registro?.procedimentoNome && nomeComFoco(registro.procedimentoNome, registro.foco)) ||
+    cabecalho?.procedimentoNome ||
+    ficha?.nome ||
+    rotulos.curto;
 
   const fotoModelo = registro
     ? registro.fotoModeloAnotadaUrl || registro.fotoModeloUrl
@@ -206,7 +210,9 @@ export const PrintableFichaSheet: React.FC<PrintableFichaSheetProps> = ({
                   Procedimento
                 </span>
                 <span className="font-semibold text-ink">
-                  {registro?.procedimentoNome || cabecalho?.procedimentoNome}
+                  {registro?.procedimentoNome
+                    ? nomeComFoco(registro.procedimentoNome, registro.foco)
+                    : cabecalho?.procedimentoNome}
                 </span>
               </div>
               <div>

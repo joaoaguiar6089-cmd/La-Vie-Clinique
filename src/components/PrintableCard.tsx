@@ -64,9 +64,11 @@ export const PrintableCard: React.FC<PrintableCardProps> = ({
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
         />
-        <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded bg-ink/85 text-surface text-[10px] font-bold uppercase tracking-wider">
-          {procedure.category}
-        </div>
+        {procedure.category && (
+          <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded bg-ink/85 text-surface text-[10px] font-bold uppercase tracking-wider">
+            {procedure.category}
+          </div>
+        )}
         {(isPromoDay || procedure.isFeatured) && (
           <div className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded bg-brand text-white text-[10px] font-bold uppercase tracking-wider">
             {isPromoDay ? `-${formatDiscountPercent(discountPercent)}% OFF` : 'Destaque'}

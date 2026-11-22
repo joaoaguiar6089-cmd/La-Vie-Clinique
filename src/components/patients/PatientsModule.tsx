@@ -116,8 +116,6 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
 }) => {
   /** Visita cujo acompanhamento (com os materiais usados) está aberto. */
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
-  /** Avaliações da paciente aberta — lidas só enquanto a página dela está na tela. */
-  const [avaliacoes, setAvaliacoes] = useState<EvaluationRecord[]>([]);
   const [acompanhamentos, setAcompanhamentos] = useState<EvaluationRecord[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [records, setRecords] = useState<AnamnesisRecord[]>([]);
@@ -242,20 +240,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
   }, [pacienteAbertoId, patients, linhas]);
 
   const idsCadastrados = useMemo(() => new Set(patients.map((p) => p.id)), [patients]);
-
-  /**
-   * As avaliações dela, por consulta por paciente — e não a coleção inteira, que carrega
-   * respostas e anotações de todo mundo. Quem ainda não tem cadastro não tem avaliação: emitir
-   * uma pede o cadastro antes.
-   */
   const pacienteAbertoCadastrado = !!pacienteAberto && idsCadastrados.has(pacienteAberto.id);
-  useEffect(() => {
-    if (!pacienteAberto || !pacienteAbertoCadastrado) {
-      setAvaliacoes([]);
-      return;
-    }
-    return subscribeToRegistrosDeFicha('avaliacao', { pacienteId: pacienteAberto.id }, setAvaliacoes);
-  }, [pacienteAberto?.id, pacienteAbertoCadastrado]);
 
   /**
    * Os acompanhamentos dela, pela mesma consulta por paciente — a página usa só as fotos da sessão,
@@ -367,7 +352,7 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
       anamneses: records,
       limparConfirmacao: opcoes?.limparConfirmacao,
     });
-    // Pedida pelo painel da avaliação: a visita existia só para levar o acompanhamento.
+    // Pedida pelo painel da anamnese "Sem avaliação": a visita existia só para levar o relatório.
     if (formAtendimento?.paraAcompanhar && ehRealizado(registro)) setAcompanhando(registro);
     // Compareceu: o acompanhamento é o passo seguinte, e é agora que a profissional lembra.
     if (formAtendimento?.modo === 'confirmacao') {
@@ -652,7 +637,6 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
           recibos={doPacienteAberto.recibos}
           atendimentos={doPacienteAberto.atendimentos}
           planos={doPacienteAberto.planos}
-          avaliacoes={avaliacoes}
           acompanhamentos={acompanhamentos}
           todosPacientes={patients}
           templates={templates}
@@ -692,10 +676,10 @@ export const PatientsModule: React.FC<PatientsModuleProps> = ({
               }),
             })
           }
-          onRegistrarVisita={(avaliacao) =>
+          onRegistrarVisita={(origem) =>
             abrirFormulario({
               modo: 'novo',
-              atendimento: sementeDaVisita(avaliacao),
+              atendimento: sementeDaVisita(origem),
               paraAcompanhar: true,
             })
           }

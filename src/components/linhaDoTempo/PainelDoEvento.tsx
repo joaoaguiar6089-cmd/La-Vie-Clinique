@@ -11,19 +11,23 @@ import {
   RotateCcw,
   Share2,
 } from 'lucide-react';
-import { AnamnesisRecord, Attendance, EvaluationRecord, Quote } from '../../types';
+import { AnamnesisRecord, Attendance, Quote } from '../../types';
 import { ItemDaLinha } from '../../utils/pacienteResumo';
 import { formatDateOnly } from '../../utils/formatters';
 import { isQuoteEditavel, podeSubstituir } from '../../utils/quoteCalc';
 import { acompanhamentoComRegistro, acompanhamentoVisivel } from '../../utils/fichasClinicas';
-import { ROTULO_DO_STATUS, nomeDosProcedimentos } from '../../utils/attendances';
+import { ROTULO_DO_STATUS, ehPendente, nomeDosProcedimentos } from '../../utils/attendances';
+import {
+  PROCEDIMENTO_AVALIACAO_ID,
+  alvoDoQueFoiAvaliado,
+  ehAvaliacao,
+} from '../../utils/procedimentoAvaliacao';
 import {
   ContextoDaJornada,
   OrigemDaVisita,
   Tratamento,
   anamnesesDoOrcamento,
   atendimentosDaAnamnese,
-  atendimentosDaAvaliacao,
   avaliacaoDaAnamnese,
   origemDaAnamnese,
   proximosAgendamentos,
@@ -50,15 +54,14 @@ export interface AcoesDaLinha {
     'abrirPrevia' | 'abrirCompartilhamento' | 'abrirEdicao' | 'abrirDuplicacao' | 'abrirSubstituicao'
   >;
   onVerAnamnese: (r: AnamnesisRecord) => void;
-  onVerAvaliacao: (r: EvaluationRecord) => void;
   /** O acompanhamento, com os materiais usados dentro. */
   onAcompanhamento: (a: Attendance) => void;
   /** "Ir para a anamnese": a janela que pergunta se é para enviar o link ou preencher aqui. */
   onNovaAnamnese: (alvo: AlvoDoPasso & { templateId?: string }) => void;
-  onNovaAvaliacao: (alvo: AlvoDoPasso) => void;
+  /** Agendar — inclusive a Avaliação, que é um atendimento como os outros. */
   onAgendar: (alvo: AlvoDoPasso & { professionalId?: string }) => void;
   /**
-   * A avaliação (ou a anamnese "Sem avaliação") sem atendimento depois dela: o relatório precisa
+   * A anamnese "Sem avaliação" sem atendimento depois dela: o relatório precisa
    * de uma visita, então o formulário de atendimento abre com a data e a hora por preencher — e,
    * salvo, abre o relatório dela.
    */
@@ -71,9 +74,12 @@ export interface AcoesDaLinha {
 const ROTULO_DO_TIPO = {
   atendimento: 'Atendimento',
   anamnese: 'Anamnese',
-  avaliacao: 'Avaliação',
   orcamento: 'Orçamento',
 } as const;
+
+/** "Avaliação" no atendimento do procedimento Avaliação; o rótulo do tipo nos demais. */
+const rotuloDoItem = (item: ItemDaLinha): string =>
+  item.tipo === 'atendimento' && ehAvaliacao(item.ref) ? 'Avaliação' : ROTULO_DO_TIPO[item.tipo];
 
 const botaoPrincipal =
   'inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl bg-ink text-white text-body font-semibold hover:bg-black transition-colors';
@@ -150,21 +156,32 @@ export const PainelDoEvento: React.FC<PainelDoEventoProps> = ({ item, contexto, 
     [contexto.atendimentos, pacienteId, excetoId]
   );
 
-  /** O procedimento que vai semeado para o próximo passo e para o agendamento. */
+  /**
+   * O procedimento que vai semeado para o próximo passo e para o agendamento. Da Avaliação, o que
+   * ela avaliou (o foco) — o próximo agendamento é o do tratamento, não outra avaliação.
+   */
   const tratamento: Tratamento | undefined =
     item.tipo === 'orcamento'
       ? item.ref.itens[0] && {
           procedureId: item.ref.itens[0].procedureId,
           procedimentoNome: item.ref.itens[0].titulo,
+          foco: item.ref.itens[0].foco,
         }
       : item.tipo === 'anamnese'
       ? { procedureId: item.ref.procedimentoId, procedimentoNome: item.ref.procedimentoNome }
-      : { procedureId: item.ref.procedureId, procedimentoNome: item.ref.procedimentoNome };
+      : ehAvaliacao(item.ref)
+      ? item.ref.foco
+        ? (() => {
+            const avaliado = alvoDoQueFoiAvaliado(item.ref, contexto.catalogo);
+            return { procedureId: avaliado.procedureId, procedimentoNome: avaliado.procedimentoNome };
+          })()
+        : undefined
+      : { procedureId: item.ref.procedureId, procedimentoNome: item.ref.procedimentoNome, foco: item.ref.foco };
 
   const cabecalho = (
     <div>
       <p className="text-label uppercase tracking-wider font-semibold text-brand">
-        {ROTULO_DO_TIPO[item.tipo]} · {formatDateOnly(item.data)}
+        {rotuloDoItem(item)} · {formatDateOnly(item.data)}
         {item.tipo === 'atendimento' && item.ref.hora ? ` · ${item.ref.hora}` : ''}
       </p>
       {acoes.onAbrirPaciente && pacienteId ? (
@@ -189,7 +206,7 @@ export const PainelDoEvento: React.FC<PainelDoEventoProps> = ({ item, contexto, 
     <BottomSheet
       aberto
       onFechar={onFechar}
-      titulo={`${ROTULO_DO_TIPO[item.tipo]} de ${pacienteNome}`}
+      titulo={`${rotuloDoItem(item)} de ${pacienteNome}`}
       cabecalho={cabecalho}
       noCentroNoComputador
     >
@@ -198,9 +215,6 @@ export const PainelDoEvento: React.FC<PainelDoEventoProps> = ({ item, contexto, 
       )}
       {item.tipo === 'anamnese' && (
         <PassosDaAnamnese r={item.ref} contexto={contexto} acoes={acoes} fazer={fazer} />
-      )}
-      {item.tipo === 'avaliacao' && (
-        <PassosDaAvaliacao av={item.ref} contexto={contexto} acoes={acoes} fazer={fazer} />
       )}
       {item.tipo === 'atendimento' && <PassosDoAtendimento a={item.ref} acoes={acoes} fazer={fazer} />}
 
@@ -381,11 +395,17 @@ const PassosDaAnamnese: React.FC<PassosProps & { r: AnamnesisRecord }> = ({ r, c
     }
   };
 
-  const preencherAvaliacao = fazer(() =>
-    acoes.onNovaAvaliacao({
+  /** A Avaliação é um atendimento: agenda-se com o foco no procedimento da anamnese. */
+  const agendarAvaliacao = fazer(() =>
+    acoes.onAgendar({
       pacienteId: r.pacienteId,
       pacienteNome: r.pacienteNome,
-      tratamento: { procedureId: r.procedimentoId, procedimentoNome: r.procedimentoNome },
+      tratamento: {
+        procedureId: PROCEDIMENTO_AVALIACAO_ID,
+        procedimentoNome: contexto.catalogo.find(ehAvaliacao)?.title || 'Avaliação',
+        foco: r.procedimentoNome,
+      },
+      professionalId: r.professionalId,
     })
   );
 
@@ -405,18 +425,27 @@ const PassosDaAnamnese: React.FC<PassosProps & { r: AnamnesisRecord }> = ({ r, c
         </LinhaDoPasso>
       </Secao>
 
-      {/* A avaliação é a resposta à anamnese e a base do procedimento: o passo aparece mesmo sem
-          ficha de avaliação cadastrada — o formulário puxa perguntas de outra ficha ali dentro. */}
+      {/* A avaliação é a resposta à anamnese e a base do procedimento. É um atendimento do
+          procedimento Avaliação, e a ficha dela é o relatório desse atendimento. */}
       <Secao titulo="Próximo passo · Avaliação">
-        {avaliacao ? (
+        {avaliacao && ehPendente(avaliacao) ? (
           <LinhaDoPasso
-            titulo={avaliacao.procedimentoNome}
-            detalhe={`Feita em ${formatDateOnly(avaliacao.dataAtendimento.slice(0, 10))}`}
+            titulo={nomeDosProcedimentos(avaliacao)}
+            detalhe={`Agendada para ${quandoDoAtendimento(avaliacao)}`}
           >
-            <button type="button" onClick={fazer(() => acoes.onVerAvaliacao(avaliacao))} className={botaoFeito}>
-              <Eye className="w-4 h-4" />
-              Ver
+            <button type="button" onClick={fazer(() => acoes.onAbrirNaAgenda(avaliacao))} className={botaoSecundario}>
+              <CalendarClock className="w-4 h-4" />
+              Abrir na agenda
             </button>
+          </LinhaDoPasso>
+        ) : avaliacao ? (
+          <LinhaDoPasso
+            titulo={nomeDosProcedimentos(avaliacao)}
+            detalhe={`Feita em ${quandoDoAtendimento(avaliacao)}${
+              acompanhamentoComRegistro(avaliacao) ? ' · com relatório' : ' · relatório por preencher'
+            }`}
+          >
+            <BotaoDoAcompanhamento a={avaliacao} onClick={fazer(() => acoes.onAcompanhamento(avaliacao))} />
           </LinhaDoPasso>
         ) : dispensada ? (
           <LinhaDoPasso titulo={r.procedimentoNome} detalhe="Sem avaliação — segue para o relatório">
@@ -432,8 +461,9 @@ const PassosDaAnamnese: React.FC<PassosProps & { r: AnamnesisRecord }> = ({ r, c
           </LinhaDoPasso>
         ) : (
           <LinhaDoPasso titulo={r.procedimentoNome} detalhe="Ainda sem avaliação">
-            <button type="button" onClick={preencherAvaliacao} className={botaoPrincipal}>
-              Preencher avaliação
+            <button type="button" onClick={agendarAvaliacao} className={botaoPrincipal}>
+              <CalendarPlus className="w-4 h-4" />
+              Agendar avaliação
             </button>
             <button
               type="button"
@@ -469,7 +499,7 @@ const PassosDaAnamnese: React.FC<PassosProps & { r: AnamnesisRecord }> = ({ r, c
  */
 const PassoDoRelatorio: React.FC<{
   atendimentos: Attendance[];
-  /** "desta avaliação", "desta anamnese" — para a frase de quando não há visita. */
+  /** "desta anamnese" — para a frase de quando não há visita. */
   depoisDe: string;
   onAcompanhamento: (a: Attendance) => () => void;
   onRegistrar: () => void;
@@ -520,33 +550,6 @@ const BotaoDoAcompanhamento: React.FC<{ a: Attendance; onClick: () => void }> = 
       <NotebookPen className="w-4 h-4" />
       {registrado ? 'Ver' : 'Preencher'}
     </button>
-  );
-};
-
-const PassosDaAvaliacao: React.FC<PassosProps & { av: EvaluationRecord }> = ({ av, contexto, acoes, fazer }) => {
-  const atendimentos = useMemo(() => atendimentosDaAvaliacao(av, contexto), [av, contexto]);
-
-  return (
-    <>
-      <Secao titulo="Avaliação">
-        <LinhaDoPasso
-          titulo={av.procedimentoNome}
-          detalhe={`Feita em ${formatDateOnly(av.dataAtendimento.slice(0, 10))}`}
-        >
-          <button type="button" onClick={fazer(() => acoes.onVerAvaliacao(av))} className={botaoPrincipal}>
-            <Eye className="w-4 h-4" />
-            Ver
-          </button>
-        </LinhaDoPasso>
-      </Secao>
-
-      <PassoDoRelatorio
-        atendimentos={atendimentos}
-        depoisDe="desta avaliação"
-        onAcompanhamento={(a) => fazer(() => acoes.onAcompanhamento(a))}
-        onRegistrar={fazer(() => acoes.onRegistrarVisita(av))}
-      />
-    </>
   );
 };
 

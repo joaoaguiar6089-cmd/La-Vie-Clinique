@@ -1,9 +1,10 @@
-import { AnamnesisRecord, Attendance, EvaluationRecord, Quote } from '../types';
+import { AnamnesisRecord, Attendance, Quote } from '../types';
 import { DataISO, ehRealizado, hojeISO, instanteDoAtendimento } from './attendances';
 import { dataPorExtenso, diasAntesDeHoje, periodoDeDias } from './indicadores';
 import { acompanhamentoComRegistro } from './fichasClinicas';
 import { ETAPA_DA_JORNADA, ItemDaLinha, linhaDoTempo } from './pacienteResumo';
 import { chaveDeNome } from './templateMatching';
+import { ehAvaliacao } from './procedimentoAvaliacao';
 
 /**
  * A linha do tempo da clínica inteira — a da tela Hoje.
@@ -23,7 +24,7 @@ export const PERIODOS_DA_LINHA: { dias: number; rotulo: string }[] = [
   { dias: 30, rotulo: '30 dias' },
 ];
 
-/** O maior período — é o que as consultas de anamnese e avaliação trazem de uma vez só. */
+/** O maior período — é o que a consulta de anamneses traz de uma vez só. */
 export const MAIOR_PERIODO_DA_LINHA = 30;
 
 /** O corte das consultas: trocar o filtro entre Hoje e 30 dias não gera leitura nova. */
@@ -31,13 +32,14 @@ export const corteDaLinha = (hoje: DataISO = hojeISO()): DataISO =>
   diasAntesDeHoje(MAIOR_PERIODO_DA_LINHA - 1, hoje);
 
 /**
- * O que os botões de tipo filtram: os tipos de item e mais o acompanhamento.
+ * O que os botões de tipo filtram: os tipos de item, a avaliação e o acompanhamento.
  *
- * O acompanhamento não vira item próprio: ele mora no atendimento (é o caderno verde da linha), e
- * repetir a visita numa segunda linha do mesmo dia seria ruído. Filtrar por ele mostra os
- * atendimentos que já têm acompanhamento registrado.
+ * Nenhum dos dois vira item próprio. A avaliação é um atendimento (do procedimento fixo
+ * Avaliação), e filtrar por ela mostra esses atendimentos. O acompanhamento mora no atendimento
+ * (é o caderno verde da linha), e repetir a visita numa segunda linha do mesmo dia seria ruído:
+ * filtrar por ele mostra os atendimentos que já têm acompanhamento registrado.
  */
-export type FiltroDeTipo = TipoNaLinha | 'acompanhamento';
+export type FiltroDeTipo = TipoNaLinha | 'avaliacao' | 'acompanhamento';
 
 /** Na ordem da jornada: Orçamento → Anamnese → Avaliação → Atendimento → Acompanhamento. */
 export const TIPOS_DA_LINHA: { tipo: FiltroDeTipo; rotulo: string }[] = [
@@ -52,6 +54,7 @@ export const TIPOS_DA_LINHA: { tipo: FiltroDeTipo; rotulo: string }[] = [
 export const passaNoFiltroDeTipo = (item: ItemDaLinha, tipos: FiltroDeTipo[] = []): boolean =>
   tipos.length === 0 ||
   tipos.includes(item.tipo) ||
+  (tipos.includes('avaliacao') && item.tipo === 'atendimento' && ehAvaliacao(item.ref)) ||
   (tipos.includes('acompanhamento') &&
     item.tipo === 'atendimento' &&
     acompanhamentoComRegistro(item.ref));
@@ -105,7 +108,7 @@ export interface FiltroDaLinha {
  * A linha da clínica: tudo dentro do período, do mais recente para o mais antigo.
  *
  * A data de cada item é a mesma da linha da paciente — a do atendimento, a da emissão do
- * orçamento, a da anamnese e a da avaliação. No mesmo dia, o horário ordena; sem horário, a
+ * orçamento e a da anamnese. No mesmo dia, o horário ordena; sem horário, a
  * etapa da jornada desempata.
  */
 export const linhaDaClinica = (
@@ -113,7 +116,6 @@ export const linhaDaClinica = (
     atendimentos: Attendance[];
     anamneses: AnamnesisRecord[];
     orcamentos: Quote[];
-    avaliacoes: EvaluationRecord[];
   },
   filtro: FiltroDaLinha,
   hoje: DataISO = hojeISO()
@@ -124,8 +126,7 @@ export const linhaDaClinica = (
   return linhaDoTempo(
     (dados.atendimentos || []).filter((a) => atendimentoEntraNaLinha(a, hoje)),
     dados.anamneses || [],
-    dados.orcamentos || [],
-    dados.avaliacoes || []
+    dados.orcamentos || []
   )
     .filter((item) => item.data >= periodo.de && item.data <= periodo.ate)
     .filter((item) => passaNoFiltroDeTipo(item, filtro.tipos))
@@ -164,7 +165,10 @@ export const agruparPorDia = (itens: ItemDaLinha[], hoje: DataISO = hojeISO()): 
   return dias;
 };
 
-/** Quantos itens de cada tipo, para os botões de filtro. O acompanhamento conta dentro do atendimento. */
+/**
+ * Quantos itens de cada tipo, para os botões de filtro. A avaliação e o acompanhamento contam
+ * dentro do atendimento.
+ */
 export const contarPorTipo = (itens: ItemDaLinha[]): Record<FiltroDeTipo, number> => {
   const contagem: Record<FiltroDeTipo, number> = {
     atendimento: 0,
@@ -175,6 +179,7 @@ export const contarPorTipo = (itens: ItemDaLinha[]): Record<FiltroDeTipo, number
   };
   itens.forEach((i) => {
     contagem[i.tipo] += 1;
+    if (i.tipo === 'atendimento' && ehAvaliacao(i.ref)) contagem.avaliacao += 1;
     if (i.tipo === 'atendimento' && acompanhamentoComRegistro(i.ref)) contagem.acompanhamento += 1;
   });
   return contagem;

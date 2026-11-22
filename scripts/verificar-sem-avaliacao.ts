@@ -1,17 +1,20 @@
 /**
- * Confere o "Sem avaliação" da linha do tempo: a anamnese que não terá avaliação passa direto ao
- * relatório do atendimento, com os mesmos atendimentos que a avaliação ofereceria.
+ * Confere o "Sem avaliação" da linha do tempo — a anamnese que não terá avaliação passa direto ao
+ * relatório do atendimento — e o passo da Avaliação, que é um atendimento do procedimento fixo
+ * Avaliação, com o foco no tratamento da anamnese.
  *
  *   npx tsx scripts/verificar-sem-avaliacao.ts
  */
-import { AnamnesisRecord, Attendance, EvaluationRecord } from '../src/types';
+import { AnamnesisRecord, Attendance } from '../src/types';
 import {
   ContextoDaJornada,
   atendimentosDaAnamnese,
-  atendimentosDaAvaliacao,
+  avaliacaoDaAnamnese,
   origemDaAnamnese,
   sementeDaVisita,
+  sementeDoAgendamento,
 } from '../src/utils/passosDaJornada';
+import { PROCEDIMENTO_AVALIACAO_ID } from '../src/utils/procedimentoAvaliacao';
 import { hojeISO } from '../src/utils/attendances';
 
 let falhas = 0;
@@ -54,7 +57,6 @@ const contexto: ContextoDaJornada = {
     atd('outra', '2026-10-31', { pacienteId: 'p2' }),
   ],
   anamneses: [anamnese],
-  avaliacoes: [],
   catalogo: [],
   templatesAnamnese: [],
 };
@@ -70,21 +72,57 @@ ok('com a profissional da anamnese', semente.professionalId === 'karol');
 ok('hoje, sem hora', semente.data === hojeISO() && !semente.hora);
 ok('sem id — o formulário cria o seu', semente.id === '');
 
-console.log('\nA avaliação segue igual');
-const av = {
-  id: 'av1',
+console.log('\nO passo da Avaliação é um atendimento');
+const aval = (id: string, data: string, extra: Partial<Attendance> = {}): Attendance =>
+  atd(id, data, { procedureId: PROCEDIMENTO_AVALIACAO_ID, procedimentoNome: 'Avaliação', ...extra });
+const comAvaliacoes = (...avs: Attendance[]): ContextoDaJornada => ({
+  ...contexto,
+  atendimentos: [...contexto.atendimentos, ...avs],
+});
+ok('sem atendimento de Avaliação, o passo está por fazer', !avaliacaoDaAnamnese(anamnese, contexto));
+ok(
+  'Avaliação com o foco no tratamento da anamnese conta',
+  avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('a1', '2026-10-29', { foco: 'Ozonioterapia' })))?.id === 'a1'
+);
+ok(
+  'Avaliação com foco em outro tratamento não conta',
+  !avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('a2', '2026-10-29', { foco: 'Botox' })))
+);
+ok(
+  'Avaliação sem foco serve, mas a do foco vence',
+  avaliacaoDaAnamnese(
+    anamnese,
+    comAvaliacoes(aval('geral', '2026-10-30'), aval('foco', '2026-10-29', { foco: 'ozonioterapia' }))
+  )?.id === 'foco'
+);
+ok(
+  'Avaliação de antes da anamnese não conta',
+  !avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('antes', '2026-10-20', { foco: 'Ozonioterapia' })))
+);
+ok(
+  'falta não conta; agendada conta',
+  !avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('f', '2026-10-29', { foco: 'Ozonioterapia', status: 'faltou' }))) &&
+    avaliacaoDaAnamnese(anamnese, comAvaliacoes(aval('ag', '2099-01-02', { foco: 'Ozonioterapia', status: 'agendado' })))?.id === 'ag'
+);
+ok(
+  'feita vence a agendada',
+  avaliacaoDaAnamnese(
+    anamnese,
+    comAvaliacoes(
+      aval('ag', '2099-01-02', { foco: 'Ozonioterapia', status: 'agendado' }),
+      aval('feita', '2026-10-29', { foco: 'Ozonioterapia' })
+    )
+  )?.id === 'feita'
+);
+const agendamento = sementeDoAgendamento({
   pacienteId: 'p1',
   pacienteNome: 'Cristiane Soares',
-  procedureId: 'ozonio',
-  procedimentoNome: 'Ozonioterapia',
-  dataAtendimento: '2026-10-28',
-  createdAt: '2026-10-28T12:00:00.000Z',
-} as unknown as EvaluationRecord;
+  tratamento: { procedureId: PROCEDIMENTO_AVALIACAO_ID, procedimentoNome: 'Avaliação', foco: 'Ozonioterapia' },
+});
 ok(
-  'mesma lista que a anamnese ofereceria',
-  atendimentosDaAvaliacao(av, contexto).map((a) => a.id).join() === lista.join()
+  'agendar a avaliação leva o procedimento Avaliação e o foco',
+  agendamento.procedureId === PROCEDIMENTO_AVALIACAO_ID && agendamento.foco === 'Ozonioterapia'
 );
-ok('semente da avaliação igual à de antes', sementeDaVisita(av).procedureId === 'ozonio');
 
 console.log(falhas === 0 ? '\nTudo certo.' : `\n${falhas} falha(s).`);
 if (falhas > 0) process.exit(1);

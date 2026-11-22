@@ -23,19 +23,17 @@ import {
   passaNoFiltroDeTipo,
 } from '../../utils/linhaDoTempoClinica';
 import { ItemDaLinha } from '../../utils/pacienteResumo';
-import { alvoDoAtendimento, alvoDoRegistro } from '../../utils/fichasClinicas';
+import { alvoDoAtendimento } from '../../utils/fichasClinicas';
 import { resolveOrientationImage } from '../../utils/orientationImage';
 import { resolveConsentTerm } from '../../utils/consentTerm';
 import { montarMapasPublicos } from '../../utils/laserAreas';
 import {
   saveAnamnesisRecord,
   subscribeToAnamnesisRecordsDesde,
-  subscribeToRegistrosDeFicha,
 } from '../../services/databaseService';
 import { useAcoesDeOrcamento } from '../quotes/useAcoesDeOrcamento';
 import { CartaoDaLinhaDoTempo } from '../linhaDoTempo/ItemDaLinhaDoTempo';
 import { AcoesDaLinha, AlvoDoPasso, PainelDoEvento } from '../linhaDoTempo/PainelDoEvento';
-import { EmissaoDeAvaliacao } from '../evaluations/EmissaoDeAvaliacao';
 import { ContextoDaJornada, OrigemDaVisita } from '../../utils/passosDaJornada';
 import { PrintableAnamnesisSheet } from '../anamnesis/PrintableAnamnesisSheet';
 import { FichaFillModal } from '../fichas/FichaFillModal';
@@ -109,7 +107,7 @@ const CabecalhoDoDia: React.FC<{ data: string; rotulo: string; total: number }> 
 /**
  * A linha do tempo da clínica inteira, na tela Hoje, abaixo do calendário e dos atalhos.
  *
- * Atendimentos, orçamentos e pacientes já estão em memória. Anamneses e avaliações não: vêm por
+ * Atendimentos, orçamentos e pacientes já estão em memória. Anamneses não: vêm por
  * uma consulta só dos últimos 30 dias — o maior período oferecido —, e não pela coleção inteira,
  * porque esta é a primeira tela depois do login e ninguém deveria pagar a história toda da clínica
  * para ver a semana. Trocar o período entre Hoje e 30 dias filtra o que já chegou.
@@ -137,17 +135,13 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
   const [tipos, setTipos] = useState<FiltroDeTipo[]>([]);
   const [limite, setLimite] = useState(PAGINA);
   const [anamneses, setAnamneses] = useState<AnamnesisRecord[]>([]);
-  const [avaliacoes, setAvaliacoes] = useState<EvaluationRecord[]>([]);
   const [anamnesesProntas, setAnamnesesProntas] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   const [anamneseAberta, setAnamneseAberta] = useState<AnamnesisRecord | null>(null);
-  const [avaliacaoAberta, setAvaliacaoAberta] = useState<EvaluationRecord | null>(null);
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
   /** O evento tocado: abre o painel com o documento e o passo seguinte. */
   const [aberto, setAberto] = useState<ItemDaLinha | null>(null);
-  /** A avaliação pedida pelo painel da anamnese, com a paciente e o procedimento dela. */
-  const [avaliacaoNova, setAvaliacaoNova] = useState<AlvoDoPasso | null>(null);
 
   const acoesDeOrcamento = useAcoesDeOrcamento({
     clinic,
@@ -165,11 +159,8 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
       },
       () => setAnamnesesProntas(true)
     );
-    // Avaliação é interna: sem as regras publicadas ou sem permissão, a linha segue sem elas.
-    const pararAvaliacoes = subscribeToRegistrosDeFicha('avaliacao', { desde: corte }, setAvaliacoes);
     return () => {
       pararAnamneses();
-      pararAvaliacoes();
     };
   }, [corte]);
 
@@ -187,11 +178,11 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
   const semTipo = useMemo(
     () =>
       linhaDaClinica(
-        { atendimentos, anamneses, orcamentos: quotes, avaliacoes },
+        { atendimentos, anamneses, orcamentos: quotes },
         { dias, busca },
         hoje
       ),
-    [atendimentos, anamneses, quotes, avaliacoes, dias, busca, hoje]
+    [atendimentos, anamneses, quotes, dias, busca, hoje]
   );
   const contagem = useMemo(() => contarPorTipo(semTipo), [semTipo]);
   const filtrados = useMemo(
@@ -209,10 +200,8 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
   const acoes: AcoesDaLinha = {
     orcamento: acoesDeOrcamento,
     onVerAnamnese: setAnamneseAberta,
-    onVerAvaliacao: setAvaliacaoAberta,
     onAcompanhamento: setAcompanhando,
     onNovaAnamnese,
-    onNovaAvaliacao: setAvaliacaoNova,
     onAgendar,
     onRegistrarVisita,
     onAbrirNaAgenda,
@@ -220,18 +209,17 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
   };
 
   /**
-   * O que o painel sabe da paciente. Anamneses e avaliações são as dos últimos 30 dias — basta:
+   * O que o painel sabe da paciente. As anamneses são as dos últimos 30 dias — basta:
    * o passo seguinte de um evento vem depois dele, e a linha não mostra nada mais antigo.
    */
   const contexto: ContextoDaJornada = useMemo(
     () => ({
       atendimentos,
       anamneses,
-      avaliacoes,
       catalogo: catalogProcedures,
       templatesAnamnese,
     }),
-    [atendimentos, anamneses, avaliacoes, catalogProcedures, templatesAnamnese]
+    [atendimentos, anamneses, catalogProcedures, templatesAnamnese]
   );
 
   const alternarTipo = (tipo: FiltroDeTipo) =>
@@ -424,18 +412,6 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
           />
         )}
 
-        <EmissaoDeAvaliacao
-          aberto={!!avaliacaoNova}
-          onFechar={() => setAvaliacaoNova(null)}
-          pacientes={pacientes}
-          catalogo={catalogProcedures}
-          professionals={clinic.professionals || []}
-          clinic={clinic}
-          professionalIdPadrao={professionalLogadaId}
-          pacienteInicial={pacientes.find((p) => p.id === avaliacaoNova?.pacienteId) || null}
-          procedimentoInicial={avaliacaoNova?.tratamento || null}
-        />
-
         {anamneseAberta && (
           <PrintableAnamnesisSheet
             record={anamneses.find((r) => r.id === anamneseAberta.id) || anamneseAberta}
@@ -446,19 +422,6 @@ export const LinhaDoTempoDaClinica: React.FC<LinhaDoTempoDaClinicaProps> = ({
             orientationImage={resolveOrientationImage(templateDaAnamnese)}
             consentSections={resolveConsentTerm(templateDaAnamnese)}
             mapasDeAreas={mapasDeAreas}
-          />
-        )}
-
-        {avaliacaoAberta && (
-          <FichaFillModal
-            tipo="avaliacao"
-            isOpen
-            onClose={() => setAvaliacaoAberta(null)}
-            alvo={alvoDoRegistro(avaliacaoAberta)}
-            paciente={pacientes.find((p) => p.id === avaliacaoAberta.pacienteId)}
-            catalogo={catalogProcedures}
-            professionals={clinic.professionals || []}
-            clinicProfile={clinic}
           />
         )}
 

@@ -4,7 +4,6 @@ import {
   AnamnesisRecord,
   AnamnesisTemplate,
   Attendance,
-  EvaluationRecord,
   Procedure,
   Quote,
   SessionPlan,
@@ -30,8 +29,6 @@ interface PatientResumoTabProps {
   atendimentos: Attendance[];
   planos: SessionPlan[];
   quotes: Quote[];
-  /** Avaliações emitidas para ela — entram na linha do tempo. */
-  avaliacoes: EvaluationRecord[];
   catalogProcedures: Procedure[];
   /** Fichas-modelo de anamnese — juntam as áreas do laser num tratamento só, no painel do evento. */
   templates: AnamnesisTemplate[];
@@ -50,7 +47,6 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
   atendimentos,
   planos,
   quotes,
-  avaliacoes,
   catalogProcedures,
   templates,
   acoes,
@@ -62,8 +58,8 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
     [planos, atendimentos, catalogProcedures]
   );
   const linha = useMemo(
-    () => linhaDoTempo(atendimentos, records, quotes, avaliacoes),
-    [atendimentos, records, quotes, avaliacoes]
+    () => linhaDoTempo(atendimentos, records, quotes),
+    [atendimentos, records, quotes]
   );
 
   /** O evento tocado na linha do tempo: abre o painel com o documento e o passo seguinte. */
@@ -72,11 +68,10 @@ export const PatientResumoTab: React.FC<PatientResumoTabProps> = ({
     () => ({
       atendimentos,
       anamneses: records,
-      avaliacoes,
       catalogo: catalogProcedures,
       templatesAnamnese: templates,
     }),
-    [atendimentos, records, avaliacoes, catalogProcedures, templates]
+    [atendimentos, records, catalogProcedures, templates]
   );
 
   return (

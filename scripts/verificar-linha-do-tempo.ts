@@ -8,7 +8,7 @@
  *
  *   npx tsx scripts/verificar-linha-do-tempo.ts
  */
-import { AnamnesisRecord, Attendance, EvaluationRecord, Quote } from '../src/types';
+import { AnamnesisRecord, Attendance, Quote } from '../src/types';
 import {
   agruparPorDia,
   atendimentoEntraNaLinha,
@@ -81,21 +81,19 @@ const orcamentos = [
   },
 ] as unknown as Quote[];
 
-const avaliacoes = [
-  {
-    id: 'av1',
-    pacienteId: 'p1',
-    pacienteNome: 'Ana Lúcia',
-    procedimentoNome: 'Preenchimento labial',
-    dataAtendimento: dia(10),
-    createdAt: `${dia(10)}T12:00:00.000Z`,
-    respostas: {},
-    perguntasSnapshot: [],
-    preenchidoEm: dia(10),
-  },
-] as unknown as EvaluationRecord[];
+// A avaliação é um atendimento do procedimento fixo Avaliação, com o foco no que foi avaliado.
+const avaliacao = {
+  id: 'av1',
+  pacienteId: 'p1',
+  pacienteNome: 'Ana Lúcia',
+  data: dia(10),
+  procedureId: 'avaliacao',
+  procedimentoNome: 'Avaliação',
+  foco: 'Preenchimento labial',
+  createdAt: `${dia(10)}T12:00:00.000Z`,
+} as unknown as Attendance;
 
-const dados = { atendimentos, anamneses, orcamentos, avaliacoes };
+const dados = { atendimentos: [...atendimentos, avaliacao], anamneses, orcamentos };
 const ids = (itens: { id: string }[]) => itens.map((i) => i.id);
 
 console.log('== quem entra');
@@ -153,12 +151,20 @@ ok(
 ok(
   'atendimento e acompanhamento juntos não repetem a visita',
   ids(linhaDaClinica(dados, { dias: 30, tipos: ['atendimento', 'acompanhamento'] }, HOJE)).join() ===
-    'realizado-hoje,compareceu-ontem,faltou,so-materiais'
+    'realizado-hoje,compareceu-ontem,faltou,so-materiais,av1'
+);
+ok(
+  'filtro por avaliação: só os atendimentos da Avaliação',
+  ids(linhaDaClinica(dados, { dias: 30, tipos: ['avaliacao'] }, HOJE)).join() === 'av1'
+);
+ok(
+  'o título da avaliação leva o foco',
+  linhaDaClinica(dados, { dias: 30, tipos: ['avaliacao'] }, HOJE)[0]?.titulo === 'Avaliação · Preenchimento labial'
 );
 const contagem = contarPorTipo(trinta);
 ok(
   'contagem por tipo',
-  contagem.atendimento === 4 &&
+  contagem.atendimento === 5 &&
     contagem.orcamento === 1 &&
     contagem.anamnese === 1 &&
     contagem.avaliacao === 1 &&

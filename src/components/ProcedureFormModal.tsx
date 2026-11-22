@@ -36,6 +36,8 @@ import { ConfirmDialog, ConfirmRequest } from './ConfirmDialog';
 import { CampoDoCard, CampoEmDestaque, PreviaDoCardIndividual } from './PreviaDoCardIndividual';
 import { marcaDaClinica } from '../utils/marca';
 import { ListaSuspensa } from './common/ListaSuspensa';
+import { CampoDeFocos } from './CampoDeFocos';
+import { ehAvaliacao, focosDoProcedimento } from '../utils/procedimentoAvaliacao';
 
 const IMAGEM_PADRAO =
   'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80';
@@ -94,6 +96,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   onArquivarProcedimentos,
 }) => {
   const [title, setTitle] = useState('');
+  /** "Foco / Aplicação" — ver `Procedure.focos`. */
+  const [focos, setFocos] = useState<string[]>([]);
   const [subtitle, setSubtitle] = useState('');
   const [category, setCategory] = useState('Harmonização & Injetáveis');
   const [customCategory, setCustomCategory] = useState('');
@@ -202,6 +206,12 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   const [fotoEmAjuste, setFotoEmAjuste] = useState<number | null>(null);
 
   /** Devolve à tela o "Mais de 1 sessão" gravado no procedimento (ou o desmarcado, sem procedimento). */
+  /**
+   * A Avaliação, procedimento fixo de toda clínica: o mesmo formulário, sem categoria, sem plano
+   * recomendado e pacote, sem preparo, benefícios e regiões. Ver `utils/procedimentoAvaliacao.ts`.
+   */
+  const avaliacao = ehAvaliacao(procedureToEdit);
+
   const carregarSessoesInclusas = (proc: Procedure | null) => {
     const n = proc ? sessoesDoProcedimento(proc) : 1;
     setMaisDeUmaSessao(n > 1);
@@ -216,12 +226,14 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
   useEffect(() => {
     if (procedureToEdit) {
       setTitle(procedureToEdit.title || '');
+      setFocos(focosDoProcedimento(procedureToEdit));
       setSubtitle(procedureToEdit.subtitle || '');
       setCategory(procedureToEdit.category || 'Harmonização & Injetáveis');
       setDescription(procedureToEdit.description || '');
       setPrice(procedureToEdit.price ? String(procedureToEdit.price) : '');
       setPromotionalPrice(procedureToEdit.promotionalPrice ? String(procedureToEdit.promotionalPrice) : '');
-      setPriceNote(procedureToEdit.priceNote || 'por sessão');
+      // A Avaliação não é "por sessão": sem condição gravada, fica em branco.
+      setPriceNote(procedureToEdit.priceNote || (ehAvaliacao(procedureToEdit) ? '' : 'por sessão'));
       setIsStartingPrice(Boolean(procedureToEdit.isStartingPrice));
       setDuration(procedureToEdit.duration || '');
       setSessionsRecommended(procedureToEdit.sessionsRecommended || '');
@@ -252,6 +264,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     } else {
       // Reset defaults for new procedure
       setTitle('');
+      setFocos([]);
       setSubtitle('');
       setCategory(existingCategories.length > 0 ? existingCategories[0] : 'Harmonização & Injetáveis');
       setDescription('');
@@ -541,28 +554,29 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     const procedureData: Procedure = {
       id: procedureId,
       title: title.trim(),
+      focos: focosDoProcedimento({ focos }),
       subtitle: subtitle.trim() || undefined,
-      category: finalCategory,
+      category: avaliacao ? '' : finalCategory,
       description: description.trim(),
       price: exigeSelecaoDeArea ? precoDoMapa : Number(price),
       promotionalPrice:
         !exigeSelecaoDeArea && promotionalPrice ? Number(promotionalPrice) : undefined,
-      priceNote: priceNote.trim() || 'por sessão',
+      priceNote: priceNote.trim() || (avaliacao ? '' : 'por sessão'),
       isStartingPrice: exigeSelecaoDeArea ? areasDoMapa.length > 1 : isStartingPrice,
       duration: duration.trim() || undefined,
-      sessionsRecommended: sessionsRecommended.trim() || undefined,
+      sessionsRecommended: avaliacao ? undefined : sessionsRecommended.trim() || undefined,
       // Desmarcado = `undefined`, e é o `saveProcedureToDb` que transforma isso em apagar o campo.
       // Com mapa, as sessões são de cada área.
-      sessoesInclusas: exigeSelecaoDeArea ? undefined : sessoesDoPacote,
+      sessoesInclusas: exigeSelecaoDeArea || avaliacao ? undefined : sessoesDoPacote,
       recoveryTime: recoveryTime.trim() || undefined,
-      orientacoesPreProcedimento: orientacoesPreProcedimento.trim() || undefined,
+      orientacoesPreProcedimento: avaliacao ? undefined : orientacoesPreProcedimento.trim() || undefined,
       intervaloEntreSessoesDias: Number(intervaloEntreSessoesDias) > 0
         ? Number(intervaloEntreSessoesDias)
         : undefined,
       images: uploadedImages,
       enquadramentosDasFotos: listaDeEnquadramentosParaGravar(enquadramentos, uploadedImages.length),
-      benefits: benefits.length > 0 ? benefits : ['Melhora estética e bem-estar'],
-      areasTreated: areasTreated.length > 0 ? areasTreated : undefined,
+      benefits: avaliacao ? [] : benefits.length > 0 ? benefits : ['Melhora estética e bem-estar'],
+      areasTreated: !avaliacao && areasTreated.length > 0 ? areasTreated : undefined,
       contraindications: contraindications.trim() || undefined,
       idealCandidate: idealCandidate.trim() || undefined,
       isFeatured: isFeatured,
@@ -576,7 +590,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
       areasDoMapa: exigeSelecaoDeArea ? areasDoMapa : undefined,
       // As áreas do formato antigo seguem em memória como estão: só a conversão as lê.
       laserAreas: baseDoProcedimento?.laserAreas,
-      order: baseDoProcedimento?.order || 99,
+      // A Avaliação nunca reordenada tem ordem 0, que é o que a põe no topo do catálogo.
+      order: avaliacao ? baseDoProcedimento?.order || 0 : baseDoProcedimento?.order || 99,
       createdAt: baseDoProcedimento?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -705,22 +720,22 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
     id: procedureToEdit?.id || idDoNovoRef.current || 'previa',
     title: title.trim() || 'Nome do procedimento',
     subtitle: subtitle.trim() || undefined,
-    category: categoriaFinal(),
+    category: avaliacao ? '' : categoriaFinal(),
     description: description.trim(),
     price: exigeSelecaoDeArea
       ? precosDoMapa.length > 0 ? Math.min(...precosDoMapa) : 0
       : Number(price) || 0,
     promotionalPrice:
       !exigeSelecaoDeArea && Number(promotionalPrice) > 0 ? Number(promotionalPrice) : undefined,
-    priceNote: priceNote.trim() || 'por sessão',
+    priceNote: priceNote.trim() || (avaliacao ? '' : 'por sessão'),
     isStartingPrice: exigeSelecaoDeArea ? areasDoMapa.length > 1 : isStartingPrice,
     duration: duration.trim() || undefined,
-    sessionsRecommended: sessionsRecommended.trim() || undefined,
+    sessionsRecommended: avaliacao ? undefined : sessionsRecommended.trim() || undefined,
     recoveryTime: recoveryTime.trim() || undefined,
     images: images.length > 0 ? images : [IMAGEM_PADRAO],
     enquadramentosDasFotos: listaDeEnquadramentosParaGravar(enquadramentos, images.length),
-    benefits: benefits.length > 0 ? benefits : ['Melhora estética e bem-estar'],
-    areasTreated: areasTreated.length > 0 ? areasTreated : undefined,
+    benefits: avaliacao ? [] : benefits.length > 0 ? benefits : ['Melhora estética e bem-estar'],
+    areasTreated: !avaliacao && areasTreated.length > 0 ? areasTreated : undefined,
     contraindications: contraindications.trim() || undefined,
     idealCandidate: idealCandidate.trim() || undefined,
     isFeatured,
@@ -834,6 +849,35 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   required
                 />
                 {errors.title && <p className="text-xs text-red-600 mt-1">{errors.title}</p>}
+                {avaliacao && (
+                  <p className="text-label text-muted mt-1">
+                    Procedimento fixo de toda clínica — não tem categoria e não pode ser excluído.
+                  </p>
+                )}
+              </div>
+
+              {/* Foco / Aplicação: as variações do procedimento, escolhidas no agendamento, no
+                  orçamento e no relatório — e que separam as fichas-modelo do relatório. */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-ink mb-1">
+                  Foco / Aplicação <span className="text-gray-500 font-normal">(Opcional)</span>
+                </label>
+                <p className="text-label text-muted mb-2 leading-snug">
+                  {avaliacao
+                    ? 'Para qual procedimento a cliente quer a avaliação. Escolhido no agendamento, no orçamento e no relatório — e cada foco pode ter a sua ficha de relatório.'
+                    : 'As variações deste procedimento (ex.: na harmonização glútea, trocanter, volume ou celulite). Escolhido no agendamento, no orçamento e no relatório — e cada foco pode ter a sua ficha de relatório.'}
+                </p>
+                <CampoDeFocos
+                  focos={focos}
+                  onMudar={setFocos}
+                  placeholder={avaliacao ? 'Ex: Harmonização Glútea, Depilação a Laser' : undefined}
+                  sugestoes={
+                    avaliacao
+                      ? allProcedures.filter((p) => !ehAvaliacao(p)).map((p) => p.title)
+                      : []
+                  }
+                  rotuloDasSugestoes="Procedimentos do catálogo"
+                />
               </div>
 
               {/* Logo abaixo do nome: é a primeira decisão sobre o procedimento — vendido inteiro
@@ -894,6 +938,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 />
               </div>
 
+              {!avaliacao && (
               <div data-campo-do-card="categoria">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Categoria
@@ -953,6 +998,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   </div>
                 )}
               </div>
+              )}
 
               <div className="flex items-center pt-5">
                 <label
@@ -1230,6 +1276,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 />
               </div>
 
+              {!avaliacao && (
               <div data-campo-do-card="recomendacao">
                 <label className="block text-xs font-medium text-ink mb-1">
                   Plano Recomendado
@@ -1242,6 +1289,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                   className="w-full px-3.5 py-2 rounded-sm bg-card border border-white/80 text-xs font-medium text-ink"
                 />
               </div>
+              )}
 
               <div data-campo-do-card="intervalo">
                 <label className="block text-xs font-medium text-ink mb-1">
@@ -1271,8 +1319,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 />
               </div>
 
-              {/* Com mapa, as sessões do pacote são de cada área. */}
-              {!exigeSelecaoDeArea && (
+              {/* Com mapa, as sessões do pacote são de cada área. A Avaliação não tem pacote. */}
+              {!exigeSelecaoDeArea && !avaliacao && (
               <div className="sm:col-span-2" data-campo-do-card="sessoes">
                 <span className="block text-xs font-medium text-ink mb-2">Sessões do pacote</span>
                 <CampoMaisDeUmaSessao
@@ -1288,6 +1336,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
 
             {/* Preparo da paciente. Diferente de "Contraindicações": aquilo é motivo para não
                 fazer; isto é o que fazer antes de quem já vai. */}
+            {!avaliacao && (
             <div data-campo-do-card="orientacoes">
               <label className="block text-body font-medium text-ink mb-1">
                 Orientações de preparo (antes de vir)
@@ -1304,6 +1353,7 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 Configurações.
               </p>
             </div>
+            )}
 
             <div data-campo-do-card="descricao">
               <label className="block text-xs font-medium text-ink mb-1">
@@ -1320,7 +1370,9 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
               {errors.description && <p className="text-xs text-red-600 mt-1">{errors.description}</p>}
             </div>
 
-            {/* Interactive Benefits list */}
+            {/* Interactive Benefits list — a Avaliação não tem benefícios nem regiões. */}
+            {!avaliacao && (
+            <>
             <div data-campo-do-card="beneficios">
               <label className="block text-xs font-medium text-ink mb-1">
                 Benefícios & Destaques (Tags)
@@ -1411,6 +1463,8 @@ export const ProcedureFormModal: React.FC<ProcedureFormModalProps> = ({
                 ))}
               </div>
             </div>
+            </>
+            )}
           </div>
 
           {/* Section 4: Images & Visuals */}

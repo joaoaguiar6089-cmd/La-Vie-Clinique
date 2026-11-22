@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Trash2, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
-import { ProdutoDeEstoque, Professional, QuoteItem } from '../../types';
+import { Procedure, ProdutoDeEstoque, Professional, QuoteItem } from '../../types';
 import { formatBRL } from '../../utils/formatters';
 import {
   itemValorFinal,
@@ -22,6 +22,7 @@ import { EditorDeMateriais } from '../estoque/EditorDeMateriais';
 import { CampoTinta, INPUT_TINTA } from '../common/Tinta';
 import { OpcaoLigavel, PrefixoReais } from './PecasDoOrcamento';
 import { ListaSuspensa } from '../common/ListaSuspensa';
+import { EscolhaDoFoco } from '../common/EscolhaDoFoco';
 
 interface QuoteItemEditorProps {
   item: QuoteItem;
@@ -45,6 +46,8 @@ interface QuoteItemEditorProps {
    * por padrão (o olho no topo da seção liga): o orçamento costuma ser montado com a cliente perto.
    */
   mostrarCustos: boolean;
+  /** O procedimento do catálogo por trás do item — é dele que vêm os focos. */
+  procedimento?: Procedure;
 }
 
 /** Campos numéricos guardam o texto digitado para não travar em "0" enquanto se apaga. */
@@ -65,6 +68,7 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
   onMudarConsumo,
   onRecalcularConsumo,
   mostrarCustos,
+  procedimento,
 }) => {
   const [valorTabelaStr, setValorTabelaStr] = useState(numeroDigitado(item.valorTabela));
   const [valorDescontoStr, setValorDescontoStr] = useState(numeroDigitado(item.valorComDesconto));
@@ -163,6 +167,14 @@ export const QuoteItemEditor: React.FC<QuoteItemEditorProps> = ({
       </div>
 
       <div className="flex flex-col gap-4 sm:pl-11">
+        {/* O foco / aplicação do procedimento — sai no documento junto do nome. */}
+        {!produto && (
+          <EscolhaDoFoco
+            procedimento={procedimento}
+            valor={item.foco}
+            onMudar={(foco) => patch({ foco })}
+          />
+        )}
         {/* Produto: quantidade × valor de uma unidade. Sem profissional — ninguém "realiza" um produto. */}
         {produto ? (
           <div className="grid grid-cols-2 gap-2.5">

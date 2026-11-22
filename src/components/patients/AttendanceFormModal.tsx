@@ -28,6 +28,7 @@ import {
   isoParaData,
 } from '../common/MaskedDateTimeInput';
 import { ProcedureSearchSelect } from '../common/ProcedureSearchSelect';
+import { EscolhaDoFoco } from '../common/EscolhaDoFoco';
 import { CampoDeDataComCalendario } from '../common/CampoDeDataComCalendario';
 import { PatientSearchSelect } from '../quotes/PatientSearchSelect';
 import {
@@ -214,6 +215,8 @@ interface LinhaDeProcedimento {
   chave: string;
   procedureId?: string;
   procedimentoNome: string;
+  /** O foco / aplicação escolhido para este procedimento — ver `Procedure.focos`. */
+  foco?: string;
   /** O plano que veio de fora: o do registro editado ou remarcado, ou o do "+ adicionar sessão". */
   planoDeOrigemId?: string;
   /** "Desvincular" tocado: fica avulso mesmo havendo plano aberto do mesmo procedimento. */
@@ -222,11 +225,12 @@ interface LinhaDeProcedimento {
 
 let ultimaChave = 0;
 const linhaDeProcedimento = (
-  p: Partial<Pick<LinhaDeProcedimento, 'procedureId' | 'procedimentoNome' | 'planoDeOrigemId'>> = {}
+  p: Partial<Pick<LinhaDeProcedimento, 'procedureId' | 'procedimentoNome' | 'planoDeOrigemId' | 'foco'>> = {}
 ): LinhaDeProcedimento => ({
   chave: `proc-${++ultimaChave}`,
   procedureId: p.procedureId,
   procedimentoNome: p.procedimentoNome || '',
+  foco: p.foco,
   planoDeOrigemId: p.planoDeOrigemId,
 });
 
@@ -320,6 +324,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
           linhaDeProcedimento({
             procedureId: p.procedureId,
             procedimentoNome: p.procedimentoNome,
+            foco: p.foco,
             planoDeOrigemId: (i === 0 && planoFixoId) || p.planoId,
           })
         )
@@ -663,10 +668,19 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
     trocarProcedimentos(
       procedimentos.map((l) =>
         l.chave === chave
-          ? { ...l, procedureId: escolha.procedureId, procedimentoNome: escolha.procedimentoNome }
+          ? {
+              ...l,
+              procedureId: escolha.procedureId,
+              procedimentoNome: escolha.procedimentoNome,
+              // O foco é do procedimento: trocado o procedimento, o foco de antes não vale.
+              foco: escolha.procedureId === l.procedureId ? l.foco : undefined,
+            }
           : l
       )
     );
+
+  const mudarFoco = (chave: string, foco: string | undefined) =>
+    setProcedimentos((atual) => atual.map((l) => (l.chave === chave ? { ...l, foco } : l)));
 
   const adicionarProcedimento = () => {
     const nova = linhaDeProcedimento();
@@ -777,6 +791,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         .map((linha, i) => ({
           procedureId: linha.procedureId,
           procedimentoNome: linha.procedimentoNome.trim(),
+          ...(linha.foco ? { foco: linha.foco } : {}),
           planoId:
             planoNovo && linha.chave === alvoDoPlanoNovo?.chave
               ? planoNovo.id
@@ -796,6 +811,7 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
         duracaoMin,
         procedureId: principalDaVisita.procedureId,
         procedimentoNome: principalDaVisita.procedimentoNome,
+        foco: principalDaVisita.foco,
         planoId: principalDaVisita.planoId,
         procedimentosAdicionais: adicionais.length > 0 ? adicionais : undefined,
         professionalId: professionalId || undefined,
@@ -973,18 +989,26 @@ export const AttendanceFormModal: React.FC<AttendanceFormModalProps> = ({
             um agendamento só: a duração soma, e cada um entra no plano dele. */}
         <div className="flex flex-col gap-2">
           {procedimentos.map((linha, i) => (
-            <ProcedureSearchSelect
-              key={linha.chave}
-              id={i === 0 ? 'atendimento-procedimento' : `atendimento-${linha.chave}`}
-              rotulo={procedimentos.length > 1 ? `${i + 1}º procedimento` : 'Procedimento'}
-              procedures={procedures}
-              procedureId={linha.procedureId}
-              nome={linha.procedimentoNome}
-              onSelect={(escolha) => mudarProcedimento(linha.chave, escolha)}
-              onRemover={i > 0 ? () => removerProcedimento(linha.chave) : undefined}
-              autoFocus={linha.chave === linhaEmFoco}
-              erro={i === 0 ? erros.procedimento : undefined}
-            />
+            <React.Fragment key={linha.chave}>
+              <ProcedureSearchSelect
+                id={i === 0 ? 'atendimento-procedimento' : `atendimento-${linha.chave}`}
+                rotulo={procedimentos.length > 1 ? `${i + 1}º procedimento` : 'Procedimento'}
+                procedures={procedures}
+                procedureId={linha.procedureId}
+                nome={linha.procedimentoNome}
+                onSelect={(escolha) => mudarProcedimento(linha.chave, escolha)}
+                onRemover={i > 0 ? () => removerProcedimento(linha.chave) : undefined}
+                autoFocus={linha.chave === linhaEmFoco}
+                erro={i === 0 ? erros.procedimento : undefined}
+              />
+              {/* O foco / aplicação, quando o procedimento tem — na Avaliação, o que ela avalia. */}
+              <EscolhaDoFoco
+                className="px-1 pb-1"
+                procedimento={procedures.find((c) => c.id === linha.procedureId)}
+                valor={linha.foco}
+                onMudar={(foco) => mudarFoco(linha.chave, foco)}
+              />
+            </React.Fragment>
           ))}
           {partesDaDuracao.length > 1 && (
             <p className="px-1 text-[13px] text-ink-soft leading-snug">

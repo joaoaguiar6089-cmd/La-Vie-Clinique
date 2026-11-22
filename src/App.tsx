@@ -11,8 +11,6 @@ import { PublicAnamnesisEntry } from './components/anamnesis/PublicAnamnesisEntr
 import { QuotesPanel } from './components/quotes/QuotesPanel';
 import { RecibosProvider } from './components/recibos/RecibosContext';
 import { ProvedorDaMarcaDosDocumentos } from './components/documentos/MarcaDosDocumentos';
-import { EvaluationsModule } from './components/evaluations/EvaluationsModule';
-import { EmissaoDeAvaliacao } from './components/evaluations/EmissaoDeAvaliacao';
 import { AcompanhamentoModule } from './components/acompanhamento/AcompanhamentoModule';
 import { NovoRelatorio } from './components/acompanhamento/NovoRelatorio';
 import { EstoqueModule } from './components/estoque/EstoqueModule';
@@ -51,6 +49,7 @@ import { mapearTemplatesPorProcedimento } from './utils/templateMatching';
 import { OrigemDaVisita, sementeDaVisita, sementeDoAgendamento } from './utils/passosDaJornada';
 import { hojeISO } from './utils/attendances';
 import { AbaDasFichas, ehAbaDasFichas } from './utils/abasDasFichas';
+import { ehAvaliacao, PROCEDIMENTO_AVALIACAO_ID } from './utils/procedimentoAvaliacao';
 import type { AlvoDoPasso } from './components/linhaDoTempo/PainelDoEvento';
 import { SAMPLE_PROCEDURES, DEFAULT_CLINIC_PROFILE, INITIAL_CATEGORIES } from './data/initialData';
 import { PERFIL_EM_BRANCO } from './data/exemplosZulia';
@@ -70,8 +69,6 @@ import {
   salvarEnderecoPublicoDaClinica,
   replaceAllProceduresWithOfficialPdfCatalog,
   subscribeToAnamnesisTemplates,
-  subscribeToEvaluationTemplates,
-  subscribeToEvaluationGeneralQuestions,
   subscribeToAttendances,
   subscribeToRespostasPendentes,
   aplicarRespostaDoLink,
@@ -301,12 +298,9 @@ function MainCatalogApp() {
 
   /**
    * Atendimentos e pacientes sobem para cá porque a tela Hoje, a agenda e o selo da agenda no
-   * menu precisam deles estando o usuário em qualquer tela. As fichas de avaliação vêm junto
-   * porque a seção delas as recebe prontas. As assinaturas são compartilhadas
+   * menu precisam deles estando o usuário em qualquer tela. As assinaturas são compartilhadas
    * (`subscribeShared`), então quem já as consumia adiante continua sem pagar leitura nova.
    */
-  const [evaluationTemplates, setEvaluationTemplates] = useState<EvaluationTemplate[]>([]);
-  const [evaluationGerais, setEvaluationGerais] = useState<AnamnesisQuestion[]>([]);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [allPatients, setAllPatients] = useState<Patient[]>([]);
   /**
@@ -336,8 +330,7 @@ function MainCatalogApp() {
    * e o formulário não reabriria.
    */
   const [anamnesisRequest, setAnamnesisRequest] = useState<AnamnesisOpenRequest | null>(null);
-  /** "Criar → Nova avaliação" e "Criar → Novo relatório": abrem por cima da tela em que se está. */
-  const [emitindoAvaliacao, setEmitindoAvaliacao] = useState(false);
+  /** "Criar → Novo relatório": abre por cima da tela em que se está. */
   const [criandoRelatorio, setCriandoRelatorio] = useState(false);
 
   /**
@@ -384,7 +377,21 @@ function MainCatalogApp() {
     if (acao === 'agendamento') navegar({ view: 'agenda', criarNovo: true });
     else if (acao === 'paciente') navegar({ view: 'patients', criarNovo: true });
     else if (acao === 'orcamento') navegar({ view: 'quotes', criarNovo: true });
-    else if (acao === 'avaliacao') setEmitindoAvaliacao(true);
+    // A avaliação é um atendimento do procedimento fixo Avaliação: agenda-se como qualquer outro,
+    // e a ficha dela é o relatório desse atendimento.
+    else if (acao === 'avaliacao')
+      navegar({
+        view: 'agenda',
+        criarNovo: true,
+        sementeDoAtendimento: sementeDoAgendamento({
+          pacienteNome: '',
+          tratamento: {
+            procedureId: PROCEDIMENTO_AVALIACAO_ID,
+            procedimentoNome: procedures.find(ehAvaliacao)?.title || 'Avaliação',
+          },
+          professionalId: currentProfessional?.id,
+        }),
+      });
     else if (acao === 'relatorio') setCriandoRelatorio(true);
     else {
       // A ficha de anamnese nasce sem procedimento escolhido: quem escolhe é o formulário.
@@ -629,16 +636,10 @@ function MainCatalogApp() {
     return unsubscribe;
   }, [painelLiberado]);
 
-  // Avaliações: fichas-modelo, perguntas gerais, atendimentos e pacientes.
+  // Atendimentos, pacientes e orçamentos.
   useEffect(() => {
     if (!painelLiberado) return;
     const unsubs = [
-      subscribeToEvaluationTemplates(setEvaluationTemplates, (err) => {
-        if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
-      }),
-      subscribeToEvaluationGeneralQuestions(setEvaluationGerais, (err) => {
-        if (isQuotaOrOfflineError(err)) setIsQuotaExceeded(true);
-      }),
       subscribeToAttendances(
         (data) => {
           setAttendances(data);
@@ -861,7 +862,7 @@ function MainCatalogApp() {
 
   const handleDeleteProcedure = (id: string) => {
     const proc = procedures.find((p) => p.id === id);
-    if (!proc) return;
+    if (!proc || ehAvaliacao(proc)) return;
 
     setConfirmacao({
       titulo: `Remover "${proc.title}"?`,
@@ -904,6 +905,7 @@ function MainCatalogApp() {
   };
 
   const handleDuplicateProcedure = async (procedure: Procedure) => {
+    if (ehAvaliacao(procedure)) return;
     const duplicated: Procedure = {
       ...procedure,
       id: `proc-${Date.now()}`,
@@ -1270,15 +1272,14 @@ function MainCatalogApp() {
                 <EstoqueModule catalogProcedures={procedures} autor={autorDoLogin} />
               </div>
             ) : ehAbaDasFichas(currentView) ? (
-              /* As três fichas da paciente numa tela só, "Fichas", com as abas no topo: anamnese
-                 (o histórico de saúde), avaliação (antes do procedimento) e relatório (depois do
-                 atendimento). No menu é um item só; cada aba continua sendo a seção que era. */
+              /* As fichas da paciente numa tela só, "Fichas", com as abas no topo: anamnese (o
+                 histórico de saúde) e relatório (o registro de cada atendimento — inclusive o da
+                 Avaliação). No menu é um item só; cada aba continua sendo a seção que era. */
               <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-6 lg:pt-8 pb-6 flex flex-col gap-4">
                 <TituloDaTela titulo="Fichas" />
                 <AbasSublinhadas
                   abas={[
                     { id: 'anamnesis' as const, rotulo: 'Anamneses' },
-                    { id: 'evaluations' as const, rotulo: 'Avaliações' },
                     { id: 'acompanhamento' as const, rotulo: 'Relatórios' },
                   ]}
                   ativa={currentView}
@@ -1294,16 +1295,6 @@ function MainCatalogApp() {
                     templates={anamnesisTemplates}
                     openRequest={anamnesisRequest}
                     onOpenRequestHandled={() => setAnamnesisRequest(null)}
-                  />
-                ) : currentView === 'evaluations' ? (
-                  <EvaluationsModule
-                    clinicProfile={clinic}
-                    catalogProcedures={procedures}
-                    fichas={evaluationTemplates}
-                    pacientes={allPatients}
-                    professionals={clinic.professionals || []}
-                    gerais={evaluationGerais}
-                    currentProfessionalId={currentProfessional?.id}
                   />
                 ) : (
                   <AcompanhamentoModule
@@ -1480,17 +1471,8 @@ function MainCatalogApp() {
           onAcaoRapida={acaoRapida}
         />
 
-        {/* 7. "Criar → Nova avaliação" e "Criar → Novo relatório". Sempre montados: são eles que
-            guardam a ficha em preenchimento depois de o painel de escolha fechar. */}
-        <EmissaoDeAvaliacao
-          aberto={emitindoAvaliacao}
-          onFechar={() => setEmitindoAvaliacao(false)}
-          pacientes={allPatients}
-          catalogo={procedures}
-          professionals={clinic.professionals || []}
-          clinic={clinic}
-          professionalIdPadrao={currentProfessional?.id}
-        />
+        {/* 7. "Criar → Novo relatório". Sempre montado: é ele que guarda a ficha em
+            preenchimento depois de o painel de escolha fechar. */}
         <NovoRelatorio
           aberto={criandoRelatorio}
           onFechar={() => setCriandoRelatorio(false)}

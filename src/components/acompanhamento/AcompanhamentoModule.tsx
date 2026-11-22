@@ -60,6 +60,7 @@ export const AcompanhamentoModule: React.FC<AcompanhamentoModuleProps> = ({
   const [criarFichaPara, setCriarFichaPara] = useState<{
     procedureId?: string;
     procedimentoNome: string;
+    foco?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -78,7 +79,7 @@ export const AcompanhamentoModule: React.FC<AcompanhamentoModuleProps> = ({
     };
   }, []);
 
-  const irParaCadastroDeFicha = (alvo: { procedureId?: string; procedimentoNome: string }) => {
+  const irParaCadastroDeFicha = (alvo: { procedureId?: string; procedimentoNome: string; foco?: string }) => {
     setAberto(null);
     setCriarFichaPara(alvo);
     setAba('fichas');

@@ -9,6 +9,7 @@ import { JANELAS_DA_LISTA, ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fic
 import { subscribeToRegistrosDeFicha } from '../../services/databaseService';
 import { SkeletonLista } from '../common/Skeleton';
 import { Avatar, CampoDeBusca, Chip } from '../common/Tinta';
+import { nomeComFoco } from '../../utils/procedimentoAvaliacao';
 
 interface ListaDeFichasProps {
   tipo: TipoDeFicha;
@@ -60,7 +61,7 @@ export const ListaDeFichas: React.FC<ListaDeFichasProps> = ({ tipo, descricao, a
     const termo = chaveDeNome(busca).trim();
     if (!termo) return registros;
     return registros.filter((r) =>
-      [r.pacienteNome, r.procedimentoNome, r.profissionalNome].some((campo) =>
+      [r.pacienteNome, r.procedimentoNome, r.foco, r.profissionalNome].some((campo) =>
         chaveDeNome(campo).includes(termo)
       )
     );
@@ -138,7 +139,7 @@ export const ListaDeFichas: React.FC<ListaDeFichasProps> = ({ tipo, descricao, a
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="inline-flex items-center px-3 py-1.5 rounded-[10px] bg-cream text-[#5B3E25] text-[14px] font-semibold">
-                    {r.procedimentoNome}
+                    {nomeComFoco(r.procedimentoNome, r.foco)}
                   </span>
                   {comFoto && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-line-soft text-ink-soft text-[12px] font-bold">

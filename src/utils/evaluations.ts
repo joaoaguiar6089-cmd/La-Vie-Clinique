@@ -17,6 +17,7 @@ import {
 } from './templateMatching';
 import { paraArray } from './firestoreShapes';
 import { ehRealizado, hojeISO, procedimentosDoAtendimento } from './attendances';
+import { mesmoFoco } from './procedimentoAvaliacao';
 
 /**
  * As regras das fichas clínicas: qual ficha-modelo vale para cada procedimento, e o que uma
@@ -55,7 +56,23 @@ export const procedimentoDoAtendimento = (
 };
 
 /**
- * A ficha de avaliação de um atendimento — **específica primeiro, categoria depois**.
+ * Os focos em que a ficha vale para um procedimento — `[]` = vale para todos.
+ * Ver `EvaluationTemplate.focosPorProcedimento`.
+ */
+export const focosDaFichaNoProcedimento = (
+  ficha: Pick<EvaluationTemplate, 'focosPorProcedimento'>,
+  procedureId: string
+): string[] => {
+  const mapa = ficha.focosPorProcedimento;
+  if (!mapa || typeof mapa !== 'object') return [];
+  return paraArray<string>((mapa as Record<string, unknown>)[procedureId]).filter(
+    (f) => typeof f === 'string' && !!f.trim()
+  );
+};
+
+/**
+ * A ficha-modelo de um atendimento — **específica primeiro, categoria depois**; e, dentro da
+ * específica, **a do foco primeiro**.
  *
  * A ordem é o contrário de `mapearTemplatesPorProcedimento`, onde o laser resolve por categoria
  * antes do vínculo direto. Lá está certo: as treze fichas por área estavam sendo aposentadas de
@@ -63,11 +80,15 @@ export const procedimentoDoAtendimento = (
  * se deu ao trabalho de criar ficha para uma área só quis sobrepor a da categoria, e a regra
  * geral perder para a exceção é o que torna a exceção possível.
  *
+ * O foco segue a mesma lógica: a ficha da "Harmonização Glútea · Trocanter" vence a da
+ * Harmonização Glútea sem foco. Ficha restrita a outros focos não vale — é o que distingue o
+ * relatório da avaliação de glúteo do da avaliação de laser, as duas no procedimento Avaliação.
+ *
  * Devolve `undefined` quando não há ficha: a tela mostra observações e um atalho para cadastrar,
  * nunca um vazio sem saída.
  */
 export const fichaDeAvaliacaoPara = (
-  alvo: { procedureId?: string; procedimentoNome: string },
+  alvo: { procedureId?: string; procedimentoNome: string; foco?: string },
   fichas: EvaluationTemplate[],
   catalogo: Procedure[]
 ): EvaluationTemplate | undefined => {
@@ -76,8 +97,15 @@ export const fichaDeAvaliacaoPara = (
 
   const idAlvo = proc?.id || alvo.procedureId;
   if (idAlvo) {
-    const especifica = lista.find((f) => (f.procedureIds || []).includes(idAlvo));
-    if (especifica) return especifica;
+    const especificas = lista.filter((f) => (f.procedureIds || []).includes(idAlvo));
+    if (alvo.foco) {
+      const doFoco = especificas.find((f) =>
+        focosDaFichaNoProcedimento(f, idAlvo).some((x) => mesmoFoco(x, alvo.foco))
+      );
+      if (doFoco) return doFoco;
+    }
+    const semFoco = especificas.find((f) => focosDaFichaNoProcedimento(f, idAlvo).length === 0);
+    if (semFoco) return semFoco;
   }
 
   const catAlvo = chaveDeCategoria(proc?.category);
