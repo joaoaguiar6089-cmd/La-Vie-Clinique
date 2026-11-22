@@ -1,5 +1,6 @@
 import { Attendance, EvaluationRecord, Patient, ProcedimentoDaVisita } from '../types';
 import { ehRealizado, hojeISO } from './attendances';
+import { focosDe } from './procedimentoAvaliacao';
 
 /**
  * As duas fichas clínicas da profissional — avaliação e acompanhamento — e o que as distingue.
@@ -176,10 +177,10 @@ export interface AlvoDaFicha {
   procedureId?: string;
   procedimentoNome: string;
   /**
-   * O foco / aplicação do atendimento (`Attendance.foco`) — escolhe a ficha-modelo do relatório.
-   * Na Avaliação, é o procedimento que a cliente veio avaliar.
+   * Os focos / aplicações do atendimento (`Attendance.focos`) — escolhem as fichas-modelo do
+   * relatório. Na Avaliação, os procedimentos que a cliente veio avaliar.
    */
-  foco?: string;
+  focos?: string[];
   /**
    * Os outros procedimentos da visita (`Attendance.procedimentosAdicionais`). A ficha continua
    * sendo do principal; estes servem aos materiais, que sugerem o consumo de todos.
@@ -211,7 +212,7 @@ export const alvoDoAtendimento = (a: Attendance): AlvoDaFicha => ({
   pacienteNome: a.pacienteNome,
   procedureId: a.procedureId,
   procedimentoNome: a.procedimentoNome,
-  foco: a.foco,
+  focos: focosDe(a),
   procedimentosAdicionais: a.procedimentosAdicionais,
   data: a.data,
   professionalId: a.professionalId,
@@ -226,7 +227,7 @@ export const alvoDoRegistro = (r: EvaluationRecord): AlvoDaFicha => ({
   pacienteNome: r.pacienteNome,
   procedureId: r.procedureId,
   procedimentoNome: r.procedimentoNome,
-  foco: r.foco,
+  focos: focosDe(r),
   data: (r.dataAtendimento || '').slice(0, 10),
   professionalId: r.professionalId,
   profissionalNome: r.profissionalNome,

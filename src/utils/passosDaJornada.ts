@@ -7,7 +7,7 @@ import {
   instanteDoAtendimento,
   mesmoProcedimento,
 } from './attendances';
-import { ehAvaliacao } from './procedimentoAvaliacao';
+import { ehAvaliacao, focosDe } from './procedimentoAvaliacao';
 import { acompanhamentoComRegistro, atendimentoAconteceu } from './fichasClinicas';
 import { mapearTemplatesPorProcedimento } from './templateMatching';
 
@@ -32,8 +32,8 @@ export interface Tratamento {
    * antigas guardam o id da ficha no lugar do procedimento, e só por ela o vínculo aparece.
    */
   templateId?: string;
-  /** O foco / aplicação — na Avaliação, o que ela avalia. Vai semeado no agendamento. */
-  foco?: string;
+  /** Os focos / aplicações — na Avaliação, o que ela avalia. Vão semeados no agendamento. */
+  focos?: string[];
 }
 
 /** O que o painel precisa saber da paciente, além do próprio evento. */
@@ -178,8 +178,9 @@ export const anamnesesDoOrcamento = (q: Quote, contexto: ContextoDaJornada): Ana
 // ANAMNESE → AVALIAÇÃO
 // ==========================================
 
-/** O tratamento sob avaliação num atendimento de Avaliação: o foco dele. */
-const tratamentoAvaliado = (a: Attendance): Tratamento => ({ procedimentoNome: a.foco || '' });
+/** Os tratamentos sob avaliação num atendimento de Avaliação: um por foco. */
+const tratamentosAvaliados = (a: Attendance): Tratamento[] =>
+  focosDe(a).map((foco) => ({ procedimentoNome: foco }));
 
 /**
  * A Avaliação da anamnese — o atendimento do procedimento Avaliação, agendado ou feito, a partir
@@ -204,8 +205,8 @@ export const avaliacaoDaAnamnese = (
       (ehRealizado(a) || ehPendente(a))
   );
   const peso = (a: Attendance): number => {
-    if (a.foco && mesmoTratamento(tratamento, tratamentoAvaliado(a), fichaPorProcedimento)) return 0;
-    if (!a.foco) return 1;
+    if (tratamentosAvaliados(a).some((t) => mesmoTratamento(tratamento, t, fichaPorProcedimento))) return 0;
+    if (focosDe(a).length === 0) return 1;
     return 2;
   };
   return candidatas
@@ -276,7 +277,7 @@ export const sementeDoAgendamento = (alvo: {
   data: '',
   procedureId: alvo.tratamento?.procedureId,
   procedimentoNome: alvo.tratamento?.procedimentoNome || '',
-  foco: alvo.tratamento?.foco,
+  focos: alvo.tratamento?.focos?.length ? alvo.tratamento.focos : undefined,
   professionalId: alvo.professionalId,
   createdAt: '',
 });

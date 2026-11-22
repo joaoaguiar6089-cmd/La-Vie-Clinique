@@ -94,8 +94,16 @@ import {
   situacaoDoLink,
 } from '../utils/agendamentoLink';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../utils/fichasClinicas';
+import { minutosDoHHMM } from '../utils/agenda';
+import {
+  deslocarHora,
+  membrosDaVisita,
+  novoGrupoId,
+  visitaComoUmAtendimento,
+} from '../utils/visitas';
 import {
   ehAvaliacao,
+  focosDe,
   focosDoProcedimento,
   limparCamposDaAvaliacao,
   PROCEDIMENTO_AVALIACAO_ID,
@@ -2953,11 +2961,14 @@ export function subscribeToAttendances(
   );
 }
 
-export async function saveAttendance(
+/**
+ * O documento de um atendimento como ele vai para o banco, com os campos que precisam ser
+ * apagados de propósito (a gravação é `merge: true`, onde um campo ausente fica como estava).
+ */
+function dadosDoAtendimento(
   attendance: Attendance,
   opcoes?: { limparConfirmacao?: boolean }
-): Promise<void> {
-  const docRef = documentoDaClinica(ATTENDANCES_COLLECTION, attendance.id);
+): Record<string, unknown> {
   const dataToSave: Record<string, unknown> = cleanForFirestore({
     ...attendance,
     updatedAt: new Date().toISOString(),
@@ -2985,14 +2996,84 @@ export async function saveAttendance(
   }
   // Pelo mesmo motivo, o "Desvincular" do plano no formulário só vale se o campo for apagado.
   if (!attendance.planoId) dataToSave.planoId = deleteField();
+  // Os focos vão sempre como lista (o `foco` único de antes vira lista na primeira gravação), e
+  // tirar o último apaga o campo.
+  const focos = focosDe(attendance);
+  dataToSave.focos = focos.length > 0 ? focos : deleteField();
+  dataToSave.foco = deleteField();
+  return dataToSave;
+}
+
+export async function saveAttendance(
+  attendance: Attendance,
+  opcoes?: { limparConfirmacao?: boolean }
+): Promise<void> {
+  const docRef = documentoDaClinica(ATTENDANCES_COLLECTION, attendance.id);
   // Com confirmação do servidor por causa da agenda: uma gravação barrada pela cota fica na fila
   // local e a promise nunca resolve, então a tela mostraria o horário reservado sem que nada
   // tivesse chegado ao banco — e a recepção marcaria outra paciente em cima.
-  await comConfirmacaoDoServidor(setDoc(docRef, dataToSave, { merge: true }), 'do atendimento');
+  await comConfirmacaoDoServidor(
+    setDoc(docRef, dadosDoAtendimento(attendance, opcoes), { merge: true }),
+    'do atendimento'
+  );
   await sincronizarLinkDoAtendimento(
     attendance,
     opcoes?.limparConfirmacao ? apagarRespostaDoLink() : {}
   );
+}
+
+/**
+ * Grava a visita inteira — um atendimento por procedimento (`utils/visitas.ts`) — num lote só, e o
+ * link da cliente uma vez, com todos. `removidos` são os atendimentos da visita que saíram no
+ * formulário (o procedimento tirado da lista): saem com o relatório e os materiais deles.
+ */
+export async function salvarVisita(
+  registros: Attendance[],
+  opcoes?: { limparConfirmacao?: boolean; removidos?: Attendance[] }
+): Promise<void> {
+  if (registros.length === 0) return;
+  const batch = writeBatch(db);
+  registros.forEach((r) => {
+    batch.set(
+      documentoDaClinica(ATTENDANCES_COLLECTION, r.id),
+      dadosDoAtendimento(r, { limparConfirmacao: opcoes?.limparConfirmacao }),
+      { merge: true }
+    );
+  });
+  await comConfirmacaoDoServidor(batch.commit(), 'do atendimento');
+  for (const removido of opcoes?.removidos || []) {
+    await deleteAttendance(removido, { semLink: true });
+  }
+  await sincronizarLinkDoAtendimento(
+    registros[0],
+    opcoes?.limparConfirmacao ? apagarRespostaDoLink() : {},
+    registros
+  );
+}
+
+/**
+ * Os atendimentos da visita de `a`, lidos do banco (os vivos, ou os remarcados, como ele), na
+ * ordem da visita. Sem grupo, é ele só. É o que deixa o link, a remarcação e a exclusão tratarem a
+ * visita inteira sem quem chama precisar ter a lista à mão.
+ */
+async function membrosDaVisitaNoBanco(a: Attendance): Promise<Attendance[]> {
+  if (!a.grupoId) return [a];
+  try {
+    const snap = await getDocs(
+      query(colecaoDaClinica(ATTENDANCES_COLLECTION), where('grupoId', '==', a.grupoId))
+    );
+    const lista: Attendance[] = [];
+    snap.forEach((d) => lista.push(d.id === a.id ? a : { ...(d.data() as Attendance), id: d.id }));
+    return membrosDaVisita(a, lista);
+  } catch (e) {
+    console.warn('Não foi possível ler os outros atendimentos da visita:', e);
+    return [a];
+  }
+}
+
+/** A visita de `a` como um atendimento só — o que a mensagem do WhatsApp mostra à cliente. */
+export async function visitaDoAtendimento(a: Attendance): Promise<Attendance> {
+  return visitaComoUmAtendimento(await membrosDaVisitaNoBanco(a));
 }
 
 /**
@@ -3002,7 +3083,10 @@ export async function saveAttendance(
  * entra no lote quando a marca diz que ele existe. Apagar às cegas um documento de uma coleção
  * cuja regra ainda não foi publicada derrubaria o lote inteiro — e a visita junto.
  */
-export async function deleteAttendance(atendimento: Attendance): Promise<void> {
+export async function deleteAttendance(
+  atendimento: Attendance,
+  opcoes?: { semLink?: boolean }
+): Promise<void> {
   if (atendimento.materiaisRegistradosEm) await devolverAoEstoqueAntesDeApagar(atendimento.id);
   const batch = writeBatch(db);
   batch.delete(documentoDaClinica(ATTENDANCES_COLLECTION, atendimento.id));
@@ -3020,7 +3104,15 @@ export async function deleteAttendance(atendimento: Attendance): Promise<void> {
 
   // O link fica de fora do lote: o token só existe em quem já o compartilhou, e um documento
   // ausente ou uma regra ainda não publicada não podem impedir a exclusão da visita.
-  if (atendimento.linkToken) {
+  if (atendimento.linkToken && !opcoes?.semLink) {
+    // Da visita com mais de um procedimento, o link continua com os que ficaram.
+    const restantes = (await membrosDaVisitaNoBanco(atendimento)).filter(
+      (m) => m.id !== atendimento.id && m.linkToken === atendimento.linkToken
+    );
+    if (restantes.length > 0) {
+      await sincronizarLinkDoAtendimento(restantes[0], {}, restantes);
+      return;
+    }
     try {
       await comConfirmacaoDoServidor(
         deleteDoc(documentoDaClinica(APPOINTMENT_LINKS_COLLECTION, atendimento.linkToken)),
@@ -3113,15 +3205,30 @@ export function subscribeToSessionPlans(
 export async function remarcarAtendimento(
   original: Attendance,
   destino: { data: string; hora: string },
-  opcoes?: { aprovacaoDePedido?: boolean }
+  opcoes?: {
+    aprovacaoDePedido?: boolean;
+    /** O destino é o do começo da visita (o pedido da cliente), e não o deste atendimento. */
+    doInicioDaVisita?: boolean;
+  }
 ): Promise<Attendance> {
   const agora = new Date().toISOString();
 
-  const novo: Attendance = {
-    ...original,
-    id: `atd-${Date.now()}`,
+  // A visita inteira muda de horário, mantendo um procedimento depois do outro: o destino vale
+  // para este atendimento (ou para o começo da visita), e os outros andam o mesmo tanto.
+  const membros = (await membrosDaVisitaNoBanco(original)).filter((m) => m.status === original.status);
+  const base = opcoes?.doInicioDaVisita ? membros[0] : membros.find((m) => m.id === original.id) || original;
+  const inicioBase = minutosDoHHMM(base.hora);
+  const inicioDestino = minutosDoHHMM(destino.hora);
+  const desloca = inicioBase !== null && inicioDestino !== null ? inicioDestino - inicioBase : null;
+  const grupoNovo = membros.length > 1 ? novoGrupoId() : undefined;
+  const carimbo = Date.now();
+
+  const novos: Attendance[] = membros.map((m, i) => ({
+    ...m,
+    id: membros.length > 1 ? `atd-${carimbo}-${i}` : `atd-${carimbo}`,
+    grupoId: grupoNovo,
     data: destino.data,
-    hora: destino.hora,
+    hora: desloca !== null ? deslocarHora(m.hora, desloca) : destino.hora,
     status: 'agendado',
     // O desfecho, o acompanhamento, os materiais e a confirmação pertencem à visita que não
     // aconteceu. A paciente confirmou o horário antigo; o novo nasce a confirmar, como qualquer
@@ -3141,28 +3248,36 @@ export async function remarcarAtendimento(
     googleAgenda: undefined,
     createdAt: agora,
     updatedAt: agora,
-  };
+  }));
 
   const batch = writeBatch(db);
-  batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, original.id), {
-    status: 'remarcado',
-    updatedAt: agora,
-    // Estado final: o token e as respostas da paciente seguem com o agendamento novo.
-    linkToken: deleteField(),
-    avisoAusenciaEm: deleteField(),
-    pedidoRemarcacao: deleteField(),
+  membros.forEach((m) => {
+    batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, m.id), {
+      status: 'remarcado',
+      updatedAt: agora,
+      // Estado final: o token e as respostas da paciente seguem com o agendamento novo.
+      linkToken: deleteField(),
+      avisoAusenciaEm: deleteField(),
+      pedidoRemarcacao: deleteField(),
+    });
   });
-  batch.set(documentoDaClinica(ATTENDANCES_COLLECTION, novo.id), cleanForFirestore(novo), { merge: true });
+  novos.forEach((n) => {
+    batch.set(documentoDaClinica(ATTENDANCES_COLLECTION, n.id), cleanForFirestore(n), { merge: true });
+  });
   await comConfirmacaoDoServidor(batch.commit(), 'da remarcação');
 
-  await sincronizarLinkDoAtendimento(novo, {
-    ...apagarRespostaDoLink(),
-    ...(opcoes?.aprovacaoDePedido
-      ? { decisaoRemarcacao: 'aprovada', decisaoEm: agora }
-      : {}),
-  });
+  await sincronizarLinkDoAtendimento(
+    novos[0],
+    {
+      ...apagarRespostaDoLink(),
+      ...(opcoes?.aprovacaoDePedido
+        ? { decisaoRemarcacao: 'aprovada', decisaoEm: agora }
+        : {}),
+    },
+    novos
+  );
 
-  return novo;
+  return novos[Math.max(0, membros.findIndex((m) => m.id === original.id))];
 }
 
 // ==========================================
@@ -3216,13 +3331,22 @@ function apagarRespostaDoLink(): Record<string, unknown> {
  */
 async function sincronizarLinkDoAtendimento(
   atendimento: Attendance,
-  extra: Record<string, unknown> = {}
+  extra: Record<string, unknown> = {},
+  /** Os atendimentos da visita, quando quem chama já os tem. Ausente: lidos do banco. */
+  membrosConhecidos?: Attendance[]
 ): Promise<void> {
   if (!atendimento.linkToken) return;
   try {
+    // A visita inteira no link: "Harmonização Glútea + Botox", a hora do primeiro e a duração
+    // somada — e os ids de todos, para a resposta da cliente valer para cada um.
+    const membros = (membrosConhecidos || (await membrosDaVisitaNoBanco(atendimento))).filter(
+      (m) => m.id === atendimento.id || m.linkToken === atendimento.linkToken
+    );
+    const visita = visitaComoUmAtendimento(membros.length > 0 ? membros : [atendimento]);
     await comConfirmacaoDoServidor(
       updateDoc(documentoDaClinica(APPOINTMENT_LINKS_COLLECTION, atendimento.linkToken), {
-        ...camposDoLinkDoAtendimento(atendimento),
+        ...camposDoLinkDoAtendimento(visita),
+        attendanceIds: membros.length > 1 ? membros.map((m) => m.id) : deleteField(),
         ...extra,
       }),
       'do link do agendamento'
@@ -3245,12 +3369,23 @@ async function sincronizarLinkDoAtendimento(
  * tocou para enviar precisa saber que o link não funciona.
  */
 export async function garantirLinkDoAgendamento(
-  atendimento: Attendance,
+  atendimentoTocado: Attendance,
   clinic: ClinicProfile,
   catalogo: Procedure[]
 ): Promise<string> {
   const agora = new Date().toISOString();
-  const snapshot = montarSnapshotDoLink(atendimento, clinic, catalogo);
+  // Da visita com mais de um procedimento, um link só para todos: a cópia é da visita inteira, e
+  // todo atendimento dela passa a apontar para o mesmo token.
+  const membros = await membrosDaVisitaNoBanco(atendimentoTocado);
+  const visita = visitaComoUmAtendimento(membros);
+  const atendimento: Attendance = {
+    ...visita,
+    linkToken: atendimentoTocado.linkToken || membros.find((m) => m.linkToken)?.linkToken,
+  };
+  const snapshot = {
+    ...montarSnapshotDoLink(atendimento, clinic, catalogo),
+    attendanceIds: membros.length > 1 ? membros.map((m) => m.id) : undefined,
+  };
 
   const token = atendimento.linkToken || crypto.randomUUID();
   const linkRef = documentoDaClinica(APPOINTMENT_LINKS_COLLECTION, token);
@@ -3270,6 +3405,15 @@ export async function garantirLinkDoAgendamento(
         updateDoc(linkRef, { ...renovacao, updatedAt: agora }),
         'do link do agendamento'
       );
+      // O procedimento que entrou na visita depois de o link existir passa a apontar para ele.
+      const semToken = membros.filter((m) => m.linkToken !== token);
+      if (semToken.length > 0) {
+        const lote = writeBatch(db);
+        semToken.forEach((m) =>
+          lote.update(documentoDaClinica(ATTENDANCES_COLLECTION, m.id), { linkToken: token })
+        );
+        await comConfirmacaoDoServidor(lote.commit(), 'do link do agendamento');
+      }
       return token;
     }
   }
@@ -3284,9 +3428,11 @@ export async function garantirLinkDoAgendamento(
       updatedAt: agora,
     })
   );
-  if (!atendimento.linkToken) {
-    batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, atendimento.id), { linkToken: token });
-  }
+  membros.forEach((m) => {
+    if (m.linkToken !== token) {
+      batch.update(documentoDaClinica(ATTENDANCES_COLLECTION, m.id), { linkToken: token });
+    }
+  });
   await comConfirmacaoDoServidor(batch.commit(), 'do link do agendamento');
   return token;
 }
@@ -3381,17 +3527,21 @@ export async function aplicarRespostaDoLink(link: AppointmentLink): Promise<void
   const batch = writeBatch(db);
 
   if (link.resposta && link.respondidoEm) {
-    const atendimentoRef = documentoDaClinica(ATTENDANCES_COLLECTION, link.attendanceId);
-    const atual = await getDoc(atendimentoRef);
-    const dados = atual.exists() ? (atual.data() as Attendance) : null;
+    // A resposta vale para a visita inteira: todos os atendimentos do link.
+    const ids = link.attendanceIds && link.attendanceIds.length > 0 ? link.attendanceIds : [link.attendanceId];
+    const efeito = efeitoDaResposta(link.resposta, link.respondidoEm);
+    for (const id of ids) {
+      const atendimentoRef = documentoDaClinica(ATTENDANCES_COLLECTION, id);
+      const atual = await getDoc(atendimentoRef);
+      const dados = atual.exists() ? (atual.data() as Attendance) : null;
 
-    if (dados && dados.status === 'agendado' && dados.linkToken === link.id) {
-      const efeito = efeitoDaResposta(link.resposta, link.respondidoEm);
-      const campos: Record<string, unknown> = { ...efeito.gravar, updatedAt: agora };
-      efeito.apagar.forEach((campo) => {
-        campos[campo] = deleteField();
-      });
-      batch.update(atendimentoRef, campos);
+      if (dados && dados.status === 'agendado' && dados.linkToken === link.id) {
+        const campos: Record<string, unknown> = { ...efeito.gravar, updatedAt: agora };
+        efeito.apagar.forEach((campo) => {
+          campos[campo] = deleteField();
+        });
+        batch.update(atendimentoRef, campos);
+      }
     }
   }
 
@@ -3405,13 +3555,16 @@ export async function aplicarRespostaDoLink(link: AppointmentLink): Promise<void
  */
 export async function recusarPedidoDeRemarcacao(atendimento: Attendance): Promise<void> {
   const agora = new Date().toISOString();
-  await comConfirmacaoDoServidor(
-    updateDoc(documentoDaClinica(ATTENDANCES_COLLECTION, atendimento.id), {
+  // O pedido é da visita: sai de todos os atendimentos dela.
+  const membros = (await membrosDaVisitaNoBanco(atendimento)).filter((m) => m.status === atendimento.status);
+  const lote = writeBatch(db);
+  membros.forEach((m) =>
+    lote.update(documentoDaClinica(ATTENDANCES_COLLECTION, m.id), {
       pedidoRemarcacao: deleteField(),
       updatedAt: agora,
-    }),
-    'da recusa'
+    })
   );
+  await comConfirmacaoDoServidor(lote.commit(), 'da recusa');
   await sincronizarLinkDoAtendimento(atendimento, {
     resposta: deleteField(),
     respondidoEm: deleteField(),
@@ -3428,10 +3581,11 @@ export async function recusarPedidoDeRemarcacao(atendimento: Attendance): Promis
 export async function aprovarPedidoDeRemarcacao(atendimento: Attendance): Promise<Attendance> {
   const pedido = atendimento.pedidoRemarcacao;
   if (!pedido) throw new Error('Este agendamento não tem pedido de alteração em aberto.');
+  // O horário que a cliente pediu é o do começo da visita — é o que o link mostrou a ela.
   return remarcarAtendimento(
     atendimento,
     { data: pedido.data, hora: pedido.hora },
-    { aprovacaoDePedido: true }
+    { aprovacaoDePedido: true, doInicioDaVisita: true }
   );
 }
 
@@ -3801,8 +3955,14 @@ export async function saveRegistroDeFicha(
       consumoEstimado.length > 0 ? consumoEstimado.map((m) => cleanForFirestore(m)) : deleteField(),
     // Desmarcar o consumo desfaz o elo com o orçamento (que continua salvo em Orçamentos).
     orcamentoId: registro.orcamentoId || deleteField(),
-    // O foco acompanha o do atendimento: tirado de lá, sai daqui também.
-    foco: registro.foco || deleteField(),
+    // Os focos acompanham os do atendimento: tirados de lá, saem daqui também. O `foco` único de
+    // antes sai sempre — quem lê é `focosDe()`, e a lista passa a ser a verdade.
+    focos: focosDe(registro).length > 0 ? focosDe(registro) : deleteField(),
+    foco: deleteField(),
+    blocosDeFoco:
+      registro.blocosDeFoco && registro.blocosDeFoco.length > 0
+        ? registro.blocosDeFoco.map((b) => cleanForFirestore(b))
+        : deleteField(),
     // Mesma razão: tirar o último grupo extra precisa apagar o campo, não deixá-lo como estava.
     gruposExtras:
       gruposExtras.length > 0 ? gruposExtras.map((g) => cleanForFirestore(g)) : deleteField(),
@@ -4796,7 +4956,7 @@ async function migrarAvaliacoesParaRelatorios(): Promise<void> {
         } else {
           loteDosRegistros.update(documentoDaClinica(ATTENDANCES_COLLECTION, item.relatorio.id), {
             acompanhamentoPreenchidoEm: item.relatorio.preenchidoEm || agora,
-            ...(item.focoNoAtendimentoExistente ? { foco: item.focoNoAtendimentoExistente } : {}),
+            ...(item.focoNoAtendimentoExistente ? { focos: [item.focoNoAtendimentoExistente] } : {}),
             updatedAt: agora,
           });
         }

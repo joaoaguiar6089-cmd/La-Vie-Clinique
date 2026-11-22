@@ -88,35 +88,44 @@ export const focosDoProcedimento = (p?: Pick<Procedure, 'focos'> | null): string
 export const mesmoFoco = (a?: string | null, b?: string | null): boolean =>
   !!a && !!b && chaveDeNome(a) === chaveDeNome(b);
 
-/** "Harmonização Glútea · Trocanter" — o nome com o foco, quando há foco. */
-export const nomeComFoco = (nome: string, foco?: string | null): string => {
-  const f = (foco || '').trim();
-  return f ? `${nome} · ${f}` : nome;
+/**
+ * Os focos de um atendimento, item de orçamento ou relatório: a lista `focos` — ou, em registro de
+ * antes de dar para marcar mais de um, o `foco` único. Sem vazios nem repetidos.
+ */
+export const focosDe = (x?: { focos?: unknown; foco?: unknown } | null): string[] => {
+  if (!x) return [];
+  const lista = Array.isArray(x.focos)
+    ? (x.focos as unknown[])
+    : x.focos && typeof x.focos === 'object'
+    ? Object.values(x.focos as Record<string, unknown>)
+    : [];
+  const brutos = lista.length > 0 ? lista : typeof x.foco === 'string' ? [x.foco] : [];
+  return focosDoProcedimento({ focos: brutos.filter((f): f is string => typeof f === 'string') });
 };
 
-/** O foco da lista, na grafia dela — para gravar "Trocanter" mesmo que tenham digitado "trocanter". */
-export const focoNaGrafiaDaLista = (foco: string | undefined, lista: string[]): string | undefined => {
-  const f = (foco || '').trim();
-  if (!f) return undefined;
-  return lista.find((x) => mesmoFoco(x, f)) || f;
+/** "Harmonização Glútea · Fase 1, Fase 2" — o nome com os focos, quando há. */
+export const nomeComFoco = (nome: string, focos?: string | string[] | null): string => {
+  const lista = (Array.isArray(focos) ? focos : focos ? [focos] : [])
+    .map((f) => (f || '').trim())
+    .filter(Boolean);
+  return lista.length > 0 ? `${nome} · ${lista.join(', ')}` : nome;
 };
+
+/** Algum dos focos é este? */
+export const temFoco = (focos: string[], foco?: string | null): boolean =>
+  !!foco && focos.some((f) => mesmoFoco(f, foco));
 
 /**
- * Do relatório de uma Avaliação, o que foi avaliado — o procedimento do foco, achado no catálogo
- * pelo nome ("Harmonização Glútea"). É sobre ele, e não sobre a Avaliação, que o orçamento montado
- * no relatório nasce. Foco que não é procedimento do catálogo vira item avulso com o nome dele;
- * sem foco, o orçamento começa vazio (como na antiga avaliação personalizada).
+ * Do relatório de uma Avaliação, o que foi avaliado: um procedimento por foco, achado no catálogo
+ * pelo nome ("Harmonização Glútea"). É sobre eles, e não sobre a Avaliação, que o orçamento montado
+ * no relatório nasce — um item por foco. Foco que não é procedimento do catálogo vira item avulso
+ * com o nome dele; sem foco, a lista vem vazia e o orçamento começa sem item.
  */
-export const alvoDoQueFoiAvaliado = <
-  T extends { procedureId?: string; procedimentoNome: string; foco?: string; personalizada?: boolean },
->(
-  alvo: T,
+export const procedimentosAvaliados = (
+  alvo: { focos?: string[]; foco?: string },
   catalogo: Procedure[]
-): T => {
-  const foco = (alvo.foco || '').trim();
-  if (!foco) {
-    return { ...alvo, procedureId: undefined, procedimentoNome: 'o tratamento', foco: undefined, personalizada: true };
-  }
-  const proc = (catalogo || []).find((p) => !ehAvaliacao(p) && chaveDeNome(p.title) === chaveDeNome(foco));
-  return { ...alvo, procedureId: proc?.id, procedimentoNome: proc?.title || foco, foco: undefined };
-};
+): { procedureId?: string; procedimentoNome: string }[] =>
+  focosDe(alvo).map((foco) => {
+    const proc = (catalogo || []).find((p) => !ehAvaliacao(p) && chaveDeNome(p.title) === chaveDeNome(foco));
+    return { procedureId: proc?.id, procedimentoNome: proc?.title || foco };
+  });

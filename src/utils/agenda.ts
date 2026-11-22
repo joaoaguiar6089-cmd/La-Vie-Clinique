@@ -439,7 +439,7 @@ export const conflitosDeSala = (
   if (!meu) return [];
 
   return atendimentos.filter((a) => {
-    if (a.id === candidato.id) return false;
+    if (a.id === candidato.id || candidato.ignorarIds?.includes(a.id)) return false;
     if (a.data !== candidato.data) return false;
     if (a.salaId !== candidato.salaId) return false;
     if (a.status === 'faltou' || a.status === 'remarcado') return false;
@@ -619,6 +619,11 @@ export const distribuirEmColunas = (eventos: EventoDaGrade[]): Map<string, Posic
 export interface CandidatoDeHorario {
   /** Ausente em registro novo; presente na edição, para ele não conflitar consigo mesmo. */
   id?: string;
+  /**
+   * Os outros atendimentos da mesma visita (`Attendance.grupoId`), que o candidato substitui na
+   * edição — eles não conflitam com a visita de que fazem parte.
+   */
+  ignorarIds?: string[];
   data: DataISO;
   hora?: string;
   duracaoMin?: number;
@@ -644,7 +649,7 @@ export const conflitosDe = (
   if (!meu) return [];
 
   return atendimentos.filter((a) => {
-    if (a.id === candidato.id) return false;
+    if (a.id === candidato.id || candidato.ignorarIds?.includes(a.id)) return false;
     if (a.data !== candidato.data) return false;
     if (a.professionalId !== candidato.professionalId) return false;
     if (a.status === 'faltou' || a.status === 'remarcado') return false;

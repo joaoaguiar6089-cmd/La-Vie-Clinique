@@ -34,6 +34,7 @@ import { QuotePreviewModal } from './QuotePreviewModal';
 import { definirClinicaDoLink } from '../../lib/estadoDaClinica';
 import { clinicMonogram } from '../ClinicLogo';
 import { ehZulia } from '../../lib/projetoFirebase';
+import { focosDe } from '../../utils/procedimentoAvaliacao';
 
 const dataCurta = (iso?: string): string => {
   if (!iso) return '';
@@ -253,9 +254,10 @@ export const PublicQuoteEntry: React.FC = () => {
                     {item.titulo}
                   </span>
                 </h2>
-                {item.foco && (
+                {focosDe(item).length > 0 && (
                   <p className="text-xs text-ink-soft mt-1">
-                    Foco: <span className="font-semibold text-ink">{item.foco}</span>
+                    {focosDe(item).length > 1 ? 'Focos' : 'Foco'}:{' '}
+                    <span className="font-semibold text-ink">{focosDe(item).join(', ')}</span>
                   </p>
                 )}
                 {item.profissionalNome && (

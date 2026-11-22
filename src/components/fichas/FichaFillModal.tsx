@@ -29,11 +29,13 @@ import {
 import { QuestionFieldRenderer } from '../anamnesis/QuestionFieldRenderer';
 import { PhotoAnnotationEditor } from '../anamnesis/PhotoAnnotationEditor';
 import {
-  fichaDeAvaliacaoPara,
+  BlocoDoRelatorio,
+  fichasDoRelatorioPara,
   fichaTemConteudo,
   fotosDaSessao,
   MAX_FOTOS_DA_SESSAO,
   perguntasDaAvaliacao,
+  perguntasDosBlocos,
   perguntasRespondidas,
 } from '../../utils/evaluations';
 import { AlvoDaFicha, ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
@@ -42,6 +44,7 @@ import {
   grupoDaFichaModelo,
   gruposParaGravar,
   ID_DO_GRUPO_LIVRE,
+  idDoGrupoLivreDoFoco,
   novoDadoLivre,
   TITULO_DO_GRUPO_LIVRE,
 } from '../../utils/gruposExtras';
@@ -59,7 +62,12 @@ import {
   subscribeToPerguntasGeraisDaFicha,
 } from '../../services/databaseService';
 import { formatDateOnly } from '../../utils/formatters';
-import { alvoDoQueFoiAvaliado, ehAvaliacao, nomeComFoco } from '../../utils/procedimentoAvaliacao';
+import {
+  ehAvaliacao,
+  focosDe,
+  nomeComFoco,
+  procedimentosAvaliados,
+} from '../../utils/procedimentoAvaliacao';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PrintableFichaSheet } from './PrintableFichaSheet';
 import { SidePanel } from '../common/SidePanel';
@@ -230,21 +238,58 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   }, [isOpen, tipo]);
 
   /**
-   * A ficha-modelo do registro, quando ele já foi preenchido com uma; senão a que vale hoje para
-   * o procedimento. Reabrir uma ficha antiga com o modelo de hoje trocaria a figura e as perguntas
-   * sobre as quais ela foi escrita.
+   * As fichas-modelo do relatório: uma só, ou — com mais de um foco — um bloco por foco, cada um
+   * com a ficha dele (`fichasDoRelatorioPara`).
+   *
+   * Reaberto, vale o que o registro gravou: os blocos, ou a ficha com que foi preenchido. Reabrir
+   * uma ficha antiga com o modelo de hoje trocaria a figura e as perguntas sobre as quais ela foi
+   * escrita.
    */
-  const ficha = useMemo(() => {
-    if (personalizada) return undefined;
+  const resolucao = useMemo((): { ficha?: EvaluationTemplate; blocos?: BlocoDoRelatorio[] } => {
+    if (personalizada) return {};
+    if (registro?.blocosDeFoco && registro.blocosDeFoco.length > 0) {
+      return {
+        blocos: registro.blocosDeFoco.map((b) => ({
+          foco: b.foco,
+          ficha: b.templateId ? fichas.find((f) => f.id === b.templateId) : undefined,
+        })),
+      };
+    }
     const doRegistro = registro?.templateId
       ? fichas.find((f) => f.id === registro.templateId)
       : undefined;
-    return doRegistro || fichaDeAvaliacaoPara(alvo, fichas, catalogo);
-  }, [personalizada, registro?.templateId, alvo, fichas, catalogo]);
+    if (doRegistro) return { ficha: doRegistro };
+    return fichasDoRelatorioPara(alvo, fichas, catalogo);
+  }, [personalizada, registro?.blocosDeFoco, registro?.templateId, alvo, fichas, catalogo]);
+  const ficha = resolucao.ficha;
+  const blocos = resolucao.blocos;
+
+  /**
+   * Cada bloco com as suas perguntas, sem repetir as que já vieram antes — e, reaberto, também as
+   * respondidas que a ficha do foco não tem mais (gravadas no bloco), para a resposta não sumir.
+   */
+  const blocosNaTela = useMemo(() => {
+    if (!blocos) return undefined;
+    const daFicha = perguntasDosBlocos(gerais, blocos);
+    const vistas = new Set([...gerais.map((q) => q.id), ...daFicha.flat().map((q) => q.id)]);
+    return blocos.map((b, i) => {
+      const gravado = registro?.blocosDeFoco?.find((x) => x.foco === b.foco);
+      const soDoRegistro = (registro?.perguntasSnapshot || []).filter(
+        (q) => !ehPerguntaExtra(q) && !!gravado?.perguntaIds.includes(q.id) && !vistas.has(q.id)
+      );
+      soDoRegistro.forEach((q) => vistas.add(q.id));
+      return { ...b, perguntas: [...daFicha[i], ...soDoRegistro] };
+    });
+  }, [blocos, gerais, registro]);
 
   const perguntas = useMemo(
-    () => (personalizada ? [] : perguntasDaAvaliacao(gerais, ficha)),
-    [personalizada, gerais, ficha]
+    () =>
+      personalizada
+        ? []
+        : blocosNaTela
+        ? [...gerais, ...blocosNaTela.flatMap((b) => b.perguntas)]
+        : perguntasDaAvaliacao(gerais, ficha),
+    [personalizada, gerais, ficha, blocosNaTela]
   );
 
   /**
@@ -261,11 +306,22 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   );
 
   const gruposDeFicha = grupos.filter((g) => !g.livre);
-  const dadosLivres = grupos.find((g) => g.livre)?.perguntas || [];
+  /** O grupo das perguntas criadas na hora — o de sempre, ou o do bloco de um foco. */
+  const grupoLivreDo = (foco?: string) =>
+    grupos.find((g) => g.livre && (g.foco || '') === (foco || ''));
+  const dadosLivres = grupoLivreDo()?.perguntas || [];
+
+  /** A ficha que dá o mapa anatômico: a única, ou a primeira dos blocos que tiver um. */
+  const fichaDoMapa =
+    ficha ||
+    blocos
+      ?.map((b) => b.ficha)
+      .find((f) => !!f && !!(f.fotoModeloUrl || f.fotoModeloFemininoUrl || f.fotoModeloMasculinoUrl));
 
   /** A gravada, senão a da ficha-modelo resolvida pelo gênero da paciente. */
   const fotoModeloUrl =
-    fotoModeloGravada || (ficha ? resolveTemplatePhoto(ficha, paciente?.genero) || '' : '');
+    fotoModeloGravada ||
+    (fichaDoMapa ? resolveTemplatePhoto(fichaDoMapa, paciente?.genero) || '' : '');
 
   /**
    * O relatório é o registro da sessão: as fotos aparecem sempre. Na avaliação, se o modelo pedir —
@@ -345,14 +401,31 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
 
   const uso = useUsoDeMaterial(alvo, catalogo, isOpen && tipo === 'acompanhamento');
   // O registro só vale depois de lido: antes disso, `null` quer dizer "ainda não sei", não "não há".
-  // O orçamento é do que foi avaliado — o foco da Avaliação ("Harmonização Glútea") —, não da
-  // própria Avaliação.
-  const alvoDoOrcamento = useMemo(
-    () => (relatorioDaAvaliacao ? alvoDoQueFoiAvaliado(alvo, catalogo) : alvo),
+  // O orçamento é do que foi avaliado — os focos da Avaliação ("Harmonização Glútea", "Botox"),
+  // um item por foco —, não da própria Avaliação.
+  const procedimentosDoOrcamento = useMemo(
+    () =>
+      relatorioDaAvaliacao
+        ? procedimentosAvaliados(alvo, catalogo)
+        : [{ procedureId: alvo.procedureId, procedimentoNome: alvo.procedimentoNome }],
     [relatorioDaAvaliacao, alvo, catalogo]
+  );
+  const alvoDoOrcamento = useMemo(
+    () =>
+      relatorioDaAvaliacao
+        ? {
+            ...alvo,
+            procedureId: procedimentosDoOrcamento[0]?.procedureId,
+            procedimentoNome: procedimentosDoOrcamento[0]?.procedimentoNome || 'o tratamento',
+            // Sem foco, o orçamento começa sem item, como na avaliação personalizada.
+            personalizada: procedimentosDoOrcamento.length === 0 || alvo.personalizada,
+          }
+        : alvo,
+    [relatorioDaAvaliacao, alvo, procedimentosDoOrcamento]
   );
   const orcamento = useOrcamentoDaAvaliacao({
     alvo: alvoDoOrcamento,
+    procedimentos: procedimentosDoOrcamento,
     paciente,
     catalogo,
     clinic: clinicProfile,
@@ -462,32 +535,44 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     });
   };
 
-  /** As perguntas criadas na hora moram num grupo só; ele nasce com a primeira. */
-  const mudarDadosLivres = (
-    mudar: (perguntas: AnamnesisQuestion[]) => AnamnesisQuestion[]
-  ) => {
+  /**
+   * As perguntas criadas na hora moram num grupo por lugar: o de sempre, no fim da ficha, e um por
+   * bloco de foco. O grupo nasce com a primeira pergunta e sai com a última.
+   */
+  const adicionarDadoLivre = (foco?: string) => {
+    const existente = grupoLivreDo(foco);
+    const grupoId = existente?.id || (foco ? idDoGrupoLivreDoFoco(foco) : ID_DO_GRUPO_LIVRE);
+    const novo = novoDadoLivre((existente?.perguntas || []).length, grupoId);
     setGrupos((atual) => {
-      const livre = atual.find((g) => g.livre);
-      const perguntas = mudar(livre?.perguntas || []);
-      const resto = atual.filter((g) => !g.livre);
-      return perguntas.length === 0
-        ? resto
+      const alvoDoGrupo = atual.find((g) => g.livre && (g.foco || '') === (foco || ''));
+      const lista = alvoDoGrupo
+        ? atual.map((g) => (g === alvoDoGrupo ? { ...g, perguntas: [...g.perguntas, novo] } : g))
         : [
-            ...resto,
-            { id: ID_DO_GRUPO_LIVRE, titulo: TITULO_DO_GRUPO_LIVRE, livre: true, perguntas },
+            ...atual,
+            foco
+              ? { id: grupoId, titulo: foco, livre: true, foco, perguntas: [novo] }
+              : { id: grupoId, titulo: TITULO_DO_GRUPO_LIVRE, livre: true, perguntas: [novo] },
           ];
+      // O grupo de sempre fica por último, junto do botão dele.
+      return [...lista.filter((g) => !(g.livre && !g.foco)), ...lista.filter((g) => g.livre && !g.foco)];
     });
-  };
-
-  const adicionarDadoLivre = () => {
-    const novo = novoDadoLivre(dadosLivres.length);
-    mudarDadosLivres((perguntas) => [...perguntas, novo]);
     setDadoRecemCriado(novo.id);
     setMexeuNosGrupos(true);
   };
 
+  /** Muda as perguntas do grupo livre que tem esta pergunta; grupo que esvazia sai. */
+  const mudarNoGrupoLivre = (
+    id: string,
+    mudar: (perguntas: AnamnesisQuestion[]) => AnamnesisQuestion[]
+  ) =>
+    setGrupos((atual) =>
+      atual
+        .map((g) => (g.livre && g.perguntas.some((q) => q.id === id) ? { ...g, perguntas: mudar(g.perguntas) } : g))
+        .filter((g) => !g.livre || g.perguntas.length > 0)
+    );
+
   const mudarDadoLivre = (pergunta: AnamnesisQuestion) =>
-    mudarDadosLivres((perguntas) => perguntas.map((q) => (q.id === pergunta.id ? pergunta : q)));
+    mudarNoGrupoLivre(pergunta.id, (perguntas) => perguntas.map((q) => (q.id === pergunta.id ? pergunta : q)));
 
   /** A resposta de antes não serve ao tipo novo — "sim" não é uma data. */
   const trocarTipoDoDadoLivre = (pergunta: AnamnesisQuestion) => {
@@ -497,10 +582,36 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   };
 
   const removerDadoLivre = (id: string) => {
-    mudarDadosLivres((perguntas) => perguntas.filter((q) => q.id !== id));
+    mudarNoGrupoLivre(id, (perguntas) => perguntas.filter((q) => q.id !== id));
     esquecerRespostas([id]);
     setMexeuNosGrupos(true);
   };
+
+  /** As perguntas criadas na hora de um lugar, com o botão de criar mais. */
+  const camposCriadosNaHora = (foco?: string) => (
+    <>
+      {(grupoLivreDo(foco)?.perguntas || []).map((q) => (
+        <PerguntaCriadaNaHora
+          key={q.id}
+          pergunta={q}
+          valor={respostas[q.id]}
+          focar={q.id === dadoRecemCriado}
+          onMudarPergunta={mudarDadoLivre}
+          onTrocarTipo={trocarTipoDoDadoLivre}
+          onResponder={(v) => handleResposta(q.id, v)}
+          onRemover={() => removerDadoLivre(q.id)}
+        />
+      ))}
+      <button
+        type="button"
+        onClick={() => adicionarDadoLivre(foco)}
+        className="inline-flex items-center gap-1.5 min-h-[36px] text-[13px] font-semibold text-brand hover:underline"
+      >
+        <Plus className="w-3.5 h-3.5" />
+        Nova pergunta
+      </button>
+    </>
+  );
 
   const handleSalvarAnotacao = async (dataUrl: string, annotationsJson: string) => {
     const url = await subirImagemOuManter(dataUrl, `${rotulos.pastaDoStorage}/anotadas`);
@@ -598,11 +709,20 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
           pacienteGenero: paciente?.genero || registro?.pacienteGenero,
           procedureId: alvo.procedureId,
           procedimentoNome: alvo.procedimentoNome,
-          foco: alvo.foco || undefined,
+          focos: focosDe(alvo).length > 0 ? focosDe(alvo) : undefined,
           dataAtendimento: alvo.data,
           professionalId: alvo.professionalId,
           profissionalNome: profissional?.name || alvo.profissionalNome,
           templateId: ficha?.id,
+          // Os blocos com o que entrou em cada um — é o que o relatório reaberto e o PDF repetem.
+          blocosDeFoco: blocosNaTela?.map((b) => ({
+            foco: b.foco,
+            templateId: b.ficha?.id,
+            perguntaIds: [
+              ...b.perguntas.map((q) => q.id),
+              ...(gruposExtras.find((g) => g.livre && g.foco === b.foco)?.perguntas || []).map((q) => q.id),
+            ],
+          })),
           personalizada: personalizada || undefined,
           respostas,
           // Só o que foi respondido: congelar a ficha-modelo inteira faria cada ficha pagar KB
@@ -898,7 +1018,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       aberto
       onFechar={onClose}
       titulo={rotulos.nome}
-      sobretitulo={`${alvo.pacienteNome} · ${nomeComFoco(alvo.procedimentoNome, alvo.foco)} · ${formatDateOnly(alvo.data)}`}
+      sobretitulo={`${alvo.pacienteNome} · ${nomeComFoco(alvo.procedimentoNome, focosDe(alvo))} · ${formatDateOnly(alvo.data)}`}
       formato="central"
       largura="tela"
       navegacao={navegacao}
@@ -952,12 +1072,12 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                   relatório), as perguntas criadas na hora e o caminho para configurar. Um vazio sem
                   saída faria a profissional concluir que a funcionalidade está quebrada.
                 */}
-                {!ficha && !personalizada && (
+                {!ficha && !blocos && !personalizada && (
                   <div className="text-[13px] text-ink-soft bg-surface border border-[rgba(26,26,26,.1)] rounded-xl px-3.5 py-3 space-y-3">
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="flex-1 min-w-[200px]">
                         Nenhuma ficha-modelo de {rotulos.minusculo} cadastrada para{' '}
-                        <strong className="text-ink">{nomeComFoco(alvo.procedimentoNome, alvo.foco)}</strong>.
+                        <strong className="text-ink">{nomeComFoco(alvo.procedimentoNome, focosDe(alvo))}</strong>.
                         {montavel
                           ? ' Dá para usar as perguntas de outra ficha-modelo e criar as suas em "Nova pergunta".'
                           : ' Dá para criar as perguntas em "Nova pergunta".'}
@@ -968,7 +1088,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                             onCadastrarFicha({
                               procedureId: alvo.procedureId,
                               procedimentoNome: alvo.procedimentoNome,
-                              foco: alvo.foco,
+                              foco: focosDe(alvo)[0],
                             })
                           }
                           className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand hover:underline"
@@ -1049,29 +1169,91 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                   </div>
                 )}
 
-                {perguntas.length + perguntasSoDoRegistro.length > 0 && (
-                  <div className="space-y-4">
-                    {ficha && (
-                      <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
-                        {ficha.nome}
-                      </h3>
+                {/* Mais de um foco: as perguntas gerais e, embaixo, um bloco por foco, cada um com o
+                    título dele, as perguntas da ficha do foco e as criadas na hora ali. */}
+                {blocosNaTela ? (
+                  <>
+                    {gerais.length + perguntasSoDoRegistro.length > 0 && (
+                      <div className={COLUNAS_DE_PERGUNTAS}>
+                        {[...gerais, ...perguntasSoDoRegistro].map((q) => (
+                          <QuestionFieldRenderer
+                            key={q.id}
+                            question={q}
+                            value={respostas[q.id]}
+                            onChange={(v) => handleResposta(q.id, v)}
+                            hideMandatoryAsterisk
+                          />
+                        ))}
+                      </div>
                     )}
-                    {/* No computador largo, duas colunas: a página de perguntas cabe sem rolar. */}
-                    <div className={COLUNAS_DE_PERGUNTAS}>
-                      {[...perguntas, ...perguntasSoDoRegistro].map((q) => (
-                        <QuestionFieldRenderer
-                          key={q.id}
-                          question={q}
-                          value={respostas[q.id]}
-                          onChange={(v) => handleResposta(q.id, v)}
-                          // Sem asterisco: a ficha é documento interno e se completa ao longo do
-                          // dia — marcar campo obrigatório aqui só criaria uma trava que a
-                          // profissional teria que contornar para salvar o que já sabe.
-                          hideMandatoryAsterisk
-                        />
-                      ))}
+                    {blocosNaTela.map((b) => (
+                      <div
+                        key={b.foco}
+                        className="space-y-4 rounded-2xl border border-[rgba(26,26,26,.1)] bg-surface/50 p-4 sm:p-5"
+                      >
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                          <h3 className="text-[16px] font-bold text-ink">{b.foco}</h3>
+                          <span className="text-[12px] text-muted">
+                            {b.ficha ? b.ficha.nome : 'Sem ficha-modelo para este foco'}
+                          </span>
+                        </div>
+                        {b.perguntas.length > 0 && (
+                          <div className={COLUNAS_DE_PERGUNTAS}>
+                            {b.perguntas.map((q) => (
+                              <QuestionFieldRenderer
+                                key={q.id}
+                                question={q}
+                                value={respostas[q.id]}
+                                onChange={(v) => handleResposta(q.id, v)}
+                                hideMandatoryAsterisk
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <div className="space-y-3">{camposCriadosNaHora(b.foco)}</div>
+                        {!b.ficha && onCadastrarFicha && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onCadastrarFicha({
+                                procedureId: alvo.procedureId,
+                                procedimentoNome: alvo.procedimentoNome,
+                                foco: b.foco,
+                              })
+                            }
+                            className="block text-[12px] font-semibold text-muted hover:text-brand hover:underline"
+                          >
+                            Cadastrar ficha para {b.foco}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  perguntas.length + perguntasSoDoRegistro.length > 0 && (
+                    <div className="space-y-4">
+                      {ficha && (
+                        <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
+                          {ficha.nome}
+                        </h3>
+                      )}
+                      {/* No computador largo, duas colunas: a página de perguntas cabe sem rolar. */}
+                      <div className={COLUNAS_DE_PERGUNTAS}>
+                        {[...perguntas, ...perguntasSoDoRegistro].map((q) => (
+                          <QuestionFieldRenderer
+                            key={q.id}
+                            question={q}
+                            value={respostas[q.id]}
+                            onChange={(v) => handleResposta(q.id, v)}
+                            // Sem asterisco: a ficha é documento interno e se completa ao longo do
+                            // dia — marcar campo obrigatório aqui só criaria uma trava que a
+                            // profissional teria que contornar para salvar o que já sabe.
+                            hideMandatoryAsterisk
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )
                 )}
 
                 {/* Grupos puxados de outras fichas-modelo — cada um com o nome da ficha de origem */}
@@ -1107,34 +1289,18 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                 ))}
 
                 {/* Perguntas criadas na hora — em toda ficha: o atendimento sempre traz alguma
-                    pergunta que a ficha-modelo não previu. */}
-                <div className="space-y-3">
-                  {dadosLivres.length > 0 && (
-                    <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
-                      {personalizada ? 'Perguntas desta avaliação' : TITULO_DO_GRUPO_LIVRE}
-                    </h3>
-                  )}
-                  {dadosLivres.map((q) => (
-                    <PerguntaCriadaNaHora
-                      key={q.id}
-                      pergunta={q}
-                      valor={respostas[q.id]}
-                      focar={q.id === dadoRecemCriado}
-                      onMudarPergunta={mudarDadoLivre}
-                      onTrocarTipo={trocarTipoDoDadoLivre}
-                      onResponder={(v) => handleResposta(q.id, v)}
-                      onRemover={() => removerDadoLivre(q.id)}
-                    />
-                  ))}
-                  <button
-                    type="button"
-                    onClick={adicionarDadoLivre}
-                    className="inline-flex items-center gap-1.5 min-h-[36px] text-[13px] font-semibold text-brand hover:underline"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Nova pergunta
-                  </button>
-                </div>
+                    pergunta que a ficha-modelo não previu. Com blocos de foco, cada bloco tem o
+                    seu "Nova pergunta"; este só aparece se já tiver pergunta de antes. */}
+                {(!blocosNaTela || dadosLivres.length > 0) && (
+                  <div className="space-y-3">
+                    {dadosLivres.length > 0 && (
+                      <h3 className="text-label font-semibold uppercase tracking-wider text-gray-400">
+                        {personalizada ? 'Perguntas desta avaliação' : TITULO_DO_GRUPO_LIVRE}
+                      </h3>
+                    )}
+                    {camposCriadosNaHora()}
+                  </div>
+                )}
               </section>
 
               {/* ===== Página 2 — o mapa anatômico e as fotos ===== */}

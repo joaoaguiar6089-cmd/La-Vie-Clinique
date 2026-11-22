@@ -41,6 +41,7 @@ import { LogoDaFolha, useEstiloDaMarca, useMarcaDosDocumentos } from '../documen
 import { esperarFontesDosDocumentos } from '../../utils/marcaDosDocumentos';
 import { clinicMonogram } from '../ClinicLogo';
 import { ehZulia } from '../../lib/projetoFirebase';
+import { focosDe } from '../../utils/procedimentoAvaliacao';
 
 /** Espaço da folha do comprovante: a página útil menos o cabeçalho compacto e o título. */
 const CAIXA_COMPROVANTE_W = CONTENT_W;
@@ -273,9 +274,9 @@ const BlocoItem: React.FC<{ item: QuoteItem; semSeparador: boolean }> = ({ item,
               {item.titulo}
             </span>
           </div>
-          {item.foco && (
+          {focosDe(item).length > 0 && (
             <div style={{ fontSize: 10, color: CINZA, marginTop: 4 }}>
-              Foco: <strong>{item.foco}</strong>
+              {focosDe(item).length > 1 ? 'Focos' : 'Foco'}: <strong>{focosDe(item).join(', ')}</strong>
             </div>
           )}
           {item.profissionalNome && (

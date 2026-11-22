@@ -16,7 +16,7 @@ import {
   marcarConfirmacao,
   recusarPedidoDeRemarcacao,
   remarcarAtendimento,
-  saveAttendance,
+  salvarVisita,
   subscribeToQuotes,
   subscribeToSessionPlans,
 } from '../../services/databaseService';
@@ -60,6 +60,8 @@ import { AgendaFiltros } from './AgendaFiltros';
 import { AgendaDetalheModal } from './AgendaDetalheModal';
 import { AgendaRespostasClientes } from './AgendaRespostasClientes';
 import { FichaFillModal } from '../fichas/FichaFillModal';
+import { EscolhaDoRelatorio } from '../fichas/EscolhaDoRelatorio';
+import { membrosDaVisita, umPorVisita, visitaComoUmAtendimento } from '../../utils/visitas';
 import { perguntaDoAcompanhamento } from '../fichas/perguntaDoAcompanhamento';
 import { alvoDoAtendimento, dependentesDoAtendimento } from '../../utils/fichasClinicas';
 import { SkeletonAgenda } from '../common/Skeleton';
@@ -146,6 +148,11 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   const [pacienteDoForm, setPacienteDoForm] = useState<Patient | null>(null);
   const [detalhe, setDetalhe] = useState<Attendance | null>(null);
   const [acompanhando, setAcompanhando] = useState<Attendance | null>(null);
+  /**
+   * A visita com mais de um procedimento que acabou de ser confirmada: a janela que oferece o
+   * relatório de cada um. Fica por baixo enquanto um relatório está aberto, e volta quando ele fecha.
+   */
+  const [relatoriosDaVisita, setRelatoriosDaVisita] = useState<Attendance[] | null>(null);
   const [arrastando, setArrastando] = useState<Attendance | null>(null);
   const [confirmacao, setConfirmacao] = useState<ConfirmRequest | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -244,7 +251,9 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
     return rotulos;
   }, [atendimentos, planos]);
 
-  const pendentes = useMemo(() => agendamentosAtrasados(visiveis), [visiveis]);
+  // As listas da recepção têm uma linha por visita: a cliente recebe uma mensagem só pela visita,
+  // e resolver um atendimento dela resolve todos (`utils/visitas.ts`).
+  const pendentes = useMemo(() => umPorVisita(agendamentosAtrasados(visiveis)), [visiveis]);
 
   /**
    * A confirmar amanhã. Sai de `atendimentos` (a clínica inteira) e não de `visiveis`, que é o
@@ -254,10 +263,12 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
    */
   const aConfirmar = useMemo(
     () =>
-      aConfirmarAmanha(
-        filtroProfissionalId
-          ? atendimentos.filter((a) => a.professionalId === filtroProfissionalId)
-          : atendimentos
+      umPorVisita(
+        aConfirmarAmanha(
+          filtroProfissionalId
+            ? atendimentos.filter((a) => a.professionalId === filtroProfissionalId)
+            : atendimentos
+        )
       ),
     [atendimentos, filtroProfissionalId]
   );
@@ -267,7 +278,10 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
    * inteira), sem o filtro de profissional: um pedido de outro horário não deve sumir porque
    * alguém está olhando a agenda de uma pessoa só.
    */
-  const respostasDasClientes = useMemo(() => respostasParaResolver(atendimentos), [atendimentos]);
+  const respostasDasClientes = useMemo(
+    () => umPorVisita(respostasParaResolver(atendimentos)),
+    [atendimentos]
+  );
 
   /**
    * O detalhe guarda uma **cópia** do agendamento de quando foi aberto — é o que deixa o selo de
@@ -409,10 +423,13 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   // DESFECHOS
   // ==========================================
 
+  /** Os atendimentos da visita de `a` — Compareceu, Faltou, Remarcar e Editar valem para todos. */
+  const visitaDe = (a: Attendance) => membrosDaVisita(a, atendimentos);
+
   const marcarStatus = async (a: Attendance, status: Attendance['status']) => {
     try {
       setErro(null);
-      await saveAttendance({ ...a, status });
+      await salvarVisita(visitaDe(a).map((m) => ({ ...m, status })));
       setDetalhe(null);
     } catch (e) {
       setErro(`Não foi possível atualizar o agendamento: ${(e as Error).message}`);
@@ -427,10 +444,16 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
   const abrirRemarcacao = async (a: Attendance) => {
     try {
       setErro(null);
-      await saveAttendance({ ...a, status: 'remarcado' });
+      const membros = visitaDe(a);
+      await salvarVisita(membros.map((m) => ({ ...m, status: 'remarcado' })));
       setDetalhe(null);
       setPacienteDoForm(pacienteDe(a));
-      setFormulario({ modo: 'novo', atendimento: { ...a, data: '', hora: undefined } });
+      // A visita inteira volta ao formulário, com todos os procedimentos, como semente de uma
+      // visita nova (outro grupo) — a data em branco, que é o que precisa ser decidido.
+      setFormulario({
+        modo: 'novo',
+        atendimento: { ...visitaComoUmAtendimento(membros), grupoId: undefined, data: '', hora: undefined },
+      });
     } catch (e) {
       setErro(`Não foi possível remarcar: ${(e as Error).message}`);
     }
@@ -479,7 +502,8 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
     );
     try {
       setErro(null);
-      await marcarConfirmacao(a.id, confirmado);
+      // A visita inteira: a cliente confirmou o horário, e não um procedimento.
+      await Promise.all(visitaDe(a).map((m) => marcarConfirmacao(m.id, confirmado)));
     } catch (e) {
       setDetalhe((atual) =>
         atual && atual.id === a.id ? { ...atual, confirmadoEm: a.confirmadoEm } : atual
@@ -614,22 +638,32 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
    * e nos outros casos o workflow busca só as da paciente em questão.
    */
   const handleSalvar = async (
-    registro: Attendance,
+    registros: Attendance[],
     planoNovo?: SessionPlan,
-    opcoes?: { limparConfirmacao?: boolean }
+    opcoes?: { limparConfirmacao?: boolean; removidos?: Attendance[] }
   ) => {
     await salvarAtendimento({
-      registro,
+      registros,
+      removidos: opcoes?.removidos,
       planoNovo,
       pacienteACriar: cadastroSeraCriado ? pacienteDoForm || undefined : undefined,
       limparConfirmacao: opcoes?.limparConfirmacao,
     });
-    // Pedida pelo painel da avaliação: a visita existia só para levar o acompanhamento.
-    if (formulario?.paraAcompanhar && ehRealizado(registro)) setAcompanhando(registro);
-    // Compareceu: o acompanhamento é o passo seguinte, e é agora que a profissional lembra.
+    const [registro] = registros;
+    // Pedida pelo painel da anamnese "Sem avaliação": a visita existia só para levar o relatório.
+    if (formulario?.paraAcompanhar && ehRealizado(registro)) {
+      if (registros.length > 1) setRelatoriosDaVisita(registros);
+      else setAcompanhando(registro);
+    }
+    // Compareceu: o relatório é o passo seguinte, e é agora que a profissional lembra. Com mais de
+    // um procedimento, a janela oferece o relatório de cada um.
     if (formulario?.modo === 'confirmacao') {
-      const pergunta = perguntaDoAcompanhamento(formulario.atendimento, registro, setAcompanhando);
-      if (pergunta) setConfirmacao(pergunta);
+      if (registros.length > 1) {
+        setRelatoriosDaVisita(registros);
+      } else {
+        const pergunta = perguntaDoAcompanhamento(formulario.atendimento, registro, setAcompanhando);
+        if (pergunta) setConfirmacao(pergunta);
+      }
     }
   };
 
@@ -762,6 +796,7 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
       {detalheAoVivo && (
         <AgendaDetalheModal
           atendimento={detalheAoVivo}
+          visita={membrosDaVisita(detalheAoVivo, atendimentos)}
           clinic={clinic}
           catalogo={catalogProcedures}
           pacientes={pacientes}
@@ -794,6 +829,15 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
           catalogo={catalogProcedures}
           professionals={professionals}
           clinicProfile={clinic}
+        />
+      )}
+
+      {relatoriosDaVisita && !acompanhando && (
+        <EscolhaDoRelatorio
+          visita={relatoriosDaVisita}
+          atendimentosAoVivo={atendimentos}
+          onAbrir={setAcompanhando}
+          onFechar={() => setRelatoriosDaVisita(null)}
         />
       )}
 
@@ -832,6 +876,11 @@ export const AgendaModule: React.FC<AgendaModuleProps> = ({
         professionals={professionals}
         professionalIdPadrao={currentProfessionalId}
         atendimento={formulario?.atendimento}
+        grupo={
+          formulario?.atendimento && formulario.modo !== 'novo'
+            ? membrosDaVisita(formulario.atendimento, atendimentos)
+            : undefined
+        }
         modo={formulario?.modo || 'novo'}
         soVisitaFeita={formulario?.paraAcompanhar}
         onSalvar={handleSalvar}
