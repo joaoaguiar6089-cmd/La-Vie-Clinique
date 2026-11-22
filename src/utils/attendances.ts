@@ -1,4 +1,5 @@
 import { Attendance, AttendanceStatus, Procedure, ProcedimentoDaVisita, SessionPlan } from '../types';
+import { nomeComFoco } from './procedimentoAvaliacao';
 
 /**
  * As regras do diário de atendimentos: o que é agendamento, o que conta como sessão feita, e
@@ -120,26 +121,36 @@ export const mesmoProcedimento = (
 type ComProcedimentos = Pick<
   Attendance,
   'procedureId' | 'procedimentoNome' | 'planoId' | 'procedimentosAdicionais'
->;
+> &
+  Partial<Pick<Attendance, 'foco'>>;
 
 /**
  * Todos os procedimentos da visita, o principal primeiro. Registro de antes da lista devolve um
  * só. Adicional sem nome é descartado — um documento torto não pode virar "Botox + " na agenda.
  */
 export const procedimentosDoAtendimento = (a: ComProcedimentos): ProcedimentoDaVisita[] => [
-  { procedureId: a.procedureId, procedimentoNome: a.procedimentoNome || '', planoId: a.planoId },
+  {
+    procedureId: a.procedureId,
+    procedimentoNome: a.procedimentoNome || '',
+    planoId: a.planoId,
+    ...(a.foco ? { foco: a.foco } : {}),
+  },
   ...(Array.isArray(a.procedimentosAdicionais) ? a.procedimentosAdicionais : []).filter(
     (p): p is ProcedimentoDaVisita =>
       !!p && typeof p.procedimentoNome === 'string' && !!p.procedimentoNome.trim()
   ),
 ];
 
+/** Cada procedimento com o foco dele: "Harmonização Glútea · Trocanter". */
 const nomesDaVisita = (a: ComProcedimentos): string[] =>
   procedimentosDoAtendimento(a)
-    .map((p) => p.procedimentoNome.trim())
+    .map((p) => (p.procedimentoNome.trim() ? nomeComFoco(p.procedimentoNome.trim(), p.foco) : ''))
     .filter(Boolean);
 
-/** "Botox + Preenchimento labial" — o nome da visita no cartão da agenda, na lista e no Google. */
+/**
+ * "Botox + Preenchimento labial" — o nome da visita no cartão da agenda, na lista e no Google.
+ * Com foco, ele vai junto: "Avaliação · Harmonização Glútea".
+ */
 export const nomeDosProcedimentos = (a: ComProcedimentos): string =>
   nomesDaVisita(a).join(' + ');
 

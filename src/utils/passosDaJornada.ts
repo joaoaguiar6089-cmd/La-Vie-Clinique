@@ -1,5 +1,13 @@
-import { AnamnesisRecord, AnamnesisTemplate, Attendance, EvaluationRecord, Procedure, Quote } from '../types';
-import { chaveDoProcedimento, ehPendente, hojeISO, instanteDoAtendimento, mesmoProcedimento } from './attendances';
+import { AnamnesisRecord, AnamnesisTemplate, Attendance, Procedure, Quote } from '../types';
+import {
+  chaveDoProcedimento,
+  ehPendente,
+  ehRealizado,
+  hojeISO,
+  instanteDoAtendimento,
+  mesmoProcedimento,
+} from './attendances';
+import { ehAvaliacao } from './procedimentoAvaliacao';
 import { acompanhamentoComRegistro, atendimentoAconteceu } from './fichasClinicas';
 import { mapearTemplatesPorProcedimento } from './templateMatching';
 
@@ -7,7 +15,9 @@ import { mapearTemplatesPorProcedimento } from './templateMatching';
  * O passo seguinte de cada documento da jornada — o que o painel do evento da linha do tempo
  * mostra abaixo do documento.
  *
- * A ordem é Orçamento → Anamnese → Avaliação → Atendimento → Acompanhamento. O painel não manda
+ * A ordem é Orçamento → Anamnese → Avaliação → Atendimento → Relatório. A Avaliação não é mais
+ * ficha à parte: é um atendimento do procedimento fixo Avaliação, com o foco no que a cliente
+ * quer avaliar, e a ficha dela é o relatório desse atendimento. O painel não manda
  * a equipe procurar o formulário: mostra o passo seguinte já feito (com a data e o "Ver") ou por
  * fazer (com o botão que faz). As regras moram aqui, longe da tela, para a linha da clínica e a
  * da paciente nunca discordarem sobre o que já aconteceu.
@@ -22,13 +32,14 @@ export interface Tratamento {
    * antigas guardam o id da ficha no lugar do procedimento, e só por ela o vínculo aparece.
    */
   templateId?: string;
+  /** O foco / aplicação — na Avaliação, o que ela avalia. Vai semeado no agendamento. */
+  foco?: string;
 }
 
 /** O que o painel precisa saber da paciente, além do próprio evento. */
 export interface ContextoDaJornada {
   atendimentos: Attendance[];
   anamneses: AnamnesisRecord[];
-  avaliacoes: EvaluationRecord[];
   catalogo: Procedure[];
   templatesAnamnese: AnamnesisTemplate[];
 }
@@ -66,7 +77,7 @@ const tratamentoDaAnamnese = (r: AnamnesisRecord): Tratamento => ({
   templateId: r.templateId,
 });
 
-/** O tratamento de uma avaliação ou atendimento. O `templateId` da avaliação é de outra ficha, e fica de fora. */
+/** O tratamento de um atendimento. */
 const tratamentoDe = (x: { procedureId?: string; procedimentoNome: string }): Tratamento => ({
   procedureId: x.procedureId,
   procedimentoNome: x.procedimentoNome,
@@ -167,26 +178,48 @@ export const anamnesesDoOrcamento = (q: Quote, contexto: ContextoDaJornada): Ana
 // ANAMNESE → AVALIAÇÃO
 // ==========================================
 
-/** A avaliação feita depois da anamnese, do mesmo tratamento — a resposta a ela. */
+/** O tratamento sob avaliação num atendimento de Avaliação: o foco dele. */
+const tratamentoAvaliado = (a: Attendance): Tratamento => ({ procedimentoNome: a.foco || '' });
+
+/**
+ * A Avaliação da anamnese — o atendimento do procedimento Avaliação, agendado ou feito, a partir
+ * do dia da anamnese. Vale a do mesmo tratamento (o foco dela é o procedimento da anamnese); na
+ * falta, uma Avaliação sem foco, que serve a qualquer tratamento.
+ *
+ * Falta e remarcação ficam de fora: a avaliação não aconteceu, e o passo continua por fazer. Entre
+ * as que valem, a feita mais recente vem antes da agendada.
+ */
 export const avaliacaoDaAnamnese = (
   r: AnamnesisRecord,
   contexto: ContextoDaJornada
-): EvaluationRecord | undefined => {
+): Attendance | undefined => {
   const fichaPorProcedimento = fichasDeAnamnesePorProcedimento(contexto);
   const dia = diaDoRegistro(r);
   const tratamento = tratamentoDaAnamnese(r);
-  return maisRecente(
-    contexto.avaliacoes.filter(
-      (av) =>
-        av.pacienteId === r.pacienteId &&
-        diaDoRegistro(av) >= dia &&
-        mesmoTratamento(tratamento, tratamentoDe(av), fichaPorProcedimento)
-    )
+  const candidatas = contexto.atendimentos.filter(
+    (a) =>
+      a.pacienteId === r.pacienteId &&
+      ehAvaliacao(a) &&
+      (a.data || '') >= dia &&
+      (ehRealizado(a) || ehPendente(a))
   );
+  const peso = (a: Attendance): number => {
+    if (a.foco && mesmoTratamento(tratamento, tratamentoAvaliado(a), fichaPorProcedimento)) return 0;
+    if (!a.foco) return 1;
+    return 2;
+  };
+  return candidatas
+    .filter((a) => peso(a) < 2)
+    .sort(
+      (a, b) =>
+        peso(a) - peso(b) ||
+        Number(ehPendente(a)) - Number(ehPendente(b)) ||
+        instanteDoAtendimento(b) - instanteDoAtendimento(a)
+    )[0];
 };
 
 // ==========================================
-// AVALIAÇÃO → ACOMPANHAMENTO
+// ANAMNESE → RELATÓRIO
 // ==========================================
 
 /**
@@ -213,10 +246,6 @@ const atendimentosDepoisDe = (
     (a, b) => peso(a) - peso(b) || instanteDoAtendimento(b) - instanteDoAtendimento(a)
   );
 };
-
-/** Os atendimentos que podem levar o relatório da avaliação — o passo seguinte a ela. */
-export const atendimentosDaAvaliacao = (av: EvaluationRecord, contexto: ContextoDaJornada): Attendance[] =>
-  atendimentosDepoisDe(av.pacienteId, diaDoRegistro(av), tratamentoDe(av), contexto);
 
 /**
  * A anamnese marcada "Sem avaliação" pula um passo: o seguinte a ela passa a ser o relatório do
@@ -247,13 +276,14 @@ export const sementeDoAgendamento = (alvo: {
   data: '',
   procedureId: alvo.tratamento?.procedureId,
   procedimentoNome: alvo.tratamento?.procedimentoNome || '',
+  foco: alvo.tratamento?.foco,
   professionalId: alvo.professionalId,
   createdAt: '',
 });
 
 /**
- * De onde sai a visita que o relatório precisa: a avaliação — ou a anamnese marcada "Sem
- * avaliação", que ocupa o lugar dela na jornada.
+ * De onde sai a visita que o relatório precisa: a anamnese marcada "Sem avaliação", que segue
+ * direto para o atendimento.
  */
 export type OrigemDaVisita = {
   pacienteId?: string;
@@ -273,8 +303,8 @@ export const origemDaAnamnese = (r: AnamnesisRecord): OrigemDaVisita => ({
 });
 
 /**
- * A visita que o relatório precisa: o procedimento e a profissional da avaliação (ou da
- * anamnese sem avaliação), a data de hoje e a hora por preencher (o formulário a exige aqui).
+ * A visita que o relatório precisa: o procedimento e a profissional da anamnese sem avaliação, a
+ * data de hoje e a hora por preencher (o formulário a exige aqui).
  */
 export const sementeDaVisita = (origem: OrigemDaVisita): Attendance => ({
   ...sementeDoAgendamento({

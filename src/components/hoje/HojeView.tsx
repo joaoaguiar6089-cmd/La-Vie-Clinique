@@ -67,12 +67,22 @@ interface HojeViewProps {
   onNovaAnamnese: (alvo: AlvoDoPasso & { templateId?: string }) => void;
 }
 
-/** Os documentos da paciente na ordem em que o atendimento acontece. */
-const SEQUENCIA: { view: AppView; titulo: string; sub: string; icone: React.ElementType }[] = [
-  { view: 'quotes', titulo: 'Orçamento', sub: 'Preços e pagamentos', icone: Receipt },
-  { view: 'anamnesis', titulo: 'Anamnese', sub: 'Histórico de saúde', icone: ClipboardList },
-  { view: 'evaluations', titulo: 'Avaliação', sub: 'Antes do procedimento', icone: ClipboardCheck },
-  { view: 'acompanhamento', titulo: 'Relatório', sub: 'Depois do atendimento', icone: NotebookPen },
+/**
+ * Os documentos da paciente na ordem em que o atendimento acontece. A Avaliação não é mais ficha
+ * à parte: é um atendimento (o procedimento fixo Avaliação), e o atalho dela agenda um.
+ */
+const SEQUENCIA: {
+  chave: string;
+  view?: AppView;
+  criar?: AcaoDeCriacao;
+  titulo: string;
+  sub: string;
+  icone: React.ElementType;
+}[] = [
+  { chave: 'orcamento', view: 'quotes', titulo: 'Orçamento', sub: 'Preços e pagamentos', icone: Receipt },
+  { chave: 'anamnese', view: 'anamnesis', titulo: 'Anamnese', sub: 'Histórico de saúde', icone: ClipboardList },
+  { chave: 'avaliacao', criar: 'avaliacao', titulo: 'Avaliação', sub: 'Agendar a avaliação', icone: ClipboardCheck },
+  { chave: 'relatorio', view: 'acompanhamento', titulo: 'Relatório', sub: 'Depois do atendimento', icone: NotebookPen },
 ];
 
 /**
@@ -138,7 +148,7 @@ export const HojeView: React.FC<HojeViewProps> = ({
     { rotulo: 'Nova paciente', icone: UserPlus, onClick: () => onCriar('paciente') },
     { rotulo: 'Novo orçamento', icone: FilePlus2, onClick: () => onCriar('orcamento') },
     { rotulo: 'Nova ficha de anamnese', icone: ClipboardList, onClick: () => onCriar('anamnese') },
-    { rotulo: 'Nova avaliação', icone: ClipboardCheck, onClick: () => onCriar('avaliacao') },
+    { rotulo: 'Agendar avaliação', icone: ClipboardCheck, onClick: () => onCriar('avaliacao') },
     { rotulo: 'Novo relatório', icone: NotebookPen, onClick: () => onCriar('relatorio') },
   ];
 
@@ -197,7 +207,7 @@ export const HojeView: React.FC<HojeViewProps> = ({
             <span className="hidden sm:inline-flex">
               <MenuDeAcoes
                 acoes={acoesDeCriar}
-                rotulo="Criar agendamento, paciente, orçamento, anamnese, avaliação ou relatório"
+                rotulo="Criar agendamento, avaliação, paciente, orçamento, anamnese ou relatório"
                 titulo="Criar"
                 gatilho={{ texto: 'Criar', icone: Plus }}
               />
@@ -220,11 +230,11 @@ export const HojeView: React.FC<HojeViewProps> = ({
             Atalhos, na ordem do atendimento
           </h2>
           <ol className="grid grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
-            {SEQUENCIA.map(({ view, titulo, sub, icone: Icone }, i) => (
-              <li key={view} className="relative min-w-0">
+            {SEQUENCIA.map(({ chave, view, criar, titulo, sub, icone: Icone }, i) => (
+              <li key={chave} className="relative min-w-0">
                 <button
                   type="button"
-                  onClick={() => onIrPara(view)}
+                  onClick={() => (criar ? onCriar(criar) : view && onIrPara(view))}
                   className="peca-no-relevo group w-full h-full rounded-[18px] sm:rounded-[22px] px-1 py-3 sm:p-3.5 lg:px-5 lg:py-3.5 flex flex-col lg:flex-row items-center gap-2 lg:gap-4 text-center lg:text-left"
                 >
                   <span className="shrink-0 w-11 h-11 lg:w-[52px] lg:h-[52px] rounded-full bg-ink text-brand-pale flex items-center justify-center shadow-[0_8px_18px_-10px_rgba(26,26,26,.8)]">

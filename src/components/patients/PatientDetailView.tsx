@@ -64,7 +64,7 @@ import {
 } from '../../utils/pacienteResumo';
 import { PatientResumoTab } from './PatientResumoTab';
 import { AntesEDepois } from './AntesEDepois';
-import { EmissaoDeAvaliacao } from '../evaluations/EmissaoDeAvaliacao';
+import { PROCEDIMENTO_AVALIACAO_ID, ehAvaliacao } from '../../utils/procedimentoAvaliacao';
 import { FichaFillModal } from '../fichas/FichaFillModal';
 import { alvoDoRegistro } from '../../utils/fichasClinicas';
 import { useRecibos } from '../recibos/RecibosContext';
@@ -83,8 +83,6 @@ interface PatientDetailViewProps {
   atendimentos: Attendance[];
   /** Planos de sessão dele — quem agrupa os atendimentos na aba. */
   planos: SessionPlan[];
-  /** Avaliações emitidas para ela, das mais recentes para as mais antigas. */
-  avaliacoes: EvaluationRecord[];
   /** Acompanhamentos dela — entram só pelas fotos da sessão, no antes e depois e na aba Fotos. */
   acompanhamentos: EvaluationRecord[];
   /** Cadastro completo — o formulário de ficha precisa dele para a busca de paciente. */
@@ -93,7 +91,7 @@ interface PatientDetailViewProps {
   generalQuestions: AnamnesisQuestion[];
   clinic: ClinicProfile;
   catalogProcedures: Procedure[];
-  /** Profissional logada — já vem escolhida ao emitir uma avaliação. */
+  /** Profissional logada — já vem escolhida ao agendar uma avaliação. */
   currentProfessionalId?: string;
   onVoltar: () => void;
   onSalvarPaciente: (patient: Patient) => Promise<void>;
@@ -120,8 +118,7 @@ interface PatientDetailViewProps {
   /** "Agendar", do painel da linha do tempo: o formulário de atendimento já com o procedimento. */
   onAgendar: (alvo: AlvoDoPasso & { professionalId?: string }) => void;
   /**
-   * A visita que o relatório precisa (da avaliação, ou da anamnese "Sem avaliação") — salva,
-   * abre o relatório.
+   * A visita que o relatório precisa (da anamnese "Sem avaliação") — salva, abre o relatório.
    */
   onRegistrarVisita: (origem: OrigemDaVisita) => void;
   onAbrirNaAgenda: (a: Attendance) => void;
@@ -145,7 +142,7 @@ interface SementeDaAnamnese {
  * - **Financeiro**: orçamentos e recibos.
  */
 type Aba = 'resumo' | 'fichas' | 'fotos' | 'financeiro';
-type FiltroDeFichas = 'todas' | 'anamneses' | 'avaliacoes' | 'acompanhamentos';
+type FiltroDeFichas = 'todas' | 'anamneses' | 'acompanhamentos';
 type FiltroDoFinanceiro = 'orcamentos' | 'recibos';
 
 /** O que o menu "Novo" cria — na ordem da jornada da paciente. */
@@ -167,7 +164,6 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
   recibos,
   atendimentos,
   planos,
-  avaliacoes,
   acompanhamentos,
   todosPacientes,
   templates,
@@ -225,12 +221,6 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
     onErro: (mensagem) => setConfirmacao(aviso('Nem tudo foi salvo', mensagem, 'perigo')),
   });
   const recibosCtx = useRecibos();
-  const [emitindoAvaliacao, setEmitindoAvaliacao] = useState(false);
-  /** O procedimento da anamnese, quando a avaliação foi pedida pelo painel dela. */
-  const [procedimentoDaAvaliacao, setProcedimentoDaAvaliacao] = useState<
-    { procedureId?: string; procedimentoNome: string } | null
-  >(null);
-  const [avaliacaoAberta, setAvaliacaoAberta] = useState<EvaluationRecord | null>(null);
 
   useEffect(() => {
     if (!menuNovoAberto) return;
@@ -265,9 +255,17 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
       irParaFinanceiro('recibos');
       recibosCtx?.abrirNovo(patient);
     } else if (tipo === 'avaliacao') {
-      irParaFichas('avaliacoes');
-      setProcedimentoDaAvaliacao(null);
-      setEmitindoAvaliacao(true);
+      // A avaliação é um atendimento do procedimento fixo Avaliação: agenda-se para ela.
+      irParaFichas('acompanhamentos');
+      onAgendar({
+        pacienteId: patient.id,
+        pacienteNome: patient.nome,
+        tratamento: {
+          procedureId: PROCEDIMENTO_AVALIACAO_ID,
+          procedimentoNome: catalogProcedures.find(ehAvaliacao)?.title || 'Avaliação',
+        },
+        professionalId: currentProfessionalId,
+      });
     } else {
       irParaFinanceiro('orcamentos');
       acoesDeOrcamento.abrirNovo(patient);
@@ -290,22 +288,14 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
 
   /** Agendamento futuro não é atendimento feito — o contador da aba conta só o que aconteceu. */
   const totalAtendimentos = contarAtendimentosRealizados(atendimentos);
-  /** As avaliações, da mais recente para a mais antiga. */
-  const avaliacoesEmOrdem = React.useMemo(
-    () =>
-      [...avaliacoes].sort((a, b) =>
-        (b.dataAtendimento || b.createdAt || '').localeCompare(a.dataAtendimento || a.createdAt || '')
-      ),
-    [avaliacoes]
-  );
 
   const whatsAppUrl = buildWhatsAppUrl(patient.contato);
   const iniciais = iniciaisDe(patient.nome);
   const idade = idadeDe(patient.dataNascimento);
   const desde = pacienteDesde(patient, atendimentos);
   const fotos = React.useMemo(
-    () => fotosDaPaciente(records, avaliacoes, acompanhamentos),
-    [records, avaliacoes, acompanhamentos]
+    () => fotosDaPaciente(records, acompanhamentos),
+    [records, acompanhamentos]
   );
   /** Um elemento só, para o Resumo e a aba Fotos mostrarem o mesmo antes e depois. */
   const antesEDepois = (
@@ -349,8 +339,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           </p>
           <p className="text-label text-muted mt-0.5">
             {quotes.length} orçamento{quotes.length === 1 ? '' : 's'} · {records.length} anamnese
-            {records.length === 1 ? '' : 's'} · {avaliacoes.length} avaliaç
-            {avaliacoes.length === 1 ? 'ão' : 'ões'} · {totalAtendimentos} atendimento
+            {records.length === 1 ? '' : 's'} · {totalAtendimentos} atendimento
             {totalAtendimentos === 1 ? '' : 's'}
           </p>
         </div>
@@ -424,7 +413,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                 { tipo: 'orcamento' as const, icone: Receipt, rotulo: 'Orçamento' },
                 ...(recibosCtx ? [{ tipo: 'recibo' as const, icone: ReceiptText, rotulo: 'Recibo' }] : []),
                 { tipo: 'anamnese' as const, icone: ClipboardList, rotulo: 'Anamnese' },
-                { tipo: 'avaliacao' as const, icone: ClipboardCheck, rotulo: 'Avaliação' },
+                { tipo: 'avaliacao' as const, icone: ClipboardCheck, rotulo: 'Avaliação (agendar)' },
                 { tipo: 'atendimento' as const, icone: CalendarClock, rotulo: 'Atendimento' },
               ]
             ).map(({ tipo, icone: Icone, rotulo }) => (
@@ -455,7 +444,7 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                 id: 'fichas' as const,
                 icone: ClipboardList,
                 rotulo: 'Fichas',
-                total: records.length + avaliacoes.length + totalAtendimentos,
+                total: records.length + totalAtendimentos,
               },
               { id: 'fotos' as const, icone: Images, rotulo: 'Fotos', total: fotos.length },
               {
@@ -504,13 +493,11 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
           atendimentos={atendimentos}
           planos={planos}
           quotes={quotes}
-          avaliacoes={avaliacoes}
           catalogProcedures={catalogProcedures}
           templates={templates}
           acoes={{
             orcamento: acoesDeOrcamento,
             onVerAnamnese: setFichaAberta,
-            onVerAvaliacao: setAvaliacaoAberta,
             onAcompanhamento: onAcompanhamentoAtendimento,
             onNovaAnamnese: ({ tratamento, templateId }) =>
               novaAnamnese({
@@ -518,10 +505,6 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                 procedureId: tratamento?.procedureId,
                 procedimentoNome: tratamento?.procedimentoNome,
               }),
-            onNovaAvaliacao: ({ tratamento }) => {
-              setProcedimentoDaAvaliacao(tratamento || null);
-              setEmitindoAvaliacao(true);
-            },
             onAgendar,
             onRegistrarVisita,
             onAbrirNaAgenda,
@@ -571,8 +554,8 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
         </div>
       )}
 
-      {/* Fichas: anamneses, avaliações e relatórios, com o filtro em cima. "Todas" mostra as três
-          listas, uma abaixo da outra, na ordem da jornada. */}
+      {/* Fichas: anamneses e relatórios (a Avaliação inclusive, que é um atendimento), com o
+          filtro em cima. "Todas" mostra as listas uma abaixo da outra, na ordem da jornada. */}
       {aba === 'fichas' && (
         <div className="space-y-5">
           <FiltrosDaAba
@@ -583,10 +566,9 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
               {
                 id: 'todas',
                 rotulo: 'Todas',
-                total: records.length + avaliacoes.length + totalAtendimentos,
+                total: records.length + totalAtendimentos,
               },
               { id: 'anamneses', rotulo: 'Anamneses', total: records.length },
-              { id: 'avaliacoes', rotulo: 'Avaliações', total: avaliacoes.length },
               { id: 'acompanhamentos', rotulo: 'Relatórios', total: totalAtendimentos },
             ]}
           />
@@ -711,54 +693,6 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
                         </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* As avaliações — abrem o formulário, com o orçamento que tiver sido montado nelas. */}
-          {(filtroFichas === 'todas' || filtroFichas === 'avaliacoes') && (
-            <section className="space-y-2">
-              {filtroFichas === 'todas' && (
-                <h3 className="font-serif-luxury text-title text-ink">Avaliações</h3>
-              )}
-              {avaliacoesEmOrdem.length === 0 ? (
-                <div className="glass-card rounded-sm py-14 text-center">
-                  <ClipboardCheck className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-                  <p className="text-sm text-gray-500">
-                    Nenhuma avaliação para {patient.nome.split(' ')[0]} ainda.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => criarNovo('avaliacao')}
-                    className="mt-3 inline-flex items-center gap-1.5 text-body font-semibold text-brand hover:underline"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Nova avaliação
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {avaliacoesEmOrdem.map((avaliacao) => (
-                    <button
-                      key={avaliacao.id}
-                      type="button"
-                      onClick={() => setAvaliacaoAberta(avaliacao)}
-                      aria-label={`Abrir a avaliação de ${avaliacao.procedimentoNome}`}
-                      className="w-full text-left glass-card glass-card-hover rounded-sm p-4 flex flex-wrap items-center gap-4"
-                    >
-                      <span className="flex-1 min-w-[160px]">
-                        <span className="block text-sm text-ink truncate">{avaliacao.procedimentoNome}</span>
-                        <span className="flex items-center gap-1.5 text-body text-gray-400 truncate">
-                          <Calendar className="w-3 h-3 shrink-0" />
-                          {formatarDataAtendimento(avaliacao.dataAtendimento)}
-                          {avaliacao.profissionalNome && ` · ${avaliacao.profissionalNome}`}
-                          {avaliacao.orcamentoId && ' · com orçamento'}
-                        </span>
-                      </span>
-                      <Eye className="w-4 h-4 text-gray-400 ml-auto shrink-0" />
-                    </button>
                   ))}
                 </div>
               )}
@@ -966,33 +900,6 @@ export const PatientDetailView: React.FC<PatientDetailViewProps> = ({
 
       {/* Formulário, prévia e compartilhamento de orçamento. */}
       {acoesDeOrcamento.modais}
-
-      {/* Nova avaliação — já com esta paciente escolhida. Sempre montado: é ele que guarda a
-          ficha em preenchimento depois de o painel de emissão fechar. */}
-      <EmissaoDeAvaliacao
-        aberto={emitindoAvaliacao}
-        onFechar={() => setEmitindoAvaliacao(false)}
-        pacientes={todosPacientes}
-        catalogo={catalogProcedures}
-        professionals={clinic.professionals || []}
-        clinic={clinic}
-        professionalIdPadrao={currentProfessionalId}
-        pacienteInicial={patient}
-        procedimentoInicial={procedimentoDaAvaliacao}
-      />
-
-      {avaliacaoAberta && (
-        <FichaFillModal
-          tipo="avaliacao"
-          isOpen
-          onClose={() => setAvaliacaoAberta(null)}
-          alvo={alvoDoRegistro(avaliacaoAberta)}
-          paciente={patient}
-          catalogo={catalogProcedures}
-          professionals={clinic.professionals || []}
-          clinicProfile={clinic}
-        />
-      )}
 
       <ConfirmDialog pedido={confirmacao} onFechar={() => setConfirmacao(null)} />
     </div>

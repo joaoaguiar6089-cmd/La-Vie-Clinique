@@ -22,6 +22,7 @@ import { enquadramentoDaCapa } from '../utils/enquadramentoDaFoto';
 import { ClinicLogo } from './ClinicLogo';
 import { useEstiloDaMarca } from './documentos/MarcaDosDocumentos';
 import { FotoEnquadrada } from './FotoEnquadrada';
+import { ehAvaliacao } from '../utils/procedimentoAvaliacao';
 
 const IMAGEM_PADRAO =
   'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1000&auto=format&fit=crop&q=80';
@@ -310,7 +311,8 @@ export const PrintableProcedureCard: React.FC<PrintableProcedureCardProps> = ({
                   </div>
                   <div className="text-right text-[11px] text-gray-400 shrink-0">
                     <p>Condições personalizadas</p>
-                    <p className="text-brand-light">Avaliação inclusa</p>
+                    {/* Na própria Avaliação, "avaliação inclusa" não diz nada. */}
+                    {!ehAvaliacao(procedure) && <p className="text-brand-light">Avaliação inclusa</p>}
                   </div>
                 </div>
               )}

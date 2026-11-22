@@ -216,6 +216,7 @@ export const ListaDeItensDoOrcamento: React.FC<{
             onMudarConsumo={(linhas) => orc.mudarConsumoDoItem(item.id, linhas)}
             onRecalcularConsumo={() => orc.recalcularConsumoDoItem(item.id)}
             mostrarCustos={orc.mostrarCustos}
+            procedimento={item.procedureId ? procedures.find((p) => p.id === item.procedureId) : undefined}
           />
         ))}
       </div>

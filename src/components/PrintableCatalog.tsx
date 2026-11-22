@@ -12,6 +12,9 @@ import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { enquadramentoDaCapa } from '../utils/enquadramentoDaFoto';
 import { FotoEnquadrada } from './FotoEnquadrada';
 
+/** O grupo dos procedimentos sem categoria — na prática, a Avaliação, que não tem uma. */
+const NOME_DO_GRUPO_SEM_CATEGORIA = 'Avaliação';
+
 interface PrintableCatalogProps {
   procedures: Procedure[];
   clinic: ClinicProfile;
@@ -58,9 +61,11 @@ const HorizontalProcedureCard: React.FC<ProcedureCardProps> = ({
         enquadramento={enquadramentoDaCapa(proc, 'catalogo')}
         className="w-full h-full"
       />
-      <div className="absolute top-3.5 left-3.5 px-3 py-1 rounded-sm bg-ink/90 text-brand-light text-[10px] font-bold uppercase tracking-wider shadow-sm">
-        {proc.category}
-      </div>
+      {proc.category && (
+        <div className="absolute top-3.5 left-3.5 px-3 py-1 rounded-sm bg-ink/90 text-brand-light text-[10px] font-bold uppercase tracking-wider shadow-sm">
+          {proc.category}
+        </div>
+      )}
       {hasDiscount && (
         <div className="absolute top-3.5 right-3.5 px-2.5 py-1 rounded-sm bg-brand text-white text-[10px] font-bold uppercase tracking-wider shadow-sm">
           {isPromoDay ? `-${formatDiscountPercent(discountPercent)}% OFF` : 'Especial'}
@@ -532,7 +537,7 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
                                   Corporal" virava "Ultrassom Microfocado - Co...". Fonte menor e
                                   quebra em duas linhas em vez de truncar. */}
                               <h3 className="text-[12px] font-bold text-ink group-hover:text-brand-hover transition-colors leading-snug break-words hyphens-auto">
-                                {catName}
+                                {catName || NOME_DO_GRUPO_SEM_CATEGORIA}
                               </h3>
                               <span className="text-[11px] text-muted block mt-0.5 font-medium">
                                 {countInCat} {countInCat === 1 ? 'procedimento' : 'procedimentos'}
@@ -633,7 +638,7 @@ export const PrintableCatalog: React.FC<PrintableCatalogProps> = ({
                     <span>Sumário</span>
                   </a>
                   <span className="text-xs font-bold text-ink uppercase tracking-wider">
-                    {page.categoryName}
+                    {page.categoryName || NOME_DO_GRUPO_SEM_CATEGORIA}
                   </span>
                 </div>
 

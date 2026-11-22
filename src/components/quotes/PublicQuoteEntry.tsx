@@ -253,6 +253,11 @@ export const PublicQuoteEntry: React.FC = () => {
                     {item.titulo}
                   </span>
                 </h2>
+                {item.foco && (
+                  <p className="text-xs text-ink-soft mt-1">
+                    Foco: <span className="font-semibold text-ink">{item.foco}</span>
+                  </p>
+                )}
                 {item.profissionalNome && (
                   <p className="text-xs text-ink-soft mt-0.5">com {item.profissionalNome}</p>
                 )}

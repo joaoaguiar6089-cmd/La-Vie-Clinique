@@ -59,6 +59,7 @@ import {
   subscribeToPerguntasGeraisDaFicha,
 } from '../../services/databaseService';
 import { formatDateOnly } from '../../utils/formatters';
+import { alvoDoQueFoiAvaliado, ehAvaliacao, nomeComFoco } from '../../utils/procedimentoAvaliacao';
 import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { PrintableFichaSheet } from './PrintableFichaSheet';
 import { SidePanel } from '../common/SidePanel';
@@ -86,7 +87,7 @@ interface FichaFillModalProps {
   /** Avisa quem abriu que a ficha mudou. */
   onSalvou?: () => void;
   /** "Cadastrar ficha para este procedimento" — leva ao gerenciador. */
-  onCadastrarFicha?: (alvo: { procedureId?: string; procedimentoNome: string }) => void;
+  onCadastrarFicha?: (alvo: { procedureId?: string; procedimentoNome: string; foco?: string }) => void;
 }
 
 const labelClass = 'block text-label font-semibold uppercase tracking-wider text-gray-400 mb-1';
@@ -203,8 +204,6 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
   /** Juntar ou tirar um grupo não gera `input`/`change` no painel. */
   const [mexeuNosGrupos, setMexeuNosGrupos] = useState(false);
   const [escolhendoFicha, setEscolhendoFicha] = useState(false);
-  /** As fichas-modelo de avaliação, para puxar perguntas — assinadas só com a escolha aberta. */
-  const [fichasDeAvaliacao, setFichasDeAvaliacao] = useState<EvaluationTemplate[] | null>(null);
   /** A pergunta recém-criada — o texto dela já abre com o cursor. */
   const [dadoRecemCriado, setDadoRecemCriado] = useState<string | null>(null);
   /** Puxar as perguntas de outra ficha-modelo — no relatório, para o procedimento sem ficha. */
@@ -213,12 +212,12 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
    * Avaliação personalizada: sem ficha-modelo e sem perguntas gerais — só as perguntas que a
    * profissional cria na hora.
    */
-  const personalizada = tipo === 'avaliacao' && !!(alvo.personalizada || registro?.personalizada);
-
-  useEffect(() => {
-    if (!isOpen || !escolhendoFicha || tipo !== 'acompanhamento') return;
-    return subscribeToFichasModelo('avaliacao', setFichasDeAvaliacao);
-  }, [isOpen, escolhendoFicha, tipo]);
+  const personalizada = !!(alvo.personalizada || registro?.personalizada);
+  /**
+   * O relatório de uma Avaliação — o atendimento do procedimento fixo. É nele que mora o
+   * orçamento que a avaliação monta (procedimentos, consumo estimado e pagamento).
+   */
+  const relatorioDaAvaliacao = tipo === 'acompanhamento' && ehAvaliacao(alvo);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -346,12 +345,25 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
 
   const uso = useUsoDeMaterial(alvo, catalogo, isOpen && tipo === 'acompanhamento');
   // O registro só vale depois de lido: antes disso, `null` quer dizer "ainda não sei", não "não há".
+  // O orçamento é do que foi avaliado — o foco da Avaliação ("Harmonização Glútea") —, não da
+  // própria Avaliação.
+  const alvoDoOrcamento = useMemo(
+    () => (relatorioDaAvaliacao ? alvoDoQueFoiAvaliado(alvo, catalogo) : alvo),
+    [relatorioDaAvaliacao, alvo, catalogo]
+  );
   const orcamento = useOrcamentoDaAvaliacao({
-    alvo,
+    alvo: alvoDoOrcamento,
     paciente,
     catalogo,
     clinic: clinicProfile,
-    ativo: isOpen && tipo === 'avaliacao',
+    // Também no relatório que veio de uma avaliação com orçamento montado (a migração o pôs no
+    // atendimento daquela visita): o orçamento continua à vista onde foi feito.
+    ativo:
+      isOpen &&
+      (tipo === 'avaliacao' ||
+        relatorioDaAvaliacao ||
+        !!registro?.orcamentoId ||
+        (registro?.consumoEstimado || []).length > 0),
     registro: carregando ? undefined : registro,
   });
 
@@ -541,6 +553,8 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     const gravarFicha =
       tipo === 'avaliacao' ||
       !!registro ||
+      // O orçamento montado precisa da ficha para guardar o elo com ela.
+      (orcamento.ativo && orcamento.estimou) ||
       fichaTemConteudo({
         perguntas: todasAsPerguntas,
         respostas,
@@ -569,7 +583,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
     let doOrcamento: OrcamentoGravado = { consumoEstimado: [] };
     try {
       // Só a avaliação tem orçamento. Vai primeiro: a ficha guarda o id que ele ganhar.
-      if (tipo === 'avaliacao') {
+      if (orcamento.ativo) {
         etapa = 'orcamento';
         doOrcamento = await orcamento.gravar();
         etapa = 'ficha';
@@ -584,6 +598,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
           pacienteGenero: paciente?.genero || registro?.pacienteGenero,
           procedureId: alvo.procedureId,
           procedimentoNome: alvo.procedimentoNome,
+          foco: alvo.foco || undefined,
           dataAtendimento: alvo.data,
           professionalId: alvo.professionalId,
           profissionalNome: profissional?.name || alvo.profissionalNome,
@@ -601,8 +616,8 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
           // Os campos legados (`fotoSessaoUrl`…) são espelhados da primeira por `saveRegistroDeFicha`.
           fotosSessao: fotos,
           // Só a avaliação estima consumo e tem orçamento; vazio apaga o que estava gravado.
-          consumoEstimado: tipo === 'avaliacao' ? doOrcamento.consumoEstimado : undefined,
-          orcamentoId: tipo === 'avaliacao' ? doOrcamento.orcamentoId : undefined,
+          consumoEstimado: orcamento.ativo ? doOrcamento.consumoEstimado : undefined,
+          orcamentoId: orcamento.ativo ? doOrcamento.orcamentoId : undefined,
           observacoes: observacoes.trim() || undefined,
           preenchidoEm: registro?.preenchidoEm || agora,
           createdAt: registro?.createdAt || agora,
@@ -644,7 +659,9 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
         setGerandoPdf(false);
       }
       if (doOrcamento.aviso) {
-        setErro(`A avaliação foi salva. ${doOrcamento.aviso}`);
+        setErro(
+          `${rotulos.artigo === 'a' ? 'A' : 'O'} ${rotulos.minusculo} foi salv${rotulos.artigo}. ${doOrcamento.aviso}`
+        );
         setErrosAoSalvar((n) => n + 1);
       }
       if (paraImprimir) {
@@ -666,7 +683,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       const motivo = (e as Error).message;
       setErro(
         etapa === 'orcamento'
-          ? `Não foi possível salvar o orçamento — a avaliação não foi salva: ${motivo}`
+          ? `Não foi possível salvar o orçamento — ${rotulos.artigo} ${rotulos.minusculo} não foi salv${rotulos.artigo}: ${motivo}`
           : etapa === 'ficha'
           ? `Não foi possível salvar ${rotulos.artigo} ${rotulos.minusculo}: ${motivo}`
           : gravarFicha
@@ -726,10 +743,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
    */
   type OpcaoDeGrupo = { tipo: TipoDeFicha; rotulo: string; fichas: EvaluationTemplate[] };
   const opcoesDeGrupo: OpcaoDeGrupo[] = (
-    [
-      { tipo: 'acompanhamento', rotulo: 'Fichas de relatório', fichas },
-      { tipo: 'avaliacao', rotulo: 'Fichas de avaliação', fichas: fichasDeAvaliacao || [] },
-    ] as OpcaoDeGrupo[]
+    [{ tipo: 'acompanhamento', rotulo: 'Fichas de relatório', fichas }] as OpcaoDeGrupo[]
   )
     .map((o) => ({ ...o, fichas: o.fichas.filter((f) => (f.perguntas || []).length > 0) }))
     .filter((o) => o.fichas.length > 0);
@@ -884,7 +898,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
       aberto
       onFechar={onClose}
       titulo={rotulos.nome}
-      sobretitulo={`${alvo.pacienteNome} · ${alvo.procedimentoNome} · ${formatDateOnly(alvo.data)}`}
+      sobretitulo={`${alvo.pacienteNome} · ${nomeComFoco(alvo.procedimentoNome, alvo.foco)} · ${formatDateOnly(alvo.data)}`}
       formato="central"
       largura="tela"
       navegacao={navegacao}
@@ -943,7 +957,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="flex-1 min-w-[200px]">
                         Nenhuma ficha-modelo de {rotulos.minusculo} cadastrada para{' '}
-                        <strong className="text-ink">{alvo.procedimentoNome}</strong>.
+                        <strong className="text-ink">{nomeComFoco(alvo.procedimentoNome, alvo.foco)}</strong>.
                         {montavel
                           ? ' Dá para usar as perguntas de outra ficha-modelo e criar as suas em "Nova pergunta".'
                           : ' Dá para criar as perguntas em "Nova pergunta".'}
@@ -954,6 +968,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
                             onCadastrarFicha({
                               procedureId: alvo.procedureId,
                               procedimentoNome: alvo.procedimentoNome,
+                              foco: alvo.foco,
                             })
                           }
                           className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand hover:underline"
@@ -985,11 +1000,7 @@ export const FichaFillModal: React.FC<FichaFillModalProps> = ({
 
                     {montavel && escolhendoFicha && (
                       <div className="space-y-3">
-                        {fichasDeAvaliacao === null && opcoesDeGrupo.length === 0 ? (
-                          <div className="flex justify-center py-3 text-gray-400">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          </div>
-                        ) : opcoesDeGrupo.length === 0 ? (
+                        {opcoesDeGrupo.length === 0 ? (
                           <p className="text-[13px] text-muted">
                             Nenhuma ficha-modelo com perguntas cadastrada ainda. Use "Nova pergunta" para
                             criar os campos deste relatório.

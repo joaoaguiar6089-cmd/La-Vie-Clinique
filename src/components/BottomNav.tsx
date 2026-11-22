@@ -53,7 +53,7 @@ export type AcaoDeCriacao =
 interface BottomNavProps {
   currentView: AppView;
   onSelectView: (view: AppView) => void;
-  /** Abre as Fichas na aba em que se estava da última vez (anamneses, avaliações ou relatórios). */
+  /** Abre as Fichas na aba em que se estava da última vez (anamneses ou relatórios). */
   onAbrirFichas: () => void;
   onCriar: (acao: AcaoDeCriacao) => void;
   onOpenSettings: () => void;
@@ -237,13 +237,13 @@ const PainelMais: React.FC<{
 
         <div>
           <p className="text-[13px] font-semibold text-brand-light">Documentos da paciente</p>
-          {/* As fichas — anamnese, avaliação (antes do procedimento) e relatório (depois do
-              atendimento), abas de uma tela só. Os orçamentos moram no Financeiro, logo abaixo. */}
+          {/* As fichas — anamnese e relatório (o registro de cada atendimento, inclusive o da
+              Avaliação), abas de uma tela só. Os orçamentos moram no Financeiro, logo abaixo. */}
           <div className="flex flex-col">
             <LinhaDoMais
               icone={ClipboardList}
               titulo="Fichas"
-              sub="Anamneses, avaliações e relatórios"
+              sub="Anamneses e relatórios"
               ativo={ehAbaDasFichas(currentView)}
               onClick={abrirFichas}
             />
@@ -423,8 +423,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         />
         <ItemDaFolha
           icone={ClipboardCheck}
-          rotulo="Nova avaliação"
-          descricao="Antes do procedimento"
+          rotulo="Agendar avaliação"
+          descricao="Um atendimento do procedimento Avaliação"
           onClick={() => criar('avaliacao')}
         />
         <ItemDaFolha

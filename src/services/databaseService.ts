@@ -82,13 +82,7 @@ import { definirClinicaAtual } from '../lib/estadoDaClinica';
 import { downscaleDataUrl, estimateFirestoreDocBytes, FIRESTORE_DOC_SAFE_BYTES } from '../utils/imageCompressor';
 import { subirImagem, subirImagemOuManter } from './imageStorage';
 import { isLaserCategory } from '../utils/templateMatching';
-import {
-  fotosDaSessao,
-  MIGRACAO_AVALIACAO,
-  MIGRACAO_FICHAS_PADRAO,
-  planejarInstalacaoDeFichasPadrao,
-  planejarMigracao,
-} from '../utils/evaluations';
+import { fotosDaSessao, MIGRACAO_AVALIACAO, planejarMigracao } from '../utils/evaluations';
 import { paraArray } from '../utils/firestoreShapes';
 import { ehDaEquipe, uidsDaEquipe } from '../utils/equipe';
 import { nomeDosProcedimentos } from '../utils/attendances';
@@ -100,6 +94,18 @@ import {
   situacaoDoLink,
 } from '../utils/agendamentoLink';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../utils/fichasClinicas';
+import {
+  ehAvaliacao,
+  focosDoProcedimento,
+  limparCamposDaAvaliacao,
+  PROCEDIMENTO_AVALIACAO_ID,
+  procedimentoAvaliacaoPadrao,
+} from '../utils/procedimentoAvaliacao';
+import {
+  MIGRACAO_AVALIACAO_VIRA_RELATORIO,
+  paraAtendimentoNovo,
+  planejarMigracaoDaAvaliacao,
+} from '../utils/migracaoDaAvaliacao';
 import { AtualizacaoDaJuncao, ColecaoDaPaciente, DocumentoInterno } from '../utils/juncaoDePacientes';
 import type { DocumentoDoArquivo } from '../utils/arquivoDePacientes';
 import { caixaLida, linhasSemValor } from '../utils/estoque';
@@ -118,8 +124,6 @@ import {
   SAMPLE_PATIENTS,
   SAMPLE_ANAMNESIS_RECORDS,
   LASER_HEALTH_QUESTIONS,
-  DEFAULT_EVALUATION_TEMPLATES,
-  FICHAS_AVALIACAO_DEMAIS_PROCEDIMENTOS,
 } from '../data/anamnesisInitialData';
 import { gravarLocal, lerLocal } from '../lib/estadoDaClinica';
 
@@ -131,6 +135,9 @@ const CLINIC_SETTINGS_DOC_ID = 'main_profile';
 // abre o link da ficha não tem login, e sem nome/telefone/endereço a página não tem como se
 // identificar nem gerar o botão de WhatsApp. Este documento carrega só o que é publicável.
 const CLINIC_PUBLIC_PROFILE_DOC_ID = 'public_profile';
+// O procedimento fixo "Avaliação" — fora da coleção `procedures`, para não contar no limite do
+// plano gratuito e existir em toda clínica sem precisar ser criado. Ver `utils/procedimentoAvaliacao.ts`.
+const PROCEDIMENTO_AVALIACAO_DOC_ID = 'procedimento_avaliacao';
 
 const ANAMNESIS_GENERAL_QUESTIONS_COLLECTION = 'anamnesis_general_questions';
 const ANAMNESIS_TEMPLATES_COLLECTION = 'anamnesis_templates';
@@ -692,8 +699,11 @@ export function normalizeProcedureList(procedures: Procedure[]): Procedure[] {
       ...proc,
       category: normalizeLaserCategory(proc.category),
     }))
-    .sort((a, b) => (a.order || 99) - (b.order || 99));
+    // A Avaliação nunca reordenada (ordem 0) abre o catálogo; reordenada, fica onde a puseram.
+    .sort((a, b) => ordemNoCatalogo(a) - ordemNoCatalogo(b));
 }
+
+const ordemNoCatalogo = (p: Procedure): number => (ehAvaliacao(p) && !p.order ? 0 : p.order || 99);
 
 /**
  * As áreas voltam do banco em formato de gravação (string por polígono) e precisam virar números
@@ -710,20 +720,48 @@ function desserializarMapaDoProcedimento(proc: Procedure): Procedure {
   };
 }
 
+/** A Avaliação como veio do banco — ou a padrão, para a clínica que nunca a salvou. */
+function avaliacaoLida(dados: Record<string, unknown> | undefined): Procedure {
+  const padrao = procedimentoAvaliacaoPadrao();
+  if (!dados) return padrao;
+  return limparCamposDaAvaliacao(
+    desserializarMapaDoProcedimento({
+      ...padrao,
+      ...(dados as unknown as Procedure),
+      title: typeof dados.title === 'string' && dados.title.trim() ? dados.title : padrao.title,
+      images: paraArray<string>(dados.images),
+      focos: paraArray<string>(dados.focos),
+    })
+  );
+}
+
 /**
  * Subscribe to real-time procedures updates.
+ *
+ * São duas leituras: a coleção `procedures` e o documento da Avaliação, que entra sempre na lista
+ * (ver `PROCEDIMENTO_AVALIACAO_DOC_ID`). A lista só sai depois das duas primeiras respostas, para
+ * a Avaliação não piscar com o valor padrão antes do gravado. Se a leitura da Avaliação falhar, a
+ * lista segue com a padrão — o catálogo não pode depender dela.
  */
 export function subscribeToProcedures(
   onUpdate: (procedures: Procedure[]) => void,
   onError?: (err: Error) => void
 ) {
   const q = query(colecaoDaClinica(PROCEDURES_COLLECTION), orderBy('order', 'asc'));
-  
-  return onSnapshot(
+  let colecao: Procedure[] | null = null;
+  let avaliacao: Procedure | null = null;
+  const emitir = () => {
+    if (colecao === null || avaliacao === null) return;
+    onUpdate([avaliacao, ...colecao]);
+  };
+
+  const pararColecao = onSnapshot(
     q,
     (snapshot) => {
       const items: Procedure[] = [];
       snapshot.forEach((docSnap) => {
+        // A Avaliação mora fora da coleção; um documento com o id dela aqui seria uma cópia.
+        if (docSnap.id === PROCEDIMENTO_AVALIACAO_ID) return;
         const proc = { ...(docSnap.data() as Procedure), id: docSnap.id };
         // Normaliza apenas para exibir. Gravar de volta daqui era uma gravação disparada pela
         // *chegada* do dado, e não por uma ação de alguém: toda máquina que abrisse o app
@@ -736,7 +774,8 @@ export function subscribeToProcedures(
         // não aceita array dentro de array) e precisam voltar a ser números.
         items.push(desserializarMapaDoProcedimento(proc));
       });
-      onUpdate(items);
+      colecao = items;
+      emitir();
     },
     (error) => {
       if (isQuotaOrOfflineError(error)) {
@@ -747,6 +786,24 @@ export function subscribeToProcedures(
       if (onError) onError(error);
     }
   );
+
+  const pararAvaliacao = onSnapshot(
+    documentoDaClinica(CLINIC_SETTINGS_COLLECTION, PROCEDIMENTO_AVALIACAO_DOC_ID),
+    (docSnap) => {
+      avaliacao = avaliacaoLida(docSnap.exists() ? (docSnap.data() as Record<string, unknown>) : undefined);
+      emitir();
+    },
+    (error) => {
+      console.warn('Não foi possível ler o procedimento Avaliação; segue o padrão:', error);
+      avaliacao = procedimentoAvaliacaoPadrao();
+      emitir();
+    }
+  );
+
+  return () => {
+    pararColecao();
+    pararAvaliacao();
+  };
 }
 
 /**
@@ -824,9 +881,12 @@ export function subscribeToClinicProfile(
  * e abaixo do teto de 1 MB do Firestore. Além disso, utiliza comConfirmacaoDoServidor para assegurar
  * que o servidor do Firestore confirmou a gravação antes de dar como salvo.
  */
-export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure> {
+export async function saveProcedureToDb(procedureRecebido: Procedure): Promise<Procedure> {
+  const ehAAvaliacao = ehAvaliacao(procedureRecebido);
+  const procedure = ehAAvaliacao ? limparCamposDaAvaliacao(procedureRecebido) : procedureRecebido;
   // Procedimento novo no plano gratuito cheio: avisa antes de subir as fotos (que ficariam soltas).
-  await conferirVagaParaNovo('procedures', procedure.id);
+  // A Avaliação não conta: ela existe em toda clínica, fora do limite.
+  if (!ehAAvaliacao) await conferirVagaParaNovo('procedures', procedure.id);
 
   // Se ainda houver alguma imagem em base64, processa e envia para o Firebase Storage
   let imagensFinais = procedure.images || [];
@@ -903,6 +963,16 @@ export async function saveProcedureToDb(procedure: Procedure): Promise<Procedure
         `limite de 1 MB por procedimento. Remova alguma foto (ou use um link de imagem em vez do ` +
         `upload) e salve novamente.`
     );
+  }
+
+  if (ehAAvaliacao) {
+    await comConfirmacaoDoServidor(
+      setDoc(documentoDaClinica(CLINIC_SETTINGS_COLLECTION, PROCEDIMENTO_AVALIACAO_DOC_ID), dataToSave, {
+        merge: true,
+      }),
+      'do procedimento'
+    );
+    return procedureAtualizado;
   }
 
   await gravarCadastroContado('procedures', procedureAtualizado.id, dataToSave, (g) =>
@@ -983,6 +1053,9 @@ export async function arquivarProcedimentosNoDb(ids: string[], emFavorDe: string
  * Delete a procedure by ID.
  */
 export async function deleteProcedureFromDb(procedureId: string): Promise<void> {
+  if (ehAvaliacao(procedureId)) {
+    throw new Error('A Avaliação é um procedimento fixo e não pode ser excluída.');
+  }
   // Sem confirmação do servidor a exclusão fica apenas na fila local do SDK e a promise nunca
   // resolve: a tela diria "removido" para um procedimento que continua no banco. O contador de uso
   // desce no mesmo lote (libera a vaga no plano gratuito).
@@ -1321,6 +1394,15 @@ export async function getMapasDeAreasPublicos(): Promise<MapaDeAreasPublico[]> {
 export async function reorderProceduresInDb(procedures: Procedure[]): Promise<void> {
   const batch = writeBatch(db);
   procedures.forEach((proc, index) => {
+    if (ehAvaliacao(proc)) {
+      // Documento que pode ainda não existir (a clínica nunca salvou a Avaliação): `set` com merge.
+      batch.set(
+        documentoDaClinica(CLINIC_SETTINGS_COLLECTION, PROCEDIMENTO_AVALIACAO_DOC_ID),
+        { order: index + 1 },
+        { merge: true }
+      );
+      return;
+    }
     const docRef = documentoDaClinica(PROCEDURES_COLLECTION, proc.id);
     batch.update(docRef, { order: index + 1 });
   });
@@ -1414,32 +1496,15 @@ export async function seedAnamnesisInitialDataIfEmpty(): Promise<void> {
       await migrarPerguntasProfissionalParaAvaliacao();
     }
 
-    const avaliacoesVazias = await colecaoVaziaNoServidor(EVALUATION_TEMPLATES_COLLECTION);
-    if (avaliacoesVazias === null) {
-      // Só o seed da clínica nova fica para depois; nada acima depende disto.
-      console.warn(
-        'Sem confirmação do servidor sobre "evaluation_templates". Se isto persistir, publique ' +
-          'as regras: firebase deploy --only firestore:rules,storage'
-      );
-    } else if (avaliacoesVazias && templatesVazios) {
-      // Clínica nova: as duas coleções nascem juntas, já separadas.
-      console.log('Seeding initial evaluation templates...');
-      const batch = writeBatch(db);
-      DEFAULT_EVALUATION_TEMPLATES.forEach((f) => {
-        batch.set(
-          documentoDaClinica(EVALUATION_TEMPLATES_COLLECTION, f.id),
-          cleanForFirestore({ ...f, updatedAt: new Date().toISOString() })
-        );
-      });
-      await batch.commit();
-    }
-
-    // 2c. As fichas de avaliação dos demais procedimentos do catálogo.
+    // 2b'. A ficha de avaliação deixou de existir: as fichas-modelo e as avaliações preenchidas
+    // viram fichas e relatórios do procedimento fixo Avaliação. Depois da migração de cima, que
+    // ainda pode produzir fichas de avaliação na clínica que nunca a rodou. A clínica nova não
+    // ganha mais fichas de avaliação padrão — não há mais onde usá-las.
     //
-    // Depois da migração, e não no lugar dela: a instalação pula o que já está coberto, e o que a
-    // migração acabou de criar (laser e glúteo, com id `aval-tpl-…`) precisa estar lá para ser
-    // visto como cobertura. Antes, as duas fichas padrão de mesmo alvo entrariam junto.
-    await instalarFichasDeAvaliacaoPadrao();
+    // Sem `await`: ela lê os atendimentos da clínica inteira uma vez, e o painel não precisa
+    // esperar por isso para abrir. Nenhuma tela lê mais as avaliações antigas; os relatórios
+    // aparecem pelas assinaturas assim que são gravados.
+    void migrarAvaliacoesParaRelatorios();
 
     // 3 e 4. Pacientes e fichas de exemplo: só no modo legado. Clínica da Zulia começa sem
     // cadastro nenhum.
@@ -3428,9 +3493,21 @@ function normalizarFichaAvaliacaoLida(f: EvaluationTemplate): EvaluationTemplate
     nome: f.nome || 'Ficha sem nome',
     procedureIds: paraArray<string>(bruto.procedureIds),
     categorias: paraArray<string>(bruto.categorias),
+    focosPorProcedimento: focosPorProcedimentoLidos(bruto.focosPorProcedimento),
     perguntas: paraArray<AnamnesisQuestion>(bruto.perguntas),
     temFotoSessao: !!f.temFotoSessao,
   };
+}
+
+/** O mapa procedimento → focos da ficha-modelo, só com listas de texto não vazias. */
+function focosPorProcedimentoLidos(bruto: unknown): Record<string, string[]> | undefined {
+  if (!bruto || typeof bruto !== 'object') return undefined;
+  const saida: Record<string, string[]> = {};
+  Object.entries(bruto as Record<string, unknown>).forEach(([procId, lista]) => {
+    const focos = paraArray<string>(lista).filter((f) => typeof f === 'string' && !!f.trim());
+    if (focos.length > 0) saida[procId] = focos;
+  });
+  return Object.keys(saida).length > 0 ? saida : undefined;
 }
 
 /** Mesmo cuidado, para a ficha preenchida. */
@@ -3528,17 +3605,23 @@ export async function saveFichaModelo(tipo: TipoDeFicha, ficha: EvaluationTempla
   ]);
 
   const docRef = documentoDaClinica(COLECOES_DA_FICHA[tipo].modelos, ficha.id);
-  await setDoc(
-    docRef,
-    cleanForFirestore({
+  const focos = focosPorProcedimentoLidos(ficha.focosPorProcedimento);
+  const dados = {
+    ...cleanForFirestore({
       ...ficha,
+      focosPorProcedimento: undefined,
       fotoModeloUrl: modelo || undefined,
       fotoModeloFemininoUrl: feminino || undefined,
       fotoModeloMasculinoUrl: masculino || undefined,
       updatedAt: new Date().toISOString(),
     }),
-    { merge: true }
-  );
+    // O mapa vai inteiro, e ausente apaga: com `merge`, o mapa se mesclaria com o gravado e o
+    // foco desmarcado continuaria valendo.
+    focosPorProcedimento: focos || deleteField(),
+  };
+  // `mergeFields` com todos os campos da ficha: cada um é substituído por inteiro (o mapa de
+  // focos inclusive), e o que a ficha não traz continua como estava, como no `merge` de antes.
+  await setDoc(docRef, dados, { mergeFields: Object.keys(dados) });
 }
 
 export async function saveEvaluationTemplate(ficha: EvaluationTemplate): Promise<void> {
@@ -3718,6 +3801,8 @@ export async function saveRegistroDeFicha(
       consumoEstimado.length > 0 ? consumoEstimado.map((m) => cleanForFirestore(m)) : deleteField(),
     // Desmarcar o consumo desfaz o elo com o orçamento (que continua salvo em Orçamentos).
     orcamentoId: registro.orcamentoId || deleteField(),
+    // O foco acompanha o do atendimento: tirado de lá, sai daqui também.
+    foco: registro.foco || deleteField(),
     // Mesma razão: tirar o último grupo extra precisa apagar o campo, não deixá-lo como estava.
     gruposExtras:
       gruposExtras.length > 0 ? gruposExtras.map((g) => cleanForFirestore(g)) : deleteField(),
@@ -4577,102 +4662,172 @@ async function migrarPerguntasProfissionalParaAvaliacao(): Promise<void> {
   }
 }
 
-/** Atalho local da instalação das fichas padrão, pelo mesmo motivo do atalho da migração. */
-const FICHAS_PADRAO_LOCAL_KEY = 'lavie:fichas-avaliacao-padrao:v1';
+// ==========================================
+// A AVALIAÇÃO VIRA ATENDIMENTO (E A FICHA DELA, RELATÓRIO)
+// ==========================================
+
+/** Atalho local da migração, pelo mesmo motivo do atalho das anteriores. */
+const MIGRACAO_AVALIACAO_VIRA_RELATORIO_LOCAL_KEY = 'lavie:avaliacao-vira-relatorio:v1';
 
 /**
- * Instala as fichas de avaliação dos demais procedimentos do catálogo — microfocado facial e
- * corporal, drenagem, lipedema, ozonioterapia, soroterapia, íntimo e capilar.
+ * Converte as fichas de avaliação desta clínica em fichas e relatórios do procedimento fixo
+ * Avaliação, uma vez por clínica. O que vai para onde é decidido por `planejarMigracaoDaAvaliacao`
+ * (sem banco, conferido por `scripts/verificar-avaliacao-vira-relatorio.ts`); aqui só se lê do
+ * servidor e se grava.
  *
- * Existe porque `DEFAULT_EVALUATION_TEMPLATES` só é gravado em clínica **nova**, quando as duas
- * coleções nascem juntas. A clínica que já está rodando chega aqui com as fichas que a migração
- * das perguntas da profissional produziu — laser e glúteo — e mais nada: todo o resto do catálogo
- * abriria a avaliação mostrando só o campo de observações.
+ * Grava, por avaliação preenchida: o atendimento novo da Avaliação (ou a marca no atendimento que
+ * já existia), o relatório e a exclusão da avaliação — no mesmo lote, para nenhuma ficar sem a
+ * outra. Os ids são fixos (`atd-aval-<id da avaliação>`): dois aparelhos rodando ao mesmo tempo
+ * gravam o mesmo documento, e não dois. As fichas-modelo e as perguntas gerais de avaliação
+ * ficam onde estão, sem tela nenhuma que as leia: não há por que apagar o que foi copiado.
  *
- * O que ela grava é sempre **acréscimo**: `planejarInstalacaoDeFichasPadrao` deixa de fora o id
- * que já existe e o alvo que já tem ficha, então nada que a equipe editou na tela é sobrescrito.
- * Mesmo assim o `set` vai sem `merge`, porque o que passa pelo filtro é, por definição, documento
- * que ainda não existe.
+ * Antes de pôr um relatório num atendimento que já existia, confere no servidor que ele ainda não
+ * tem relatório; se tiver, a avaliação ganha o seu próprio atendimento da Avaliação.
  */
-async function instalarFichasDeAvaliacaoPadrao(): Promise<void> {
+async function migrarAvaliacoesParaRelatorios(): Promise<void> {
   try {
-    if (lerLocal(FICHAS_PADRAO_LOCAL_KEY)) return;
+    if (lerLocal(MIGRACAO_AVALIACAO_VIRA_RELATORIO_LOCAL_KEY)) return;
   } catch {
     // localStorage indisponível — segue pela leitura no servidor.
   }
 
   const jaAplicadas = await migracoesAplicadasNaClinica();
   if (jaAplicadas === null) return; // leitura falhou; tenta de novo no próximo boot
-  if (jaAplicadas.includes(MIGRACAO_FICHAS_PADRAO)) {
+  const marcarLocal = () => {
     try {
-      gravarLocal(FICHAS_PADRAO_LOCAL_KEY, '1');
+      gravarLocal(MIGRACAO_AVALIACAO_VIRA_RELATORIO_LOCAL_KEY, '1');
     } catch {
-      // sem atalho local; a leitura acima continua resolvendo
+      // sem atalho local; a leitura do marcador continua resolvendo
     }
+  };
+  if (jaAplicadas.includes(MIGRACAO_AVALIACAO_VIRA_RELATORIO)) {
+    marcarLocal();
     return;
   }
 
   try {
-    const [avalSnap, procSnap] = await Promise.all([
+    const [fichasSnap, geraisSnap, relSnap, registrosSnap, procSnap, avaliacaoSnap] = await Promise.all([
       getDocsFromServer(colecaoDaClinica(EVALUATION_TEMPLATES_COLLECTION)),
+      getDocsFromServer(colecaoDaClinica(EVALUATION_GENERAL_QUESTIONS_COLLECTION)),
+      getDocsFromServer(colecaoDaClinica(FOLLOWUP_TEMPLATES_COLLECTION)),
+      getDocsFromServer(colecaoDaClinica(EVALUATION_RECORDS_COLLECTION)),
       getDocsFromServer(colecaoDaClinica(PROCEDURES_COLLECTION)),
+      getDocFromServer(documentoDaClinica(CLINIC_SETTINGS_COLLECTION, PROCEDIMENTO_AVALIACAO_DOC_ID)),
     ]);
 
+    const fichasDeAvaliacao: EvaluationTemplate[] = [];
+    fichasSnap.forEach((d) =>
+      fichasDeAvaliacao.push(normalizarFichaAvaliacaoLida({ ...(d.data() as EvaluationTemplate), id: d.id }))
+    );
+    const geraisDeAvaliacao: AnamnesisQuestion[] = [];
+    geraisSnap.forEach((d) => geraisDeAvaliacao.push({ ...(d.data() as AnamnesisQuestion), id: d.id }));
+    geraisDeAvaliacao.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+    const fichasDeRelatorio: EvaluationTemplate[] = [];
+    relSnap.forEach((d) => fichasDeRelatorio.push({ ...(d.data() as EvaluationTemplate), id: d.id }));
+    const registros: EvaluationRecord[] = [];
+    registrosSnap.forEach((d) => registros.push(normalizarRegistroDeFichaLido(d.id, d.data())));
     const catalogo: Procedure[] = [];
-    procSnap.forEach((d) => catalogo.push({ ...(d.data() as Procedure), id: d.id }));
-
-    // Catálogo vazio não é "clínica sem procedimentos": é leitura que não trouxe o que devia, e
-    // toda ficha padrão seria descartada por não ter alvo — de forma definitiva, porque a marca
-    // ficaria gravada. Sai sem marcar nada e tenta de novo na próxima abertura.
-    if (catalogo.length === 0) return;
-
-    const existentes: EvaluationTemplate[] = [];
-    avalSnap.forEach((d) => existentes.push({ ...(d.data() as EvaluationTemplate), id: d.id }));
-
-    const aInstalar = planejarInstalacaoDeFichasPadrao(
-      FICHAS_AVALIACAO_DEMAIS_PROCEDIMENTOS,
-      existentes,
-      catalogo
+    procSnap.forEach((d) => {
+      if (d.id !== PROCEDIMENTO_AVALIACAO_ID) catalogo.push({ ...(d.data() as Procedure), id: d.id });
+    });
+    const avaliacao = avaliacaoLida(
+      avaliacaoSnap.exists() ? (avaliacaoSnap.data() as Record<string, unknown>) : undefined
     );
 
-    const batch = writeBatch(db);
-    aInstalar.forEach((ficha) => {
-      batch.set(
-        documentoDaClinica(EVALUATION_TEMPLATES_COLLECTION, ficha.id),
-        cleanForFirestore({ ...ficha, updatedAt: new Date().toISOString() })
-      );
+    // Os atendimentos só fazem falta se há avaliação preenchida para pôr em algum.
+    const atendimentos: Attendance[] = [];
+    if (registros.length > 0) {
+      const atdSnap = await getDocsFromServer(colecaoDaClinica(ATTENDANCES_COLLECTION));
+      atdSnap.forEach((d) => atendimentos.push({ ...(d.data() as Attendance), id: d.id }));
+    }
+
+    const agora = new Date().toISOString();
+    const plano = planejarMigracaoDaAvaliacao({
+      fichasDeAvaliacao,
+      geraisDeAvaliacao,
+      fichasDeRelatorio,
+      registros,
+      atendimentos,
+      catalogo,
+      avaliacao,
+      agora,
     });
 
-    batch.set(
+    // ---- fichas-modelo e focos da Avaliação ----
+    const lote = writeBatch(db);
+    plano.fichas.forEach((ficha) => {
+      lote.set(
+        documentoDaClinica(FOLLOWUP_TEMPLATES_COLLECTION, ficha.id),
+        cleanForFirestore({ ...ficha, updatedAt: agora })
+      );
+    });
+    const focosAntes = focosDoProcedimento(avaliacao);
+    if (plano.focosDaAvaliacao.length !== focosAntes.length) {
+      lote.set(
+        documentoDaClinica(CLINIC_SETTINGS_COLLECTION, PROCEDIMENTO_AVALIACAO_DOC_ID),
+        { focos: plano.focosDaAvaliacao, updatedAt: agora },
+        { merge: true }
+      );
+    }
+    await lote.commit();
+
+    // ---- as avaliações preenchidas, cada uma com o seu atendimento, no mesmo lote ----
+    const porOrigem = new Map(registros.map((r) => [r.id, r]));
+    const itens = await Promise.all(
+      plano.relatorios.map(async (item) => {
+        if (item.atendimentoNovo) return item;
+        // Atendimento que já existia: confere que ninguém gravou relatório nele desde a leitura.
+        const jaTem = await getDocFromServer(
+          documentoDaClinica(FOLLOWUP_RECORDS_COLLECTION, item.relatorio.id)
+        ).then((d) => d.exists());
+        return jaTem ? paraAtendimentoNovo(item, porOrigem.get(item.origemId)!, avaliacao, agora) : item;
+      })
+    );
+
+    for (const grupo of emLotes(itens, Math.floor((GRAVACOES_POR_LOTE - 2) / 3))) {
+      const loteDosRegistros = writeBatch(db);
+      grupo.forEach((item) => {
+        if (item.atendimentoNovo) {
+          loteDosRegistros.set(
+            documentoDaClinica(ATTENDANCES_COLLECTION, item.atendimentoNovo.id),
+            cleanForFirestore(item.atendimentoNovo),
+            { merge: true }
+          );
+        } else {
+          loteDosRegistros.update(documentoDaClinica(ATTENDANCES_COLLECTION, item.relatorio.id), {
+            acompanhamentoPreenchidoEm: item.relatorio.preenchidoEm || agora,
+            ...(item.focoNoAtendimentoExistente ? { foco: item.focoNoAtendimentoExistente } : {}),
+            updatedAt: agora,
+          });
+        }
+        loteDosRegistros.set(
+          documentoDaClinica(FOLLOWUP_RECORDS_COLLECTION, item.relatorio.id),
+          cleanForFirestore(item.relatorio),
+          { merge: true }
+        );
+        loteDosRegistros.delete(documentoDaClinica(EVALUATION_RECORDS_COLLECTION, item.origemId));
+      });
+      await loteDosRegistros.commit();
+    }
+
+    await setDoc(
       documentoDaClinica(CLINIC_SETTINGS_COLLECTION, MIGRATIONS_DOC_ID),
       {
-        aplicadas: Array.from(new Set([...jaAplicadas, MIGRACAO_FICHAS_PADRAO])),
-        updatedAt: new Date().toISOString(),
+        aplicadas: Array.from(new Set([...jaAplicadas, MIGRACAO_AVALIACAO_VIRA_RELATORIO])),
+        updatedAt: agora,
       },
       { merge: true }
     );
-
-    await batch.commit();
-    if (aInstalar.length > 0) {
+    if (plano.fichas.length > 0 || itens.length > 0) {
       console.log(
-        `Fichas de avaliação instaladas: ${aInstalar.map((f) => f.nome).join(', ')}.`
+        `Avaliação virou atendimento: ${plano.fichas.length} ficha(s)-modelo e ${itens.length} ` +
+          'avaliação(ões) preenchida(s) passaram a relatório.'
       );
     }
-
-    try {
-      gravarLocal(FICHAS_PADRAO_LOCAL_KEY, '1');
-    } catch {
-      // sem atalho local; a leitura do marcador continua resolvendo
-    }
+    marcarLocal();
   } catch (e) {
-    if ((e as { code?: string })?.code === 'permission-denied') {
-      console.error(
-        'INSTALAÇÃO DAS FICHAS DE AVALIAÇÃO BLOQUEADA: o banco recusou a escrita em ' +
-          '"evaluation_templates". Rode `firebase deploy --only firestore:rules,storage` e ' +
-          'recarregue a página. Nada foi alterado; roda sozinha na próxima abertura.'
-      );
-    } else {
-      console.warn('Instalação das fichas de avaliação padrão falhou; tentará de novo:', e);
-    }
+    // Não derruba o boot: tenta de novo na próxima abertura. O que já foi gravado não se repete —
+    // os ids são fixos, e a avaliação migrada já saiu da coleção antiga.
+    console.warn('A migração das avaliações para relatórios falhou; tentará de novo:', e);
   }
 }

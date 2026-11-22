@@ -182,6 +182,16 @@ export type EnquadramentosDaFoto = Partial<Record<VisualizacaoDaFoto, Enquadrame
 export interface Procedure {
   id: string;
   title: string;
+  /**
+   * "Foco / Aplicação": as variações de um mesmo procedimento — na Harmonização Glútea,
+   * "Trocanter", "Volume", "Celulite"; na Avaliação, o procedimento que a cliente quer avaliar.
+   *
+   * É a clínica que cadastra a lista; o agendamento, o orçamento e o relatório escolhem um deles
+   * (`Attendance.foco`, `QuoteItem.foco`, `EvaluationRecord.foco`), e a ficha-modelo do relatório
+   * pode valer só para alguns (`EvaluationTemplate.focosPorProcedimento`). Ausente ou vazia = o
+   * procedimento não tem variações, e nenhum desses lugares pergunta o foco.
+   */
+  focos?: string[];
   subtitle?: string;
   category: string;
   description: string;
@@ -380,7 +390,6 @@ export type AppView =
   | 'procedures'
   | 'patients'
   | 'anamnesis'
-  | 'evaluations'
   | 'acompanhamento'
   | 'estoque'
   | 'quotes'
@@ -721,6 +730,8 @@ export interface QuoteItem {
   areaId?: string;
   categoria: string;
   titulo: string;
+  /** O foco / aplicação do procedimento neste item — "Trocanter". Ver `Procedure.focos`. */
+  foco?: string;
   professionalId?: string; // Quem realiza ESTE procedimento — cada item pode ter a sua
   profissionalNome?: string; // Espelha o nome no momento da emissão, para o documento
   valorTabela: number; // Nasce de Procedure.promotionalPrice ?? price, editável
@@ -1109,6 +1120,8 @@ export interface ProcedimentoDaVisita {
   /** Origem no catálogo. Ausente quando o procedimento foi digitado à mão. */
   procedureId?: string;
   procedimentoNome: string;
+  /** O foco / aplicação deste procedimento na visita — ver `Procedure.focos`. */
+  foco?: string;
   /** Vínculo com o plano deste procedimento. Ausente = avulso. */
   planoId?: string;
 }
@@ -1140,6 +1153,12 @@ export interface Attendance extends MarcaDeArquivo {
   duracaoMin?: number;
   procedureId?: string;
   procedimentoNome: string;
+  /**
+   * O foco / aplicação do procedimento principal — "Trocanter" da Harmonização Glútea, ou, na
+   * Avaliação, o procedimento que a cliente veio avaliar. Ver `Procedure.focos`. É ele que escolhe
+   * a ficha-modelo do relatório desta visita.
+   */
+  foco?: string;
   /** Vínculo com o plano. Ausente = sessão avulsa. */
   planoId?: string;
   /**
@@ -1707,6 +1726,13 @@ export interface EvaluationTemplate {
   procedureIds?: string[];
   /** Categorias inteiras do catálogo — todo procedimento delas herda esta ficha. */
   categorias?: string[];
+  /**
+   * Restringe o vínculo por procedimento a alguns focos dele (`Procedure.focos`): procedureId →
+   * focos em que a ficha vale. Procedimento ausente daqui, ou com lista vazia, = vale para todos
+   * os focos dele. É o que separa o relatório da "Harmonização Glútea · Trocanter" do da
+   * "· Celulite", e a avaliação de glúteo da avaliação de laser — ver `fichaDeAvaliacaoPara()`.
+   */
+  focosPorProcedimento?: Record<string, string[]>;
   perguntas: AnamnesisQuestion[];
   /** Liga o upload da foto daquela sessão (o registro de evolução), anotável como o mapa. */
   temFotoSessao: boolean;
@@ -1790,6 +1816,8 @@ export interface EvaluationRecord extends MarcaDeArquivo {
   pacienteGenero?: PatientGender;
   procedureId?: string;
   procedimentoNome: string;
+  /** O foco / aplicação do atendimento, espelhado dele no momento do registro. */
+  foco?: string;
   /** YYYY-MM-DD. No acompanhamento, a data da visita; na avaliação, a data em que foi feita. */
   dataAtendimento: string;
   professionalId?: string;

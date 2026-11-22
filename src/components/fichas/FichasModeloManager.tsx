@@ -25,6 +25,13 @@ import { ConfirmDialog, ConfirmRequest } from '../ConfirmDialog';
 import { downscaleImage } from '../../utils/imageCompressor';
 import { ROTULOS_DA_FICHA, TipoDeFicha } from '../../utils/fichasClinicas';
 import { ListaSuspensa } from '../common/ListaSuspensa';
+import { focosDaFichaNoProcedimento } from '../../utils/evaluations';
+import {
+  ehAvaliacao,
+  focosDoProcedimento,
+  mesmoFoco,
+  nomeComFoco,
+} from '../../utils/procedimentoAvaliacao';
 
 interface FichasModeloManagerProps {
   tipo: TipoDeFicha;
@@ -39,7 +46,7 @@ interface FichasModeloManagerProps {
    * ficha nova já nasce vinculada a ele, para a profissional não ter que procurá-lo na lista
    * logo depois de o sistema já saber qual era.
    */
-  criarPara?: { procedureId?: string; procedimentoNome: string } | null;
+  criarPara?: { procedureId?: string; procedimentoNome: string; foco?: string } | null;
   onCriarParaConsumido?: () => void;
 }
 
@@ -119,10 +126,14 @@ export const FichasModeloManager: React.FC<FichasModeloManagerProps> = ({
     const proc = criarPara.procedureId
       ? catalogo.find((p) => p.id === criarPara.procedureId)
       : undefined;
+    // Veio de um atendimento com foco: a ficha nasce só para aquele foco — é para isso que ele
+    // existe ("o relatório do trocanter não é o da celulite").
+    const foco = proc && criarPara.foco ? criarPara.foco : undefined;
     setDraft({
       ...nova,
-      nome: `${rotulos.curto} — ${proc?.title || criarPara.procedimentoNome}`,
+      nome: `${rotulos.curto} — ${nomeComFoco(proc?.title || criarPara.procedimentoNome, foco)}`,
       procedureIds: proc ? [proc.id] : [],
+      focosPorProcedimento: proc && foco ? { [proc.id]: [foco] } : undefined,
     });
     setErro('');
     onCriarParaConsumido?.();
@@ -139,7 +150,11 @@ export const FichasModeloManager: React.FC<FichasModeloManagerProps> = ({
     }
     if (f.procedureIds?.length) {
       const nomes = f.procedureIds
-        .map((id) => catalogo.find((p) => p.id === id)?.title)
+        .map((id) => {
+          const titulo = catalogo.find((p) => p.id === id)?.title;
+          const focos = focosDaFichaNoProcedimento(f, id);
+          return titulo ? nomeComFoco(titulo, focos.join(', ')) : undefined;
+        })
         .filter(Boolean) as string[];
       partes.push(nomes.length === 1 ? nomes[0] : `${f.procedureIds.length} procedimentos`);
     }
@@ -262,7 +277,18 @@ export const FichasModeloManager: React.FC<FichasModeloManagerProps> = ({
     setSalvando(true);
     setErro('');
     try {
-      await onSalvar({ ...draft, nome: draft.nome.trim() });
+      // Os focos de um procedimento tirado da lista saem junto.
+      const focosPorProcedimento = Object.fromEntries(
+        Object.entries(draft.focosPorProcedimento || {}).filter(
+          ([id, focos]) => (draft.procedureIds || []).includes(id) && (focos as string[]).length > 0
+        )
+      );
+      await onSalvar({
+        ...draft,
+        nome: draft.nome.trim(),
+        focosPorProcedimento:
+          Object.keys(focosPorProcedimento).length > 0 ? focosPorProcedimento : undefined,
+      });
       setDraft(null);
     } catch (e) {
       console.error(e);
@@ -539,6 +565,70 @@ export const FichasModeloManager: React.FC<FichasModeloManagerProps> = ({
                       para outra — o específico sempre vence o geral.
                     </p>
                   </div>
+
+                  {/* Foco / Aplicação: a ficha pode valer só para alguns focos do procedimento. */}
+                  {(draft.procedureIds || []).map((id) => {
+                    const proc = catalogo.find((p) => p.id === id);
+                    const escolhidos = focosDaFichaNoProcedimento(draft, id);
+                    const opcoes = [
+                      ...focosDoProcedimento(proc),
+                      ...escolhidos.filter((f) => !focosDoProcedimento(proc).some((x) => mesmoFoco(x, f))),
+                    ];
+                    if (!proc || opcoes.length === 0) return null;
+                    const mudarFocos = (focos: string[]) => {
+                      const mapa = { ...(draft.focosPorProcedimento || {}) };
+                      if (focos.length > 0) mapa[id] = focos;
+                      else delete mapa[id];
+                      setDraft({
+                        ...draft,
+                        focosPorProcedimento: Object.keys(mapa).length > 0 ? mapa : undefined,
+                      });
+                    };
+                    const pilula = (ativo: boolean) =>
+                      `px-2.5 py-1 rounded-sm text-body font-medium border transition-colors ${
+                        ativo
+                          ? 'bg-ink text-white border-ink'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                      }`;
+                    return (
+                      <div key={id}>
+                        <label className={labelClass}>
+                          {ehAvaliacao(proc) ? 'Avaliação para' : `Foco / Aplicação · ${proc.title}`}
+                        </label>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => mudarFocos([])}
+                            className={pilula(escolhidos.length === 0)}
+                          >
+                            Todos os focos
+                          </button>
+                          {opcoes.map((f) => {
+                            const ativo = escolhidos.some((x) => mesmoFoco(x, f));
+                            return (
+                              <button
+                                key={f}
+                                type="button"
+                                onClick={() =>
+                                  mudarFocos(
+                                    ativo
+                                      ? escolhidos.filter((x) => !mesmoFoco(x, f))
+                                      : [...escolhidos, f]
+                                  )
+                                }
+                                className={pilula(ativo)}
+                              >
+                                {f}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-label text-gray-400 mt-1.5">
+                          A ficha de um foco vence a de "Todos os focos" do mesmo procedimento.
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Perguntas */}

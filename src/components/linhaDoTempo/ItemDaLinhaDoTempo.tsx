@@ -3,6 +3,7 @@ import { CalendarCheck, ChevronRight, ClipboardCheck, ClipboardList, Receipt, Us
 import { ItemDaLinha } from '../../utils/pacienteResumo';
 import { formatBRL, formatDateOnly } from '../../utils/formatters';
 import { ROTULO_DO_STATUS } from '../../utils/attendances';
+import { ehAvaliacao } from '../../utils/procedimentoAvaliacao';
 import { QuoteDesfecho } from '../quotes/QuoteDesfecho';
 
 const ICONE_DO_TIPO = {
@@ -18,6 +19,13 @@ const ROTULO_DO_TIPO = {
   avaliacao: 'Avaliação',
   orcamento: 'Orçamento',
 } as const;
+
+/**
+ * A etapa que o item mostra: o atendimento do procedimento Avaliação aparece como Avaliação —
+ * com o ícone e a cor dela —, embora seja um atendimento como os outros.
+ */
+const etapaDoItem = (item: ItemDaLinha): keyof typeof ROTULO_DO_TIPO =>
+  item.tipo === 'atendimento' && ehAvaliacao(item.ref) ? 'avaliacao' : item.tipo;
 
 interface ItemDaLinhaDoTempoProps {
   item: ItemDaLinha;
@@ -52,7 +60,7 @@ export const ItemDaLinhaDoTempo: React.FC<ItemDaLinhaDoTempoProps> = ({
   mostrarData,
   onAbrir,
 }) => {
-  const Icone = ICONE_DO_TIPO[item.tipo];
+  const Icone = ICONE_DO_TIPO[etapaDoItem(item)];
 
   const hora = item.tipo === 'atendimento' ? item.ref.hora : undefined;
   const pacienteId = item.ref.pacienteId;
@@ -86,7 +94,7 @@ export const ItemDaLinhaDoTempo: React.FC<ItemDaLinhaDoTempoProps> = ({
               </span>
             )}
             <span className="text-label uppercase tracking-wider text-muted">
-              {ROTULO_DO_TIPO[item.tipo]}
+              {ROTULO_DO_TIPO[etapaDoItem(item)]}
             </span>
             {faltou && (
               <span className="px-1.5 py-0.5 rounded-xs bg-danger-bg text-danger border border-danger-line text-label font-semibold uppercase tracking-wider">
@@ -104,7 +112,7 @@ export const ItemDaLinhaDoTempo: React.FC<ItemDaLinhaDoTempoProps> = ({
           <button
             type="button"
             onClick={() => onAbrir(item)}
-            aria-label={`Abrir ${ROTULO_DO_TIPO[item.tipo].toLowerCase()}: ${item.titulo}${
+            aria-label={`Abrir ${ROTULO_DO_TIPO[etapaDoItem(item)].toLowerCase()}: ${item.titulo}${
               onAbrirPaciente ? ` — ${item.ref.pacienteNome}` : ''
             }`}
             className={`block max-w-full text-left truncate group-hover:text-brand transition-colors after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand ${
@@ -163,7 +171,7 @@ export const CartaoDaLinhaDoTempo: React.FC<{
   onAbrirPaciente: (pacienteId: string) => void;
   onAbrir: (item: ItemDaLinha) => void;
 }> = ({ item, onAbrirPaciente, onAbrir }) => {
-  const Icone = ICONE_DO_TIPO[item.tipo];
+  const Icone = ICONE_DO_TIPO[etapaDoItem(item)];
   const hora = item.tipo === 'atendimento' ? item.ref.hora : undefined;
   const pacienteId = item.ref.pacienteId;
   const faltou = item.tipo === 'atendimento' && item.ref.status === 'faltou';
@@ -184,14 +192,14 @@ export const CartaoDaLinhaDoTempo: React.FC<{
         <span
           aria-hidden
           className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-xl flex items-center justify-center ${
-            faltou ? 'bg-danger-bg text-danger' : TOM_DO_TIPO[item.tipo]
+            faltou ? 'bg-danger-bg text-danger' : TOM_DO_TIPO[etapaDoItem(item)]
           }`}
         >
           <Icone className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
         </span>
         <span className="min-w-0 flex-auto leading-tight">
           <span className="block text-[11px] sm:text-[12px] font-bold uppercase tracking-[.1em] sm:tracking-[.12em] text-ink-soft">
-            {ROTULO_DO_TIPO[item.tipo]}
+            {ROTULO_DO_TIPO[etapaDoItem(item)]}
           </span>
           {hora && <span className="block text-[16px] font-bold text-ink tabular-nums">{hora}</span>}
         </span>
@@ -217,7 +225,7 @@ export const CartaoDaLinhaDoTempo: React.FC<{
         <button
           type="button"
           onClick={() => onAbrir(item)}
-          aria-label={`Abrir ${ROTULO_DO_TIPO[item.tipo].toLowerCase()}: ${item.titulo} — ${item.ref.pacienteNome}`}
+          aria-label={`Abrir ${ROTULO_DO_TIPO[etapaDoItem(item)].toLowerCase()}: ${item.titulo} — ${item.ref.pacienteNome}`}
           className="block max-w-full text-left text-[14px] leading-snug text-ink-soft line-clamp-2 group-hover:text-brand-deep transition-colors after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand"
         >
           {item.titulo}

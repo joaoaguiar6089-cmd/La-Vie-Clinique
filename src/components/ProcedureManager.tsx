@@ -15,6 +15,7 @@ import { Procedure, ClinicProfile, AnamnesisTemplate } from '../types';
 import { formatBRL } from '../utils/formatters';
 import { enquadramentoDaCapa } from '../utils/enquadramentoDaFoto';
 import { SkeletonCards } from './common/Skeleton';
+import { ehAvaliacao } from '../utils/procedimentoAvaliacao';
 import { FotoEnquadrada } from './FotoEnquadrada';
 
 interface ProcedureManagerProps {
@@ -96,7 +97,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
   });
 
   const featuredCount = procedures.filter((p) => p.isFeatured).length;
-  const categoriesCount = Array.from(new Set(procedures.map((p) => p.category))).length;
+  const categoriesCount = Array.from(new Set(procedures.map((p) => p.category).filter(Boolean))).length;
 
   /** Quantos procedimentos cada categoria tem — mostrado na folha de filtro para decidir antes de tocar. */
   const contagemPorCategoria = (cat: string) =>
@@ -146,18 +147,24 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
           onClick: () => onToggleFeatured(menuProcedure.id),
           danger: false,
         },
-        {
-          label: 'Duplicar',
-          icon: Copy,
-          onClick: () => onDuplicateProcedure(menuProcedure),
-          danger: false,
-        },
-        {
-          label: 'Excluir',
-          icon: Trash2,
-          onClick: () => onDeleteProcedure(menuProcedure.id),
-          danger: true,
-        },
+        // A Avaliação é fixa: não se exclui, e uma cópia dela seria um segundo procedimento de
+        // avaliação disputando o lugar do primeiro.
+        ...(ehAvaliacao(menuProcedure)
+          ? []
+          : [
+              {
+                label: 'Duplicar',
+                icon: Copy,
+                onClick: () => onDuplicateProcedure(menuProcedure),
+                danger: false,
+              },
+              {
+                label: 'Excluir',
+                icon: Trash2,
+                onClick: () => onDeleteProcedure(menuProcedure.id),
+                danger: true,
+              },
+            ]),
       ]
     : [];
 
@@ -285,7 +292,7 @@ export const ProcedureManager: React.FC<ProcedureManagerProps> = ({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="text-label font-semibold uppercase tracking-wider text-brand truncate">
-                        {proc.category}
+                        {ehAvaliacao(proc) ? 'Procedimento fixo' : proc.category}
                       </p>
                       <h3
                         onClick={() => onViewDetails(proc)}

@@ -54,7 +54,7 @@ const ACOES: { id: AcaoRapida; titulo: string; detalhe: string }[] = [
   { id: 'novo-agendamento', titulo: 'Novo agendamento', detalhe: 'Marcar um horário na agenda' },
   { id: 'nova-paciente', titulo: 'Nova paciente', detalhe: 'Cadastrar uma paciente' },
   { id: 'novo-orcamento', titulo: 'Novo orçamento', detalhe: 'Montar um orçamento' },
-  { id: 'nova-avaliacao', titulo: 'Nova avaliação', detalhe: 'Avaliar antes do procedimento' },
+  { id: 'nova-avaliacao', titulo: 'Agendar avaliação', detalhe: 'Um atendimento do procedimento Avaliação' },
   { id: 'novo-relatorio', titulo: 'Novo relatório', detalhe: 'Registrar um atendimento' },
 ];
 

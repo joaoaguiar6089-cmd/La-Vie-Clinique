@@ -243,7 +243,7 @@ export const useOrcamentoDaAvaliacao = ({
       const atual = await getQuoteById(ligado.id);
       if (atual && !isQuoteEditavel(atual)) {
         throw new Error(
-          `o orçamento ${atual.numero} foi enviado à paciente enquanto esta avaliação estava aberta. ` +
+          `o orçamento ${atual.numero} foi enviado à paciente enquanto este relatório estava aberto. ` +
             'Feche e abra de novo — para mudar o orçamento, substitua-o pela tela de Orçamentos.'
         );
       }
@@ -327,7 +327,7 @@ export const SecaoOrcamentoDaAvaliacao: React.FC<{
           <span className="font-semibold">Consumo estimado de produto e orçamento</span>
           <span className="block text-muted">
             Marque para estimar os produtos e as quantidades que {oa.nomeDoProcedimento} vai usar e
-            montar o orçamento junto — valores, desconto e pagamento. Salvar a avaliação salva o
+            montar o orçamento junto — valores, desconto e pagamento. Salvar o relatório salva o
             orçamento, que aparece em Orçamentos.
           </span>
         </span>
@@ -337,8 +337,8 @@ export const SecaoOrcamentoDaAvaliacao: React.FC<{
         <p className="flex items-start gap-2 text-body text-ink-soft bg-surface border border-line rounded-xl px-3 py-2.5">
           <Info className="w-4 h-4 shrink-0 mt-px text-brand" />
           <span>
-            O orçamento {orcamentoExistente.numero} continua salvo em Orçamentos — ao salvar, esta
-            avaliação só deixa de estar ligada a ele.
+            O orçamento {orcamentoExistente.numero} continua salvo em Orçamentos — ao salvar, este
+            relatório só deixa de estar ligado a ele.
           </span>
         </p>
       )}
@@ -358,7 +358,7 @@ export const SecaoOrcamentoDaAvaliacao: React.FC<{
           </p>
           <p className="text-body text-muted">
             Já saiu do rascunho, então não muda mais por aqui. Para ajustar, substitua-o pela tela
-            de Orçamentos — o consumo desta avaliação fica como está.
+            de Orçamentos — o consumo deste relatório fica como está.
           </p>
         </div>
       )}
@@ -386,7 +386,7 @@ export const SecaoOrcamentoDaAvaliacao: React.FC<{
               <span>
                 <span className="font-semibold text-ink">Criar o orçamento ao salvar</span>
                 <span className="block">
-                  Esta avaliação não tem orçamento ligado. Se já foi feito um a partir dela, deixe
+                  Este relatório não tem orçamento ligado. Se já foi feito um a partir dele, deixe
                   desmarcado para não duplicar — o consumo é salvo do mesmo jeito.
                 </span>
               </span>
@@ -396,8 +396,8 @@ export const SecaoOrcamentoDaAvaliacao: React.FC<{
               <Info className="w-4 h-4 shrink-0 mt-px text-brand" />
               <span>
                 {orc.itens.some((i) => i.calculadoPorConsumo && (orc.custos[i.id] || []).length > 0)
-                  ? `Preenchido com o consumo padrão de ${oa.nomeDoProcedimento}. Ajuste ao caso desta paciente — o orçamento é criado ao salvar a avaliação.`
-                  : 'Adicione os produtos e as quantidades estimadas para esta paciente — o orçamento é criado ao salvar a avaliação.'}
+                  ? `Preenchido com o consumo padrão de ${oa.nomeDoProcedimento}. Ajuste ao caso desta paciente — o orçamento é criado ao salvar o relatório.`
+                  : 'Adicione os produtos e as quantidades estimadas para esta paciente — o orçamento é criado ao salvar o relatório.'}
               </span>
             </p>
           )}

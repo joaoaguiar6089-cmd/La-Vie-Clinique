@@ -227,14 +227,13 @@ export interface FotoDaPaciente {
   procedimentoNome: string;
   fichaId: string;
   /** De que ficha ela veio — vira a legenda no seletor do antes e depois. */
-  tipo: 'anamnese' | 'avaliacao' | 'acompanhamento';
+  tipo: 'anamnese' | 'acompanhamento';
   /** A legenda que a profissional deu à foto da sessão — "frente", "perfil direito". */
   legenda?: string;
 }
 
 export const ROTULO_DA_ORIGEM: Record<FotoDaPaciente['tipo'], string> = {
   anamnese: 'Anamnese',
-  avaliacao: 'Avaliação',
   acompanhamento: 'Relatório',
 };
 
@@ -248,8 +247,8 @@ export const legendaDaFoto = (f: FotoDaPaciente): string =>
 /**
  * As fotos da paciente, da mais antiga para a mais nova — a ordem de uma evolução.
  *
- * Vêm das três fichas: a foto que ela mandou na anamnese, e as fotos da sessão tiradas na clínica
- * na avaliação (o antes, quase sempre) e em cada acompanhamento (o depois).
+ * Vêm das fichas: a foto que ela mandou na anamnese, e as fotos da sessão tiradas na clínica em
+ * cada relatório — o da Avaliação (o antes, quase sempre) e o de cada atendimento (o depois).
  *
  * A versão anotada não entra: o comparador serve para ver a pele, e a seta desenhada por cima
  * atrapalha justamente a comparação. Ela continua na ficha e no PDF, que é onde a anotação
@@ -257,7 +256,6 @@ export const legendaDaFoto = (f: FotoDaPaciente): string =>
  */
 export const fotosDaPaciente = (
   records: AnamnesisRecord[],
-  avaliacoes: EvaluationRecord[] = [],
   acompanhamentos: EvaluationRecord[] = []
 ): FotoDaPaciente[] => {
   const daSessao = (
@@ -283,7 +281,6 @@ export const fotosDaPaciente = (
       fichaId: r.id,
       tipo: 'anamnese' as const,
     })),
-    ...daSessao(avaliacoes, 'avaliacao'),
     ...daSessao(acompanhamentos, 'acompanhamento'),
   ]
     .filter((f) => !!f.url)
@@ -312,7 +309,6 @@ export const angulosDaPaciente = (patient: Patient): AnguloAntesDepois[] =>
 export type ItemDaLinha =
   | { tipo: 'atendimento'; id: string; data: string; titulo: string; profissional?: string; ref: Attendance }
   | { tipo: 'anamnese'; id: string; data: string; titulo: string; profissional?: string; ref: AnamnesisRecord }
-  | { tipo: 'avaliacao'; id: string; data: string; titulo: string; profissional?: string; ref: EvaluationRecord }
   | { tipo: 'orcamento'; id: string; data: string; titulo: string; profissional?: string; ref: Quote };
 
 /**
@@ -320,14 +316,13 @@ export type ItemDaLinha =
  *
  * Uma linha só, e não quatro listas: a pergunta que a profissional faz ao abrir a ficha é "o que
  * andou acontecendo aqui", e a resposta atravessa os tipos de documento da jornada — orçamento,
- * anamnese, avaliação e atendimento. As abas continuam existindo para quando a pergunta é sobre um
- * tipo específico.
+ * anamnese e atendimento (a Avaliação é um atendimento). As abas continuam existindo para quando a
+ * pergunta é sobre um tipo específico.
  */
 export const linhaDoTempo = (
   atendimentos: Attendance[],
   records: AnamnesisRecord[],
-  quotes: Quote[],
-  avaliacoes: EvaluationRecord[] = []
+  quotes: Quote[]
 ): ItemDaLinha[] => {
   const itens: ItemDaLinha[] = [
     ...atendimentos.map((a) => ({
@@ -340,14 +335,6 @@ export const linhaDoTempo = (
     })),
     ...records.map((r) => ({
       tipo: 'anamnese' as const,
-      id: r.id,
-      data: (r.dataAtendimento || r.createdAt || '').slice(0, 10),
-      titulo: r.procedimentoNome,
-      profissional: r.profissionalNome,
-      ref: r,
-    })),
-    ...avaliacoes.map((r) => ({
-      tipo: 'avaliacao' as const,
       id: r.id,
       data: (r.dataAtendimento || r.createdAt || '').slice(0, 10),
       titulo: r.procedimentoNome,
@@ -373,13 +360,12 @@ export const linhaDoTempo = (
 };
 
 /**
- * A ordem da jornada da paciente: Orçamento → Anamnese → Avaliação → Atendimento. É ela que
- * desempata o mesmo dia — a linha vai do mais recente para o mais antigo, então a etapa mais
- * adiantada da jornada fica em cima.
+ * A ordem da jornada da paciente: Orçamento → Anamnese → Atendimento (a Avaliação inclusive). É
+ * ela que desempata o mesmo dia — a linha vai do mais recente para o mais antigo, então a etapa
+ * mais adiantada da jornada fica em cima.
  */
 export const ETAPA_DA_JORNADA: Record<ItemDaLinha['tipo'], number> = {
   orcamento: 0,
   anamnese: 1,
-  avaliacao: 2,
   atendimento: 3,
 };

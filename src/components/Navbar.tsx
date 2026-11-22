@@ -19,7 +19,7 @@ import { ehAbaDasFichas } from '../utils/abasDasFichas';
 interface NavbarProps {
   currentView: AppView;
   onSelectView: (view: AppView) => void;
-  /** Abre as Fichas na aba em que se estava da última vez (anamneses, avaliações ou relatórios). */
+  /** Abre as Fichas na aba em que se estava da última vez (anamneses ou relatórios). */
   onAbrirFichas: () => void;
   onOpenExport: () => void;
   onOpenSettings: () => void;
@@ -171,13 +171,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       ativo: currentView === 'patients',
       onClick: ir('patients'),
     },
-    // As fichas da paciente — anamnese, avaliação (antes do procedimento) e relatório (depois do
-    // atendimento), que são as abas de uma tela só e por isso um item só no menu. Os orçamentos
+    // As fichas da paciente — anamnese e relatório (o registro de cada atendimento, inclusive o da
+    // Avaliação), que são as abas de uma tela só e por isso um item só no menu. Os orçamentos
     // moram no Financeiro, na primeira aba.
     {
       id: 'fichas',
       rotulo: 'Fichas',
-      titulo: 'Fichas — anamneses, avaliações e relatórios',
+      titulo: 'Fichas — anamneses e relatórios',
       icone: ClipboardList,
       ativo: ehAbaDasFichas(currentView),
       onClick: () => {

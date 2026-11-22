@@ -273,6 +273,11 @@ const BlocoItem: React.FC<{ item: QuoteItem; semSeparador: boolean }> = ({ item,
               {item.titulo}
             </span>
           </div>
+          {item.foco && (
+            <div style={{ fontSize: 10, color: CINZA, marginTop: 4 }}>
+              Foco: <strong>{item.foco}</strong>
+            </div>
+          )}
           {item.profissionalNome && (
             <div style={{ fontSize: 9.5, color: CINZA, marginTop: 4 }}>
               com {item.profissionalNome}

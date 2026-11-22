@@ -23,6 +23,7 @@ import { buildSingleProcedureWhatsAppUrl } from '../utils/exportHelpers';
 import { getProcedureDoctors } from '../utils/doctorHelpers';
 import { enquadramentoDaFoto } from '../utils/enquadramentoDaFoto';
 import { FotoEnquadrada } from './FotoEnquadrada';
+import { ehAvaliacao } from '../utils/procedimentoAvaliacao';
 
 interface ProcedureDetailModalProps {
   procedure: Procedure | null;
@@ -112,9 +113,13 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
               </div>
             </div>
             <div className="absolute inset-x-0 bottom-3 flex items-center justify-between px-4">
-              <span className="h-7 px-2.5 rounded-full bg-white/95 text-ink-soft text-body font-semibold flex items-center">
-                {procedure.category}
-              </span>
+              {procedure.category ? (
+                <span className="h-7 px-2.5 rounded-full bg-white/95 text-ink-soft text-body font-semibold flex items-center">
+                  {procedure.category}
+                </span>
+              ) : (
+                <span />
+              )}
               {procedure.isFeatured && (
                 <span className="h-7 px-2.5 rounded-full bg-[rgba(26,26,26,.85)] text-[#E8CDAC] text-body font-semibold flex items-center">
                   Destaque
@@ -451,7 +456,8 @@ export const ProcedureDetailModal: React.FC<ProcedureDetailModalProps> = ({
                   </div>
                   <div className="text-right text-[12px] text-gray-400">
                     <p>Condições personalizadas</p>
-                    <p className="text-brand-light">Avaliação inclusa</p>
+                    {/* Na própria Avaliação, "avaliação inclusa" não diz nada. */}
+                    {!ehAvaliacao(procedure) && <p className="text-brand-light">Avaliação inclusa</p>}
                   </div>
                 </div>
 
