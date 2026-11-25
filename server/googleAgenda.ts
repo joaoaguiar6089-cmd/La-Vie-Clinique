@@ -336,6 +336,42 @@ const apagarEvento = async (acesso: string, calendario: string, eventoId: string
   }
 };
 
+/**
+ * Salva eventos no calendário de uma conta, do próprio servidor — para o agendamento que nasce
+ * fora do painel (o conector do Claude, `server/conectorClaudeAgenda.ts`). Mesma validação e mesmo
+ * envio do `/sincronizar`; quem chama já conferiu que a conta é da clínica (ela vem do banco).
+ *
+ * Lança quando não dá para falar com o Google (servidor sem as chaves, autorização recusada,
+ * calendário apagado): quem chama trata como "o painel envia quando abrir".
+ */
+export async function salvarEventosPeloServidor(
+  tokenCifrado: string,
+  calendarioId: string,
+  eventos: { eventoId: string; evento: unknown }[]
+): Promise<{ eventoId: string; ok: boolean }[]> {
+  if (!configurado()) throw new Error('Google Agenda não configurado no servidor');
+  if (eventos.length > MAX_OPERACOES) throw new Error('eventos demais');
+  const acesso = await tokenDeAcesso(tokenCifrado);
+  const resultados: { eventoId: string; ok: boolean }[] = [];
+  for (const { eventoId, evento: bruto } of eventos) {
+    const evento = validarEvento(bruto);
+    if (!ID_DO_EVENTO.test(eventoId) || !evento) {
+      resultados.push({ eventoId, ok: false });
+      continue;
+    }
+    try {
+      await salvarEvento(acesso, calendarioId, eventoId, evento);
+      resultados.push({ eventoId, ok: true });
+    } catch (e) {
+      if (e instanceof CalendarioApagado) throw e;
+      if (e instanceof ErroDoGoogle && e.status === 401) acessos.delete(tokenCifrado);
+      console.warn('[google-agenda] falha ao salvar evento pelo servidor:', e);
+      resultados.push({ eventoId, ok: false });
+    }
+  }
+  return resultados;
+}
+
 // ==========================================
 // PÁGINA DE RETORNO DA JANELA DE AUTORIZAÇÃO
 // ==========================================

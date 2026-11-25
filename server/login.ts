@@ -25,6 +25,8 @@ export interface LoginDoPainel {
   dono: boolean;
   /** O e-mail do login foi confirmado (claim padrão `email_verified`). Ausente: não. */
   emailVerificado?: boolean;
+  /** Quando a pessoa digitou a senha nesta sessão (claim padrão `auth_time`), em milissegundos. */
+  autenticadoEm?: number;
   /**
    * O segundo fator usado para entrar nesta sessão (`firebase.sign_in_second_factor`: `totp` pelo
    * aplicativo autenticador, `phone` por SMS), ou `null` se entrou só com a senha.
@@ -40,6 +42,7 @@ export const loginDasClaims = (claims: Record<string, unknown> & { uid: string; 
   papel: claims.papel === 'admin' || claims.papel === 'profissional' ? claims.papel : null,
   dono: claims.donoDaPlataforma === true,
   emailVerificado: claims.email_verified === true,
+  autenticadoEm: typeof claims.auth_time === 'number' ? claims.auth_time * 1000 : undefined,
   segundoFator:
     typeof (claims.firebase as { sign_in_second_factor?: unknown } | undefined)?.sign_in_second_factor === 'string'
       ? String((claims.firebase as { sign_in_second_factor: string }).sign_in_second_factor)

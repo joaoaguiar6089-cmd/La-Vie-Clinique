@@ -27,6 +27,8 @@ import { AreaDoDono } from './components/dono/AreaDoDono';
 import { assinarAceiteDosDocumentos } from './services/cadastroApi';
 import { CADASTRO_ABERTO } from './utils/cadastro';
 import { AcessoAoPainelView } from './components/auth/AcessoAoPainelView';
+import { AutorizarClaudeView } from './components/auth/AutorizarClaudeView';
+import { nomeDaClinica } from './utils/marca';
 import { ConfirmDialog, ConfirmRequest } from './components/ConfirmDialog';
 import { CommandPalette, AcaoRapida } from './components/common/CommandPalette';
 import { HojeView } from './components/hoje/HojeView';
@@ -165,6 +167,9 @@ const isPublicQuoteRoute = !!publicSearchParams?.get('orcamento');
 // Mesmo padrão: a cliente abre o agendamento dela (?agendamento=<token>) para confirmar, avisar
 // que não vai ou pedir outro horário — sem login e sem carregar o painel.
 const isPublicAppointmentRoute = !!publicSearchParams?.get('agendamento');
+// O Claude pedindo para conectar à agenda (ver server/conectorClaudeLogin.ts): depois do login de
+// sempre, o painel mostra "Conectar o Claude à agenda?" no lugar do painel.
+const pedidoDoClaude = publicSearchParams?.get('autorizar-claude') || null;
 
 function MainCatalogApp() {
   // Catálogo exibido enquanto o Firestore não responde. É só uma cópia local da última
@@ -1047,6 +1052,19 @@ function MainCatalogApp() {
     return <LoginScreen />;
   }
 
+  // O dono da plataforma não enxerga dados de clínica nenhuma — nem pelo Claude.
+  if (pedidoDoClaude && ehZulia && donoDaPlataforma && acessoAoPainel === 'negado') {
+    return (
+      <AutorizarClaudeView
+        pedido={pedidoDoClaude}
+        user={authUser}
+        nomeDaClinica=""
+        onSair={() => logout()}
+        erroInicial="Este é o login do dono da plataforma, que não acessa a agenda nem as pacientes das clínicas. Saia e entre com um login da equipe da clínica (Configurações → Equipe)."
+      />
+    );
+  }
+
   // O dono da plataforma (sem clínica): o painel dele, com a verificação em duas etapas.
   if (ehZulia && donoDaPlataforma && acessoAoPainel === 'negado') {
     return <AreaDoDono user={authUser} onSair={() => logout()} />;
@@ -1072,6 +1090,17 @@ function MainCatalogApp() {
         acesso={acessoAoPainel}
         email={authUser.email}
         onTentarDeNovo={() => setTentativaDeAcesso((n) => n + 1)}
+        onSair={() => logout()}
+      />
+    );
+  }
+
+  if (pedidoDoClaude) {
+    return (
+      <AutorizarClaudeView
+        pedido={pedidoDoClaude}
+        user={authUser}
+        nomeDaClinica={nomeDaClinica(clinic)}
         onSair={() => logout()}
       />
     );

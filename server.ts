@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { criarRotasDoCadastro } from './server/cadastro';
+import { criarRotasDoConectorClaude } from './server/conectorClaude';
 import { criarRotasDoDono } from './server/dono';
 import { criarRotasDaEquipe, manterEquipeSincronizada } from './server/equipe';
 import { apagarArquivosDaClinica, bancoAdmin, espacoDaClinica, PREFIXO_DA_CREDENCIAL } from './server/firebaseAdmin';
@@ -105,6 +106,10 @@ app.use('/api/acesso', criarRotasDeAcesso());
 // Leitura da foto ou do PDF de um pedido de compra do Estoque pelo Gemini, com a chave do servidor
 // (ver server/leituraDePedido.ts).
 app.use('/api/leitura-de-pedido', criarRotasLeituraDePedido());
+// Conector do Claude: o servidor MCP em /api/mcp e o login dele (OAuth, com o login do painel),
+// inclusive os endereços /.well-known/... — antes do express.static e do app.get('*') abaixo.
+// Ver server/conectorClaude.ts e docs/conector-claude.md.
+app.use(criarRotasDoConectorClaude());
 // Política de privacidade pública — o Google exige o link dela na tela de consentimento.
 app.get('/privacidade', servirPrivacidade);
 // Documentos da plataforma (texto em public/legal/*.md): Termos de Uso, Política de Privacidade e o
